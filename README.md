@@ -294,16 +294,37 @@ SELECT
 
 ## Development
 
+### Setup
+```bash
+# Install with uv (recommended)
+uv sync --dev
+
+# Or with pip
+pip install -e .[dev]
+```
+
 ### Running Tests
 ```bash
-# Install dev dependencies
-pip install -e .[dev]
+# With uv
+uv run pytest
 
-# Run tests
+# With pip
 pytest
 
 # Run with coverage
-pytest --cov=prismql
+uv run pytest --cov=prismql
+```
+
+### Code Formatting and Linting
+```bash
+# Format code with ruff
+uv run ruff format .
+
+# Check and fix linting issues  
+uv run ruff check . --fix
+
+# Run both before committing
+uv run ruff format . && uv run ruff check . --fix
 ```
 
 ### Building Documentation
