@@ -5,7 +5,7 @@ from typing import Optional, Any
 
 class PrismQLError(Exception):
     """Base exception for all PrismQL errors."""
-    
+
     def __init__(self, message: str, details: Optional[dict[str, Any]] = None):
         super().__init__(message)
         self.details = details or {}
@@ -13,8 +13,10 @@ class PrismQLError(Exception):
 
 class PrismQLSyntaxError(PrismQLError):
     """Raised when there's a syntax error in the PrismQL query."""
-    
-    def __init__(self, message: str, line: Optional[int] = None, column: Optional[int] = None):
+
+    def __init__(
+        self, message: str, line: Optional[int] = None, column: Optional[int] = None
+    ):
         details = {}
         if line is not None:
             details["line"] = line
@@ -25,8 +27,13 @@ class PrismQLSyntaxError(PrismQLError):
 
 class PrismQLRuntimeError(PrismQLError):
     """Raised when there's a runtime error during query execution."""
-    
-    def __init__(self, message: str, query: Optional[str] = None, cause: Optional[Exception] = None):
+
+    def __init__(
+        self,
+        message: str,
+        query: Optional[str] = None,
+        cause: Optional[Exception] = None,
+    ):
         details = {}
         if query is not None:
             details["query"] = query
@@ -38,8 +45,10 @@ class PrismQLRuntimeError(PrismQLError):
 
 class BackendError(PrismQLError):
     """Raised when there's an error with a backend operation."""
-    
-    def __init__(self, message: str, backend_name: str, operation: Optional[str] = None):
+
+    def __init__(
+        self, message: str, backend_name: str, operation: Optional[str] = None
+    ):
         details = {"backend": backend_name}
         if operation is not None:
             details["operation"] = operation
@@ -48,4 +57,5 @@ class BackendError(PrismQLError):
 
 class ConfigurationError(PrismQLError):
     """Raised when there's a configuration error."""
+
     pass
