@@ -1,4 +1,4 @@
-# Generated from /Users/asmirnov/Projects/vibes/Chat-Corpora-Annotator/prismql/src/prismql/grammar/PrismQL.g4 by ANTLR 4.13.1
+# Generated from /Users/asmirnov/Projects/vibes/prismql/src/prismql/grammar/PrismQL.g4 by ANTLR 4.13.1
 # encoding: utf-8
 from antlr4 import *
 from io import StringIO
@@ -10,19 +10,21 @@ else:
 
 def serializedATN():
     return [
-        4,1,22,119,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,
+        4,1,31,152,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,
         6,2,7,7,7,2,8,7,8,1,0,1,0,1,0,1,1,1,1,3,1,24,8,1,1,1,3,1,27,8,1,
         1,1,1,1,3,1,31,8,1,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,5,2,41,8,2,10,
         2,12,2,44,9,2,1,3,1,3,1,3,5,3,49,8,3,10,3,12,3,52,9,3,1,3,3,3,55,
         8,3,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,3,4,65,8,4,1,4,1,4,1,4,1,4,1,
         4,1,4,5,4,73,8,4,10,4,12,4,76,9,4,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,
         5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,
-        5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,3,5,111,8,5,1,6,1,6,1,7,1,
-        7,1,8,1,8,1,8,0,1,8,9,0,2,4,6,8,10,12,14,16,0,0,127,0,18,1,0,0,0,
-        2,23,1,0,0,0,4,32,1,0,0,0,6,45,1,0,0,0,8,64,1,0,0,0,10,110,1,0,0,
-        0,12,112,1,0,0,0,14,114,1,0,0,0,16,116,1,0,0,0,18,19,5,5,0,0,19,
-        20,3,2,1,0,20,1,1,0,0,0,21,24,3,4,2,0,22,24,3,6,3,0,23,21,1,0,0,
-        0,23,22,1,0,0,0,24,26,1,0,0,0,25,27,5,1,0,0,26,25,1,0,0,0,26,27,
+        5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,
+        5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,
+        5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,1,5,3,5,144,8,5,1,6,1,6,1,
+        7,1,7,1,8,1,8,1,8,0,1,8,9,0,2,4,6,8,10,12,14,16,0,0,169,0,18,1,0,
+        0,0,2,23,1,0,0,0,4,32,1,0,0,0,6,45,1,0,0,0,8,64,1,0,0,0,10,143,1,
+        0,0,0,12,145,1,0,0,0,14,147,1,0,0,0,16,149,1,0,0,0,18,19,5,5,0,0,
+        19,20,3,2,1,0,20,1,1,0,0,0,21,24,3,4,2,0,22,24,3,6,3,0,23,21,1,0,
+        0,0,23,22,1,0,0,0,24,26,1,0,0,0,25,27,5,1,0,0,26,25,1,0,0,0,26,27,
         1,0,0,0,27,30,1,0,0,0,28,29,5,6,0,0,29,31,3,12,6,0,30,28,1,0,0,0,
         30,31,1,0,0,0,31,3,1,0,0,0,32,33,5,2,0,0,33,34,3,0,0,0,34,42,5,3,
         0,0,35,36,5,1,0,0,36,37,5,2,0,0,37,38,3,0,0,0,38,39,5,3,0,0,39,41,
@@ -36,18 +38,29 @@ def serializedATN():
         0,0,67,68,5,9,0,0,68,73,3,8,4,6,69,70,10,4,0,0,70,71,5,10,0,0,71,
         73,3,8,4,5,72,66,1,0,0,0,72,69,1,0,0,0,73,76,1,0,0,0,74,72,1,0,0,
         0,74,75,1,0,0,0,75,9,1,0,0,0,76,74,1,0,0,0,77,78,5,11,0,0,78,79,
-        5,2,0,0,79,80,3,14,7,0,80,81,5,3,0,0,81,111,1,0,0,0,82,83,5,12,0,
-        0,83,84,5,2,0,0,84,111,5,3,0,0,85,86,5,13,0,0,86,87,5,2,0,0,87,111,
-        5,3,0,0,88,89,5,14,0,0,89,90,5,2,0,0,90,111,5,3,0,0,91,92,5,15,0,
-        0,92,93,5,2,0,0,93,111,5,3,0,0,94,95,5,16,0,0,95,96,5,2,0,0,96,111,
-        5,3,0,0,97,98,5,17,0,0,98,99,5,2,0,0,99,111,5,3,0,0,100,101,5,18,
-        0,0,101,102,5,2,0,0,102,103,3,16,8,0,103,104,5,3,0,0,104,111,1,0,
-        0,0,105,106,5,19,0,0,106,107,5,2,0,0,107,108,3,16,8,0,108,109,5,
-        3,0,0,109,111,1,0,0,0,110,77,1,0,0,0,110,82,1,0,0,0,110,85,1,0,0,
-        0,110,88,1,0,0,0,110,91,1,0,0,0,110,94,1,0,0,0,110,97,1,0,0,0,110,
-        100,1,0,0,0,110,105,1,0,0,0,111,11,1,0,0,0,112,113,5,20,0,0,113,
-        13,1,0,0,0,114,115,5,21,0,0,115,15,1,0,0,0,116,117,5,21,0,0,117,
-        17,1,0,0,0,10,23,26,30,42,50,54,64,72,74,110
+        5,2,0,0,79,80,3,14,7,0,80,81,5,3,0,0,81,144,1,0,0,0,82,83,5,12,0,
+        0,83,84,5,2,0,0,84,85,3,16,8,0,85,86,5,3,0,0,86,144,1,0,0,0,87,88,
+        5,13,0,0,88,89,5,2,0,0,89,90,3,16,8,0,90,91,5,3,0,0,91,144,1,0,0,
+        0,92,93,5,14,0,0,93,94,5,2,0,0,94,144,5,3,0,0,95,96,5,15,0,0,96,
+        97,5,2,0,0,97,144,5,3,0,0,98,99,5,16,0,0,99,100,5,2,0,0,100,144,
+        5,3,0,0,101,102,5,17,0,0,102,103,5,2,0,0,103,144,5,3,0,0,104,105,
+        5,18,0,0,105,106,5,2,0,0,106,144,5,3,0,0,107,108,5,19,0,0,108,109,
+        5,2,0,0,109,144,5,3,0,0,110,111,5,20,0,0,111,112,5,2,0,0,112,113,
+        3,14,7,0,113,114,5,3,0,0,114,144,1,0,0,0,115,116,5,28,0,0,116,117,
+        5,2,0,0,117,118,3,16,8,0,118,119,5,3,0,0,119,144,1,0,0,0,120,121,
+        5,27,0,0,121,122,5,2,0,0,122,123,3,16,8,0,123,124,5,3,0,0,124,144,
+        1,0,0,0,125,126,5,26,0,0,126,127,5,2,0,0,127,144,5,3,0,0,128,129,
+        5,25,0,0,129,130,5,2,0,0,130,144,5,3,0,0,131,132,5,21,0,0,132,133,
+        5,2,0,0,133,144,5,3,0,0,134,135,5,22,0,0,135,136,5,2,0,0,136,144,
+        5,3,0,0,137,138,5,23,0,0,138,139,5,2,0,0,139,144,5,3,0,0,140,141,
+        5,24,0,0,141,142,5,2,0,0,142,144,5,3,0,0,143,77,1,0,0,0,143,82,1,
+        0,0,0,143,87,1,0,0,0,143,92,1,0,0,0,143,95,1,0,0,0,143,98,1,0,0,
+        0,143,101,1,0,0,0,143,104,1,0,0,0,143,107,1,0,0,0,143,110,1,0,0,
+        0,143,115,1,0,0,0,143,120,1,0,0,0,143,125,1,0,0,0,143,128,1,0,0,
+        0,143,131,1,0,0,0,143,134,1,0,0,0,143,137,1,0,0,0,143,140,1,0,0,
+        0,144,11,1,0,0,0,145,146,5,29,0,0,146,13,1,0,0,0,147,148,5,30,0,
+        0,148,15,1,0,0,0,149,150,5,30,0,0,150,17,1,0,0,0,10,23,26,30,42,
+        50,54,64,72,74,143
     ]
 
 class PrismQLParser ( Parser ):
@@ -64,9 +77,12 @@ class PrismQLParser ( Parser ):
 
     symbolicNames = [ "<INVALID>", "<INVALID>", "<INVALID>", "<INVALID>", 
                       "<INVALID>", "Select", "InWin", "Unr", "Not", "And", 
-                      "Or", "HasWordOfDict", "HasTime", "HasLocation", "HasOrganization", 
-                      "HasURL", "HasDate", "HasQuestion", "HasUserMentioned", 
-                      "ByUser", "INTEGER", "STRING", "WS" ]
+                      "Or", "Contains", "From", "MentionsUser", "IsQuestion", 
+                      "MentionsDate", "MentionsTime", "MentionsPlace", "MentionsOrg", 
+                      "ContainsLink", "HasWordOfDict", "HasTime", "HasLocation", 
+                      "HasOrganization", "HasURL", "HasDate", "HasQuestion", 
+                      "HasUserMentioned", "ByUser", "INTEGER", "STRING", 
+                      "WS" ]
 
     RULE_query = 0
     RULE_body = 1
@@ -92,18 +108,27 @@ class PrismQLParser ( Parser ):
     Not=8
     And=9
     Or=10
-    HasWordOfDict=11
-    HasTime=12
-    HasLocation=13
-    HasOrganization=14
-    HasURL=15
-    HasDate=16
-    HasQuestion=17
-    HasUserMentioned=18
-    ByUser=19
-    INTEGER=20
-    STRING=21
-    WS=22
+    Contains=11
+    From=12
+    MentionsUser=13
+    IsQuestion=14
+    MentionsDate=15
+    MentionsTime=16
+    MentionsPlace=17
+    MentionsOrg=18
+    ContainsLink=19
+    HasWordOfDict=20
+    HasTime=21
+    HasLocation=22
+    HasOrganization=23
+    HasURL=24
+    HasDate=25
+    HasQuestion=26
+    HasUserMentioned=27
+    ByUser=28
+    INTEGER=29
+    STRING=30
+    WS=31
 
     def __init__(self, input:TokenStream, output:TextIO = sys.stdout):
         super().__init__(input, output)
@@ -436,7 +461,7 @@ class PrismQLParser ( Parser ):
                 self.state = 62
                 self.restriction(2)
                 pass
-            elif token in [11, 12, 13, 14, 15, 16, 17, 18, 19]:
+            elif token in [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]:
                 self.state = 63
                 self.condition()
                 pass
@@ -502,12 +527,55 @@ class PrismQLParser ( Parser ):
             super().__init__(parent, invokingState)
             self.parser = parser
 
-        def HasWordOfDict(self):
-            return self.getToken(PrismQLParser.HasWordOfDict, 0)
+        def Contains(self):
+            return self.getToken(PrismQLParser.Contains, 0)
 
         def hdict(self):
             return self.getTypedRuleContext(PrismQLParser.HdictContext,0)
 
+
+        def From(self):
+            return self.getToken(PrismQLParser.From, 0)
+
+        def huser(self):
+            return self.getTypedRuleContext(PrismQLParser.HuserContext,0)
+
+
+        def MentionsUser(self):
+            return self.getToken(PrismQLParser.MentionsUser, 0)
+
+        def IsQuestion(self):
+            return self.getToken(PrismQLParser.IsQuestion, 0)
+
+        def MentionsDate(self):
+            return self.getToken(PrismQLParser.MentionsDate, 0)
+
+        def MentionsTime(self):
+            return self.getToken(PrismQLParser.MentionsTime, 0)
+
+        def MentionsPlace(self):
+            return self.getToken(PrismQLParser.MentionsPlace, 0)
+
+        def MentionsOrg(self):
+            return self.getToken(PrismQLParser.MentionsOrg, 0)
+
+        def ContainsLink(self):
+            return self.getToken(PrismQLParser.ContainsLink, 0)
+
+        def HasWordOfDict(self):
+            return self.getToken(PrismQLParser.HasWordOfDict, 0)
+
+        def ByUser(self):
+            return self.getToken(PrismQLParser.ByUser, 0)
+
+        def HasUserMentioned(self):
+            return self.getToken(PrismQLParser.HasUserMentioned, 0)
+
+        def HasQuestion(self):
+            return self.getToken(PrismQLParser.HasQuestion, 0)
+
+        def HasDate(self):
+            return self.getToken(PrismQLParser.HasDate, 0)
 
         def HasTime(self):
             return self.getToken(PrismQLParser.HasTime, 0)
@@ -520,22 +588,6 @@ class PrismQLParser ( Parser ):
 
         def HasURL(self):
             return self.getToken(PrismQLParser.HasURL, 0)
-
-        def HasDate(self):
-            return self.getToken(PrismQLParser.HasDate, 0)
-
-        def HasQuestion(self):
-            return self.getToken(PrismQLParser.HasQuestion, 0)
-
-        def HasUserMentioned(self):
-            return self.getToken(PrismQLParser.HasUserMentioned, 0)
-
-        def huser(self):
-            return self.getTypedRuleContext(PrismQLParser.HuserContext,0)
-
-
-        def ByUser(self):
-            return self.getToken(PrismQLParser.ByUser, 0)
 
         def getRuleIndex(self):
             return PrismQLParser.RULE_condition
@@ -554,13 +606,13 @@ class PrismQLParser ( Parser ):
         localctx = PrismQLParser.ConditionContext(self, self._ctx, self.state)
         self.enterRule(localctx, 10, self.RULE_condition)
         try:
-            self.state = 110
+            self.state = 143
             self._errHandler.sync(self)
             token = self._input.LA(1)
             if token in [11]:
                 self.enterOuterAlt(localctx, 1)
                 self.state = 77
-                self.match(PrismQLParser.HasWordOfDict)
+                self.match(PrismQLParser.Contains)
                 self.state = 78
                 self.match(PrismQLParser.T__1)
                 self.state = 79
@@ -571,77 +623,164 @@ class PrismQLParser ( Parser ):
             elif token in [12]:
                 self.enterOuterAlt(localctx, 2)
                 self.state = 82
-                self.match(PrismQLParser.HasTime)
+                self.match(PrismQLParser.From)
                 self.state = 83
                 self.match(PrismQLParser.T__1)
                 self.state = 84
+                self.huser()
+                self.state = 85
                 self.match(PrismQLParser.T__2)
                 pass
             elif token in [13]:
                 self.enterOuterAlt(localctx, 3)
-                self.state = 85
-                self.match(PrismQLParser.HasLocation)
-                self.state = 86
-                self.match(PrismQLParser.T__1)
                 self.state = 87
+                self.match(PrismQLParser.MentionsUser)
+                self.state = 88
+                self.match(PrismQLParser.T__1)
+                self.state = 89
+                self.huser()
+                self.state = 90
                 self.match(PrismQLParser.T__2)
                 pass
             elif token in [14]:
                 self.enterOuterAlt(localctx, 4)
-                self.state = 88
-                self.match(PrismQLParser.HasOrganization)
-                self.state = 89
+                self.state = 92
+                self.match(PrismQLParser.IsQuestion)
+                self.state = 93
                 self.match(PrismQLParser.T__1)
-                self.state = 90
+                self.state = 94
                 self.match(PrismQLParser.T__2)
                 pass
             elif token in [15]:
                 self.enterOuterAlt(localctx, 5)
-                self.state = 91
-                self.match(PrismQLParser.HasURL)
-                self.state = 92
+                self.state = 95
+                self.match(PrismQLParser.MentionsDate)
+                self.state = 96
                 self.match(PrismQLParser.T__1)
-                self.state = 93
+                self.state = 97
                 self.match(PrismQLParser.T__2)
                 pass
             elif token in [16]:
                 self.enterOuterAlt(localctx, 6)
-                self.state = 94
-                self.match(PrismQLParser.HasDate)
-                self.state = 95
+                self.state = 98
+                self.match(PrismQLParser.MentionsTime)
+                self.state = 99
                 self.match(PrismQLParser.T__1)
-                self.state = 96
+                self.state = 100
                 self.match(PrismQLParser.T__2)
                 pass
             elif token in [17]:
                 self.enterOuterAlt(localctx, 7)
-                self.state = 97
-                self.match(PrismQLParser.HasQuestion)
-                self.state = 98
+                self.state = 101
+                self.match(PrismQLParser.MentionsPlace)
+                self.state = 102
                 self.match(PrismQLParser.T__1)
-                self.state = 99
+                self.state = 103
                 self.match(PrismQLParser.T__2)
                 pass
             elif token in [18]:
                 self.enterOuterAlt(localctx, 8)
-                self.state = 100
-                self.match(PrismQLParser.HasUserMentioned)
-                self.state = 101
+                self.state = 104
+                self.match(PrismQLParser.MentionsOrg)
+                self.state = 105
                 self.match(PrismQLParser.T__1)
-                self.state = 102
-                self.huser()
-                self.state = 103
+                self.state = 106
                 self.match(PrismQLParser.T__2)
                 pass
             elif token in [19]:
                 self.enterOuterAlt(localctx, 9)
-                self.state = 105
-                self.match(PrismQLParser.ByUser)
-                self.state = 106
-                self.match(PrismQLParser.T__1)
                 self.state = 107
-                self.huser()
+                self.match(PrismQLParser.ContainsLink)
                 self.state = 108
+                self.match(PrismQLParser.T__1)
+                self.state = 109
+                self.match(PrismQLParser.T__2)
+                pass
+            elif token in [20]:
+                self.enterOuterAlt(localctx, 10)
+                self.state = 110
+                self.match(PrismQLParser.HasWordOfDict)
+                self.state = 111
+                self.match(PrismQLParser.T__1)
+                self.state = 112
+                self.hdict()
+                self.state = 113
+                self.match(PrismQLParser.T__2)
+                pass
+            elif token in [28]:
+                self.enterOuterAlt(localctx, 11)
+                self.state = 115
+                self.match(PrismQLParser.ByUser)
+                self.state = 116
+                self.match(PrismQLParser.T__1)
+                self.state = 117
+                self.huser()
+                self.state = 118
+                self.match(PrismQLParser.T__2)
+                pass
+            elif token in [27]:
+                self.enterOuterAlt(localctx, 12)
+                self.state = 120
+                self.match(PrismQLParser.HasUserMentioned)
+                self.state = 121
+                self.match(PrismQLParser.T__1)
+                self.state = 122
+                self.huser()
+                self.state = 123
+                self.match(PrismQLParser.T__2)
+                pass
+            elif token in [26]:
+                self.enterOuterAlt(localctx, 13)
+                self.state = 125
+                self.match(PrismQLParser.HasQuestion)
+                self.state = 126
+                self.match(PrismQLParser.T__1)
+                self.state = 127
+                self.match(PrismQLParser.T__2)
+                pass
+            elif token in [25]:
+                self.enterOuterAlt(localctx, 14)
+                self.state = 128
+                self.match(PrismQLParser.HasDate)
+                self.state = 129
+                self.match(PrismQLParser.T__1)
+                self.state = 130
+                self.match(PrismQLParser.T__2)
+                pass
+            elif token in [21]:
+                self.enterOuterAlt(localctx, 15)
+                self.state = 131
+                self.match(PrismQLParser.HasTime)
+                self.state = 132
+                self.match(PrismQLParser.T__1)
+                self.state = 133
+                self.match(PrismQLParser.T__2)
+                pass
+            elif token in [22]:
+                self.enterOuterAlt(localctx, 16)
+                self.state = 134
+                self.match(PrismQLParser.HasLocation)
+                self.state = 135
+                self.match(PrismQLParser.T__1)
+                self.state = 136
+                self.match(PrismQLParser.T__2)
+                pass
+            elif token in [23]:
+                self.enterOuterAlt(localctx, 17)
+                self.state = 137
+                self.match(PrismQLParser.HasOrganization)
+                self.state = 138
+                self.match(PrismQLParser.T__1)
+                self.state = 139
+                self.match(PrismQLParser.T__2)
+                pass
+            elif token in [24]:
+                self.enterOuterAlt(localctx, 18)
+                self.state = 140
+                self.match(PrismQLParser.HasURL)
+                self.state = 141
+                self.match(PrismQLParser.T__1)
+                self.state = 142
                 self.match(PrismQLParser.T__2)
                 pass
             else:
@@ -684,7 +823,7 @@ class PrismQLParser ( Parser ):
         self.enterRule(localctx, 12, self.RULE_number)
         try:
             self.enterOuterAlt(localctx, 1)
-            self.state = 112
+            self.state = 145
             self.match(PrismQLParser.INTEGER)
         except RecognitionException as re:
             localctx.exception = re
@@ -723,7 +862,7 @@ class PrismQLParser ( Parser ):
         self.enterRule(localctx, 14, self.RULE_hdict)
         try:
             self.enterOuterAlt(localctx, 1)
-            self.state = 114
+            self.state = 147
             self.match(PrismQLParser.STRING)
         except RecognitionException as re:
             localctx.exception = re
@@ -762,7 +901,7 @@ class PrismQLParser ( Parser ):
         self.enterRule(localctx, 16, self.RULE_huser)
         try:
             self.enterOuterAlt(localctx, 1)
-            self.state = 116
+            self.state = 149
             self.match(PrismQLParser.STRING)
         except RecognitionException as re:
             localctx.exception = re

@@ -131,21 +131,23 @@ class PrismQLVisitor(PrismQLVisitor):
     
     def visitCondition(self, ctx: PrismQLParser.ConditionContext) -> Set[MessageId]:
         """Evaluate a single condition."""
-        # HasWordOfDict(dict_name)
-        if ctx.HasWordOfDict():
+        
+        # New fluent operators (preferred)
+        # contains(dict_name) - same as haswordofdict
+        if ctx.Contains():
             dict_name = ctx.hdict().getText()
             if dict_name not in self.user_dictionaries:
                 raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
             words = self.user_dictionaries[dict_name]
             return self.search_backend.search_text(words, field="text", operator="OR")
         
-        # ByUser(username)
-        elif ctx.ByUser():
+        # from(username) - same as byuser
+        elif ctx.From():
             username = ctx.huser().getText()
             return self.search_backend.search_by_field("user", username, exact=True)
         
-        # HasUserMentioned(username)
-        elif ctx.HasUserMentioned():
+        # mentions_user(username) - same as hasusermentioned
+        elif ctx.MentionsUser():
             username = ctx.huser().getText()
             # First check precomputed index
             if username in self.precomputed_indexes.user_mentions:
@@ -153,35 +155,71 @@ class PrismQLVisitor(PrismQLVisitor):
             # Otherwise search in text
             return self.search_backend.search_text([username], field="text")
         
-        # NER-based conditions
+        # is_question() - same as hasquestion
+        elif ctx.IsQuestion():
+            return self._get_questions()
+        
+        # NER-based fluent conditions
+        elif ctx.MentionsDate():
+            return self._get_ner_messages("DATE")
+        elif ctx.MentionsTime():
+            return self._get_ner_messages("TIME")
+        elif ctx.MentionsPlace():
+            return self._get_ner_messages("GPE")  # or "LOC" depending on NLP backend
+        elif ctx.MentionsOrg():
+            return self._get_ner_messages("ORG")
+        elif ctx.ContainsLink():
+            return self._get_ner_messages("URL")
+        
+        # Legacy operators (backward compatibility)
+        elif ctx.HasWordOfDict():
+            dict_name = ctx.hdict().getText()
+            if dict_name not in self.user_dictionaries:
+                raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
+            words = self.user_dictionaries[dict_name]
+            return self.search_backend.search_text(words, field="text", operator="OR")
+        
+        elif ctx.ByUser():
+            username = ctx.huser().getText()
+            return self.search_backend.search_by_field("user", username, exact=True)
+        
+        elif ctx.HasUserMentioned():
+            username = ctx.huser().getText()
+            if username in self.precomputed_indexes.user_mentions:
+                return self.precomputed_indexes.user_mentions[username]
+            return self.search_backend.search_text([username], field="text")
+        
+        elif ctx.HasQuestion():
+            return self._get_questions()
+        
         elif ctx.HasDate():
             return self._get_ner_messages("DATE")
         elif ctx.HasTime():
             return self._get_ner_messages("TIME")
         elif ctx.HasLocation():
-            return self._get_ner_messages("GPE")  # or "LOC" depending on NLP backend
+            return self._get_ner_messages("GPE")
         elif ctx.HasOrganization():
             return self._get_ner_messages("ORG")
         elif ctx.HasURL():
             return self._get_ner_messages("URL")
         
-        # HasQuestion()
-        elif ctx.HasQuestion():
-            # First check precomputed index
-            if self.precomputed_indexes.questions:
-                return self.precomputed_indexes.questions
-            
-            # Check if backend supports question detection
-            if hasattr(self.search_backend, 'get_questions'):
-                return self.search_backend.get_questions()
-            
-            # Otherwise would need NLP backend
-            if not self.nlp_backend:
-                raise PrismQLRuntimeError("HasQuestion() requires NLP backend or precomputed indexes")
-            # This would require iterating through all messages - not efficient
-            raise PrismQLRuntimeError("HasQuestion() requires precomputed indexes for large datasets")
-        
         raise PrismQLRuntimeError("Unknown condition type")
+    
+    def _get_questions(self) -> Set[MessageId]:
+        """Helper method to get questions (used by both new and legacy operators)."""
+        # First check precomputed index
+        if self.precomputed_indexes.questions:
+            return self.precomputed_indexes.questions
+        
+        # Check if backend supports question detection
+        if hasattr(self.search_backend, 'get_questions'):
+            return self.search_backend.get_questions()
+        
+        # Otherwise would need NLP backend
+        if not self.nlp_backend:
+            raise PrismQLRuntimeError("Question detection requires NLP backend or precomputed indexes")
+        # This would require iterating through all messages - not efficient
+        raise PrismQLRuntimeError("Question detection requires precomputed indexes for large datasets")
     
     def _get_ner_messages(self, ner_label: str) -> Set[MessageId]:
         """Get messages containing specific NER type."""

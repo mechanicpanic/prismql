@@ -50,16 +50,16 @@ backend = MemoryBackend(messages)
 # Initialize PrismQL engine
 engine = PrismQLEngine(search_backend=backend)
 
-# Find all questions in the conversation
-results = engine.execute("SELECT hasquestion()")
+# Find all questions in the conversation (fluent syntax!)
+results = engine.execute("SELECT is_question()")
 print(results)  # [[2], [5]]
 
 # Find messages from customer1 that contain questions
-results = engine.execute("SELECT byuser(customer1) AND hasquestion()")
+results = engine.execute("SELECT from(customer1) AND is_question()")
 print(results)  # [[5]]
 
 # Find question-answer pairs within 2 messages of each other
-results = engine.execute("SELECT hasquestion(), byuser(support) INWIN 2")
+results = engine.execute("SELECT is_question(), from(support) INWIN 2")
 print(results)  # [[2, 4]]
 ```
 
@@ -72,30 +72,34 @@ SELECT <conditions> [INWIN <window_size>]
 
 ### Conditions
 
-- **haswordofdict(dict_name)** - Messages containing words from a dictionary
-- **byuser(username)** - Messages from specific user
-- **hasusermentioned(username)** - Messages mentioning a user
-- **hasquestion()** - Messages containing questions
-- **hasdate()** - Messages containing dates
-- **hastime()** - Messages containing times
-- **haslocation()** - Messages containing locations
-- **hasorganization()** - Messages containing organizations
-- **hasurl()** - Messages containing URLs
+**New Fluent Syntax (Recommended):**
+- **contains(dict_name)** - Messages containing words from a dictionary  
+- **from(username)** - Messages from specific user
+- **mentions_user(username)** - Messages mentioning a user
+- **is_question()** - Messages containing questions
+- **mentions_date()** - Messages containing dates
+- **mentions_time()** - Messages containing times
+- **mentions_place()** - Messages containing locations
+- **mentions_org()** - Messages containing organizations
+- **contains_link()** - Messages containing URLs
+
+**Legacy Syntax (Still Supported):**
+- **haswordofdict(dict_name)**, **byuser(username)**, **hasusermentioned(username)**, etc.
 
 ### Boolean Operators
 
 ```sql
--- AND operator
-SELECT byuser(alice) AND hasquestion()
+-- AND operator (fluent syntax)
+SELECT from(alice) AND is_question()
 
 -- OR operator  
-SELECT byuser(alice) OR byuser(bob)
+SELECT from(alice) OR from(bob)
 
 -- NOT operator
-SELECT NOT byuser(bot)
+SELECT NOT from(bot)
 
 -- Complex combinations
-SELECT (byuser(alice) OR byuser(bob)) AND hasquestion()
+SELECT (from(alice) OR from(bob)) AND is_question()
 ```
 
 ### Window Constraints
@@ -103,8 +107,8 @@ SELECT (byuser(alice) OR byuser(bob)) AND hasquestion()
 The `INWIN` clause groups messages that appear within N positions of each other:
 
 ```sql
--- Find questions followed by answers within 5 messages
-SELECT hasquestion(), haswordofdict(answers) INWIN 5
+-- Find questions followed by answers within 5 messages (fluent syntax)
+SELECT is_question(), contains(answers) INWIN 5
 ```
 
 ### Multiple Restrictions
@@ -112,10 +116,10 @@ SELECT hasquestion(), haswordofdict(answers) INWIN 5
 Comma-separated restrictions find combinations:
 
 ```sql
--- Find customer question + support response + resolution
-SELECT byuser(customer) AND hasquestion(), 
-       byuser(support),
-       haswordofdict(resolved) 
+-- Find customer question + support response + resolution (fluent syntax)
+SELECT from(customer) AND is_question(), 
+       from(support),
+       contains(resolved) 
        INWIN 10
 ```
 
@@ -124,8 +128,8 @@ SELECT byuser(customer) AND hasquestion(),
 The `UNR` flag generates all permutations instead of sliding windows:
 
 ```sql
--- Find any combination of these conditions
-SELECT hasquestion(), hasurl(), hasdate() UNR
+-- Find any combination of these conditions (fluent syntax)
+SELECT is_question(), contains_link(), mentions_date() UNR
 ```
 
 ### Subqueries
@@ -133,10 +137,10 @@ SELECT hasquestion(), hasurl(), hasdate() UNR
 Parentheses create subqueries that are evaluated independently:
 
 ```sql
--- Complex multi-stage pattern
+-- Complex multi-stage pattern (fluent syntax)
 SELECT 
-  (SELECT byuser(customer), haswordofdict(problem) INWIN 3);
-  (SELECT byuser(support), haswordofdict(solution) INWIN 5)
+  (SELECT from(customer), contains(problem) INWIN 3);
+  (SELECT from(support), contains(solution) INWIN 5)
   INWIN 20
 ```
 

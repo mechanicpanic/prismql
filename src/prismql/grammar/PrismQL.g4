@@ -32,15 +32,27 @@ restriction
 
 condition
     :
-    HasWordOfDict '(' hdict ')'
+    // New fluent operators (preferred)
+    Contains '(' hdict ')'
+    | From '(' huser ')'
+    | MentionsUser '(' huser ')'
+    | IsQuestion '(' ')'
+    | MentionsDate '(' ')'
+    | MentionsTime '(' ')'
+    | MentionsPlace '(' ')'
+    | MentionsOrg '(' ')'
+    | ContainsLink '(' ')'
+    
+    // Legacy operators (backward compatibility)
+    | HasWordOfDict '(' hdict ')'
+    | ByUser '(' huser ')'
+    | HasUserMentioned '(' huser ')'
+    | HasQuestion '(' ')'
+    | HasDate '(' ')'
     | HasTime '(' ')'
     | HasLocation '(' ')'
     | HasOrganization '(' ')'
     | HasURL '(' ')'
-    | HasDate '(' ')'
-    | HasQuestion '(' ')'
-    | HasUserMentioned '(' huser ')'
-    | ByUser '(' huser ')'
     ;
 
 // Rule references
@@ -56,7 +68,18 @@ Not    : 'NOT'    | 'not'   ;
 And    : 'AND'    | 'and'   ;
 Or     : 'OR'     | 'or'    ;
 
-// Condition keywords
+// New fluent condition keywords (preferred)
+Contains         : 'CONTAINS'         | 'contains'        ;
+From             : 'FROM'             | 'from'            ;
+MentionsUser     : 'MENTIONS_USER'    | 'mentions_user'   | 'MENTIONSUSER' | 'mentionsuser' ;
+IsQuestion       : 'IS_QUESTION'      | 'is_question'     | 'ISQUESTION'   | 'isquestion'   ;
+MentionsDate     : 'MENTIONS_DATE'    | 'mentions_date'   | 'MENTIONSDATE' | 'mentionsdate' ;
+MentionsTime     : 'MENTIONS_TIME'    | 'mentions_time'   | 'MENTIONSTIME' | 'mentionstime' ;
+MentionsPlace    : 'MENTIONS_PLACE'   | 'mentions_place'  | 'MENTIONSPLACE'| 'mentionsplace';
+MentionsOrg      : 'MENTIONS_ORG'     | 'mentions_org'    | 'MENTIONSORG'  | 'mentionsorg'  ;
+ContainsLink     : 'CONTAINS_LINK'    | 'contains_link'   | 'CONTAINSLINK' | 'containslink' ;
+
+// Legacy condition keywords (backward compatibility)
 HasWordOfDict    : 'HASWORDOFDICT'    | 'haswordofdict'   ;
 HasTime          : 'HASTIME'          | 'hastime'         ;
 HasLocation      : 'HASLOCATION'      | 'haslocation'     ;
