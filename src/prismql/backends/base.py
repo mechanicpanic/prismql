@@ -1,10 +1,10 @@
 """Abstract base classes for PrismQL backends."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional
-from collections.abc import Set, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Optional, Set
 
-from ..types import MessageId, Document, NERLabel
+from ..types import Document, MessageId, NERLabel
 
 
 class SearchBackend(ABC):

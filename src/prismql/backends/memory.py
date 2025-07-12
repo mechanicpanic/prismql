@@ -1,11 +1,11 @@
 """In-memory backend implementation for PrismQL."""
 
 import re
-from typing import Any, Optional
-from collections.abc import Set, Sequence
+from collections.abc import Sequence
+from typing import Optional, Set
 
+from ..types import Document, MessageId
 from .base import SearchBackend
-from ..types import MessageId, Document
 
 
 class MemoryBackend(SearchBackend):
@@ -28,10 +28,10 @@ class MemoryBackend(SearchBackend):
         self.id_field = id_field
 
         # Build indexes
-        self._id_to_doc = {}
-        self._field_indexes = {}
-        self._text_index = {}
-        self._question_ids = set()
+        self._id_to_doc: dict[MessageId, Document] = {}
+        self._field_indexes: dict[str, dict[str, Set[MessageId]]] = {}
+        self._text_index: dict[str, Set[MessageId]] = {}
+        self._question_ids: Set[MessageId] = set()
 
         for doc in self.documents:
             doc_id = doc.get(id_field)
@@ -77,7 +77,7 @@ class MemoryBackend(SearchBackend):
 
         for term in terms:
             term_lower = term.lower()
-            matching_ids = set()
+            matching_ids: Set[MessageId] = set()
 
             # Check exact word matches
             if term_lower in self._text_index:
@@ -117,13 +117,12 @@ class MemoryBackend(SearchBackend):
         if exact:
             # Exact match
             return self._field_indexes[field].get(value_lower, set()).copy()
-        else:
-            # Partial match
-            matching_ids = set()
-            for indexed_value, doc_ids in self._field_indexes[field].items():
-                if value_lower in indexed_value:
-                    matching_ids.update(doc_ids)
-            return matching_ids
+        # Partial match
+        matching_ids: Set[MessageId] = set()
+        for indexed_value, doc_ids in self._field_indexes[field].items():
+            if value_lower in indexed_value:
+                matching_ids.update(doc_ids)
+        return matching_ids
 
     def get_total_documents(self) -> int:
         """Get total number of documents."""
@@ -149,7 +148,7 @@ class MemoryBackend(SearchBackend):
 
     def get_questions(self) -> Set[MessageId]:
         """Get IDs of messages that contain questions."""
-        return self._question_ids.copy()
+        return set(self._question_ids)
 
     def _is_question(self, text: str) -> bool:
         """Check if text contains a question."""

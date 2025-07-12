@@ -1,20 +1,17 @@
 """PrismQL query visitor implementation."""
 
 import itertools
-from collections.abc import Mapping, Sequence, Set
-from typing import Any, Optional, Union
-
-from antlr4 import CommonTokenStream, InputStream
+from collections.abc import Mapping, Sequence
+from typing import Optional, Set
 
 from ..backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
 from ..exceptions import PrismQLRuntimeError
-from ..grammar.generated.PrismQLLexer import PrismQLLexer
 from ..grammar.generated.PrismQLParser import PrismQLParser
-from ..grammar.generated.PrismQLVisitor import PrismQLVisitor
+from ..grammar.generated.PrismQLVisitor import PrismQLVisitor as BasePrismQLVisitor
 from ..types import MessageGroup, MessageId, QueryResult
 
 
-class PrismQLVisitor(PrismQLVisitor):
+class PrismQLVisitor(BasePrismQLVisitor):
     """
     Visitor that traverses the PrismQL parse tree and executes the query.
 
@@ -54,7 +51,7 @@ class PrismQLVisitor(PrismQLVisitor):
             restriction_results = self.visitRestrictions(ctx.restrictions())
             return self._merge_restrictions(restriction_results, window_size)
 
-        elif ctx.query_seq():
+        if ctx.query_seq():
             # Multiple subqueries in sequence
             subquery_results = self.visitQuery_seq(ctx.query_seq())
             return self._merge_queries(subquery_results, window_size)
@@ -94,9 +91,8 @@ class PrismQLVisitor(PrismQLVisitor):
             for perm in itertools.product(*restriction_results):
                 permutations.append(list(perm))
             return permutations
-        else:
-            # Return as-is (will be merged by window processor)
-            return restriction_results
+        # Return as-is (will be merged by window processor)
+        return restriction_results
 
     def visitRestriction(self, ctx: PrismQLParser.RestrictionContext) -> Set[MessageId]:
         """Process a single restriction with boolean operators."""
@@ -107,13 +103,13 @@ class PrismQLVisitor(PrismQLVisitor):
             return lhs & rhs  # Set intersection
 
         # Handle OR operator
-        elif ctx.Or():
+        if ctx.Or():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
             return lhs | rhs  # Set union
 
         # Handle NOT operator
-        elif ctx.Not():
+        if ctx.Not():
             excluded = self.visitRestriction(ctx.restriction(0))
             # Get all message IDs up to a reasonable limit
             total_docs = min(
@@ -123,11 +119,11 @@ class PrismQLVisitor(PrismQLVisitor):
             return all_messages - excluded  # Set difference
 
         # Handle parentheses - just visit the inner restriction
-        elif ctx.getChildCount() == 3 and ctx.getChild(0).getText() == "(":
+        if ctx.getChildCount() == 3 and ctx.getChild(0).getText() == "(":
             return self.visitRestriction(ctx.restriction(0))
 
         # Handle condition
-        elif ctx.condition():
+        if ctx.condition():
             return self.visitCondition(ctx.condition())
 
         # This shouldn't happen with a valid parse tree
@@ -146,12 +142,12 @@ class PrismQLVisitor(PrismQLVisitor):
             return self.search_backend.search_text(words, field="text", operator="OR")
 
         # from(username) - same as byuser
-        elif ctx.From():
+        if ctx.From():
             username = ctx.huser().getText()
             return self.search_backend.search_by_field("user", username, exact=True)
 
         # mentions_user(username) - same as hasusermentioned
-        elif ctx.MentionsUser():
+        if ctx.MentionsUser():
             username = ctx.huser().getText()
             # First check precomputed index
             if username in self.precomputed_indexes.user_mentions:
@@ -160,51 +156,51 @@ class PrismQLVisitor(PrismQLVisitor):
             return self.search_backend.search_text([username], field="text")
 
         # is_question() - same as hasquestion
-        elif ctx.IsQuestion():
+        if ctx.IsQuestion():
             return self._get_questions()
 
         # NER-based fluent conditions
-        elif ctx.MentionsDate():
+        if ctx.MentionsDate():
             return self._get_ner_messages("DATE")
-        elif ctx.MentionsTime():
+        if ctx.MentionsTime():
             return self._get_ner_messages("TIME")
-        elif ctx.MentionsPlace():
+        if ctx.MentionsPlace():
             return self._get_ner_messages("GPE")  # or "LOC" depending on NLP backend
-        elif ctx.MentionsOrg():
+        if ctx.MentionsOrg():
             return self._get_ner_messages("ORG")
-        elif ctx.ContainsLink():
+        if ctx.ContainsLink():
             return self._get_ner_messages("URL")
 
         # Legacy operators (backward compatibility)
-        elif ctx.HasWordOfDict():
+        if ctx.HasWordOfDict():
             dict_name = ctx.hdict().getText()
             if dict_name not in self.user_dictionaries:
                 raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
             words = self.user_dictionaries[dict_name]
             return self.search_backend.search_text(words, field="text", operator="OR")
 
-        elif ctx.ByUser():
+        if ctx.ByUser():
             username = ctx.huser().getText()
             return self.search_backend.search_by_field("user", username, exact=True)
 
-        elif ctx.HasUserMentioned():
+        if ctx.HasUserMentioned():
             username = ctx.huser().getText()
             if username in self.precomputed_indexes.user_mentions:
                 return self.precomputed_indexes.user_mentions[username]
             return self.search_backend.search_text([username], field="text")
 
-        elif ctx.HasQuestion():
+        if ctx.HasQuestion():
             return self._get_questions()
 
-        elif ctx.HasDate():
+        if ctx.HasDate():
             return self._get_ner_messages("DATE")
-        elif ctx.HasTime():
+        if ctx.HasTime():
             return self._get_ner_messages("TIME")
-        elif ctx.HasLocation():
+        if ctx.HasLocation():
             return self._get_ner_messages("GPE")
-        elif ctx.HasOrganization():
+        if ctx.HasOrganization():
             return self._get_ner_messages("ORG")
-        elif ctx.HasURL():
+        if ctx.HasURL():
             return self._get_ner_messages("URL")
 
         raise PrismQLRuntimeError("Unknown condition type")
@@ -217,7 +213,8 @@ class PrismQLVisitor(PrismQLVisitor):
 
         # Check if backend supports question detection
         if hasattr(self.search_backend, "get_questions"):
-            return self.search_backend.get_questions()
+            result = self.search_backend.get_questions()
+            return result if result is not None else set()
 
         # Otherwise would need NLP backend
         if not self.nlp_backend:
@@ -238,12 +235,12 @@ class PrismQLVisitor(PrismQLVisitor):
         # Otherwise would need NLP backend
         if not self.nlp_backend:
             raise PrismQLRuntimeError(
-                f"NER condition requires NLP backend or precomputed indexes"
+                "NER condition requires NLP backend or precomputed indexes"
             )
 
         # This would require iterating through all messages - not efficient
         raise PrismQLRuntimeError(
-            f"NER conditions require precomputed indexes for large datasets"
+            "NER conditions require precomputed indexes for large datasets"
         )
 
     def _merge_restrictions(

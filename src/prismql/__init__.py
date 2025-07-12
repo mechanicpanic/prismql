@@ -22,10 +22,10 @@ Example:
     >>> results = engine.execute("SELECT hasquestion() INWIN 10")
 """
 
-from .engine import PrismQLEngine
-from .backends.base import SearchBackend, NLPBackend
-from .exceptions import PrismQLError, PrismQLSyntaxError, PrismQLRuntimeError
 from .__version__ import __version__
+from .backends.base import NLPBackend, SearchBackend
+from .engine import PrismQLEngine
+from .exceptions import PrismQLError, PrismQLRuntimeError, PrismQLSyntaxError
 
 __all__ = [
     # Main engine

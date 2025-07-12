@@ -1,6 +1,6 @@
 """PrismQL exceptions."""
 
-from typing import Optional, Any
+from typing import Any, Optional
 
 
 class PrismQLError(Exception):

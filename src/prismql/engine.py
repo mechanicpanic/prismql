@@ -1,23 +1,31 @@
 """Main PrismQL engine."""
 
-from typing import Optional, Any
 from collections.abc import Mapping, Sequence
+from typing import Any, Optional
 
-from antlr4 import InputStream, CommonTokenStream
+from antlr4 import CommonTokenStream, InputStream
 from antlr4.error.ErrorListener import ErrorListener
 
+from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
+from .exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from .grammar.generated.PrismQLLexer import PrismQLLexer
 from .grammar.generated.PrismQLParser import PrismQLParser
-from .visitors.query_visitor import PrismQLVisitor
-from .backends.base import SearchBackend, NLPBackend, PrecomputedIndexes
 from .types import QueryResult
-from .exceptions import PrismQLSyntaxError, PrismQLRuntimeError
+from .visitors.query_visitor import PrismQLVisitor
 
 
 class PrismQLErrorListener(ErrorListener):
     """Custom error listener for syntax errors."""
 
-    def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
+    def syntaxError(
+        self,
+        recognizer: Any,
+        offendingSymbol: Any,
+        line: int,
+        column: int,
+        msg: str,
+        e: Any,
+    ) -> None:
         raise PrismQLSyntaxError(f"Syntax error: {msg}", line=line, column=column)
 
 
@@ -67,7 +75,9 @@ class PrismQLEngine:
         """
         self.search_backend = search_backend
         self.nlp_backend = nlp_backend
-        self.user_dictionaries = user_dictionaries or {}
+        self.user_dictionaries: dict[str, list[str]] = {
+            k: list(v) for k, v in (user_dictionaries or {}).items()
+        }
         self.precomputed_indexes = precomputed_indexes or PrecomputedIndexes()
 
         # Create visitor
@@ -113,7 +123,8 @@ class PrismQLEngine:
             tree = parser.query()
 
             # Execute using visitor
-            return self.visitor.visit(tree)
+            result = self.visitor.visit(tree)
+            return result if result is not None else []
 
         except PrismQLSyntaxError:
             # Re-raise syntax errors as-is

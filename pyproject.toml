@@ -34,10 +34,11 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "ruff>=0.0.261",
+    "ruff>=0.1.0",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
+    "hatchling>=1.0.0",
+    "twine>=4.0.0",
 ]
 
 [project.urls]
@@ -47,27 +48,118 @@ Repository = "https://github.com/prismql/prismql"
 Issues = "https://github.com/prismql/prismql/issues"
 
 [build-system]
-requires = ["setuptools>=61.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/tests",
+  "/README.md",
+  "/LICENSE",
+]
 
-[tool.setuptools.package-data]
-prismql = ["grammar/*.g4"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/prismql"]
 
-[tool.black]
-line-length = 88
-target-version = ['py39', 'py310', 'py311']
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
 
 [tool.ruff]
 line-length = 88
-select = ["E", "F", "I", "N", "W", "B", "C90", "UP", "ANN", "S", "A", "C4", "RET", "SIM", "ARG"]
-ignore = ["ANN101", "ANN102"]
 target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "B",   # flake8-bugbear
+    "C90", # mccabe complexity
+    "UP",  # pyupgrade
+    "ANN", # flake8-annotations
+    "S",   # flake8-bandit
+    "A",   # flake8-builtins
+    "C4",  # flake8-comprehensions
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "ARG", # flake8-unused-arguments
+]
+ignore = [
+    "ANN101", # Missing type annotation for self
+    "ANN102", # Missing type annotation for cls
+    "ANN401", # Dynamically typed expressions (Any) are disallowed
+    "S101",   # Use of assert detected
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "ANN201", "ANN001", "B017", "E712"]
+"examples/*" = ["ANN201", "ANN001", "E501", "W291"]
+"scripts/*" = ["S602", "ANN201", "ANN001"]
+"src/prismql/grammar/generated/*" = ["ALL"]
+"src/prismql/visitors/*" = ["N802", "C901"]
 
 [tool.mypy]
 python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_optional = true
+
+[[tool.mypy.overrides]]
+module = [
+    "antlr4.*",
+    "prismql.grammar.generated.*",
+]
+ignore_missing_imports = true
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+source = ["src/prismql"]
+omit = [
+    "*/tests/*",
+    "*/examples/*",
+    "*/grammar/generated/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "twine>=6.1.0",
+]

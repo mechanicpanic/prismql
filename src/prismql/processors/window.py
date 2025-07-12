@@ -1,9 +1,8 @@
 """Window processing for PrismQL queries."""
 
-from typing import cast
 from collections import defaultdict
 
-from ..types import MessageId, MessageGroup, QueryResult
+from ..types import MessageGroup, QueryResult
 
 
 class WindowProcessor:
@@ -41,14 +40,14 @@ class WindowProcessor:
         for group in groups:
             all_messages.update(group)
 
-        # Convert to integers for sorting (assuming int IDs)
-        sorted_messages = sorted([int(msg) for msg in all_messages])
+        # Sort messages (works for both int and str IDs)
+        sorted_messages = sorted(all_messages, key=lambda x: (isinstance(x, str), x))
 
         # Build index of which groups contain each message
         message_to_groups = defaultdict(set)
         for group_idx, group in enumerate(groups):
             for msg_id in group:
-                message_to_groups[int(msg_id)].add(group_idx)
+                message_to_groups[msg_id].add(group_idx)
 
         # Find valid combinations within windows
         results = []
@@ -68,8 +67,14 @@ class WindowProcessor:
                     msg = sorted_messages[msg_idx]
 
                     # Check if within window (both directions)
-                    if abs(msg - start_msg) > window_size:
-                        continue
+                    # For numeric IDs, use distance; for others, use position in sorted list
+                    if isinstance(start_msg, int) and isinstance(msg, int):
+                        if abs(msg - start_msg) > window_size:
+                            continue
+                    else:
+                        # For string IDs or mixed types, use position difference
+                        if abs(msg_idx - start_idx) > window_size:
+                            continue
 
                     # Check which groups this message belongs to
                     msg_groups = message_to_groups[msg]
@@ -85,7 +90,7 @@ class WindowProcessor:
                     if len(groups_used) == len(groups):
                         combination.sort()  # Sort for consistent ordering
                         if combination not in results:
-                            results.append(combination[:])
+                            results.append(list(combination))
                         break
 
         return results
@@ -112,16 +117,18 @@ class WindowProcessor:
         message_sources = defaultdict(list)
         for group_idx, group in enumerate(groups):
             for msg_id in group:
-                message_sources[int(msg_id)].append(group_idx)
+                message_sources[msg_id].append(group_idx)
 
         # Sort all unique messages
-        sorted_messages = sorted(message_sources.keys())
+        sorted_messages = sorted(
+            message_sources.keys(), key=lambda x: (isinstance(x, str), x)
+        )
 
         # Group messages that are within window_size of each other
         results = []
         used_messages = set()
 
-        for start_msg in sorted_messages:
+        for start_idx, start_msg in enumerate(sorted_messages):
             if start_msg in used_messages:
                 continue
 
@@ -129,11 +136,17 @@ class WindowProcessor:
             window_group = [start_msg]
             used_messages.add(start_msg)
 
-            for msg in sorted_messages:
-                if msg <= start_msg:
-                    continue
-                if msg - start_msg > window_size:
-                    break
+            for msg_idx, msg in enumerate(
+                sorted_messages[start_idx + 1 :], start=start_idx + 1
+            ):
+                # Check distance based on type
+                if isinstance(start_msg, int) and isinstance(msg, int):
+                    if msg - start_msg > window_size:
+                        break
+                else:
+                    # For string IDs or mixed types, use position difference
+                    if msg_idx - start_idx > window_size:
+                        break
                 if msg not in used_messages:
                     window_group.append(msg)
                     used_messages.add(msg)
@@ -144,6 +157,6 @@ class WindowProcessor:
                 group_sources.update(message_sources[msg])
 
             if len(group_sources) >= 2:
-                results.append(window_group)
+                results.append(list(window_group))
 
         return results

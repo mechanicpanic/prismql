@@ -1,8 +1,7 @@
 # Generated from /Users/asmirnov/Projects/vibes/prismql/src/prismql/grammar/PrismQL.g4 by ANTLR 4.13.1
-# encoding: utf-8
-from antlr4 import *
-from io import StringIO
 import sys
+
+from antlr4 import *
 
 if sys.version_info[1] > 5:
     from typing import TextIO
@@ -1506,8 +1505,7 @@ class PrismQLParser(Parser):
         def accept(self, visitor: ParseTreeVisitor):
             if hasattr(visitor, "visitQuery"):
                 return visitor.visitQuery(self)
-            else:
-                return visitor.visitChildren(self)
+            return visitor.visitChildren(self)
 
     def query(self):
         localctx = PrismQLParser.QueryContext(self, self._ctx, self.state)
@@ -1553,8 +1551,7 @@ class PrismQLParser(Parser):
         def accept(self, visitor: ParseTreeVisitor):
             if hasattr(visitor, "visitBody"):
                 return visitor.visitBody(self)
-            else:
-                return visitor.visitChildren(self)
+            return visitor.visitChildren(self)
 
     def body(self):
         localctx = PrismQLParser.BodyContext(self, self._ctx, self.state)
@@ -1611,8 +1608,7 @@ class PrismQLParser(Parser):
         def query(self, i: int = None):
             if i is None:
                 return self.getTypedRuleContexts(PrismQLParser.QueryContext)
-            else:
-                return self.getTypedRuleContext(PrismQLParser.QueryContext, i)
+            return self.getTypedRuleContext(PrismQLParser.QueryContext, i)
 
         def getRuleIndex(self):
             return PrismQLParser.RULE_query_seq
@@ -1620,8 +1616,7 @@ class PrismQLParser(Parser):
         def accept(self, visitor: ParseTreeVisitor):
             if hasattr(visitor, "visitQuery_seq"):
                 return visitor.visitQuery_seq(self)
-            else:
-                return visitor.visitChildren(self)
+            return visitor.visitChildren(self)
 
     def query_seq(self):
         localctx = PrismQLParser.Query_seqContext(self, self._ctx, self.state)
@@ -1671,8 +1666,7 @@ class PrismQLParser(Parser):
         def restriction(self, i: int = None):
             if i is None:
                 return self.getTypedRuleContexts(PrismQLParser.RestrictionContext)
-            else:
-                return self.getTypedRuleContext(PrismQLParser.RestrictionContext, i)
+            return self.getTypedRuleContext(PrismQLParser.RestrictionContext, i)
 
         def Unr(self):
             return self.getToken(PrismQLParser.Unr, 0)
@@ -1683,8 +1677,7 @@ class PrismQLParser(Parser):
         def accept(self, visitor: ParseTreeVisitor):
             if hasattr(visitor, "visitRestrictions"):
                 return visitor.visitRestrictions(self)
-            else:
-                return visitor.visitChildren(self)
+            return visitor.visitChildren(self)
 
     def restrictions(self):
         localctx = PrismQLParser.RestrictionsContext(self, self._ctx, self.state)
@@ -1733,8 +1726,7 @@ class PrismQLParser(Parser):
         def restriction(self, i: int = None):
             if i is None:
                 return self.getTypedRuleContexts(PrismQLParser.RestrictionContext)
-            else:
-                return self.getTypedRuleContext(PrismQLParser.RestrictionContext, i)
+            return self.getTypedRuleContext(PrismQLParser.RestrictionContext, i)
 
         def Not(self):
             return self.getToken(PrismQLParser.Not, 0)
@@ -1754,8 +1746,7 @@ class PrismQLParser(Parser):
         def accept(self, visitor: ParseTreeVisitor):
             if hasattr(visitor, "visitRestriction"):
                 return visitor.visitRestriction(self)
-            else:
-                return visitor.visitChildren(self)
+            return visitor.visitChildren(self)
 
     def restriction(self, _p: int = 0):
         _parentctx = self._ctx
@@ -1948,8 +1939,7 @@ class PrismQLParser(Parser):
         def accept(self, visitor: ParseTreeVisitor):
             if hasattr(visitor, "visitCondition"):
                 return visitor.visitCondition(self)
-            else:
-                return visitor.visitChildren(self)
+            return visitor.visitChildren(self)
 
     def condition(self):
         localctx = PrismQLParser.ConditionContext(self, self._ctx, self.state)
@@ -2161,8 +2151,7 @@ class PrismQLParser(Parser):
         def accept(self, visitor: ParseTreeVisitor):
             if hasattr(visitor, "visitNumber"):
                 return visitor.visitNumber(self)
-            else:
-                return visitor.visitChildren(self)
+            return visitor.visitChildren(self)
 
     def number(self):
         localctx = PrismQLParser.NumberContext(self, self._ctx, self.state)
@@ -2197,8 +2186,7 @@ class PrismQLParser(Parser):
         def accept(self, visitor: ParseTreeVisitor):
             if hasattr(visitor, "visitHdict"):
                 return visitor.visitHdict(self)
-            else:
-                return visitor.visitChildren(self)
+            return visitor.visitChildren(self)
 
     def hdict(self):
         localctx = PrismQLParser.HdictContext(self, self._ctx, self.state)
@@ -2233,8 +2221,7 @@ class PrismQLParser(Parser):
         def accept(self, visitor: ParseTreeVisitor):
             if hasattr(visitor, "visitHuser"):
                 return visitor.visitHuser(self)
-            else:
-                return visitor.visitChildren(self)
+            return visitor.visitChildren(self)
 
     def huser(self):
         localctx = PrismQLParser.HuserContext(self, self._ctx, self.state)
@@ -2258,8 +2245,7 @@ class PrismQLParser(Parser):
         pred = self._predicates.get(ruleIndex, None)
         if pred is None:
             raise Exception("No predicate with index:" + str(ruleIndex))
-        else:
-            return pred(localctx, predIndex)
+        return pred(localctx, predIndex)
 
     def restriction_sempred(self, localctx: RestrictionContext, predIndex: int):
         if predIndex == 0:
