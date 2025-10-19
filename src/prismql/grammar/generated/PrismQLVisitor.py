@@ -26,6 +26,10 @@ class PrismQLVisitor(ParseTreeVisitor):
     def visitRestrictions(self, ctx: PrismQLParser.RestrictionsContext):
         return self.visitChildren(ctx)
 
+    # Visit a parse tree produced by PrismQLParser#named_restriction.
+    def visitNamed_restriction(self, ctx: PrismQLParser.Named_restrictionContext):
+        return self.visitChildren(ctx)
+
     # Visit a parse tree produced by PrismQLParser#restriction.
     def visitRestriction(self, ctx: PrismQLParser.RestrictionContext):
         return self.visitChildren(ctx)

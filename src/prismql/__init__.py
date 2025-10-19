@@ -28,6 +28,7 @@ from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
 from .backends.factory import BackendFactory
 from .engine import PrismQLEngine
 from .exceptions import PrismQLError, PrismQLRuntimeError, PrismQLSyntaxError
+from .types import NamedQueryResult
 
 __all__ = [
     # Main engine
@@ -37,10 +38,11 @@ __all__ = [
     "NLPBackend",
     "PrecomputedIndexes",
     "BackendFactory",
-    # Aggregation types
+    # Result types
     "AggregateResult",
     "AggregationFunction",
     "GroupedResult",
+    "NamedQueryResult",
     # Exceptions
     "PrismQLError",
     "PrismQLSyntaxError",

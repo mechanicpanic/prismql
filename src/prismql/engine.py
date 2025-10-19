@@ -12,7 +12,7 @@ from .backends.factory import BackendFactory
 from .exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from .grammar.generated.PrismQLLexer import PrismQLLexer
 from .grammar.generated.PrismQLParser import PrismQLParser
-from .types import QueryResult
+from .types import NamedQueryResult, QueryResult
 from .visitors.query_visitor import PrismQLVisitor
 
 
@@ -94,7 +94,9 @@ class PrismQLEngine:
             timestamp_field=timestamp_field,
         )
 
-    def execute(self, query: str) -> Union[QueryResult, AggregateResult, GroupedResult]:
+    def execute(
+        self, query: str
+    ) -> Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]:
         """
         Parse and execute a PrismQL query.
 

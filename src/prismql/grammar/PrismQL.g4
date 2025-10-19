@@ -18,7 +18,12 @@ query_seq
 
 restrictions
     :
-    restriction (',' restriction)* Unr?
+    named_restriction (',' named_restriction)* Unr?
+    ;
+
+named_restriction
+    :
+    restriction (As QUOTED_STRING)?
     ;
 
 restriction
@@ -131,6 +136,7 @@ field_name : STRING;
 
 // Keywords (case-insensitive)
 Select : 'SELECT' | 'select';
+As     : 'AS'     | 'as'    ;
 InWin  : 'INWIN'  | 'inwin' ;
 Within : 'WITHIN' | 'within' ;
 Unr    : 'UNR'    | 'unr'   ;

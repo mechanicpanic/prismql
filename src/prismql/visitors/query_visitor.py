@@ -13,7 +13,7 @@ from ..grammar.generated.PrismQLParser import PrismQLParser
 from ..grammar.generated.PrismQLVisitor import PrismQLVisitor as BasePrismQLVisitor
 from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..processors.variables import VariableConstraint, VariableValidator
-from ..types import MessageGroup, MessageId, QueryResult
+from ..types import MessageGroup, MessageId, NamedQueryResult, QueryResult
 
 
 class PrismQLVisitor(BasePrismQLVisitor):
@@ -46,20 +46,24 @@ class PrismQLVisitor(BasePrismQLVisitor):
         self.variable_constraints: list[VariableConstraint] = []
         self.current_restriction_position = 0
 
+        # Pattern naming for result labeling
+        self.pattern_names: list[Optional[str]] = []
+
     def visitQuery(
         self, ctx: PrismQLParser.QueryContext
-    ) -> Union[QueryResult, AggregateResult, GroupedResult]:
+    ) -> Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]:
         """Entry point - visit the query body."""
         return self.visitBody(ctx.body())
 
     def visitBody(
         self, ctx: PrismQLParser.BodyContext
-    ) -> Union[QueryResult, AggregateResult, GroupedResult]:
+    ) -> Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]:
         """Process query body with optional window, grouping, aggregation,
         ordering, and limiting."""
-        # Reset variable tracking for this query
+        # Reset variable tracking and pattern names for this query
         self.variable_constraints = []
         self.current_restriction_position = 0
+        self.pattern_names = []
 
         # Step 1: Extract window size if specified (position-based or time-based)
         window_size = self.DEFAULT_WINDOW_SIZE
@@ -78,7 +82,16 @@ class PrismQLVisitor(BasePrismQLVisitor):
         elif ctx.query_seq():
             # Multiple subqueries in sequence
             subquery_results = self.visitQuery_seq(ctx.query_seq())
-            results = self._merge_queries(subquery_results, window_size)
+            # Unwrap NamedQueryResult to plain QueryResult for merging
+            unwrapped_results: list[
+                Union[QueryResult, AggregateResult, GroupedResult]
+            ] = []
+            for result in subquery_results:
+                if isinstance(result, NamedQueryResult):
+                    unwrapped_results.append(result.to_list())
+                else:
+                    unwrapped_results.append(result)
+            results = self._merge_queries(unwrapped_results, window_size)
         else:
             results = []
 
@@ -135,13 +148,19 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if ctx.limit_clause():
             results = self._apply_limit(results, ctx.limit_clause())
 
+        # Step 8: Wrap with NamedQueryResult if pattern names were used
+        if self.pattern_names and any(name is not None for name in self.pattern_names):
+            return NamedQueryResult(results, self.pattern_names)
+
         return results
 
     def visitQuery_seq(
         self, ctx: PrismQLParser.Query_seqContext
-    ) -> list[Union[QueryResult, AggregateResult, GroupedResult]]:
+    ) -> list[Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]]:
         """Process a sequence of subqueries."""
-        results: list[Union[QueryResult, AggregateResult, GroupedResult]] = []
+        results: list[
+            Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]
+        ] = []
         for query_ctx in ctx.query():
             result = self.visitQuery(query_ctx)
             results.append(result)
@@ -158,9 +177,19 @@ class PrismQLVisitor(BasePrismQLVisitor):
         """
         restriction_results = []
 
-        # Process each restriction
-        for restriction_ctx in ctx.restriction():
-            result = self.visitRestriction(restriction_ctx)
+        # Process each named restriction
+        for named_restriction_ctx in ctx.named_restriction():
+            # Extract pattern name if present
+            pattern_name = None
+            if named_restriction_ctx.As():
+                # Get QUOTED_STRING and strip quotes
+                quoted_name = named_restriction_ctx.QUOTED_STRING().getText()
+                # Remove surrounding quotes (either " or ')
+                pattern_name = quoted_name[1:-1]
+            self.pattern_names.append(pattern_name)
+
+            # Process the underlying restriction
+            result = self.visitRestriction(named_restriction_ctx.restriction())
             # Convert set to sorted list
             sorted_result = sorted(result)
             restriction_results.append(sorted_result)
