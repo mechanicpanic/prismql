@@ -8,7 +8,7 @@ query
 
 body
     :
-    (query_seq | restrictions) ';'? (InWin number | Within time_value)? groupby_clause? aggregate_clause? orderby_clause? limit_clause?
+    (query_seq | restrictions) ';'? (InWin number | Within time_value)? temporal_filter? groupby_clause? aggregate_clause? orderby_clause? limit_clause?
     ;
 
 query_seq
@@ -55,10 +55,35 @@ condition
     | HasURL '(' ')'
     ;
 
+// Temporal filtering
+temporal_filter
+    :
+    Before '(' timestamp ')'
+    | After '(' timestamp ')'
+    | Between '(' timestamp ',' timestamp ')'
+    ;
+
+timestamp
+    :
+    QUOTED_STRING       # AbsoluteTimestamp
+    | time_value Ago    # RelativeTimestamp
+    ;
+
 // Aggregation and grouping
 groupby_clause
     :
-    GroupBy field_name (',' field_name)*
+    GroupBy groupby_field (',' groupby_field)*
+    ;
+
+groupby_field
+    :
+    field_name                          # SimpleGroupBy
+    | temporal_group_func '(' field_name ')'  # TemporalGroupBy
+    ;
+
+temporal_group_func
+    :
+    Hours | Days | Weeks | Months | Years
     ;
 
 aggregate_clause
@@ -130,12 +155,20 @@ Desc      : 'DESC'      | 'desc'     ;
 Limit     : 'LIMIT'     | 'limit'    ;
 Offset    : 'OFFSET'    | 'offset'   ;
 
-// Time units
+// Temporal filtering keywords
+Before    : 'BEFORE'    | 'before'   ;
+After     : 'AFTER'     | 'after'    ;
+Between   : 'BETWEEN'   | 'between'  ;
+Ago       : 'AGO'       | 'ago'      ;
+
+// Time units (also used for temporal grouping)
 Seconds   : 'SECONDS' | 'seconds' | 'SECOND' | 'second' | 's' ;
 Minutes   : 'MINUTES' | 'minutes' | 'MINUTE' | 'minute' | 'm' ;
 Hours     : 'HOURS'   | 'hours'   | 'HOUR'   | 'hour'   | 'h' ;
 Days      : 'DAYS'    | 'days'    | 'DAY'    | 'day'    | 'd' ;
 Weeks     : 'WEEKS'   | 'weeks'   | 'WEEK'   | 'week'   | 'w' ;
+Months    : 'MONTHS'  | 'months'  | 'MONTH'  | 'month'  ;
+Years     : 'YEARS'   | 'years'   | 'YEAR'   | 'year'   ;
 
 // New fluent condition keywords (preferred)
 Contains         : 'CONTAINS'         | 'contains'        ;
@@ -162,6 +195,7 @@ ByUser           : 'BYUSER'           | 'byuser'          ;
 // Tokens
 INTEGER : DIGIT+;
 STRING  : (LETTER | DIGIT)+;
+QUOTED_STRING : '"' (~["])* '"' | '\'' (~['])* '\'';
 
 // Whitespace (skip)
 WS: [ \n\r\t] -> skip;

@@ -1,11 +1,13 @@
 """Core aggregation logic for PrismQL queries."""
 
+import re
 from collections import defaultdict
 from collections.abc import Sequence
 from statistics import mean
 from typing import Any, Optional
 
 from ..backends.base import SearchBackend
+from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..types import MessageGroup, MessageId, QueryResult
 from .types import AggregateResult, AggregationFunction, GroupedResult
 
@@ -30,13 +32,69 @@ class Aggregator:
         """
         Group query results by specified fields.
 
+        Supports both simple field grouping and temporal grouping.
+        Temporal grouping fields have format: __UNIT__(field_name)
+        where UNIT can be HOURS, DAYS, WEEKS, MONTHS, YEARS.
+
         Args:
             results: Query results to group
-            fields: Field names to group by
+            fields: Field names to group by (may include temporal grouping)
 
         Returns:
             Grouped results
         """
+        # Check if any fields are temporal grouping
+        temporal_pattern = re.compile(r"^__(HOURS|DAYS|WEEKS|MONTHS|YEARS)__\((.+)\)$")
+        has_temporal = any(temporal_pattern.match(f) for f in fields)
+
+        if has_temporal and len(fields) == 1:
+            # Pure temporal grouping (single field)
+            match = temporal_pattern.match(fields[0])
+            if match:
+                unit_str = match.group(1)
+                field_name = match.group(2)
+
+                # Map unit string to TemporalUnit
+                unit_map = {
+                    "HOURS": TemporalUnit.HOUR,
+                    "DAYS": TemporalUnit.DAY,
+                    "WEEKS": TemporalUnit.WEEK,
+                    "MONTHS": TemporalUnit.MONTH,
+                    "YEARS": TemporalUnit.YEAR,
+                }
+                unit = unit_map[unit_str]
+
+                # Get all message IDs and documents
+                all_ids: set[MessageId] = set()
+                for group in results:
+                    all_ids.update(group)
+
+                try:
+                    documents = self.search_backend.get_documents(list(all_ids))
+                except NotImplementedError:
+                    return GroupedResult(
+                        groups={"__all__": results}, group_by_fields=fields
+                    )
+
+                # Use TemporalProcessor to group by temporal unit
+                temporal_groups = TemporalProcessor.group_by_temporal_unit(
+                    all_ids, documents, field_name, unit
+                )
+
+                # Convert message ID groups to message groups
+                # (keeping original structure)
+                result_groups: dict[str, list[MessageGroup]] = defaultdict(list)
+                for group in results:
+                    # Find which temporal group each message in this group belongs to
+                    for msg_id in group:
+                        for temp_key, temp_ids in temporal_groups.items():
+                            if msg_id in temp_ids:
+                                result_groups[temp_key].append(group)
+                                break
+
+                return GroupedResult(groups=dict(result_groups), group_by_fields=fields)
+
+        # Regular field-based grouping
         # Get all message IDs from results
         all_message_ids: set[MessageId] = set()
         for group in results:
@@ -53,9 +111,9 @@ class Aggregator:
         # Build mapping from message ID to field values
         message_fields: dict[MessageId, dict[str, Any]] = {}
         for doc in documents:
-            msg_id = doc.get("id")
-            if msg_id is not None:
-                message_fields[msg_id] = {
+            msg_id_value = doc.get("id")
+            if msg_id_value is not None:
+                message_fields[msg_id_value] = {
                     field: doc.get(field, "__none__") for field in fields
                 }
 

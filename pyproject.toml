@@ -106,6 +106,8 @@ ignore = [
 "src/prismql/backends/factory.py" = ["C901"]  # Complexity - future refactor candidate
 "src/prismql/backends/spacy.py" = ["S110"]  # Intentional except pass
 "src/prismql/processors/window.py" = ["C901"]  # Complexity - future refactor candidate
+"src/prismql/processors/temporal.py" = ["C901", "ARG004"]  # Complexity & unused args
+"src/prismql/aggregators/aggregator.py" = ["C901"]  # Complexity - future refactor
 
 [tool.mypy]
 python_version = "3.9"

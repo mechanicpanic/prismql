@@ -2,6 +2,7 @@
 
 import itertools
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Any, Optional, Union
 
 from ..aggregators.aggregator import Aggregator
@@ -10,6 +11,7 @@ from ..backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
 from ..exceptions import PrismQLRuntimeError
 from ..grammar.generated.PrismQLParser import PrismQLParser
 from ..grammar.generated.PrismQLVisitor import PrismQLVisitor as BasePrismQLVisitor
+from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..types import MessageGroup, MessageId, QueryResult
 
 
@@ -30,12 +32,14 @@ class PrismQLVisitor(BasePrismQLVisitor):
         nlp_backend: Optional[NLPBackend] = None,
         user_dictionaries: Optional[Mapping[str, Sequence[str]]] = None,
         precomputed_indexes: Optional[PrecomputedIndexes] = None,
+        timestamp_field: str = "timestamp",
     ) -> None:
         self.search_backend = search_backend
         self.nlp_backend = nlp_backend
         self.user_dictionaries = user_dictionaries or {}
         self.precomputed_indexes = precomputed_indexes or PrecomputedIndexes()
         self.aggregator = Aggregator(search_backend)
+        self.timestamp_field = timestamp_field
 
     def visitQuery(
         self, ctx: PrismQLParser.QueryContext
@@ -68,6 +72,15 @@ class PrismQLVisitor(BasePrismQLVisitor):
             results = self._merge_queries(subquery_results, window_size)
         else:
             results = []
+
+        # Step 2.5: Apply temporal filtering if specified (BEFORE, AFTER, BETWEEN)
+        if ctx.temporal_filter():
+            start_time, end_time, inclusive = self._parse_temporal_filter(
+                ctx.temporal_filter()
+            )
+            results = self._apply_temporal_filter(
+                results, start_time, end_time, inclusive
+            )
 
         # Step 3: Apply GROUP BY if specified
         grouped_results: Optional[GroupedResult] = None
@@ -389,15 +402,51 @@ class PrismQLVisitor(BasePrismQLVisitor):
         return number * multiplier
 
     def _extract_group_by_fields(self, ctx: Any) -> list[str]:
-        """Extract field names from GROUP BY clause."""
+        """
+        Extract field names from GROUP BY clause.
+
+        Supports both simple fields and temporal grouping.
+        For temporal grouping, returns special field names like:
+        - "HOUR(timestamp)" for hourly grouping
+        - "DAY(timestamp)" for daily grouping
+        etc.
+
+        Note: Temporal grouping is handled specially in the aggregator.
+        """
+        from ..grammar.generated.PrismQLParser import PrismQLParser
+
         fields = []
-        if ctx.field_name():
-            # Single field or list of fields
-            if isinstance(ctx.field_name(), list):
-                for field_ctx in ctx.field_name():
-                    fields.append(field_ctx.getText())
-            else:
-                fields.append(ctx.field_name().getText())
+
+        # Get groupby_field contexts
+        groupby_fields = ctx.groupby_field()
+        if not isinstance(groupby_fields, list):
+            groupby_fields = [groupby_fields]
+
+        for field_ctx in groupby_fields:
+            if isinstance(field_ctx, PrismQLParser.SimpleGroupByContext):
+                # Simple field grouping
+                fields.append(field_ctx.field_name().getText().strip("\"'"))
+            elif isinstance(field_ctx, PrismQLParser.TemporalGroupByContext):
+                # Temporal grouping: HOUR(field), DAY(field), etc.
+                func_text = field_ctx.temporal_group_func().getText().upper()
+                # Normalize to plural form for aggregator
+                func_map = {
+                    "HOUR": "HOURS",
+                    "HOURS": "HOURS",
+                    "DAY": "DAYS",
+                    "DAYS": "DAYS",
+                    "WEEK": "WEEKS",
+                    "WEEKS": "WEEKS",
+                    "MONTH": "MONTHS",
+                    "MONTHS": "MONTHS",
+                    "YEAR": "YEARS",
+                    "YEARS": "YEARS",
+                }
+                func = func_map.get(func_text, func_text)
+                field_name = field_ctx.field_name().getText().strip("\"'")
+                # Store as special field name that aggregator will recognize
+                fields.append(f"__{func}__({field_name})")
+
         return fields
 
     def _extract_aggregations(
@@ -503,3 +552,133 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Apply offset and limit
         return results[offset : offset + limit]
+
+    def _parse_temporal_filter(
+        self, ctx: Any
+    ) -> tuple[Optional[datetime], Optional[datetime], bool]:
+        """
+        Parse temporal filter clause (BEFORE, AFTER, BETWEEN).
+
+        Args:
+            ctx: temporal_filter context from parser
+
+        Returns:
+            Tuple of (start_time, end_time, inclusive), where:
+            - None means unbounded
+            - inclusive=True for BETWEEN, False for BEFORE/AFTER
+        """
+        if ctx.Before():
+            # BEFORE(timestamp) -> (None, timestamp, exclusive)
+            end_time = self._parse_timestamp(ctx.timestamp(0))
+            return (None, end_time, False)
+
+        if ctx.After():
+            # AFTER(timestamp) -> (timestamp, None, exclusive)
+            start_time = self._parse_timestamp(ctx.timestamp(0))
+            return (start_time, None, False)
+
+        if ctx.Between():
+            # BETWEEN(timestamp1, timestamp2) -> (timestamp1, timestamp2, inclusive)
+            start_time = self._parse_timestamp(ctx.timestamp(0))
+            end_time = self._parse_timestamp(ctx.timestamp(1))
+            return (start_time, end_time, True)
+
+        return (None, None, False)
+
+    def _parse_timestamp(self, ctx: Any) -> datetime:
+        """
+        Parse timestamp from context (absolute or relative).
+
+        Args:
+            ctx: timestamp context from parser
+
+        Returns:
+            Parsed datetime object
+        """
+        from ..grammar.generated.PrismQLParser import PrismQLParser
+
+        if isinstance(ctx, PrismQLParser.AbsoluteTimestampContext):
+            # Absolute timestamp: ISO 8601 string (quoted)
+            timestamp_str = ctx.QUOTED_STRING().getText().strip("\"'")
+            return TemporalProcessor.parse_timestamp(timestamp_str)
+
+        if isinstance(ctx, PrismQLParser.RelativeTimestampContext):
+            # Relative timestamp: "5 hours ago"
+            time_value_ctx = ctx.time_value()
+            value = int(time_value_ctx.number().getText())
+            unit_text = time_value_ctx.time_unit().getText().lower()
+
+            # Map unit text to TemporalUnit
+            unit_map = {
+                "second": TemporalUnit.SECOND,
+                "seconds": TemporalUnit.SECOND,
+                "s": TemporalUnit.SECOND,
+                "minute": TemporalUnit.MINUTE,
+                "minutes": TemporalUnit.MINUTE,
+                "m": TemporalUnit.MINUTE,
+                "hour": TemporalUnit.HOUR,
+                "hours": TemporalUnit.HOUR,
+                "h": TemporalUnit.HOUR,
+                "day": TemporalUnit.DAY,
+                "days": TemporalUnit.DAY,
+                "d": TemporalUnit.DAY,
+                "week": TemporalUnit.WEEK,
+                "weeks": TemporalUnit.WEEK,
+                "w": TemporalUnit.WEEK,
+                "month": TemporalUnit.MONTH,
+                "months": TemporalUnit.MONTH,
+                "year": TemporalUnit.YEAR,
+                "years": TemporalUnit.YEAR,
+            }
+
+            unit = unit_map.get(unit_text, TemporalUnit.DAY)
+            return TemporalProcessor.parse_relative_time(value, unit)
+
+        raise ValueError(f"Unknown timestamp context type: {type(ctx)}")
+
+    def _apply_temporal_filter(
+        self,
+        results: QueryResult,
+        start_time: Optional[datetime],
+        end_time: Optional[datetime],
+        inclusive: bool = False,
+    ) -> QueryResult:
+        """
+        Apply temporal filtering to query results.
+
+        Args:
+            results: Query results to filter
+            start_time: Start of time range, None for unbounded
+            end_time: End of time range, None for unbounded
+            inclusive: If True, bounds are inclusive (BETWEEN); otherwise exclusive
+
+        Returns:
+            Filtered query results
+        """
+        # Get all message IDs from results
+        all_ids: set[MessageId] = set()
+        for group in results:
+            all_ids.update(group)
+
+        # Get documents with timestamps
+        try:
+            documents = self.search_backend.get_documents(list(all_ids))
+        except NotImplementedError as e:
+            # Backend doesn't support document retrieval - cannot filter
+            raise PrismQLRuntimeError(
+                "Temporal filtering requires backend support for get_documents()"
+            ) from e
+
+        # Filter message IDs by time range
+        filtered_ids = TemporalProcessor.filter_by_time_range(
+            all_ids, documents, self.timestamp_field, start_time, end_time, inclusive
+        )
+
+        # Filter result groups to only include filtered messages
+        filtered_results: QueryResult = []
+        for group in results:
+            filtered_group = [msg_id for msg_id in group if msg_id in filtered_ids]
+            if filtered_group:
+                filtered_results.append(filtered_group)
+
+        return filtered_results

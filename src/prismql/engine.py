@@ -65,6 +65,7 @@ class PrismQLEngine:
         nlp_backend: Optional[NLPBackend] = None,
         user_dictionaries: Optional[Mapping[str, Sequence[str]]] = None,
         precomputed_indexes: Optional[PrecomputedIndexes] = None,
+        timestamp_field: str = "timestamp",
     ) -> None:
         """
         Initialize the PrismQL engine.
@@ -74,6 +75,7 @@ class PrismQLEngine:
             nlp_backend: Optional backend for NLP operations
             user_dictionaries: Optional mapping of dictionary names to word lists
             precomputed_indexes: Optional precomputed NLP indexes
+            timestamp_field: Name of the timestamp field for temporal operations
         """
         self.search_backend = search_backend
         self.nlp_backend = nlp_backend
@@ -81,6 +83,7 @@ class PrismQLEngine:
             k: list(v) for k, v in (user_dictionaries or {}).items()
         }
         self.precomputed_indexes = precomputed_indexes or PrecomputedIndexes()
+        self.timestamp_field = timestamp_field
 
         # Create visitor
         self.visitor = PrismQLVisitor(
@@ -88,6 +91,7 @@ class PrismQLEngine:
             nlp_backend=nlp_backend,
             user_dictionaries=self.user_dictionaries,
             precomputed_indexes=self.precomputed_indexes,
+            timestamp_field=timestamp_field,
         )
 
     def execute(self, query: str) -> Union[QueryResult, AggregateResult, GroupedResult]:

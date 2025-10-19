@@ -34,8 +34,32 @@ class PrismQLVisitor(ParseTreeVisitor):
     def visitCondition(self, ctx: PrismQLParser.ConditionContext):
         return self.visitChildren(ctx)
 
+    # Visit a parse tree produced by PrismQLParser#temporal_filter.
+    def visitTemporal_filter(self, ctx: PrismQLParser.Temporal_filterContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#AbsoluteTimestamp.
+    def visitAbsoluteTimestamp(self, ctx: PrismQLParser.AbsoluteTimestampContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#RelativeTimestamp.
+    def visitRelativeTimestamp(self, ctx: PrismQLParser.RelativeTimestampContext):
+        return self.visitChildren(ctx)
+
     # Visit a parse tree produced by PrismQLParser#groupby_clause.
     def visitGroupby_clause(self, ctx: PrismQLParser.Groupby_clauseContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#SimpleGroupBy.
+    def visitSimpleGroupBy(self, ctx: PrismQLParser.SimpleGroupByContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#TemporalGroupBy.
+    def visitTemporalGroupBy(self, ctx: PrismQLParser.TemporalGroupByContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#temporal_group_func.
+    def visitTemporal_group_func(self, ctx: PrismQLParser.Temporal_group_funcContext):
         return self.visitChildren(ctx)
 
     # Visit a parse tree produced by PrismQLParser#aggregate_clause.
