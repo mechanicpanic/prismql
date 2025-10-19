@@ -7,6 +7,7 @@ from antlr4 import CommonTokenStream, InputStream
 from antlr4.error.ErrorListener import ErrorListener
 
 from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
+from .backends.factory import BackendFactory
 from .exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from .grammar.generated.PrismQLLexer import PrismQLLexer
 from .grammar.generated.PrismQLParser import PrismQLParser
@@ -63,7 +64,7 @@ class PrismQLEngine:
         nlp_backend: Optional[NLPBackend] = None,
         user_dictionaries: Optional[Mapping[str, Sequence[str]]] = None,
         precomputed_indexes: Optional[PrecomputedIndexes] = None,
-    ):
+    ) -> None:
         """
         Initialize the PrismQL engine.
 
@@ -178,6 +179,71 @@ class PrismQLEngine:
         self.user_dictionaries[name] = list(words)
         # Update visitor's dictionaries too
         self.visitor.user_dictionaries = self.user_dictionaries
+
+    @classmethod
+    def from_config(cls, config: dict[str, Any]) -> "PrismQLEngine":
+        """
+        Create PrismQL engine from configuration dictionary.
+
+        This factory method provides a convenient way to set up the engine
+        with all backends using a single configuration dictionary.
+
+        Args:
+            config: Configuration dictionary specifying backends and settings
+
+        Returns:
+            Configured PrismQLEngine instance
+
+        Raises:
+            ValueError: If configuration is invalid
+            ImportError: If required dependencies are not available
+
+        Example:
+            >>> config = {
+            ...     "search_backend": {
+            ...         "type": "opensearch",
+            ...         "client": opensearch_client,
+            ...         "index_name": "messages",
+            ...         "field_mappings": {"text": "content", "user": "author"}
+            ...     },
+            ...     "nlp_backend": {
+            ...         "type": "spacy",
+            ...         "model": "en_core_web_sm"
+            ...     },
+            ...     "user_dictionaries": {
+            ...         "sentiment": ["happy", "sad", "angry"]
+            ...     }
+            ... }
+            >>> engine = PrismQLEngine.from_config(config)
+        """
+        # Validate configuration
+        validated_config = BackendFactory.validate_config(config)
+
+        # Create backends
+        (
+            search_backend,
+            nlp_backend,
+            precomputed_indexes,
+            user_dictionaries,
+        ) = BackendFactory.create_backends(validated_config)
+
+        # Create engine
+        return cls(
+            search_backend=search_backend,
+            nlp_backend=nlp_backend,
+            user_dictionaries=user_dictionaries,
+            precomputed_indexes=precomputed_indexes,
+        )
+
+    @classmethod
+    def get_example_configs(cls) -> dict[str, dict[str, Any]]:
+        """
+        Get example configurations for common setups.
+
+        Returns:
+            Dictionary mapping setup names to example configurations
+        """
+        return BackendFactory.get_example_configs()
 
     def remove_dictionary(self, name: str) -> None:
         """

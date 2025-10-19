@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
-from typing import Optional, Set
+from typing import Optional
 
 from ..types import Document, MessageId, NERLabel
 
@@ -18,7 +18,7 @@ class SearchBackend(ABC):
     @abstractmethod
     def search_text(
         self, terms: Sequence[str], field: str = "text", operator: str = "OR"
-    ) -> Set[MessageId]:
+    ) -> set[MessageId]:
         """
         Search for messages containing any (OR) or all (AND) of the terms.
 
@@ -35,7 +35,7 @@ class SearchBackend(ABC):
     @abstractmethod
     def search_by_field(
         self, field: str, value: str, exact: bool = True
-    ) -> Set[MessageId]:
+    ) -> set[MessageId]:
         """
         Search for messages with specific field value.
 
@@ -55,7 +55,7 @@ class SearchBackend(ABC):
         pass
 
     @abstractmethod
-    def get_all_document_ids(self, limit: Optional[int] = None) -> Set[MessageId]:
+    def get_all_document_ids(self, limit: Optional[int] = None) -> set[MessageId]:
         """
         Get all document IDs (up to limit).
 
@@ -146,10 +146,10 @@ class PrecomputedIndexes:
 
     def __init__(
         self,
-        entities: Optional[Mapping[NERLabel, Set[MessageId]]] = None,
-        questions: Optional[Set[MessageId]] = None,
-        user_mentions: Optional[Mapping[str, Set[MessageId]]] = None,
-    ):
+        entities: Optional[Mapping[NERLabel, set[MessageId]]] = None,
+        questions: Optional[set[MessageId]] = None,
+        user_mentions: Optional[Mapping[str, set[MessageId]]] = None,
+    ) -> None:
         self.entities = entities or {}
         self.questions = questions or set()
         self.user_mentions = user_mentions or {}

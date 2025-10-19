@@ -23,16 +23,24 @@ Example:
 """
 
 from .__version__ import __version__
-from .backends.base import NLPBackend, SearchBackend
+from .aggregators.types import AggregateResult, AggregationFunction, GroupedResult
+from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
+from .backends.factory import BackendFactory
 from .engine import PrismQLEngine
 from .exceptions import PrismQLError, PrismQLRuntimeError, PrismQLSyntaxError
 
 __all__ = [
     # Main engine
     "PrismQLEngine",
-    # Backend interfaces
+    # Backend interfaces and factory
     "SearchBackend",
     "NLPBackend",
+    "PrecomputedIndexes",
+    "BackendFactory",
+    # Aggregation types
+    "AggregateResult",
+    "AggregationFunction",
+    "GroupedResult",
     # Exceptions
     "PrismQLError",
     "PrismQLSyntaxError",

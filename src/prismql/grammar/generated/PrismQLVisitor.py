@@ -34,6 +34,58 @@ class PrismQLVisitor(ParseTreeVisitor):
     def visitCondition(self, ctx: PrismQLParser.ConditionContext):
         return self.visitChildren(ctx)
 
+    # Visit a parse tree produced by PrismQLParser#groupby_clause.
+    def visitGroupby_clause(self, ctx: PrismQLParser.Groupby_clauseContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#aggregate_clause.
+    def visitAggregate_clause(self, ctx: PrismQLParser.Aggregate_clauseContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#CountAll.
+    def visitCountAll(self, ctx: PrismQLParser.CountAllContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#CountDistinct.
+    def visitCountDistinct(self, ctx: PrismQLParser.CountDistinctContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#DistinctValues.
+    def visitDistinctValues(self, ctx: PrismQLParser.DistinctValuesContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#SumFunc.
+    def visitSumFunc(self, ctx: PrismQLParser.SumFuncContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#AvgFunc.
+    def visitAvgFunc(self, ctx: PrismQLParser.AvgFuncContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#MinFunc.
+    def visitMinFunc(self, ctx: PrismQLParser.MinFuncContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#MaxFunc.
+    def visitMaxFunc(self, ctx: PrismQLParser.MaxFuncContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#orderby_clause.
+    def visitOrderby_clause(self, ctx: PrismQLParser.Orderby_clauseContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#limit_clause.
+    def visitLimit_clause(self, ctx: PrismQLParser.Limit_clauseContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#time_value.
+    def visitTime_value(self, ctx: PrismQLParser.Time_valueContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#time_unit.
+    def visitTime_unit(self, ctx: PrismQLParser.Time_unitContext):
+        return self.visitChildren(ctx)
+
     # Visit a parse tree produced by PrismQLParser#number.
     def visitNumber(self, ctx: PrismQLParser.NumberContext):
         return self.visitChildren(ctx)
@@ -44,6 +96,10 @@ class PrismQLVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by PrismQLParser#huser.
     def visitHuser(self, ctx: PrismQLParser.HuserContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#field_name.
+    def visitField_name(self, ctx: PrismQLParser.Field_nameContext):
         return self.visitChildren(ctx)
 
 

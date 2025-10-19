@@ -6,7 +6,7 @@ from typing import Any, Optional
 class PrismQLError(Exception):
     """Base exception for all PrismQL errors."""
 
-    def __init__(self, message: str, details: Optional[dict[str, Any]] = None):
+    def __init__(self, message: str, details: Optional[dict[str, Any]] = None) -> None:
         super().__init__(message)
         self.details = details or {}
 
@@ -16,7 +16,7 @@ class PrismQLSyntaxError(PrismQLError):
 
     def __init__(
         self, message: str, line: Optional[int] = None, column: Optional[int] = None
-    ):
+    ) -> None:
         details = {}
         if line is not None:
             details["line"] = line
@@ -33,7 +33,7 @@ class PrismQLRuntimeError(PrismQLError):
         message: str,
         query: Optional[str] = None,
         cause: Optional[Exception] = None,
-    ):
+    ) -> None:
         details = {}
         if query is not None:
             details["query"] = query
@@ -48,7 +48,7 @@ class BackendError(PrismQLError):
 
     def __init__(
         self, message: str, backend_name: str, operation: Optional[str] = None
-    ):
+    ) -> None:
         details = {"backend": backend_name}
         if operation is not None:
             details["operation"] = operation

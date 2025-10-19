@@ -28,7 +28,9 @@ dependencies = [
 [project.optional-dependencies]
 opensearch = ["opensearch-py>=2.0.0"]
 elasticsearch = ["elasticsearch>=8.0.0"]
-nlp = ["spacy>=3.0.0"]
+nlp = [
+    "spacy>=3.0.0",
+]
 all = ["prismql[opensearch,elasticsearch,nlp]"]
 dev = [
     "pytest>=7.0.0",
@@ -159,6 +161,7 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.2.0",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
     "twine>=6.1.0",

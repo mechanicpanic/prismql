@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Sequence
-from typing import Optional, Set
+from typing import Optional
 
 from ..types import Document, MessageId
 from .base import SearchBackend
@@ -16,7 +16,7 @@ class MemoryBackend(SearchBackend):
     searches using Python's built-in data structures.
     """
 
-    def __init__(self, documents: Sequence[Document], id_field: str = "id"):
+    def __init__(self, documents: Sequence[Document], id_field: str = "id") -> None:
         """
         Initialize the memory backend with documents.
 
@@ -29,9 +29,9 @@ class MemoryBackend(SearchBackend):
 
         # Build indexes
         self._id_to_doc: dict[MessageId, Document] = {}
-        self._field_indexes: dict[str, dict[str, Set[MessageId]]] = {}
-        self._text_index: dict[str, Set[MessageId]] = {}
-        self._question_ids: Set[MessageId] = set()
+        self._field_indexes: dict[str, dict[str, set[MessageId]]] = {}
+        self._text_index: dict[str, set[MessageId]] = {}
+        self._question_ids: set[MessageId] = set()
 
         for doc in self.documents:
             doc_id = doc.get(id_field)
@@ -67,7 +67,7 @@ class MemoryBackend(SearchBackend):
 
     def search_text(
         self, terms: Sequence[str], field: str = "text", operator: str = "OR"
-    ) -> Set[MessageId]:
+    ) -> set[MessageId]:
         """Search for documents containing the specified terms."""
         if not terms:
             return set()
@@ -77,7 +77,7 @@ class MemoryBackend(SearchBackend):
 
         for term in terms:
             term_lower = term.lower()
-            matching_ids: Set[MessageId] = set()
+            matching_ids: set[MessageId] = set()
 
             # Check exact word matches
             if term_lower in self._text_index:
@@ -107,7 +107,7 @@ class MemoryBackend(SearchBackend):
 
     def search_by_field(
         self, field: str, value: str, exact: bool = True
-    ) -> Set[MessageId]:
+    ) -> set[MessageId]:
         """Search for documents with specific field value."""
         if field not in self._field_indexes:
             return set()
@@ -118,7 +118,7 @@ class MemoryBackend(SearchBackend):
             # Exact match
             return self._field_indexes[field].get(value_lower, set()).copy()
         # Partial match
-        matching_ids: Set[MessageId] = set()
+        matching_ids: set[MessageId] = set()
         for indexed_value, doc_ids in self._field_indexes[field].items():
             if value_lower in indexed_value:
                 matching_ids.update(doc_ids)
@@ -128,7 +128,7 @@ class MemoryBackend(SearchBackend):
         """Get total number of documents."""
         return len(self.documents)
 
-    def get_all_document_ids(self, limit: Optional[int] = None) -> Set[MessageId]:
+    def get_all_document_ids(self, limit: Optional[int] = None) -> set[MessageId]:
         """Get all document IDs."""
         all_ids = set(self._id_to_doc.keys())
 
@@ -146,7 +146,7 @@ class MemoryBackend(SearchBackend):
                 docs.append(self._id_to_doc[doc_id].copy())
         return docs
 
-    def get_questions(self) -> Set[MessageId]:
+    def get_questions(self) -> set[MessageId]:
         """Get IDs of messages that contain questions."""
         return set(self._question_ids)
 
@@ -180,8 +180,4 @@ class MemoryBackend(SearchBackend):
             "will",
         ]
 
-        for word in question_words:
-            if text_lower.startswith(word + " "):
-                return True
-
-        return False
+        return any(text_lower.startswith(word + " ") for word in question_words)

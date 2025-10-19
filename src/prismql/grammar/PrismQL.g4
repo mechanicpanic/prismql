@@ -8,12 +8,12 @@ query
 
 body
     :
-    (query_seq | restrictions) ';'? (InWin number)?
+    (query_seq | restrictions) ';'? (InWin number | Within time_value)? groupby_clause? aggregate_clause? orderby_clause? limit_clause?
     ;
 
 query_seq
     :
-    '(' query ')' ( ';' '(' query ')' )* 
+    '(' query ')' ( ';' '(' query ')' )*
     ;
 
 restrictions
@@ -42,7 +42,7 @@ condition
     | MentionsPlace '(' ')'
     | MentionsOrg '(' ')'
     | ContainsLink '(' ')'
-    
+
     // Legacy operators (backward compatibility)
     | HasWordOfDict '(' hdict ')'
     | ByUser '(' huser ')'
@@ -55,18 +55,87 @@ condition
     | HasURL '(' ')'
     ;
 
+// Aggregation and grouping
+groupby_clause
+    :
+    GroupBy field_name (',' field_name)*
+    ;
+
+aggregate_clause
+    :
+    Aggregate aggregation_func (',' aggregation_func)*
+    ;
+
+aggregation_func
+    :
+    Count '(' ')'                          # CountAll
+    | Count '(' Distinct field_name ')'    # CountDistinct
+    | Distinct '(' field_name ')'          # DistinctValues
+    | Sum '(' field_name ')'               # SumFunc
+    | Avg '(' field_name ')'               # AvgFunc
+    | Min '(' field_name ')'               # MinFunc
+    | Max '(' field_name ')'               # MaxFunc
+    ;
+
+orderby_clause
+    :
+    OrderBy field_name (Asc | Desc)? (',' field_name (Asc | Desc)?)*
+    ;
+
+limit_clause
+    :
+    Limit number (Offset number)?
+    ;
+
+// Temporal support
+time_value
+    :
+    number time_unit
+    ;
+
+time_unit
+    :
+    Seconds | Minutes | Hours | Days | Weeks
+    ;
+
 // Rule references
 number : INTEGER;
 hdict : STRING;
 huser : STRING;
+field_name : STRING;
 
 // Keywords (case-insensitive)
 Select : 'SELECT' | 'select';
 InWin  : 'INWIN'  | 'inwin' ;
+Within : 'WITHIN' | 'within' ;
 Unr    : 'UNR'    | 'unr'   ;
 Not    : 'NOT'    | 'not'   ;
 And    : 'AND'    | 'and'   ;
 Or     : 'OR'     | 'or'    ;
+
+// Aggregation keywords
+Aggregate : 'AGGREGATE' | 'aggregate' ;
+GroupBy   : 'GROUP BY'  | 'group by' | 'GROUPBY' | 'groupby' ;
+Count     : 'COUNT'     | 'count'    ;
+Distinct  : 'DISTINCT'  | 'distinct' ;
+Sum       : 'SUM'       | 'sum'      ;
+Avg       : 'AVG'       | 'avg'      ;
+Min       : 'MIN'       | 'min'      ;
+Max       : 'MAX'       | 'max'      ;
+
+// Ordering and limiting
+OrderBy   : 'ORDER BY'  | 'order by' | 'ORDERBY' | 'orderby' ;
+Asc       : 'ASC'       | 'asc'      ;
+Desc      : 'DESC'      | 'desc'     ;
+Limit     : 'LIMIT'     | 'limit'    ;
+Offset    : 'OFFSET'    | 'offset'   ;
+
+// Time units
+Seconds   : 'SECONDS' | 'seconds' | 'SECOND' | 'second' | 's' ;
+Minutes   : 'MINUTES' | 'minutes' | 'MINUTE' | 'minute' | 'm' ;
+Hours     : 'HOURS'   | 'hours'   | 'HOUR'   | 'hour'   | 'h' ;
+Days      : 'DAYS'    | 'days'    | 'DAY'    | 'day'    | 'd' ;
+Weeks     : 'WEEKS'   | 'weeks'   | 'WEEK'   | 'week'   | 'w' ;
 
 // New fluent condition keywords (preferred)
 Contains         : 'CONTAINS'         | 'contains'        ;
