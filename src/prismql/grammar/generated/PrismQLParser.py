@@ -14,7 +14,7 @@ def serializedATN():
     return [
         4,
         1,
-        57,
+        58,
         310,
         2,
         0,
@@ -692,7 +692,7 @@ def serializedATN():
         38,
         40,
         0,
-        3,
+        4,
         1,
         0,
         31,
@@ -705,6 +705,12 @@ def serializedATN():
         0,
         29,
         33,
+        2,
+        0,
+        55,
+        55,
+        57,
+        57,
         337,
         0,
         42,
@@ -2694,8 +2700,8 @@ def serializedATN():
         0,
         303,
         304,
-        5,
-        55,
+        7,
+        3,
         0,
         0,
         304,
@@ -2706,8 +2712,8 @@ def serializedATN():
         0,
         305,
         306,
-        5,
-        55,
+        7,
+        3,
         0,
         0,
         306,
@@ -2826,6 +2832,7 @@ class PrismQLParser(Parser):
         "INTEGER",
         "STRING",
         "QUOTED_STRING",
+        "VARIABLE",
         "WS",
     ]
 
@@ -2932,7 +2939,8 @@ class PrismQLParser(Parser):
     INTEGER = 54
     STRING = 55
     QUOTED_STRING = 56
-    WS = 57
+    VARIABLE = 57
+    WS = 58
 
     def __init__(self, input: TokenStream, output: TextIO = sys.stdout):
         super().__init__(input, output)
@@ -4639,6 +4647,9 @@ class PrismQLParser(Parser):
         def STRING(self):
             return self.getToken(PrismQLParser.STRING, 0)
 
+        def VARIABLE(self):
+            return self.getToken(PrismQLParser.VARIABLE, 0)
+
         def getRuleIndex(self):
             return PrismQLParser.RULE_hdict
 
@@ -4651,10 +4662,16 @@ class PrismQLParser(Parser):
     def hdict(self):
         localctx = PrismQLParser.HdictContext(self, self._ctx, self.state)
         self.enterRule(localctx, 36, self.RULE_hdict)
+        self._la = 0  # Token type
         try:
             self.enterOuterAlt(localctx, 1)
             self.state = 303
-            self.match(PrismQLParser.STRING)
+            _la = self._input.LA(1)
+            if not (_la == 55 or _la == 57):
+                self._errHandler.recoverInline(self)
+            else:
+                self._errHandler.reportMatch(self)
+                self.consume()
         except RecognitionException as re:
             localctx.exception = re
             self._errHandler.reportError(self, re)
@@ -4675,6 +4692,9 @@ class PrismQLParser(Parser):
         def STRING(self):
             return self.getToken(PrismQLParser.STRING, 0)
 
+        def VARIABLE(self):
+            return self.getToken(PrismQLParser.VARIABLE, 0)
+
         def getRuleIndex(self):
             return PrismQLParser.RULE_huser
 
@@ -4687,10 +4707,16 @@ class PrismQLParser(Parser):
     def huser(self):
         localctx = PrismQLParser.HuserContext(self, self._ctx, self.state)
         self.enterRule(localctx, 38, self.RULE_huser)
+        self._la = 0  # Token type
         try:
             self.enterOuterAlt(localctx, 1)
             self.state = 305
-            self.match(PrismQLParser.STRING)
+            _la = self._input.LA(1)
+            if not (_la == 55 or _la == 57):
+                self._errHandler.recoverInline(self)
+            else:
+                self._errHandler.reportMatch(self)
+                self.consume()
         except RecognitionException as re:
             localctx.exception = re
             self._errHandler.reportError(self, re)

@@ -12,6 +12,7 @@ from ..exceptions import PrismQLRuntimeError
 from ..grammar.generated.PrismQLParser import PrismQLParser
 from ..grammar.generated.PrismQLVisitor import PrismQLVisitor as BasePrismQLVisitor
 from ..processors.temporal import TemporalProcessor, TemporalUnit
+from ..processors.variables import VariableConstraint, VariableValidator
 from ..types import MessageGroup, MessageId, QueryResult
 
 
@@ -41,6 +42,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
         self.aggregator = Aggregator(search_backend)
         self.timestamp_field = timestamp_field
 
+        # Variable tracking for pattern matching
+        self.variable_constraints: list[VariableConstraint] = []
+        self.current_restriction_position = 0
+
     def visitQuery(
         self, ctx: PrismQLParser.QueryContext
     ) -> Union[QueryResult, AggregateResult, GroupedResult]:
@@ -52,6 +57,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
     ) -> Union[QueryResult, AggregateResult, GroupedResult]:
         """Process query body with optional window, grouping, aggregation,
         ordering, and limiting."""
+        # Reset variable tracking for this query
+        self.variable_constraints = []
+        self.current_restriction_position = 0
+
         # Step 1: Extract window size if specified (position-based or time-based)
         window_size = self.DEFAULT_WINDOW_SIZE
         if ctx.InWin():
@@ -72,6 +81,13 @@ class PrismQLVisitor(BasePrismQLVisitor):
             results = self._merge_queries(subquery_results, window_size)
         else:
             results = []
+
+        # Step 2.3: Apply variable validation if any variables were used
+        if self.variable_constraints:
+            validator = VariableValidator(
+                self.search_backend, self.variable_constraints
+            )
+            results = validator.validate_results(results)
 
         # Step 2.5: Apply temporal filtering if specified (BEFORE, AFTER, BETWEEN)
         if ctx.temporal_filter():
@@ -149,6 +165,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
             sorted_result = sorted(result)
             restriction_results.append(sorted_result)
 
+            # Increment position after processing each restriction
+            self.current_restriction_position += 1
+
         # Handle UNR (unrelated) flag - generate permutations
         if ctx.Unr():
             # Generate all permutations of taking one message from each group
@@ -201,6 +220,15 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # contains(dict_name) - same as haswordofdict
         if ctx.Contains():
             dict_name = ctx.hdict().getText()
+
+            # Check if this is a variable
+            if dict_name.startswith("$"):
+                # Variables in contains() not yet supported - would need text field tracking
+                raise PrismQLRuntimeError(
+                    "Variables in contains() not yet supported. "
+                    "Use from($user) for user-based variables."
+                )
+
             if dict_name not in self.user_dictionaries:
                 raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
             words = self.user_dictionaries[dict_name]
@@ -209,6 +237,22 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # from(username) - same as byuser
         if ctx.From():
             username = ctx.huser().getText()
+
+            # Check if this is a variable
+            if username.startswith("$"):
+                var_name = username[1:]  # Remove $ prefix
+                # Record variable constraint
+                self.variable_constraints.append(
+                    VariableConstraint(
+                        variable_name=var_name,
+                        field_name="user",
+                        position=self.current_restriction_position,
+                    )
+                )
+                # Return all messages (variable will be validated later)
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
+
             return self.search_backend.search_by_field("user", username, exact=True)
 
         # mentions_user(username) - same as hasusermentioned
@@ -246,6 +290,22 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         if ctx.ByUser():
             username = ctx.huser().getText()
+
+            # Check if this is a variable
+            if username.startswith("$"):
+                var_name = username[1:]  # Remove $ prefix
+                # Record variable constraint
+                self.variable_constraints.append(
+                    VariableConstraint(
+                        variable_name=var_name,
+                        field_name="user",
+                        position=self.current_restriction_position,
+                    )
+                )
+                # Return all messages (variable will be validated later)
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
+
             return self.search_backend.search_by_field("user", username, exact=True)
 
         if ctx.HasUserMentioned():

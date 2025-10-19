@@ -125,8 +125,8 @@ time_unit
 
 // Rule references
 number : INTEGER;
-hdict : STRING;
-huser : STRING;
+hdict : STRING | VARIABLE;
+huser : STRING | VARIABLE;
 field_name : STRING;
 
 // Keywords (case-insensitive)
@@ -196,6 +196,7 @@ ByUser           : 'BYUSER'           | 'byuser'          ;
 INTEGER : DIGIT+;
 STRING  : (LETTER | DIGIT)+;
 QUOTED_STRING : '"' (~["])* '"' | '\'' (~['])* '\'';
+VARIABLE : '$' (LETTER | DIGIT)+;
 
 // Whitespace (skip)
 WS: [ \n\r\t] -> skip;

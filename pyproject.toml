@@ -101,13 +101,15 @@ ignore = [
 "examples/*" = ["ANN201", "ANN001", "E501", "W291"]
 "scripts/*" = ["S602", "ANN201", "ANN001"]
 "src/prismql/grammar/generated/*" = ["ALL"]
-"src/prismql/visitors/*" = ["N802", "C901"]
+"src/prismql/visitors/*" = ["N802", "C901", "E501"]  # ANTLR patterns, complexity, long lines
 "src/prismql/engine.py" = ["N802", "N803", "ARG002"]  # ANTLR interface requirements
 "src/prismql/backends/factory.py" = ["C901"]  # Complexity - future refactor candidate
 "src/prismql/backends/spacy.py" = ["S110"]  # Intentional except pass
 "src/prismql/processors/window.py" = ["C901"]  # Complexity - future refactor candidate
 "src/prismql/processors/temporal.py" = ["C901", "ARG004"]  # Complexity & unused args
+"src/prismql/processors/variables.py" = ["E501", "ARG002"]  # Line length & unused args
 "src/prismql/aggregators/aggregator.py" = ["C901"]  # Complexity - future refactor
+"examples/pattern_variables_example.py" = ["C901"]  # Example complexity acceptable
 
 [tool.mypy]
 python_version = "3.9"
