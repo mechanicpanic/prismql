@@ -46,7 +46,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
     def visitBody(
         self, ctx: PrismQLParser.BodyContext
     ) -> Union[QueryResult, AggregateResult, GroupedResult]:
-        """Process the query body with optional window constraint, grouping, aggregation, ordering, and limiting."""
+        """Process query body with optional window, grouping, aggregation,
+        ordering, and limiting."""
         # Step 1: Extract window size if specified (position-based or time-based)
         window_size = self.DEFAULT_WINDOW_SIZE
         if ctx.InWin():
@@ -107,9 +108,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         return results
 
-    def visitQuery_seq(self, ctx: PrismQLParser.Query_seqContext) -> list[QueryResult]:
+    def visitQuery_seq(
+        self, ctx: PrismQLParser.Query_seqContext
+    ) -> list[Union[QueryResult, AggregateResult, GroupedResult]]:
         """Process a sequence of subqueries."""
-        results = []
+        results: list[Union[QueryResult, AggregateResult, GroupedResult]] = []
         for query_ctx in ctx.query():
             result = self.visitQuery(query_ctx)
             results.append(result)
@@ -263,7 +266,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # Check if backend supports question detection
         if hasattr(self.search_backend, "get_questions"):
             result = self.search_backend.get_questions()
-            return result if result is not None else set()
+            return set(result) if result is not None else set()
 
         # Otherwise would need NLP backend
         if not self.nlp_backend:
@@ -316,16 +319,26 @@ class PrismQLVisitor(BasePrismQLVisitor):
         return WindowProcessor.merge_restrictions(groups, window_size)
 
     def _merge_queries(
-        self, subquery_results: list[QueryResult], window_size: int
+        self,
+        subquery_results: list[Union[QueryResult, AggregateResult, GroupedResult]],
+        window_size: int,
     ) -> QueryResult:
         """Merge results from multiple subqueries."""
         if not subquery_results:
             return []
 
+        # Validate that subqueries don't have aggregations
+        for i, result in enumerate(subquery_results):
+            if isinstance(result, (AggregateResult, GroupedResult)):
+                raise ValueError(
+                    f"Subquery {i+1} contains aggregation/grouping which is not "
+                    "supported in query sequences. Apply aggregation at the top level."
+                )
+
         # Flatten all groups from all subqueries
-        all_groups = []
+        all_groups: list[MessageGroup] = []
         for subquery_result in subquery_results:
-            all_groups.extend(subquery_result)
+            all_groups.extend(subquery_result)  # type: ignore[arg-type]
 
         # Apply window processing
         from ..processors.window import WindowProcessor
@@ -462,13 +475,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
             reverse = True
 
         # Sort by first message ID in each group
-        sorted_results = sorted(
+        return sorted(
             results,
             key=lambda group: group[0] if group else 0,
             reverse=reverse,
         )
-
-        return sorted_results
 
     def _apply_limit(self, results: QueryResult, ctx: Any) -> QueryResult:
         """

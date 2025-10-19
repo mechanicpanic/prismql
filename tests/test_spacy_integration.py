@@ -1,6 +1,7 @@
 """Integration tests for spaCy backend with real spaCy models.
 
-These tests require spaCy to be installed. They can be skipped if spaCy is not available.
+These tests require spaCy to be installed. They can be skipped if spaCy is
+not available.
 """
 
 import pytest
@@ -79,13 +80,12 @@ class TestSpacyIntegration:
 
         # Check that we get reasonable entity types
         found_entity_types = set(entities.keys())
-        expected_types = {"PERSON", "GPE", "ORG", "LOCATION", "ORGANIZATION"}
 
         # At least some overlap with expected types
         assert len(found_entity_types) >= 0  # Could be empty with small models
 
         # All returned entity lists should be lists of strings
-        for entity_type, entity_list in entities.items():
+        for _entity_type, entity_list in entities.items():
             assert isinstance(entity_list, list)
             for entity in entity_list:
                 assert isinstance(entity, str)
@@ -145,7 +145,7 @@ class TestSpacyIntegration:
 
         assert len(results) == len(texts)
 
-        for i, result in enumerate(results):
+        for _i, result in enumerate(results):
             assert isinstance(result, dict)
             assert "entities" in result
             assert "is_question" in result

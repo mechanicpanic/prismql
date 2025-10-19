@@ -240,11 +240,8 @@ class TestPrismQLEngineIntegration:
             BackendFactory,
             "_create_opensearch_backend",
             side_effect=ImportError("OpenSearch backend is not available"),
-        ):
-            with pytest.raises(
-                ImportError, match="OpenSearch backend is not available"
-            ):
-                PrismQLEngine.from_config(config)
+        ), pytest.raises(ImportError, match="OpenSearch backend is not available"):
+            PrismQLEngine.from_config(config)
 
     def test_engine_methods_with_factory_creation(self):
         """Test engine methods work correctly with factory-created engine."""
@@ -281,7 +278,7 @@ class TestPrismQLEngineIntegration:
         mock_client = MagicMock()
 
         # Mock different search responses for different queries
-        def mock_search(*args, **kwargs):
+        def mock_search(**kwargs: dict) -> dict:
             query = kwargs.get("body", {}).get("query", {})
 
             # Mock user search

@@ -1,11 +1,12 @@
 """Main PrismQL engine."""
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from antlr4 import CommonTokenStream, InputStream
 from antlr4.error.ErrorListener import ErrorListener
 
+from .aggregators.types import AggregateResult, GroupedResult
 from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
 from .backends.factory import BackendFactory
 from .exceptions import PrismQLRuntimeError, PrismQLSyntaxError
@@ -89,7 +90,7 @@ class PrismQLEngine:
             precomputed_indexes=self.precomputed_indexes,
         )
 
-    def execute(self, query: str) -> QueryResult:
+    def execute(self, query: str) -> Union[QueryResult, AggregateResult, GroupedResult]:
         """
         Parse and execute a PrismQL query.
 
@@ -97,7 +98,7 @@ class PrismQLEngine:
             query: PrismQL query string
 
         Returns:
-            List of message groups matching the query
+            Query results (QueryResult, AggregateResult, or GroupedResult)
 
         Raises:
             PrismQLSyntaxError: If the query has syntax errors
@@ -125,6 +126,7 @@ class PrismQLEngine:
 
             # Execute using visitor
             result = self.visitor.visit(tree)
+            # Return empty query result if None (shouldn't happen, but defensive)
             return result if result is not None else []
 
         except PrismQLSyntaxError:
@@ -134,7 +136,7 @@ class PrismQLEngine:
             # Wrap other exceptions
             raise PrismQLRuntimeError(
                 f"Error executing query: {str(e)}", query=query, cause=e
-            )
+            ) from e
 
     def validate(self, query: str) -> bool:
         """

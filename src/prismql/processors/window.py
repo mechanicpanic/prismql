@@ -67,7 +67,8 @@ class WindowProcessor:
                     msg = sorted_messages[msg_idx]
 
                     # Check if within window (both directions)
-                    # For numeric IDs, use distance; for others, use position in sorted list
+                    # For numeric IDs, use distance; for others, use position
+                    # in sorted list
                     if isinstance(start_msg, int) and isinstance(msg, int):
                         if abs(msg - start_msg) > window_size:
                             continue

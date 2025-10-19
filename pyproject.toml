@@ -102,6 +102,10 @@ ignore = [
 "scripts/*" = ["S602", "ANN201", "ANN001"]
 "src/prismql/grammar/generated/*" = ["ALL"]
 "src/prismql/visitors/*" = ["N802", "C901"]
+"src/prismql/engine.py" = ["N802", "N803", "ARG002"]  # ANTLR interface requirements
+"src/prismql/backends/factory.py" = ["C901"]  # Complexity - future refactor candidate
+"src/prismql/backends/spacy.py" = ["S110"]  # Intentional except pass
+"src/prismql/processors/window.py" = ["C901"]  # Complexity - future refactor candidate
 
 [tool.mypy]
 python_version = "3.9"

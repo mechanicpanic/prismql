@@ -48,7 +48,8 @@ class TestCountAggregation:
     def test_count_distinct_users(self, engine):
         """Test COUNT DISTINCT aggregation."""
         result = engine.execute(
-            "SELECT from(alice) OR from(bob) OR from(charlie) AGGREGATE count(distinct user)"
+            "SELECT from(alice) OR from(bob) OR from(charlie) "
+            "AGGREGATE count(distinct user)"
         )
 
         assert isinstance(result, AggregateResult)
@@ -119,7 +120,8 @@ class TestGroupBy:
     def test_group_by_with_count(self, engine):
         """Test GROUP BY with COUNT aggregation."""
         result = engine.execute(
-            "SELECT from(alice) OR from(bob) OR from(charlie) GROUP BY user AGGREGATE count()"
+            "SELECT from(alice) OR from(bob) OR from(charlie) "
+            "GROUP BY user AGGREGATE count()"
         )
 
         assert isinstance(result, AggregateResult)
@@ -223,7 +225,8 @@ class TestCombinedFeatures:
     def test_group_aggregate_order_limit(self, engine):
         """Test combining GROUP BY, AGGREGATE, ORDER BY, and LIMIT."""
         result = engine.execute(
-            "SELECT from(alice) OR from(bob) OR from(charlie) GROUP BY user AGGREGATE count()"
+            "SELECT from(alice) OR from(bob) OR from(charlie) "
+            "GROUP BY user AGGREGATE count()"
         )
 
         assert isinstance(result, AggregateResult)

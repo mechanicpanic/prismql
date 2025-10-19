@@ -58,7 +58,8 @@ class BackendFactory:
             config: Configuration dictionary
 
         Returns:
-            Tuple of (search_backend, nlp_backend, precomputed_indexes, user_dictionaries)
+            Tuple of (search_backend, nlp_backend, precomputed_indexes,
+            user_dictionaries)
 
         Raises:
             ValueError: If configuration is invalid
@@ -166,7 +167,7 @@ class BackendFactory:
             model_name = config.get("model")
             if model_name:
                 try:
-                    import spacy
+                    import spacy  # type: ignore[import-not-found]
 
                     nlp = spacy.load(model_name)
                 except Exception as e:
@@ -175,7 +176,8 @@ class BackendFactory:
                     ) from e
             else:
                 raise ValueError(
-                    "spaCy backend requires 'nlp' object or 'model' name in configuration"
+                    "spaCy backend requires 'nlp' object or 'model' name "
+                    "in configuration"
                 )
 
         # Extract backend configuration

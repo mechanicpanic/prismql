@@ -121,7 +121,7 @@ class Aggregator:
             # Count number of result groups
             return AggregateResult(value=len(results), function=function, field=field)
 
-        elif function == AggregationFunction.COUNT_DISTINCT:
+        if function == AggregationFunction.COUNT_DISTINCT:
             if not field:
                 raise ValueError("COUNT DISTINCT requires a field name")
 
@@ -131,7 +131,7 @@ class Aggregator:
                 value=len(unique_values), function=function, field=field
             )
 
-        elif function == AggregationFunction.DISTINCT:
+        if function == AggregationFunction.DISTINCT:
             if not field:
                 raise ValueError("DISTINCT requires a field name")
 
@@ -141,33 +141,44 @@ class Aggregator:
                 value=sorted(unique_values), function=function, field=field
             )
 
-        elif function in (
+        if function in (
             AggregationFunction.SUM,
             AggregationFunction.AVG,
             AggregationFunction.MIN,
             AggregationFunction.MAX,
         ):
-            if not field:
-                raise ValueError(f"{function.value.upper()} requires a field name")
-
-            # Get numeric field values
-            values = self._get_numeric_field_values(results, field)
-
-            if not values:
-                return AggregateResult(value=None, function=function, field=field)
-
-            if function == AggregationFunction.SUM:
-                result_value: Any = sum(values)
-            elif function == AggregationFunction.AVG:
-                result_value = mean(values)
-            elif function == AggregationFunction.MIN:
-                result_value = min(values)
-            elif function == AggregationFunction.MAX:
-                result_value = max(values)
-
-            return AggregateResult(value=result_value, function=function, field=field)
+            return self._aggregate_statistical(results, function, field)
 
         raise ValueError(f"Unsupported aggregation function: {function}")
+
+    def _aggregate_statistical(
+        self,
+        results: QueryResult,
+        function: AggregationFunction,
+        field: Optional[str],
+    ) -> AggregateResult:
+        """Apply statistical aggregation (SUM, AVG, MIN, MAX)."""
+        if not field:
+            raise ValueError(f"{function.value.upper()} requires a field name")
+
+        # Get numeric field values
+        values = self._get_numeric_field_values(results, field)
+
+        if not values:
+            return AggregateResult(value=None, function=function, field=field)
+
+        if function == AggregationFunction.SUM:
+            result_value: Any = sum(values)
+        elif function == AggregationFunction.AVG:
+            result_value = mean(values)
+        elif function == AggregationFunction.MIN:
+            result_value = min(values)
+        elif function == AggregationFunction.MAX:
+            result_value = max(values)
+        else:
+            raise ValueError(f"Unsupported statistical function: {function}")
+
+        return AggregateResult(value=result_value, function=function, field=field)
 
     def _aggregate_grouped(
         self,

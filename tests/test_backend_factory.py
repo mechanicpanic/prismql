@@ -238,9 +238,11 @@ class TestBackendFactory:
         mock_spacy = MagicMock()
         mock_spacy.load.side_effect = Exception("Model not found")
 
-        with patch.dict("sys.modules", {"spacy": mock_spacy}):
-            with pytest.raises(ValueError, match="Failed to load spaCy model"):
-                BackendFactory.create_backends(config)
+        with (
+            patch.dict("sys.modules", {"spacy": mock_spacy}),
+            pytest.raises(ValueError, match="Failed to load spaCy model"),
+        ):
+            BackendFactory.create_backends(config)
 
     def test_create_spacy_backend_missing_nlp_and_model(self):
         """Test spaCy backend creation without nlp object or model."""

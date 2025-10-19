@@ -58,7 +58,7 @@ class OpenSearchBackend(SearchBackend):
 
     def _map_field(self, field: str) -> str:
         """Map PrismQL field name to actual index field name."""
-        return self.field_mappings.get(field, field)
+        return str(self.field_mappings.get(field, field))
 
     def _execute_search(
         self, query: dict[str, Any], size: int = 10000
@@ -104,6 +104,7 @@ class OpenSearchBackend(SearchBackend):
         actual_field = self._map_field(field)
 
         # Build query based on operator
+        query: dict[str, Any]
         if len(terms) == 1:
             # Single term - use match query
             query = {
@@ -122,12 +123,17 @@ class OpenSearchBackend(SearchBackend):
                 # Should match any term
                 should_clauses = []
                 for term in terms:
-                    match_clause = {"match": {actual_field: term}}
                     if self.fuzziness:
-                        match_clause["match"][actual_field] = {
-                            "query": term,
-                            "fuzziness": self.fuzziness,
+                        match_clause: dict[str, Any] = {
+                            "match": {
+                                actual_field: {
+                                    "query": term,
+                                    "fuzziness": self.fuzziness,
+                                }
+                            }
                         }
+                    else:
+                        match_clause = {"match": {actual_field: term}}
                     should_clauses.append(match_clause)
 
                 query = {
@@ -139,12 +145,17 @@ class OpenSearchBackend(SearchBackend):
                 # Must match all terms
                 must_clauses = []
                 for term in terms:
-                    match_clause = {"match": {actual_field: term}}
                     if self.fuzziness:
-                        match_clause["match"][actual_field] = {
-                            "query": term,
-                            "fuzziness": self.fuzziness,
+                        match_clause = {
+                            "match": {
+                                actual_field: {
+                                    "query": term,
+                                    "fuzziness": self.fuzziness,
+                                }
+                            }
                         }
+                    else:
+                        match_clause = {"match": {actual_field: term}}
                     must_clauses.append(match_clause)
 
                 query = {"query": {"bool": {"must": must_clauses}}}
@@ -170,30 +181,32 @@ class OpenSearchBackend(SearchBackend):
 
         if exact:
             # Exact match using term query
-            query = {"query": {"term": {f"{actual_field}.keyword": value}}}
+            query_dict: dict[str, Any] = {
+                "query": {"term": {f"{actual_field}.keyword": value}}
+            }
 
             # Fallback to regular field if keyword field doesn't exist
             try:
-                return self._execute_search(query)
+                return self._execute_search(query_dict)
             except Exception:
                 # Try without .keyword suffix
-                query = {"query": {"term": {actual_field: value}}}
-                return self._execute_search(query)
+                query_dict = {"query": {"term": {actual_field: value}}}
+                return self._execute_search(query_dict)
         else:
             # Partial match using match query
-            query = {
+            query_dict = {
                 "query": {"match": {actual_field: {"query": value, "operator": "and"}}}
             }
             if self.fuzziness:
-                query["query"]["match"][actual_field]["fuzziness"] = self.fuzziness
+                query_dict["query"]["match"][actual_field]["fuzziness"] = self.fuzziness
 
-            return self._execute_search(query)
+            return self._execute_search(query_dict)
 
     def get_total_documents(self) -> int:
         """Get total number of documents in the index."""
         try:
             response = self.client.count(index=self.index_name)
-            return response["count"]
+            return int(response["count"])
         except Exception as e:
             raise RuntimeError(f"Failed to get document count: {e}") from e
 
@@ -207,7 +220,7 @@ class OpenSearchBackend(SearchBackend):
         Returns:
             Set of all document IDs
         """
-        query = {"query": {"match_all": {}}}
+        query: dict[str, Any] = {"query": {"match_all": {}}}
 
         size = limit if limit is not None else 10000
 
