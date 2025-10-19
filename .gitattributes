@@ -1,0 +1,27 @@
+# Git attributes for PrismQL project
+
+# Mark ANTLR-generated files as generated
+# This keeps them in git but:
+# - Hides them from diffs (git diff won't show changes)
+# - Excludes from language statistics on GitHub
+# - Collapses them in pull requests
+src/prismql/grammar/generated/*.py linguist-generated=true
+src/prismql/grammar/generated/*.interp linguist-generated=true
+src/prismql/grammar/generated/*.tokens linguist-generated=true
+
+# Additional generated file marking
+src/prismql/grammar/generated/* linguist-generated diff=generated
+
+# Line ending normalization
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+
+# Binary files
+*.jar binary
+*.whl binary
+*.gz binary
+*.zip binary

@@ -113,7 +113,10 @@ ipython_config.py
 .env.local
 .env.*.local
 
-# ANTLR generated files (optional - keeping them for now)
+# ANTLR generated files
+# Strategy: Tracked in git (so pip install works without Java/ANTLR)
+# but marked as generated in .gitattributes to hide from diffs/PRs
+# Uncomment the line below to ignore them during development:
 # src/prismql/grammar/generated/
 
 # Logs
