@@ -112,9 +112,11 @@ ignore = [
 "examples/pattern_variables_example.py" = ["C901"]  # Example complexity acceptable
 "examples/named_pattern_groups_example.py" = ["C901", "B007"]  # Example complexity and unused loop vars
 "examples/negative_patterns_example.py" = ["C901"]  # Example complexity acceptable
+"examples/quantifiers_example.py" = ["C901"]  # Example complexity acceptable
 "src/prismql/types.py" = ["E501", "ANN204"]  # Long docstring examples, __init__ annotation
 "tests/test_named_pattern_groups.py" = ["E501"]  # Long query strings
 "tests/test_negative_patterns.py" = ["E501"]  # Long query strings and comments
+"tests/test_quantifiers.py" = ["E501", "S110"]  # Long query strings, intentional except pass
 
 [tool.mypy]
 python_version = "3.9"

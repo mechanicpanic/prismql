@@ -14,10 +14,10 @@
   - ✅ Pattern Variables (backreferences with $var syntax)
   - ✅ Named Pattern Groups (AS keyword for labeling)
   - ✅ Negative Patterns (NOT operator in sequences)
-  - ⏳ Counting Constraints (quantifiers)
+  - ✅ Counting Constraints (quantifiers)
   - ⏳ Lookahead/Lookbehind (context-aware matching)
 
-**Test Coverage:** 223 tests passing (201 + 22 new)
+**Test Coverage:** 249 tests passing (223 + 26 new)
 **Last Updated:** 2025-10-20
 
 ---
@@ -100,12 +100,15 @@ AGGREGATE count()
    - Fully implemented and tested (22 comprehensive tests)
    - Works with variables, boolean operators, dictionaries, and named groups
 
-4. **Counting Constraints**
+4. **✅ Counting Constraints (quantifiers)**
    ```prismql
    SELECT from(alice){2,4}, from(bob) INWIN 10
    ```
    - "2 to 4 messages from alice, then bob, within 10 messages"
-   - Regex-style quantifiers for patterns
+   - Regex-style quantifiers: {n} (exact), {n,} (at least), {n,m} (range)
+   - Fully implemented and tested (26 comprehensive tests)
+   - Works with variables, boolean operators, named groups, and aggregation
+   - Current implementation: {n,} and {n,m} use minimum count (future: full range matching)
 
 5. **Lookahead/Lookbehind**
    ```prismql

@@ -174,6 +174,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         Returns a list of message groups, one for each restriction.
         If UNR flag is present, returns all permutations.
+        Handles quantifiers by expanding restrictions.
         """
         restriction_results = []
 
@@ -186,16 +187,29 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 quoted_name = named_restriction_ctx.QUOTED_STRING().getText()
                 # Remove surrounding quotes (either " or ')
                 pattern_name = quoted_name[1:-1]
-            self.pattern_names.append(pattern_name)
+
+            # Extract quantifier if present
+            min_count, max_count = self._extract_quantifier(named_restriction_ctx)
 
             # Process the underlying restriction
             result = self.visitRestriction(named_restriction_ctx.restriction())
             # Convert set to sorted list
             sorted_result = sorted(result)
-            restriction_results.append(sorted_result)
 
-            # Increment position after processing each restriction
-            self.current_restriction_position += 1
+            # Apply quantifier by expanding the restriction
+            # For now, we use min_count (exact or minimum)
+            # TODO: Support range matching (min to max)
+            if min_count > 1:
+                # Expand the restriction min_count times
+                for _ in range(min_count):
+                    restriction_results.append(sorted_result)
+                    self.pattern_names.append(pattern_name)
+                    self.current_restriction_position += 1
+            else:
+                # No quantifier or {1} - process normally
+                restriction_results.append(sorted_result)
+                self.pattern_names.append(pattern_name)
+                self.current_restriction_position += 1
 
         # Handle UNR (unrelated) flag - generate permutations
         if ctx.Unr():
@@ -771,3 +785,50 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 filtered_results.append(filtered_group)
 
         return filtered_results
+
+    def _extract_quantifier(self, ctx: Any) -> tuple[int, Optional[int]]:
+        """
+        Extract quantifier information from named_restriction context.
+
+        Args:
+            ctx: named_restriction context from parser
+
+        Returns:
+            Tuple of (min_count, max_count) where:
+            - min_count is the minimum required occurrences (default 1)
+            - max_count is the maximum allowed occurrences (None = unlimited)
+
+        Examples:
+            No quantifier -> (1, 1)
+            {3} -> (3, 3)           # exactly 3
+            {2,} -> (2, None)       # 2 or more
+            {2,5} -> (2, 5)         # between 2 and 5
+        """
+        from ..grammar.generated.PrismQLParser import PrismQLParser
+
+        if not ctx.quantifier():
+            # No quantifier - default to exactly 1
+            return (1, 1)
+
+        quantifier_ctx = ctx.quantifier()
+
+        # Check which type of quantifier this is
+        if isinstance(quantifier_ctx, PrismQLParser.ExactQuantifierContext):
+            # {n} - exactly n occurrences
+            count = int(quantifier_ctx.number().getText())
+            return (count, count)
+
+        if isinstance(quantifier_ctx, PrismQLParser.AtLeastQuantifierContext):
+            # {n,} - n or more occurrences
+            min_count = int(quantifier_ctx.number().getText())
+            return (min_count, None)
+
+        if isinstance(quantifier_ctx, PrismQLParser.RangeQuantifierContext):
+            # {n,m} - between n and m occurrences
+            numbers = quantifier_ctx.number()
+            min_count = int(numbers[0].getText())
+            max_count = int(numbers[1].getText())
+            return (min_count, max_count)
+
+        # Should not reach here with valid parse tree
+        return (1, 1)

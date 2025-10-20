@@ -30,6 +30,18 @@ class PrismQLVisitor(ParseTreeVisitor):
     def visitNamed_restriction(self, ctx: PrismQLParser.Named_restrictionContext):
         return self.visitChildren(ctx)
 
+    # Visit a parse tree produced by PrismQLParser#ExactQuantifier.
+    def visitExactQuantifier(self, ctx: PrismQLParser.ExactQuantifierContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#AtLeastQuantifier.
+    def visitAtLeastQuantifier(self, ctx: PrismQLParser.AtLeastQuantifierContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#RangeQuantifier.
+    def visitRangeQuantifier(self, ctx: PrismQLParser.RangeQuantifierContext):
+        return self.visitChildren(ctx)
+
     # Visit a parse tree produced by PrismQLParser#restriction.
     def visitRestriction(self, ctx: PrismQLParser.RestrictionContext):
         return self.visitChildren(ctx)

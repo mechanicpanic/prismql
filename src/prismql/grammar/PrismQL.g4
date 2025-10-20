@@ -23,7 +23,14 @@ restrictions
 
 named_restriction
     :
-    restriction (As QUOTED_STRING)?
+    restriction quantifier? (As QUOTED_STRING)?
+    ;
+
+quantifier
+    :
+    '{' number '}'                  # ExactQuantifier
+    | '{' number ',' '}'            # AtLeastQuantifier
+    | '{' number ',' number '}'     # RangeQuantifier
     ;
 
 restriction
