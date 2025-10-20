@@ -8,10 +8,16 @@ from .memory import MemoryBackend
 
 # Optional backends (may not be available if dependencies aren't installed)
 if TYPE_CHECKING:
+    from .duckdb import DuckDBBackend
     from .opensearch import OpenSearchBackend
     from .postgres import PostgresBackend
     from .spacy import SpacyBackend
 else:
+    try:
+        from .duckdb import DuckDBBackend
+    except ImportError:
+        DuckDBBackend = Any  # type: ignore[misc,assignment]
+
     try:
         from .opensearch import OpenSearchBackend
     except ImportError:
@@ -37,6 +43,7 @@ __all__ = [
     # Always available backends
     "MemoryBackend",
     # Optional backends
+    "DuckDBBackend",
     "OpenSearchBackend",
     "PostgresBackend",
     "SpacyBackend",

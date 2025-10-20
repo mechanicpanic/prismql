@@ -99,6 +99,8 @@ class BackendFactory:
             return cls._create_opensearch_backend(config)
         if backend_type in ["postgres", "postgresql"]:
             return cls._create_postgres_backend(config)
+        if backend_type == "duckdb":
+            return cls._create_duckdb_backend(config)
         raise ValueError(f"Unknown search backend type: {backend_type}")
 
     @classmethod
@@ -187,6 +189,71 @@ class BackendFactory:
 
         autocommit = config.get("autocommit", True)
         return PostgresBackend(connection, backend_config, autocommit)
+
+    @classmethod
+    def _create_duckdb_backend(cls, config: dict[str, Any]) -> SearchBackend:
+        """Create DuckDB backend."""
+        try:
+            from .duckdb import DuckDBBackend
+        except ImportError as e:
+            raise ImportError(
+                "DuckDB backend requires duckdb. Install it with: pip install duckdb"
+            ) from e
+
+        # Determine creation method
+        source_type = config.get("source_type", "database")
+
+        if source_type == "dataframe":
+            # Create from DataFrame
+            df = config.get("dataframe")
+            if df is None:
+                raise ValueError("DuckDB source_type='dataframe' requires 'dataframe'")
+            return DuckDBBackend.from_dataframe(
+                df,
+                table_name=config.get("table_name", "messages"),
+                id_field=config.get("id_field", "id"),
+                text_field=config.get("text_field", "text"),
+                user_field=config.get("user_field", "user"),
+            )
+
+        if source_type == "parquet":
+            # Create from Parquet file
+            parquet_path = config.get("parquet_path")
+            if not parquet_path:
+                raise ValueError("DuckDB source_type='parquet' requires 'parquet_path'")
+            return DuckDBBackend.from_parquet(
+                parquet_path,
+                table_name=config.get("table_name", "messages"),
+                id_field=config.get("id_field", "id"),
+                text_field=config.get("text_field", "text"),
+                user_field=config.get("user_field", "user"),
+            )
+
+        if source_type == "csv":
+            # Create from CSV file
+            csv_path = config.get("csv_path")
+            if not csv_path:
+                raise ValueError("DuckDB source_type='csv' requires 'csv_path'")
+            csv_kwargs = config.get("csv_kwargs", {})
+            return DuckDBBackend.from_csv(
+                csv_path,
+                table_name=config.get("table_name", "messages"),
+                id_field=config.get("id_field", "id"),
+                text_field=config.get("text_field", "text"),
+                user_field=config.get("user_field", "user"),
+                **csv_kwargs,
+            )
+
+        # Default: database (in-memory or persistent)
+        database = config.get("database", ":memory:")
+        table_name = config.get("table_name")
+        if not table_name:
+            raise ValueError("DuckDB backend requires 'table_name' in configuration")
+
+        field_mappings = config.get("field_mappings", {})
+        create_fts_index = config.get("create_fts_index", True)
+
+        return DuckDBBackend(database, table_name, field_mappings, create_fts_index)
 
     @classmethod
     def _create_nlp_backend(cls, config: dict[str, Any]) -> NLPBackend:
