@@ -119,6 +119,7 @@ ignore = [
 "tests/test_named_pattern_groups.py" = ["E501"]  # Long query strings
 "tests/test_negative_patterns.py" = ["E501"]  # Long query strings and comments
 "tests/test_quantifiers.py" = ["E501", "S110"]  # Long query strings, intentional except pass
+"tests/test_index_builder.py" = ["ANN202"]  # Test helper functions don't need return annotations
 
 [tool.mypy]
 python_version = "3.9"
