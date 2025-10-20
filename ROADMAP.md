@@ -10,10 +10,15 @@
 
 - ✅ **Phase 1.1:** Aggregation operators (COUNT, SUM, AVG, MIN, MAX, DISTINCT, GROUP BY, ORDER BY, LIMIT)
 - ✅ **Phase 1.2:** Temporal operators (BEFORE, AFTER, BETWEEN, temporal grouping by HOUR/DAY/WEEK/MONTH/YEAR)
-- 🚧 **Phase 1.3:** Advanced pattern matching (next)
+- 🚧 **Phase 1.3:** Advanced pattern matching (in progress)
+  - ✅ Pattern Variables (backreferences with $var syntax)
+  - ✅ Named Pattern Groups (AS keyword for labeling)
+  - ✅ Negative Patterns (NOT operator in sequences)
+  - ⏳ Counting Constraints (quantifiers)
+  - ⏳ Lookahead/Lookbehind (context-aware matching)
 
-**Test Coverage:** 165 tests passing
-**Last Updated:** 2025-10-19
+**Test Coverage:** 223 tests passing (201 + 22 new)
+**Last Updated:** 2025-10-20
 
 ---
 
@@ -86,12 +91,14 @@ AGGREGATE count()
    - Variable binding for dynamic user matching
    - Enables "same user" constraints
 
-3. **Negative Patterns (NOT operator enhancement)**
+3. **✅ Negative Patterns (NOT operator in sequences)**
    ```prismql
    SELECT from(alice), NOT from(bob), from(charlie) INWIN 5
    ```
-   - "alice followed by charlie, but NOT bob in between"
-   - Currently NOT only works on single conditions
+   - "alice, then someone other than bob, then charlie"
+   - NOT operates at position level: excludes specific conditions at that position
+   - Fully implemented and tested (22 comprehensive tests)
+   - Works with variables, boolean operators, dictionaries, and named groups
 
 4. **Counting Constraints**
    ```prismql
