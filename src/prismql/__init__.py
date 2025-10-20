@@ -29,15 +29,18 @@ from .backends.factory import BackendFactory
 from .engine import PrismQLEngine
 from .exceptions import PrismQLError, PrismQLRuntimeError, PrismQLSyntaxError
 from .types import NamedQueryResult
+from .utils import IndexBuilder
 
 __all__ = [
     # Main engine
     "PrismQLEngine",
     # Backend interfaces and factory
     "SearchBackend",
-    "NLPBackend",
+    "NLPBackend",  # DEPRECATED - use PrecomputedIndexes
     "PrecomputedIndexes",
     "BackendFactory",
+    # Utilities
+    "IndexBuilder",
     # Result types
     "AggregateResult",
     "AggregationFunction",

@@ -72,13 +72,49 @@ class PrismQLEngine:
 
         Args:
             search_backend: Backend for text search operations
-            nlp_backend: Optional backend for NLP operations
+            nlp_backend: DEPRECATED. Use precomputed_indexes instead.
+                       NLP features should be precomputed and provided via indexes
+                       rather than computed on-the-fly during queries.
             user_dictionaries: Optional mapping of dictionary names to word lists
-            precomputed_indexes: Optional precomputed NLP indexes
+            precomputed_indexes: Precomputed feature indexes (entities, questions,
+                               custom features). This is the recommended way to add
+                               NLP features to PrismQL.
             timestamp_field: Name of the timestamp field for temporal operations
+
+        Note:
+            The nlp_backend parameter is deprecated and will be removed in a future
+            version. For NLP features:
+            1. Precompute features using your preferred method (LLM, spaCy, human
+               annotation, etc.)
+            2. Build PrecomputedIndexes with your features
+            3. Pass indexes to the engine
+
+            Example:
+                >>> indexes = PrecomputedIndexes(
+                ...     entities={'ORG': {1, 5}},
+                ...     custom_features={'action_items': {2, 9}}
+                ... )
+                >>> engine = PrismQLEngine(
+                ...     search_backend=backend,
+                ...     precomputed_indexes=indexes
+                ... )
         """
+        import warnings
+
         self.search_backend = search_backend
+
+        # Deprecation warning for nlp_backend
+        if nlp_backend is not None:
+            warnings.warn(
+                "The 'nlp_backend' parameter is deprecated and will be removed in "
+                "a future version. Please use 'precomputed_indexes' instead. "
+                "Precompute NLP features using your preferred method (LLM annotations, "
+                "spaCy, human annotation, etc.) and provide them as PrecomputedIndexes.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.nlp_backend = nlp_backend
+
         self.user_dictionaries: dict[str, list[str]] = {
             k: list(v) for k, v in (user_dictionaries or {}).items()
         }

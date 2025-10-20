@@ -138,10 +138,39 @@ class NLPBackend(ABC):
 
 class PrecomputedIndexes:
     """
-    Container for precomputed NLP indexes.
+    Container for precomputed feature indexes.
 
     When processing large corpora, it's more efficient to precompute
-    NLP features once and store them, rather than computing on-the-fly.
+    features once and store them as boolean indexes, rather than computing
+    on-the-fly during queries.
+
+    This design is backend-agnostic: features can come from any source:
+    - LLM-generated annotations
+    - Human annotations from annotation platforms
+    - NLP libraries (spaCy, CoreNLP, transformers)
+    - Custom rule-based extractors
+    - Hybrid approaches
+
+    The query language doesn't care HOW features were computed, only WHICH
+    messages have which features.
+
+    Example:
+        >>> # From LLM annotations
+        >>> indexes = PrecomputedIndexes(
+        ...     entities={'ORG': {1, 5}, 'PERSON': {2, 8}},
+        ...     questions={1, 3, 7},
+        ...     custom_features={
+        ...         'action_items': {2, 9},
+        ...         'decisions': {4, 6},
+        ...         'sentiment_positive': {1, 5, 8}
+        ...     }
+        ... )
+        >>>
+        >>> # Use in queries
+        >>> engine = PrismQLEngine(
+        ...     search_backend=backend,
+        ...     precomputed_indexes=indexes
+        ... )
     """
 
     def __init__(
@@ -149,7 +178,34 @@ class PrecomputedIndexes:
         entities: Optional[Mapping[NERLabel, set[MessageId]]] = None,
         questions: Optional[set[MessageId]] = None,
         user_mentions: Optional[Mapping[str, set[MessageId]]] = None,
+        custom_features: Optional[Mapping[str, set[MessageId]]] = None,
     ) -> None:
+        """
+        Initialize precomputed indexes.
+
+        Args:
+            entities: Named entity indexes (e.g., {'ORG': {1, 5}, 'PERSON': {2}})
+            questions: Set of message IDs containing questions
+            user_mentions: User mention indexes (e.g., {'alice': {3, 7}})
+            custom_features: Arbitrary custom feature indexes
+                           (e.g., {'action_items': {2}, 'sentiment_positive': {1, 5}})
+        """
         self.entities = entities or {}
         self.questions = questions or set()
         self.user_mentions = user_mentions or {}
+        self.custom_features = custom_features or {}
+
+    def get_feature(self, feature_name: str) -> set[MessageId]:
+        """
+        Get message IDs for a custom feature.
+
+        This allows querying arbitrary features that don't fit into
+        standard categories (entities, questions, etc.).
+
+        Args:
+            feature_name: Name of the custom feature
+
+        Returns:
+            Set of message IDs with this feature, empty set if not found
+        """
+        return self.custom_features.get(feature_name, set())
