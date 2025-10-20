@@ -97,6 +97,8 @@ class BackendFactory:
             return cls._create_memory_backend(config)
         if backend_type in ["opensearch", "elasticsearch"]:
             return cls._create_opensearch_backend(config)
+        if backend_type in ["postgres", "postgresql"]:
+            return cls._create_postgres_backend(config)
         raise ValueError(f"Unknown search backend type: {backend_type}")
 
     @classmethod
@@ -140,6 +142,51 @@ class BackendFactory:
             )
 
         return OpenSearchBackend(client, backend_config)
+
+    @classmethod
+    def _create_postgres_backend(cls, config: dict[str, Any]) -> SearchBackend:
+        """Create PostgreSQL backend."""
+        try:
+            from .postgres import PostgresBackend
+        except ImportError as e:
+            raise ImportError(
+                "PostgreSQL backend requires psycopg2. "
+                "Install it with: pip install psycopg2-binary"
+            ) from e
+
+        # Get connection (either object or string)
+        connection = config.get("connection")
+        if connection is None:
+            # Try building from individual parameters
+            conn_params = config.get("connection_params")
+            if conn_params:
+                # Build connection string
+                connection = (
+                    f"postgresql://{conn_params.get('user', 'postgres')}:"
+                    f"{conn_params.get('password', '')}@"
+                    f"{conn_params.get('host', 'localhost')}:"
+                    f"{conn_params.get('port', 5432)}/"
+                    f"{conn_params.get('database', 'postgres')}"
+                )
+            else:
+                raise ValueError(
+                    "Postgres backend requires 'connection' (connection object or "
+                    "string) or 'connection_params' (dict with host, database, etc.)"
+                )
+
+        # Extract backend configuration
+        backend_config = {
+            "table_name": config.get("table_name"),
+            "field_mappings": config.get("field_mappings", {}),
+            "text_search_config": config.get("text_search_config", "english"),
+            "use_fts": config.get("use_fts", True),
+        }
+
+        if not backend_config["table_name"]:
+            raise ValueError("Postgres backend requires 'table_name' in configuration")
+
+        autocommit = config.get("autocommit", True)
+        return PostgresBackend(connection, backend_config, autocommit)
 
     @classmethod
     def _create_nlp_backend(cls, config: dict[str, Any]) -> NLPBackend:

@@ -120,6 +120,8 @@ ignore = [
 "tests/test_negative_patterns.py" = ["E501"]  # Long query strings and comments
 "tests/test_quantifiers.py" = ["E501", "S110"]  # Long query strings, intentional except pass
 "tests/test_index_builder.py" = ["ANN202"]  # Test helper functions don't need return annotations
+"src/prismql/backends/postgres.py" = ["E501", "S608", "SIM108"]  # Long SQL strings, false positive SQL injection warnings, ternary style choice
+"examples/postgres_annotation_platform.py" = ["E501", "S106", "A001", "E402"]  # Long strings, password in example, shadowing id builtin, imports after header
 
 [tool.mypy]
 python_version = "3.9"
@@ -138,6 +140,7 @@ strict_optional = true
 module = [
     "antlr4.*",
     "prismql.grammar.generated.*",
+    "psycopg2.*",
 ]
 ignore_missing_imports = true
 ignore_errors = true

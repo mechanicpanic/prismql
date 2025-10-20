@@ -9,12 +9,18 @@ from .memory import MemoryBackend
 # Optional backends (may not be available if dependencies aren't installed)
 if TYPE_CHECKING:
     from .opensearch import OpenSearchBackend
+    from .postgres import PostgresBackend
     from .spacy import SpacyBackend
 else:
     try:
         from .opensearch import OpenSearchBackend
     except ImportError:
         OpenSearchBackend = Any  # type: ignore[misc,assignment]
+
+    try:
+        from .postgres import PostgresBackend
+    except ImportError:
+        PostgresBackend = Any  # type: ignore[misc,assignment]
 
     try:
         from .spacy import SpacyBackend
@@ -32,5 +38,6 @@ __all__ = [
     "MemoryBackend",
     # Optional backends
     "OpenSearchBackend",
+    "PostgresBackend",
     "SpacyBackend",
 ]
