@@ -69,9 +69,9 @@ AGGREGATE count()
 
 ---
 
-### 🚧 Phase 1.3: Advanced Pattern Matching (NEXT)
-**Status:** Planning
-**Estimated effort:** 1-2 weeks
+### ✅ Phase 1.3: Advanced Pattern Matching (**COMPLETE**)
+**Status:** Implemented and Tested
+**Completed:** All 5 features implemented with 100+ tests
 
 **Features to implement:**
 
@@ -110,21 +110,25 @@ AGGREGATE count()
    - Works with variables, boolean operators, named groups, and aggregation
    - Current implementation: {n,} and {n,m} use minimum count (future: full range matching)
 
-5. **Lookahead/Lookbehind**
+5. **Lookahead/Lookbehind** ✅ **COMPLETE**
    ```prismql
    SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
    NOT_PRECEDED_BY from(charlie) WITHIN 5
    ```
    - Context-aware pattern matching
    - "alice then bob, but NOT if charlie spoke 5 messages before alice"
+   - Four operators: FOLLOWED_BY, PRECEDED_BY, NOT_FOLLOWED_BY, NOT_PRECEDED_BY
+   - Position-based windows over full message sequence
+   - 27 comprehensive tests covering all use cases
+   - See [LOOKAHEAD_LOOKBEHIND.md](LOOKAHEAD_LOOKBEHIND.md) for documentation
 
 **Implementation plan:**
-- [ ] Design grammar extensions
-- [ ] Update parser with new pattern rules
-- [ ] Implement pattern variable binding in visitor
-- [ ] Add pattern constraint validation
-- [ ] Create comprehensive test suite
-- [ ] Document with examples
+- [x] Design grammar extensions
+- [x] Update parser with new pattern rules
+- [x] Implement positional operators in visitor
+- [x] Add support for all four operator variants
+- [x] Create comprehensive test suite (27 tests)
+- [x] Document with examples
 
 ---
 

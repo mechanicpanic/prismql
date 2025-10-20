@@ -235,6 +235,34 @@ class PrismQLVisitor(BasePrismQLVisitor):
             rhs = self.visitRestriction(ctx.restriction(1))
             return lhs | rhs  # Set union
 
+        # Handle FOLLOWED_BY operator (lookahead)
+        if ctx.FollowedBy():
+            lhs = self.visitRestriction(ctx.restriction(0))
+            rhs = self.visitRestriction(ctx.restriction(1))
+            window = int(ctx.number().getText())
+            return self._apply_followed_by(lhs, rhs, window)
+
+        # Handle PRECEDED_BY operator (lookbehind)
+        if ctx.PrecededBy():
+            lhs = self.visitRestriction(ctx.restriction(0))
+            rhs = self.visitRestriction(ctx.restriction(1))
+            window = int(ctx.number().getText())
+            return self._apply_preceded_by(lhs, rhs, window)
+
+        # Handle NOT_FOLLOWED_BY operator (negative lookahead)
+        if ctx.NotFollowedBy():
+            lhs = self.visitRestriction(ctx.restriction(0))
+            rhs = self.visitRestriction(ctx.restriction(1))
+            window = int(ctx.number().getText())
+            return self._apply_not_followed_by(lhs, rhs, window)
+
+        # Handle NOT_PRECEDED_BY operator (negative lookbehind)
+        if ctx.NotPrecededBy():
+            lhs = self.visitRestriction(ctx.restriction(0))
+            rhs = self.visitRestriction(ctx.restriction(1))
+            window = int(ctx.number().getText())
+            return self._apply_not_preceded_by(lhs, rhs, window)
+
         # Handle NOT operator
         if ctx.Not():
             excluded = self.visitRestriction(ctx.restriction(0))
@@ -832,3 +860,144 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Should not reach here with valid parse tree
         return (1, 1)
+
+    def _apply_followed_by(
+        self, lhs: set[MessageId], rhs: set[MessageId], window: int
+    ) -> set[MessageId]:
+        """
+        Apply FOLLOWED_BY operator: return IDs from lhs that are followed by
+        an ID from rhs within the specified window.
+
+        Args:
+            lhs: Left-hand side message IDs
+            rhs: Right-hand side message IDs
+            window: Maximum distance (number of positions) to look ahead
+
+        Returns:
+            Set of message IDs from lhs that satisfy the condition
+
+        Example:
+            lhs={1,3,5}, rhs={4,6}, window=2
+            - ID 1: no rhs within 2 positions after (IDs 2,3 in sequence)
+            - ID 3: ID 4 is 1 position after in full sequence -> MATCH
+            - ID 5: ID 6 is 1 position after in full sequence -> MATCH
+            Result: {3, 5}
+        """
+        if not lhs or not rhs:
+            return set()
+
+        # Get all document IDs to establish the full sequence
+        # Use a reasonable limit to avoid performance issues
+        all_ids = sorted(
+            self.search_backend.get_all_document_ids(limit=self.MAX_MESSAGES_NOT)
+        )
+        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+
+        result = set()
+        for msg_id in lhs:
+            if msg_id not in id_to_pos:
+                continue
+            pos = id_to_pos[msg_id]
+            # Check if any rhs ID appears within window positions after this ID
+            for i in range(pos + 1, min(pos + 1 + window, len(all_ids))):
+                if all_ids[i] in rhs:
+                    result.add(msg_id)
+                    break
+
+        return result
+
+    def _apply_preceded_by(
+        self, lhs: set[MessageId], rhs: set[MessageId], window: int
+    ) -> set[MessageId]:
+        """
+        Apply PRECEDED_BY operator: return IDs from lhs that are preceded by
+        an ID from rhs within the specified window.
+
+        Args:
+            lhs: Left-hand side message IDs
+            rhs: Right-hand side message IDs
+            window: Maximum distance (number of positions) to look behind
+
+        Returns:
+            Set of message IDs from lhs that satisfy the condition
+
+        Example:
+            lhs={3,5,7}, rhs={2,6}, window=2
+            - ID 3: ID 2 is 1 position before in full sequence -> MATCH
+            - ID 5: no rhs within 2 positions before (IDs 3,4 in sequence)
+            - ID 7: ID 6 is 1 position before in full sequence -> MATCH
+            Result: {3, 7}
+        """
+        if not lhs or not rhs:
+            return set()
+
+        # Get all document IDs to establish the full sequence
+        all_ids = sorted(
+            self.search_backend.get_all_document_ids(limit=self.MAX_MESSAGES_NOT)
+        )
+        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+
+        result = set()
+        for msg_id in lhs:
+            if msg_id not in id_to_pos:
+                continue
+            pos = id_to_pos[msg_id]
+            # Check if any rhs ID appears within window positions before this ID
+            for i in range(max(0, pos - window), pos):
+                if all_ids[i] in rhs:
+                    result.add(msg_id)
+                    break
+
+        return result
+
+    def _apply_not_followed_by(
+        self, lhs: set[MessageId], rhs: set[MessageId], window: int
+    ) -> set[MessageId]:
+        """
+        Apply NOT_FOLLOWED_BY operator: return IDs from lhs that are NOT followed
+        by an ID from rhs within the specified window.
+
+        Args:
+            lhs: Left-hand side message IDs
+            rhs: Right-hand side message IDs
+            window: Maximum distance (number of positions) to look ahead
+
+        Returns:
+            Set of message IDs from lhs that satisfy the condition
+
+        Example:
+            lhs={1,3,5}, rhs={4,6}, window=2
+            - ID 1: no rhs within 2 positions after -> MATCH
+            - ID 3: ID 4 is 1 position after -> NO MATCH
+            - ID 5: ID 6 is 1 position after -> NO MATCH
+            Result: {1}
+        """
+        # Get IDs that ARE followed by, then invert
+        followed_by = self._apply_followed_by(lhs, rhs, window)
+        return lhs - followed_by
+
+    def _apply_not_preceded_by(
+        self, lhs: set[MessageId], rhs: set[MessageId], window: int
+    ) -> set[MessageId]:
+        """
+        Apply NOT_PRECEDED_BY operator: return IDs from lhs that are NOT preceded
+        by an ID from rhs within the specified window.
+
+        Args:
+            lhs: Left-hand side message IDs
+            rhs: Right-hand side message IDs
+            window: Maximum distance (number of positions) to look behind
+
+        Returns:
+            Set of message IDs from lhs that satisfy the condition
+
+        Example:
+            lhs={3,5,7}, rhs={2,6}, window=2
+            - ID 3: ID 2 is 1 position before -> NO MATCH
+            - ID 5: no rhs within 2 positions before -> MATCH
+            - ID 7: ID 6 is 1 position before -> NO MATCH
+            Result: {5}
+        """
+        # Get IDs that ARE preceded by, then invert
+        preceded_by = self._apply_preceded_by(lhs, rhs, window)
+        return lhs - preceded_by

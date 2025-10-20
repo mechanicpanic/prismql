@@ -37,6 +37,10 @@ restriction
     :
     restriction And restriction
     | restriction Or restriction
+    | restriction FollowedBy restriction Within number
+    | restriction PrecededBy restriction Within number
+    | restriction NotFollowedBy restriction Within number
+    | restriction NotPrecededBy restriction Within number
     | '(' restriction ')'
     | Not restriction
     | condition
@@ -150,6 +154,12 @@ Unr    : 'UNR'    | 'unr'   ;
 Not    : 'NOT'    | 'not'   ;
 And    : 'AND'    | 'and'   ;
 Or     : 'OR'     | 'or'    ;
+
+// Positional operators for lookahead/lookbehind
+FollowedBy     : 'FOLLOWED_BY'     | 'followed_by'     | 'FOLLOWEDBY'    | 'followedby'    ;
+PrecededBy     : 'PRECEDED_BY'     | 'preceded_by'     | 'PRECEDEDBY'    | 'precededby'    ;
+NotFollowedBy  : 'NOT_FOLLOWED_BY' | 'not_followed_by' | 'NOTFOLLOWEDBY' | 'notfollowedby' ;
+NotPrecededBy  : 'NOT_PRECEDED_BY' | 'not_preceded_by' | 'NOTPRECEDEDBY' | 'notprecededby' ;
 
 // Aggregation keywords
 Aggregate : 'AGGREGATE' | 'aggregate' ;
