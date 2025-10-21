@@ -43,15 +43,25 @@ SELECT (from(alice) OR from(bob)) AND is_question()  -- Grouping
 
 ### Window Constraints (INWIN)
 
-Find co-occurring patterns within a message window:
+Find co-occurring patterns within a message window.
+
+**Key characteristic: INWIN is UNORDERED** - the restrictions can match in any order within the window.
 
 ```prismql
--- Find questions followed by answers within 5 messages
+-- Find questions and answers within 5 messages (any order)
 SELECT is_question(), contains(answers) INWIN 5
 
--- Multiple restrictions within window
+-- Multiple restrictions within window (any order)
 SELECT from(customer), from(support), contains(solution) INWIN 10
+
+-- Same query - order doesn't matter:
+SELECT from(support), from(customer), contains(solution) INWIN 10
 ```
+
+**How it works:**
+- Finds all combinations where the restrictions appear within the specified window
+- Order of restrictions in the query does NOT affect results
+- `SELECT A, B INWIN 5` is identical to `SELECT B, A INWIN 5`
 
 ### Positional Operators
 
