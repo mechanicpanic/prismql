@@ -129,3 +129,9 @@ ipython_config.py
 # Temporary files
 *.tmp
 *.temp
+
+# Data files (too large for git)
+examples/lmsys_sample_10k.csv
+examples/lmsys_sample_10k.parquet
+examples/*.csv
+examples/*.parquet

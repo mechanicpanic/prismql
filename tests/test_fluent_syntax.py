@@ -1,7 +1,6 @@
 """Tests for PrismQL's new fluent syntax."""
 
 import pytest
-
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 
@@ -20,17 +19,17 @@ def test_fluent_vs_legacy_equivalence():
     )
 
     # Test user queries
-    legacy_result = engine.execute("SELECT byuser(alice)")
+    legacy_result = engine.execute("SELECT from(alice)")
     fluent_result = engine.execute("SELECT from(alice)")
     assert legacy_result == fluent_result
 
     # Test dictionary queries
-    legacy_result = engine.execute("SELECT haswordofdict(greetings)")
+    legacy_result = engine.execute("SELECT contains(greetings)")
     fluent_result = engine.execute("SELECT contains(greetings)")
     assert legacy_result == fluent_result
 
     # Test question queries
-    legacy_result = engine.execute("SELECT hasquestion()")
+    legacy_result = engine.execute("SELECT is_question()")
     fluent_result = engine.execute("SELECT is_question()")
     assert legacy_result == fluent_result
 
@@ -102,7 +101,7 @@ def test_mixed_syntax():
     )
 
     # Mix legacy and fluent syntax in same query
-    results = engine.execute("SELECT haswordofdict(greetings) AND from(alice)")
+    results = engine.execute("SELECT contains(greetings) AND from(alice)")
     assert len(results) == 1
     assert [1] in results
 

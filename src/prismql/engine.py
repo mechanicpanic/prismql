@@ -55,7 +55,7 @@ class PrismQLEngine:
         >>> engine = PrismQLEngine(search_backend=backend)
         >>>
         >>> # Execute query
-        >>> results = engine.execute("SELECT byuser(Alice) INWIN 10")
+        >>> results = engine.execute("SELECT from(Alice) INWIN 10")
         >>> print(results)  # [[1, 3]]
     """
 

@@ -83,33 +83,31 @@ def main():
 
     # Example 1: Find all questions
     print("1. Finding all questions in the conversation:")
-    results = engine.execute("SELECT hasquestion()")
+    results = engine.execute("SELECT is_question()")
     print(f"   Found {len(results)} questions at message IDs: {results}")
     print()
 
     # Example 2: Find messages from specific user
     print("2. Finding all messages from the student:")
-    results = engine.execute("SELECT byuser(student)")
+    results = engine.execute("SELECT from(student)")
     print(f"   Student messages: {results}")
     print()
 
     # Example 3: Boolean operations
     print("3. Finding student messages that contain questions:")
-    results = engine.execute("SELECT byuser(student) AND hasquestion()")
+    results = engine.execute("SELECT from(student) AND is_question()")
     print(f"   Student questions: {results}")
     print()
 
     # Example 4: Using dictionaries
     print("4. Finding messages about problems:")
-    results = engine.execute("SELECT haswordofdict(problems)")
+    results = engine.execute("SELECT contains(problems)")
     print(f"   Problem-related messages: {results}")
     print()
 
     # Example 5: Window constraints
     print("5. Finding problem-solution pairs within 3 messages:")
-    results = engine.execute(
-        "SELECT haswordofdict(problems), haswordofdict(solutions) INWIN 3"
-    )
+    results = engine.execute("SELECT contains(problems), contains(solutions) INWIN 3")
     print(f"   Problem-solution pairs: {results}")
     for group in results:
         print(f"   - Problem at {group[0]}, solution at {group[1]}")
@@ -117,21 +115,21 @@ def main():
 
     # Example 6: Complex query
     print("6. Finding complete help interactions (question -> answer -> confirmation):")
-    results = engine.execute("""
-        SELECT 
-            byuser(student) AND hasquestion(),
-            byuser(tutor) AND haswordofdict(solutions),
-            byuser(student) AND haswordofdict(solutions)
+    results = engine.execute(
+        """
+        SELECT
+            from(student) AND is_question(),
+            from(tutor) AND contains(solutions),
+            from(student) AND contains(solutions)
         INWIN 10
-    """)
+    """
+    )
     print(f"   Complete interactions: {results}")
     print()
 
     # Example 7: Print actual messages for context
     print("7. Showing actual messages for problem-solution pairs:")
-    results = engine.execute(
-        "SELECT haswordofdict(problems), haswordofdict(solutions) INWIN 3"
-    )
+    results = engine.execute("SELECT contains(problems), contains(solutions) INWIN 3")
     for group in results[:2]:  # Show first 2 groups
         print(f"\n   Group {group}:")
         docs = backend.get_documents(group)

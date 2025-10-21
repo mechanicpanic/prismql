@@ -19,7 +19,7 @@ Example:
     >>> engine = PrismQLEngine(search_backend=backend)
     >>>
     >>> # Execute a query
-    >>> results = engine.execute("SELECT hasquestion() INWIN 10")
+    >>> results = engine.execute("SELECT is_question() INWIN 10")
 """
 
 from .__version__ import __version__

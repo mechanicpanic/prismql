@@ -1,6 +1,7 @@
 """PrismQL query visitor implementation."""
 
 import itertools
+import warnings
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any, Optional, Union
@@ -351,8 +352,14 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if ctx.ContainsLink():
             return self._get_ner_messages("URL")
 
-        # Legacy operators (backward compatibility)
+        # Legacy operators (backward compatibility - DEPRECATED)
         if ctx.HasWordOfDict():
+            warnings.warn(
+                "haswordofdict() is deprecated and will be removed in v1.0. "
+                "Use contains() instead: 'contains(dict_name)'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             dict_name = ctx.hdict().getText()
             if dict_name not in self.user_dictionaries:
                 raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
@@ -360,6 +367,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return self.search_backend.search_text(words, field="text", operator="OR")
 
         if ctx.ByUser():
+            warnings.warn(
+                "byuser() is deprecated and will be removed in v1.0. "
+                "Use from() instead: 'from(username)'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             username = ctx.huser().getText()
 
             # Check if this is a variable
@@ -380,23 +393,65 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return self.search_backend.search_by_field("user", username, exact=True)
 
         if ctx.HasUserMentioned():
+            warnings.warn(
+                "hasusermentioned() is deprecated and will be removed in v1.0. "
+                "Use mentions_user() instead: 'mentions_user(username)'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             username = ctx.huser().getText()
             if username in self.precomputed_indexes.user_mentions:
                 return self.precomputed_indexes.user_mentions[username]
             return self.search_backend.search_text([username], field="text")
 
         if ctx.HasQuestion():
+            warnings.warn(
+                "hasquestion() is deprecated and will be removed in v1.0. "
+                "Use is_question() instead: 'is_question()'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self._get_questions()
 
         if ctx.HasDate():
+            warnings.warn(
+                "hasdate() is deprecated and will be removed in v1.0. "
+                "Use mentions_date() instead: 'mentions_date()'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self._get_ner_messages("DATE")
         if ctx.HasTime():
+            warnings.warn(
+                "hastime() is deprecated and will be removed in v1.0. "
+                "Use mentions_time() instead: 'mentions_time()'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self._get_ner_messages("TIME")
         if ctx.HasLocation():
+            warnings.warn(
+                "haslocation() is deprecated and will be removed in v1.0. "
+                "Use mentions_place() instead: 'mentions_place()'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self._get_ner_messages("GPE")
         if ctx.HasOrganization():
+            warnings.warn(
+                "hasorganization() is deprecated and will be removed in v1.0. "
+                "Use mentions_org() instead: 'mentions_org()'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self._get_ner_messages("ORG")
         if ctx.HasURL():
+            warnings.warn(
+                "hasurl() is deprecated and will be removed in v1.0. "
+                "Use contains_link() instead: 'contains_link()'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self._get_ner_messages("URL")
 
         raise PrismQLRuntimeError("Unknown condition type")

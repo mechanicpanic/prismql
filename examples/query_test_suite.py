@@ -169,7 +169,7 @@ def main() -> None:
     print_query_result(query, results, "Find all messages from Alice")
 
     # Query 2: Messages from support staff (legacy syntax)
-    query = "SELECT byuser(support_bob)"
+    query = "SELECT from(support_bob)"
     results = engine.execute(query)
     print_query_result(query, results, "Find all messages from support agent Bob")
 

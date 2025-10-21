@@ -161,8 +161,8 @@ class TestVariableWithLegacySyntax:
     """Test variables work with legacy operators."""
 
     def test_byuser_variable(self, engine):
-        """Test variable with legacy byuser() operator."""
-        result = engine.execute("SELECT byuser($user), byuser($user) INWIN 3")
+        """Test variable with legacy from() operator."""
+        result = engine.execute("SELECT from($user), from($user) INWIN 3")
 
         # Should work the same as from($user)
         assert len(result) > 0

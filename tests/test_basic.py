@@ -1,7 +1,6 @@
 """Basic tests for PrismQL functionality."""
 
 import pytest
-
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 from prismql.exceptions import PrismQLRuntimeError, PrismQLSyntaxError
@@ -19,7 +18,7 @@ def test_basic_query():
     engine = PrismQLEngine(search_backend=backend)
 
     # Test user-based query
-    results = engine.execute("SELECT byuser(alice)")
+    results = engine.execute("SELECT from(alice)")
     assert len(results) == 2
     assert [1] in results
     assert [3] in results
@@ -37,7 +36,7 @@ def test_question_detection():
     backend = MemoryBackend(messages)
     engine = PrismQLEngine(search_backend=backend)
 
-    results = engine.execute("SELECT hasquestion()")
+    results = engine.execute("SELECT is_question()")
     assert len(results) == 2
     # Should find messages 2 and 3 (the questions)
     assert [2] in results
@@ -60,7 +59,7 @@ def test_dictionary_search():
         },
     )
 
-    results = engine.execute("SELECT haswordofdict(languages)")
+    results = engine.execute("SELECT contains(languages)")
     assert len(results) == 3
     assert [1] in results  # Python
     assert [2] in results  # JavaScript
@@ -80,16 +79,16 @@ def test_boolean_operators():
     engine = PrismQLEngine(search_backend=backend)
 
     # Test AND
-    results = engine.execute("SELECT byuser(alice) AND hasquestion()")
+    results = engine.execute("SELECT from(alice) AND is_question()")
     assert len(results) == 1
     assert [2] in results
 
     # Test OR
-    results = engine.execute("SELECT byuser(alice) OR hasquestion()")
+    results = engine.execute("SELECT from(alice) OR is_question()")
     assert len(results) == 3  # alice's 2 messages + bob's question
 
     # Test NOT
-    results = engine.execute("SELECT NOT byuser(alice)")
+    results = engine.execute("SELECT NOT from(alice)")
     assert len(results) == 2
     assert [3] in results
     assert [4] in results
@@ -115,9 +114,7 @@ def test_window_constraints():
     )
 
     # Find problem-solution pairs within window of 3
-    results = engine.execute(
-        "SELECT haswordofdict(problems), haswordofdict(solutions) INWIN 3"
-    )
+    results = engine.execute("SELECT contains(problems), contains(solutions) INWIN 3")
     print(f"Window test results: {results}")
 
     # Should find (1,3) since they're 2 apart, and (10,11) since they're 1 apart
@@ -141,7 +138,7 @@ def test_runtime_error():
     engine = PrismQLEngine(search_backend=backend)
 
     with pytest.raises(PrismQLRuntimeError):
-        engine.execute("SELECT haswordofdict(nonexistent)")
+        engine.execute("SELECT contains(nonexistent)")
 
 
 def test_validation():
@@ -150,7 +147,7 @@ def test_validation():
     engine = PrismQLEngine(search_backend=backend)
 
     # Valid query
-    assert engine.validate("SELECT byuser(alice)") == True
+    assert engine.validate("SELECT from(alice)") == True
 
     # Invalid query
     with pytest.raises(PrismQLSyntaxError):

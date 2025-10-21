@@ -19,7 +19,7 @@ pip install prismql
 # With OpenSearch support
 pip install prismql[opensearch]
 
-# With Elasticsearch support  
+# With Elasticsearch support
 pip install prismql[elasticsearch]
 
 # With NLP support (spaCy)
@@ -73,7 +73,7 @@ SELECT <conditions> [INWIN <window_size>]
 ### Conditions
 
 **New Fluent Syntax (Recommended):**
-- **contains(dict_name)** - Messages containing words from a dictionary  
+- **contains(dict_name)** - Messages containing words from a dictionary
 - **from(username)** - Messages from specific user
 - **mentions_user(username)** - Messages mentioning a user
 - **is_question()** - Messages containing questions
@@ -83,8 +83,7 @@ SELECT <conditions> [INWIN <window_size>]
 - **mentions_org()** - Messages containing organizations
 - **contains_link()** - Messages containing URLs
 
-**Legacy Syntax (Still Supported):**
-- **haswordofdict(dict_name)**, **byuser(username)**, **hasusermentioned(username)**, etc.
+**Note**: Legacy syntax (`byuser()`, `haswordofdict()`, `hasquestion()`) is deprecated. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
 
 ### Boolean Operators
 
@@ -92,7 +91,7 @@ SELECT <conditions> [INWIN <window_size>]
 -- AND operator (fluent syntax)
 SELECT from(alice) AND is_question()
 
--- OR operator  
+-- OR operator
 SELECT from(alice) OR from(bob)
 
 -- NOT operator
@@ -117,9 +116,9 @@ Comma-separated restrictions find combinations:
 
 ```sql
 -- Find customer question + support response + resolution (fluent syntax)
-SELECT from(customer) AND is_question(), 
+SELECT from(customer) AND is_question(),
        from(support),
-       contains(resolved) 
+       contains(resolved)
        INWIN 10
 ```
 
@@ -138,7 +137,7 @@ Parentheses create subqueries that are evaluated independently:
 
 ```sql
 -- Complex multi-stage pattern (fluent syntax)
-SELECT 
+SELECT
   (SELECT from(customer), contains(problem) INWIN 3);
   (SELECT from(support), contains(solution) INWIN 5)
   INWIN 20
@@ -166,7 +165,7 @@ backend = OpenSearchBackend(client, index_name="chat-logs")
 engine = PrismQLEngine(search_backend=backend)
 
 # Execute queries
-results = engine.execute("SELECT haswordofdict(errors) INWIN 50")
+results = engine.execute("SELECT contains(errors) INWIN 50")
 ```
 
 ### Creating Custom Backends
@@ -181,15 +180,15 @@ class MyCustomBackend(SearchBackend):
     def search_text(self, terms, field="text", operator="OR") -> Set[int]:
         # Your implementation
         pass
-    
+
     def search_by_field(self, field, value, exact=True) -> Set[int]:
         # Your implementation
         pass
-    
+
     def get_total_documents(self) -> int:
         # Your implementation
         pass
-    
+
     def get_all_document_ids(self, limit=None) -> Set[int]:
         # Your implementation
         pass
@@ -206,7 +205,7 @@ engine.add_dictionary("problems", ["error", "broken", "failed", "issue"])
 
 # Use in queries
 results = engine.execute("""
-    SELECT haswordofdict(problems), haswordofdict(tech_terms) INWIN 10
+    SELECT contains(problems), contains(tech_terms) INWIN 10
 """)
 
 # List all dictionaries
@@ -264,19 +263,19 @@ engine = PrismQLEngine(
 ```python
 # Find escalation patterns
 escalation_query = """
-SELECT 
-  (SELECT byuser(customer) AND haswordofdict(complaint_words) INWIN 3);
-  (SELECT byuser(customer) AND haswordofdict(frustration_words));
-  (SELECT byuser(support) AND haswordofdict(escalation_words))
+SELECT
+  (SELECT from(customer) AND contains(complaint_words) INWIN 3);
+  (SELECT from(customer) AND contains(frustration_words));
+  (SELECT from(support) AND contains(escalation_words))
   INWIN 20
 """
 
 # Find successful resolutions
 resolution_query = """
 SELECT
-  haswordofdict(problem_words),
-  byuser(support) AND haswordofdict(solution_words),
-  byuser(customer) AND haswordofdict(satisfaction_words)
+  contains(problem_words),
+  from(support) AND contains(solution_words),
+  from(customer) AND contains(satisfaction_words)
   INWIN 30
 """
 ```
@@ -285,9 +284,9 @@ SELECT
 ```python
 # Find potential security discussions
 security_query = """
-SELECT 
-  haswordofdict(security_terms) AND (hasurl() OR haswordofdict(credentials)),
-  hasquestion()
+SELECT
+  contains(security_terms) AND (contains_link() OR contains(credentials)),
+  is_question()
   INWIN 10
 """
 ```
@@ -320,7 +319,7 @@ uv run pytest --cov=prismql
 # Format code with ruff
 uv run ruff format .
 
-# Check and fix linting issues  
+# Check and fix linting issues
 uv run ruff check . --fix
 
 # Run both before committing

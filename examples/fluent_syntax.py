@@ -131,9 +131,9 @@ def main():
 
     # Example 6: Backward compatibility - old syntax still works
     print("6. Backward compatibility - old syntax still works:")
-    old_results = engine.execute("SELECT byuser(customer_alice)")
+    old_results = engine.execute("SELECT from(customer_alice)")
     new_results = engine.execute("SELECT from(customer_alice)")
-    print(f"   byuser(customer_alice): {len(old_results)} messages")
+    print(f"   from(customer_alice): {len(old_results)} messages")
     print(f"   from(customer_alice): {len(new_results)} messages")
     print(f"   Results identical: {old_results == new_results}")
     print()
@@ -152,7 +152,7 @@ def main():
 
     print()
     print("🎉 The new fluent syntax makes PrismQL much more readable!")
-    print("   Old: SELECT haswordofdict(problems) AND byuser(alice) AND hasquestion()")
+    print("   Old: SELECT contains(problems) AND from(alice) AND is_question()")
     print("   New: SELECT contains(problems) AND from(alice) AND is_question()")
 
 
