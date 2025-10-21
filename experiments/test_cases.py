@@ -236,6 +236,145 @@ AMBIGUOUS_QUERIES = [
 ]
 
 # =============================================================================
+# PATTERN VARIABLE QUERIES (Advanced)
+# =============================================================================
+
+PATTERN_VARIABLE_QUERIES = [
+    TestCase(
+        id="pvar_001",
+        description="Find the same user posting consecutively within 3 messages",
+        ground_truth_query="SELECT from($user), from($user) INWIN 3",
+        category="pattern_variables",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Self-continuation pattern - same user posts multiple times",
+    ),
+    TestCase(
+        id="pvar_002",
+        description="Find someone asking, Bob responding, then the original person following up",
+        ground_truth_query="SELECT from($asker), from(bob), from($asker) INWIN 5",
+        category="pattern_variables",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Question-answer-acknowledgment pattern with variable",
+    ),
+    TestCase(
+        id="pvar_003",
+        description="Find two-person back-and-forth alternating conversation pattern",
+        ground_truth_query="SELECT from($person1), from($person2), from($person1), from($person2) INWIN 5",
+        category="pattern_variables",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Alternating conversation between two people",
+    ),
+    TestCase(
+        id="pvar_004",
+        description="Find the same user posting three consecutive messages",
+        ground_truth_query="SELECT from($user), from($user), from($user) INWIN 3",
+        category="pattern_variables",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Extended self-response pattern",
+    ),
+]
+
+# =============================================================================
+# QUANTIFIER QUERIES (Advanced counting)
+# =============================================================================
+
+QUANTIFIER_QUERIES = [
+    TestCase(
+        id="quant_001",
+        description="Find alice posting exactly 3 messages within 10 positions",
+        ground_truth_query="SELECT from(alice){3} INWIN 10",
+        category="quantifiers",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Exact quantifier for user burst detection",
+    ),
+    TestCase(
+        id="quant_002",
+        description="Find alice posting twice then bob responding",
+        ground_truth_query="SELECT from(alice){2}, from(bob) INWIN 10",
+        category="quantifiers",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Quantifier in multi-user pattern",
+    ),
+    TestCase(
+        id="quant_003",
+        description="Find any user posting 3 times then someone else responding",
+        ground_truth_query="SELECT from($user){3}, from($responder) INWIN 10",
+        category="quantifiers",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Quantifiers with pattern variables",
+    ),
+    TestCase(
+        id="quant_004",
+        description="Find bob posting twice then alice posting twice",
+        ground_truth_query="SELECT from(bob){2}, from(alice){2} INWIN 10",
+        category="quantifiers",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Multiple quantifiers in one pattern",
+    ),
+]
+
+# =============================================================================
+# NEGATIVE PATTERN QUERIES (NOT operator in sequences)
+# =============================================================================
+
+NEGATIVE_PATTERN_QUERIES = [
+    TestCase(
+        id="neg_001",
+        description="Find same user posting twice with no manager message in between",
+        ground_truth_query="SELECT from($user), NOT from(manager), from($user) INWIN 5",
+        category="negative_patterns",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="NOT in middle position - peer-to-peer conversations",
+    ),
+    TestCase(
+        id="neg_002",
+        description="Find greetings from someone who is not the manager",
+        ground_truth_query="SELECT NOT from(manager), contains(greetings) INWIN 3",
+        category="negative_patterns",
+        difficulty="medium",
+        required_dictionaries={"greetings": ["hello", "hi", "hey", "good morning"]},
+        notes="NOT at first position",
+    ),
+    TestCase(
+        id="neg_003",
+        description="Find questions with a non-thank-you response then bob responding",
+        ground_truth_query="SELECT contains(questions), NOT contains(thanks), from(bob) INWIN 5",
+        category="negative_patterns",
+        difficulty="hard",
+        required_dictionaries={
+            "questions": ["what", "how", "when", "where", "why"],
+            "thanks": ["thank", "thanks", "appreciate"],
+        },
+        notes="NOT excluding specific content",
+    ),
+]
+
+# =============================================================================
+# AGGREGATION QUERIES
+# =============================================================================
+
+AGGREGATION_QUERIES = [
+    TestCase(
+        id="agg_001",
+        description="Count total self-continuation instances",
+        ground_truth_query="SELECT from($user), from($user) INWIN 3 AGGREGATE count()",
+        category="aggregation",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Aggregation with pattern variables",
+    ),
+]
+
+# =============================================================================
 # ALL TEST CASES
 # =============================================================================
 
@@ -246,6 +385,10 @@ ALL_TEST_CASES = (
     + COMPLEX_QUERIES
     + EDGE_CASE_QUERIES
     + AMBIGUOUS_QUERIES
+    + PATTERN_VARIABLE_QUERIES
+    + QUANTIFIER_QUERIES
+    + NEGATIVE_PATTERN_QUERIES
+    + AGGREGATION_QUERIES
 )
 
 
