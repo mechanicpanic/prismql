@@ -23,6 +23,9 @@ class PrismQLSyntaxError(PrismQLError):
         if column is not None:
             details["column"] = column
         super().__init__(message, details)
+        # Also store as attributes for easier access
+        self.line = line
+        self.column = column
 
 
 class PrismQLRuntimeError(PrismQLError):

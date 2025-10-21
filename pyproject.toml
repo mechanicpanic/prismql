@@ -124,6 +124,9 @@ ignore = [
 "src/prismql/backends/duckdb.py" = ["E501", "S608", "SIM102", "S110"]  # Long SQL strings, false positive warnings, nested if style, try-except-pass for optional FTS
 "examples/postgres_annotation_platform.py" = ["E501", "S106", "A001", "E402"]  # Long strings, password in example, shadowing id builtin, imports after header
 "examples/duckdb_research_interface.py" = ["E501", "A001", "E402", "S108"]  # Long strings, shadowing id builtin, imports after header, /tmp usage in examples
+"src/prismql/validator.py" = ["E501", "ARG002", "ANN204", "SIM102"]  # Long strings, unused tree param, __init__ annotation, nested if
+"examples/llm_query_validation.py" = ["E501", "ARG001", "RET505"]  # Long strings, unused arg in mock, unnecessary elif
+"tests/test_validator.py" = ["F841"]  # Unused variable in test
 
 [tool.mypy]
 python_version = "3.9"

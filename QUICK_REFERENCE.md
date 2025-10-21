@@ -1,0 +1,485 @@
+# PrismQL Quick Reference
+
+**For LLM Agents**: This document provides complete syntax and examples for evaluating PrismQL.
+
+## What is PrismQL?
+
+PrismQL is a domain-specific query language for pattern matching in conversational data. It enables complex pattern queries like "find questions from Alice followed by responses from Bob within 3 messages" using SQL-like syntax.
+
+**Key Use Cases:**
+- LLM conversation analysis (finding question→answer patterns, topic transitions)
+- Customer support analytics (tracking problem→solution sequences)
+- Annotation platforms (querying labeled conversations)
+- Research interfaces (analyzing dialogue patterns at scale)
+
+**Backends**: In-memory, PostgreSQL, DuckDB, OpenSearch/Elasticsearch
+
+## Complete Syntax Reference
+
+### Basic Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `from(user)` | Messages from specific user | `from(alice)` |
+| `contains(dict)` | Messages containing dictionary words | `contains(greetings)` |
+| `is_question()` | Messages that are questions | `is_question()` |
+| `mentions_user(user)` | Messages mentioning a user | `mentions_user(bob)` |
+| `mentions_date()` | Messages mentioning dates | `mentions_date()` |
+| `mentions_time()` | Messages mentioning times | `mentions_time()` |
+| `mentions_place()` | Messages mentioning locations | `mentions_place()` |
+| `mentions_org()` | Messages mentioning organizations | `mentions_org()` |
+| `contains_link()` | Messages containing URLs | `contains_link()` |
+
+### Boolean Operators
+
+```prismql
+SELECT from(alice) AND is_question()           -- Intersection
+SELECT from(alice) OR from(bob)                -- Union
+SELECT NOT from(alice)                         -- Negation
+SELECT (from(alice) OR from(bob)) AND is_question()  -- Grouping
+```
+
+**Precedence**: Parentheses > NOT > AND > OR
+
+### Window Constraints (INWIN)
+
+Find co-occurring patterns within a message window:
+
+```prismql
+-- Find questions followed by answers within 5 messages
+SELECT is_question(), contains(answers) INWIN 5
+
+-- Multiple restrictions within window
+SELECT from(customer), from(support), contains(solution) INWIN 10
+```
+
+### Positional Operators
+
+Sequential pattern matching:
+
+```prismql
+-- Positive lookahead: alice followed by bob
+SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
+
+-- Positive lookbehind: bob preceded by alice
+SELECT from(bob) PRECEDED_BY from(alice) WITHIN 2
+
+-- Negative lookahead: alice NOT followed by bob
+SELECT from(alice) NOT_FOLLOWED_BY from(bob) WITHIN 5
+
+-- Negative lookbehind: bob NOT preceded by charlie
+SELECT from(bob) NOT_PRECEDED_BY from(charlie) WITHIN 3
+```
+
+**Difference from INWIN:**
+- `INWIN`: Co-occurrence (unordered)
+- `FOLLOWED_BY/PRECEDED_BY`: Sequential (ordered)
+
+### Quantifiers
+
+Specify how many times a pattern must occur:
+
+```prismql
+SELECT from(alice){2}          -- Exactly 2 messages
+SELECT from(alice){2,}         -- At least 2 messages
+SELECT from(alice){2,5}        -- Between 2 and 5 messages
+```
+
+### Named Groups
+
+Label results for clarity:
+
+```prismql
+SELECT from(alice) AS "alice_messages",
+       is_question() AS "questions"
+```
+
+### Pattern Variables
+
+Match messages with the same field value:
+
+```prismql
+-- Find same user asking and answering
+SELECT from($user), from($user) INWIN 5
+
+-- Any user followed by themselves
+SELECT from($speaker) FOLLOWED_BY from($speaker) WITHIN 2
+```
+
+### Temporal Operators
+
+Filter by time:
+
+```prismql
+SELECT from(alice) AFTER "2024-01-01"
+SELECT from(alice) BEFORE "2024-12-31"
+SELECT from(alice) BETWEEN "2024-01-01" AND "2024-06-30"
+```
+
+### Aggregations
+
+Analyze query results:
+
+```prismql
+SELECT from(alice) GROUP BY user AGGREGATE count
+SELECT from(alice) GROUP BY topic AGGREGATE count, avg_length
+```
+
+## Real-World Examples
+
+### Example 1: Customer Support Analytics
+
+```python
+from prismql import PrismQLEngine
+from prismql.backends import PostgresBackend
+
+# Connect to existing PostgreSQL database
+backend = PostgresBackend(
+    "postgresql://localhost/support_db",
+    config={
+        "table_name": "messages",
+        "field_mappings": {
+            "text": "message_content",
+            "user": "author",
+            "id": "msg_id"
+        }
+    }
+)
+
+engine = PrismQLEngine(
+    backend,
+    user_dictionaries={
+        "problems": ["error", "issue", "broken", "not working"],
+        "solutions": ["fixed", "resolved", "try this", "solution"],
+        "escalation": ["manager", "escalate", "urgent", "priority"]
+    }
+)
+
+# Find problem→solution patterns
+result = engine.execute("""
+    SELECT contains(problems), contains(solutions) INWIN 10
+""")
+
+# Find unanswered escalations
+result = engine.execute("""
+    SELECT from(customer) AND contains(escalation)
+           NOT_FOLLOWED_BY from(support) WITHIN 5
+""")
+```
+
+### Example 2: LLM Research Interface
+
+```python
+from prismql.backends import DuckDBBackend
+
+# Query Parquet files directly (no loading!)
+backend = DuckDBBackend.from_parquet("conversations.parquet")
+
+engine = PrismQLEngine(
+    backend,
+    user_dictionaries={
+        "reasoning": ["think", "because", "therefore", "reasoning"],
+        "uncertainty": ["maybe", "perhaps", "not sure", "unclear"],
+        "corrections": ["actually", "correction", "mistake", "wrong"]
+    }
+)
+
+# Find reasoning chains
+result = engine.execute("""
+    SELECT from(user) AND contains(reasoning),
+           from(assistant) AND contains(reasoning)
+    INWIN 3
+""")
+
+# Find self-corrections
+result = engine.execute("""
+    SELECT from(assistant) FOLLOWED_BY
+           from(assistant) AND contains(corrections)
+    WITHIN 2
+""")
+```
+
+### Example 3: Annotation Platform
+
+```python
+from prismql import IndexBuilder
+
+# Precompute NLP features during ingestion
+messages = [
+    {"id": 1, "text": "What time is it?", "user": "alice", "intent": "question"},
+    {"id": 2, "text": "It's 3pm", "user": "bob", "intent": "answer"}
+]
+
+# Build indexes from annotations
+indexes = IndexBuilder.from_message_annotations(
+    messages,
+    custom_fields={"intent": None}
+)
+
+engine = PrismQLEngine(backend, precomputed_indexes=indexes)
+
+# Query by annotation
+result = engine.execute("SELECT intent_question()")
+```
+
+### Example 4: Complex Pattern - Support Quality
+
+```python
+# Track complete support interactions
+query = """
+SELECT
+    from(customer) AND contains(problems) AS "initial_problem",
+    from(support) AND contains(solutions) AS "support_response",
+    from(customer) AND contains(satisfaction) AS "customer_feedback"
+INWIN 20
+"""
+
+result = engine.execute(query)
+
+# Each result is a [problem_id, response_id, feedback_id] group
+for group in result:
+    docs = backend.get_documents(group)
+    # Analyze the interaction quality
+```
+
+### Example 5: Turn-Taking Analysis
+
+```python
+# Find conversations dominated by one speaker
+query = """
+SELECT from(alice){5,}
+       NOT_PRECEDED_BY from(bob) WITHIN 10
+       NOT_FOLLOWED_BY from(bob) WITHIN 10
+"""
+
+# Find rapid back-and-forth exchanges
+query = """
+SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 1
+       FOLLOWED_BY from(alice) WITHIN 1
+       FOLLOWED_BY from(bob) WITHIN 1
+"""
+```
+
+## Performance Characteristics
+
+| Backend | Use Case | Performance | Capacity |
+|---------|----------|-------------|----------|
+| **MemoryBackend** | Testing, small datasets | Instant | <10K messages |
+| **DuckDB** | Analytics, research | Fast (100x Pandas) | Millions |
+| **PostgreSQL** | Production, annotations | Good with indexes | Billions |
+| **OpenSearch** | Full-text search | Excellent for text | Billions |
+
+**Optimization Tips:**
+1. Use precomputed indexes for NLP features
+2. Create database indexes on frequently queried fields
+3. Use DuckDB for direct Parquet querying (zero loading)
+4. Smaller windows = faster queries
+
+## Integration Patterns
+
+### Pattern 1: Query Existing Database
+
+```python
+# Zero data duplication - query in place
+backend = PostgresBackend("postgresql://localhost/db", config={...})
+engine = PrismQLEngine(backend)
+```
+
+### Pattern 2: Fast Analytics on Files
+
+```python
+# Query Parquet directly without loading
+backend = DuckDBBackend.from_parquet("data.parquet")
+engine = PrismQLEngine(backend)
+```
+
+### Pattern 3: Combine with Custom SQL
+
+```python
+# Use PrismQL for patterns, SQL for aggregations
+pattern_result = engine.execute("SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3")
+ids = [msg_id for group in pattern_result for msg_id in group]
+
+# Then use SQL for detailed analysis
+stats = backend.execute_query(f"""
+    SELECT user, AVG(length(text))
+    FROM messages
+    WHERE id IN ({','.join(map(str, ids))})
+    GROUP BY user
+""")
+```
+
+## Common Pitfalls
+
+### ❌ Wrong: Confusing INWIN with FOLLOWED_BY
+
+```prismql
+-- This finds co-occurrence (unordered)
+SELECT from(alice), from(bob) INWIN 5
+
+-- This finds sequence (ordered)
+SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 5
+```
+
+### ❌ Wrong: Forgetting to define dictionaries
+
+```python
+# This will error: Dictionary 'greetings' not found
+engine.execute("SELECT contains(greetings)")
+
+# Need to define first:
+engine = PrismQLEngine(backend, user_dictionaries={
+    "greetings": ["hello", "hi", "hey"]
+})
+```
+
+### ❌ Wrong: Using AND/OR without parentheses
+
+```prismql
+-- Precedence may not be what you expect
+SELECT from(alice) OR from(bob) FOLLOWED_BY from(charlie) WITHIN 2
+
+-- Use parentheses to be explicit
+SELECT (from(alice) OR from(bob)) FOLLOWED_BY from(charlie) WITHIN 2
+```
+
+### ✅ Correct: Check precomputed indexes first
+
+```python
+# Efficient: Use precomputed indexes
+indexes = IndexBuilder.from_message_annotations(messages, custom_fields={...})
+engine = PrismQLEngine(backend, precomputed_indexes=indexes)
+
+# Inefficient: Query NLP features on every query
+engine = PrismQLEngine(backend, nlp_backend=SpacyBackend())
+```
+
+## Language Design Goals
+
+1. **Backend-Agnostic**: Query any data source (SQL, NoSQL, files, in-memory)
+2. **LLM-Friendly**: Single consistent syntax, clear semantics
+3. **Composable**: Combine operators to express complex patterns
+4. **Efficient**: Precomputed indexes, optimized for conversation patterns
+5. **Familiar**: SQL-like syntax, easy to learn
+
+## Limitations
+
+- **Not for general SQL**: PrismQL is specialized for conversation patterns
+- **Window semantics**: Position-based, not time-based (though AFTER/BEFORE exist)
+- **No joins**: Designed for single conversation sequences
+- **Text search**: Requires dictionary definitions (no arbitrary regex yet)
+
+## Query Validation for LLM Agents
+
+PrismQL includes a comprehensive query validator that helps LLM agents self-correct:
+
+```python
+from prismql import QueryValidator, validate_query
+
+# Create validator
+validator = QueryValidator(user_dictionaries={"greetings": ["hi", "hello"]})
+
+# Validate query
+result = validator.validate("SELECT from(alice)")
+
+if result.valid:
+    print("✓ Query is good!")
+    engine.execute(result.query)
+else:
+    for error in result.errors:
+        print(f"Error: {error.message}")
+        print(f"Suggestion: {error.suggestion}")
+```
+
+**What the validator checks:**
+
+1. **Syntax errors** - Missing parens, invalid operators
+2. **Undefined dictionaries** - References to non-existent dicts
+3. **Deprecated syntax** - Old operators (byuser vs from)
+4. **Performance issues** - Large windows, inefficient patterns
+5. **Best practices** - Missing named groups, unclear precedence
+
+**Validation levels:**
+- `ERROR` - Query will fail
+- `WARNING` - Query works but inefficient/deprecated
+- `INFO` - Suggestions for improvement
+
+**LLM self-correction loop:**
+```python
+for attempt in range(max_attempts):
+    query = llm_generate_query(user_request, feedback)
+    result = validator.validate(query)
+
+    if result.valid:
+        return engine.execute(query)
+    else:
+        feedback = str(result)  # Feed errors back to LLM
+```
+
+## Quick Decision Tree
+
+**Should you use PrismQL?**
+
+✅ YES if you need to:
+- Find sequential patterns in conversations
+- Query labeled/annotated dialogue data
+- Analyze LLM conversation patterns
+- Track question→answer sequences
+- Detect conversation quality issues
+
+❌ NO if you need:
+- General SQL queries (use SQL)
+- Real-time streaming (use stream processors)
+- Graph queries (use graph databases)
+- Arbitrary regex text search (use full-text search)
+
+## Next Steps
+
+1. **Quick Start**: See `examples/quickstart.py`
+2. **Real Data**: Run `examples/download_real_data.py` for 47K messages
+3. **Advanced Patterns**: See `examples/fluent_syntax.py`
+4. **Production**: See `examples/postgres_annotation_platform.py`
+
+## Syntax Cheat Sheet
+
+```prismql
+-- Basic filtering
+SELECT from(alice)
+SELECT contains(greetings)
+SELECT is_question()
+
+-- Boolean logic
+SELECT from(alice) AND is_question()
+SELECT from(alice) OR from(bob)
+SELECT NOT from(alice)
+
+-- Window co-occurrence
+SELECT from(alice), from(bob) INWIN 5
+
+-- Sequential patterns
+SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
+
+-- Negation
+SELECT from(alice) NOT_FOLLOWED_BY from(bob) WITHIN 5
+
+-- Quantifiers
+SELECT from(alice){2,5}
+
+-- Named groups
+SELECT from(alice) AS "alice_messages"
+
+-- Variables
+SELECT from($user), from($user) INWIN 5
+
+-- Temporal
+SELECT from(alice) AFTER "2024-01-01"
+
+-- Aggregation
+SELECT from(alice) GROUP BY user AGGREGATE count
+```
+
+---
+
+**Version**: 0.1.0
+**Documentation**: See full README.md for detailed documentation
+**Migration**: Legacy syntax deprecated - see MIGRATION_GUIDE.md

@@ -30,6 +30,7 @@ from .engine import PrismQLEngine
 from .exceptions import PrismQLError, PrismQLRuntimeError, PrismQLSyntaxError
 from .types import NamedQueryResult
 from .utils import IndexBuilder
+from .validator import QueryValidator, ValidationLevel, ValidationResult, validate_query
 
 __all__ = [
     # Main engine
@@ -41,6 +42,11 @@ __all__ = [
     "BackendFactory",
     # Utilities
     "IndexBuilder",
+    # Validation
+    "QueryValidator",
+    "ValidationLevel",
+    "ValidationResult",
+    "validate_query",
     # Result types
     "AggregateResult",
     "AggregationFunction",
