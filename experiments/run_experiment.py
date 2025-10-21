@@ -60,7 +60,7 @@ MODELS = {
     "or-sonnet-4": ("openrouter", "anthropic/claude-sonnet-4"),
     "or-gpt-4": ("openrouter", "openai/gpt-4"),
     # OpenRouter models (Other comprehensive models)
-    "or-glm-4-air": ("openrouter", "z-ai/glm-4-5-air"),
+    "or-glm-4-air": ("openrouter", "z-ai/glm-4.5-air:free"),
     "or-qwen-coder-72b": ("openrouter", "qwen/qwen-3-coder-72b"),
     "or-mistral-medium": ("openrouter", "mistralai/mistral-medium-3-1"),
     "or-mixtral-8x22b": ("openrouter", "mistralai/mixtral-8x22b-instruct"),
