@@ -56,9 +56,15 @@ MODELS = {
     "gpt-4": ("openai", "gpt-4"),
     "gpt-4-turbo": ("openai", "gpt-4-turbo-preview"),
     "gpt-3.5": ("openai", "gpt-3.5-turbo"),
-    # OpenRouter models
+    # OpenRouter models (Claude/OpenAI via OpenRouter)
     "or-sonnet-4": ("openrouter", "anthropic/claude-sonnet-4"),
     "or-gpt-4": ("openrouter", "openai/gpt-4"),
+    # OpenRouter models (Other comprehensive models)
+    "or-glm-4-air": ("openrouter", "z-ai/glm-4-5-air"),
+    "or-qwen-coder-72b": ("openrouter", "qwen/qwen-3-coder-72b"),
+    "or-mistral-medium": ("openrouter", "mistralai/mistral-medium-3-1"),
+    "or-mixtral-8x22b": ("openrouter", "mistralai/mixtral-8x22b-instruct"),
+    "or-llama-4-maverick": ("openrouter", "meta-llama/llama-4-maverick:free"),
 }
 
 STRATEGIES = {
