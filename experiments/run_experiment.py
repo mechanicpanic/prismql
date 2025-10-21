@@ -65,6 +65,12 @@ MODELS = {
     "or-mistral-medium": ("openrouter", "mistralai/mistral-medium-3-1"),
     "or-mixtral-8x22b": ("openrouter", "mistralai/mixtral-8x22b-instruct"),
     "or-llama-4-maverick": ("openrouter", "meta-llama/llama-4-maverick:free"),
+    "or-llama-3.3-8b": ("openrouter", "meta-llama/llama-3.3-8b-instruct:free"),
+    "or-deepseek-r1-qwen3-8b": (
+        "openrouter",
+        "deepseek/deepseek-r1-0528-qwen3-8b:free",
+    ),
+    "or-ministral-8b": ("openrouter", "mistralai/ministral-8b"),
 }
 
 STRATEGIES = {
