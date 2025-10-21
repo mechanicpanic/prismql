@@ -14,8 +14,8 @@ The experiment framework supports:
 
 **Anthropic** (requires `ANTHROPIC_API_KEY`):
 - `sonnet-4.5` - Claude Sonnet 4.5 (claude-sonnet-4-5-20250929)
-- `opus-4.1` - Claude Opus 4.1 (claude-opus-4-20250514)
-- `haiku-4.5` - Claude Haiku 4.5 (claude-haiku-4-5-20250929)
+- `opus-4.1` - Claude Opus 4.1 (claude-opus-4-1-20250805)
+- `haiku-4.5` - Claude Haiku 4.5 (claude-haiku-4-5-20251001)
 
 **OpenAI** (requires `OPENAI_API_KEY`):
 - `gpt-4` - GPT-4

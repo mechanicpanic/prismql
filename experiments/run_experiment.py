@@ -50,8 +50,8 @@ from experiments.test_cases import get_test_cases_by_difficulty
 MODELS = {
     # Anthropic models
     "sonnet-4.5": ("anthropic", "claude-sonnet-4-5-20250929"),
-    "opus-4.1": ("anthropic", "claude-opus-4-20250514"),
-    "haiku-4.5": ("anthropic", "claude-haiku-4-5-20250929"),
+    "opus-4.1": ("anthropic", "claude-opus-4-1-20250805"),
+    "haiku-4.5": ("anthropic", "claude-haiku-4-5-20251001"),
     # OpenAI models
     "gpt-4": ("openai", "gpt-4"),
     "gpt-4-turbo": ("openai", "gpt-4-turbo-preview"),
