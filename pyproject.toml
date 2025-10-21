@@ -127,6 +127,7 @@ ignore = [
 "src/prismql/validator.py" = ["E501", "ARG002", "ANN204", "SIM102"]  # Long strings, unused tree param, __init__ annotation, nested if
 "examples/llm_query_validation.py" = ["E501", "ARG001", "RET505"]  # Long strings, unused arg in mock, unnecessary elif
 "tests/test_validator.py" = ["F841"]  # Unused variable in test
+"experiments/*.py" = ["E501", "ANN001", "ANN201", "ANN204", "E402", "A003", "C401"]  # Experiments: long lines, annotations, imports after path, id shadowing, comprehension
 
 [tool.mypy]
 python_version = "3.9"

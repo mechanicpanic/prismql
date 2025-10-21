@@ -1,0 +1,6 @@
+# Experiment results (can be large)
+results/
+
+# Python cache
+__pycache__/
+*.pyc
