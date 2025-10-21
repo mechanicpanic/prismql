@@ -260,6 +260,7 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
         test_cases: list[TestCase],
         prompt_strategies: list[PromptStrategy],
         rate_limit_delay: float = 1.0,
+        free_tier_delay: float = 5.0,
     ) -> list[ExperimentResult]:
         """
         Run complete experiment across providers, test cases, and strategies.
@@ -268,7 +269,8 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
             providers: List of LLMProvider instances
             test_cases: Test cases to evaluate
             prompt_strategies: Different prompting approaches to test
-            rate_limit_delay: Seconds to wait between API calls
+            rate_limit_delay: Seconds to wait between API calls (paid models)
+            free_tier_delay: Seconds to wait between API calls (free-tier models)
 
         Returns:
             List of ExperimentResults
@@ -333,8 +335,11 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
                             )
                         )
 
-                    # Rate limiting
-                    time.sleep(rate_limit_delay)
+                    # Rate limiting (longer delay for free-tier models)
+                    delay = (
+                        free_tier_delay if provider.is_free_tier() else rate_limit_delay
+                    )
+                    time.sleep(delay)
 
         print(f"\nCompleted {len(results)} evaluations")
         return results

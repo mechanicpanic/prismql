@@ -108,6 +108,7 @@ def run_quick_test():
         test_cases=test_cases,
         prompt_strategies=[ZERO_SHOT_STRATEGY],
         rate_limit_delay=0.5,
+        free_tier_delay=5.0,
     )
 
     # Save results
@@ -173,6 +174,7 @@ def run_full_experiment():
         test_cases=ALL_TEST_CASES,
         prompt_strategies=ALL_STRATEGIES,
         rate_limit_delay=1.0,
+        free_tier_delay=10.0,
     )
 
     # Save results
@@ -246,6 +248,7 @@ def run_custom_experiment(model_names, strategy_names, test_case_filter):
         test_cases=test_cases,
         prompt_strategies=strategies,
         rate_limit_delay=1.0,
+        free_tier_delay=10.0,
     )
 
     # Save results

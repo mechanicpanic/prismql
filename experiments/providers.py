@@ -26,6 +26,11 @@ class LLMProvider(ABC):
         """Get the model identifier."""
         pass
 
+    def is_free_tier(self) -> bool:
+        """Check if this is a free-tier model (typically has stricter rate limits)."""
+        model_name = self.get_model_name()
+        return ":free" in model_name.lower()
+
 
 class AnthropicProvider(LLMProvider):
     """Anthropic API provider (Claude models)."""
