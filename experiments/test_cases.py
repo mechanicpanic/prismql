@@ -375,6 +375,58 @@ AGGREGATION_QUERIES = [
 ]
 
 # =============================================================================
+# SUBQUERY QUERIES (Nested patterns)
+# =============================================================================
+
+SUBQUERY_QUERIES = [
+    TestCase(
+        id="sub_001",
+        description="Find customer reporting problem then support providing solution within 15 messages",
+        ground_truth_query="SELECT (SELECT from(customer), contains(problems) INWIN 3) ; (SELECT from(support), contains(solutions) INWIN 3) INWIN 15",
+        category="subqueries",
+        difficulty="hard",
+        required_dictionaries={
+            "problems": ["error", "issue", "problem", "bug"],
+            "solutions": ["fixed", "resolved", "solution", "try"],
+        },
+        notes="Escalated support thread pattern using subqueries",
+    ),
+    TestCase(
+        id="sub_002",
+        description="Find question, answer, and acknowledgment sequence within 10 messages",
+        ground_truth_query="SELECT (SELECT is_question(), from(user1) INWIN 2) ; (SELECT from(user2), contains(answers) INWIN 2) ; (SELECT from(user1), contains(thanks) INWIN 2) INWIN 10",
+        category="subqueries",
+        difficulty="hard",
+        required_dictionaries={
+            "answers": ["yes", "no", "here", "this"],
+            "thanks": ["thank", "thanks", "appreciate"],
+        },
+        notes="Three-stage conversation pattern",
+    ),
+    TestCase(
+        id="sub_003",
+        description="Find alice and bob conversation followed by charlie joining within 8 messages",
+        ground_truth_query="SELECT (SELECT from(alice), from(bob) INWIN 3) ; (SELECT from(charlie) INWIN 2) INWIN 8",
+        category="subqueries",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Two-stage pattern: initial conversation then third party joins",
+    ),
+    TestCase(
+        id="sub_004",
+        description="Find problem escalation with manager involvement",
+        ground_truth_query="SELECT (SELECT contains(problems), from(customer) INWIN 3) ; (SELECT contains(escalation), from(customer) INWIN 2) ; (SELECT from(manager) INWIN 2) INWIN 20",
+        category="subqueries",
+        difficulty="hard",
+        required_dictionaries={
+            "problems": ["error", "issue", "broken"],
+            "escalation": ["manager", "escalate", "urgent"],
+        },
+        notes="Three-stage escalation pattern",
+    ),
+]
+
+# =============================================================================
 # ALL TEST CASES
 # =============================================================================
 
@@ -389,6 +441,7 @@ ALL_TEST_CASES = (
     + QUANTIFIER_QUERIES
     + NEGATIVE_PATTERN_QUERIES
     + AGGREGATION_QUERIES
+    + SUBQUERY_QUERIES
 )
 
 

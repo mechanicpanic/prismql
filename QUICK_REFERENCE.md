@@ -135,6 +135,59 @@ SELECT from(alice) GROUP BY user AGGREGATE count
 SELECT from(alice) GROUP BY topic AGGREGATE count, avg_length
 ```
 
+### Subqueries (Nested Patterns)
+
+Execute independent queries and merge their results within a window.
+
+**Syntax:**
+```prismql
+SELECT
+    (SELECT restriction1, restriction2 INWIN N1) ;
+    (SELECT restriction3, restriction4 INWIN N2)
+    INWIN N3
+```
+
+**How it works:**
+- Each `(SELECT ...)` executes independently
+- Results are merged based on the outer `INWIN` window
+- Semicolons separate subqueries
+- Useful for complex multi-stage patterns
+
+**Examples:**
+
+```prismql
+-- Find escalated support threads
+-- (customer reports problem, then support provides solution)
+SELECT
+    (SELECT from(customer), contains(problems) INWIN 3) ;
+    (SELECT from(support), contains(solutions) INWIN 3)
+    INWIN 15
+
+-- Find question→answer→acknowledgment sequences
+SELECT
+    (SELECT is_question(), from(user1) INWIN 2) ;
+    (SELECT from(user2), contains(answers) INWIN 2) ;
+    (SELECT from(user1), contains(thanks) INWIN 2)
+    INWIN 10
+
+-- Complex pattern: problem escalation with manager involvement
+SELECT
+    (SELECT contains(problems), from(customer) INWIN 3) ;
+    (SELECT contains(escalation), from(customer) INWIN 2) ;
+    (SELECT from(manager) INWIN 2)
+    INWIN 20
+```
+
+**When to use subqueries:**
+- ✓ Multi-stage conversation patterns (question → answer → acknowledgment)
+- ✓ Escalation detection (repeated mentions → manager involvement)
+- ✓ Complex workflows with distinct phases
+- ✓ When you need to group conditions before merging
+
+**When NOT to use subqueries:**
+- ✗ Simple co-occurrence patterns (use `SELECT A, B INWIN N` instead)
+- ✗ Single-stage patterns (simpler syntax available)
+
 ## Real-World Examples
 
 ### Example 1: Customer Support Analytics
