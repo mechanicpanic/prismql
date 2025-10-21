@@ -1,24 +1,43 @@
 # PrismQL LLM Query Generation Experiments
 
-This directory contains a comprehensive experimental framework for evaluating how well different Claude models can generate PrismQL queries from natural language descriptions.
+This directory contains a comprehensive experimental framework for evaluating how well different LLMs can generate PrismQL queries from natural language descriptions.
 
 ## Overview
 
-The experiment tests:
-- **3 Claude models**: Sonnet 4.5, Opus 4.1, Haiku 4.5
+The experiment framework supports:
+- **Multiple LLM providers**: Anthropic (Claude), OpenAI (GPT), OpenRouter (any model)
+- **8+ models**: Claude Sonnet/Opus/Haiku, GPT-4/GPT-3.5, OpenRouter models
 - **4 prompting strategies**: Zero-shot, few-shot, with reference docs, self-correcting
 - **25+ test cases**: Covering basic queries, window patterns, sequential patterns, complex patterns, and edge cases
+
+### Supported Models
+
+**Anthropic** (requires `ANTHROPIC_API_KEY`):
+- `sonnet-4.5` - Claude Sonnet 4.5 (claude-sonnet-4-5-20250929)
+- `opus-4.1` - Claude Opus 4.1 (claude-opus-4-20250514)
+- `haiku-4.5` - Claude Haiku 4.5 (claude-haiku-4-5-20250929)
+
+**OpenAI** (requires `OPENAI_API_KEY`):
+- `gpt-4` - GPT-4
+- `gpt-4-turbo` - GPT-4 Turbo
+- `gpt-3.5` - GPT-3.5 Turbo
+
+**OpenRouter** (requires `OPENROUTER_API_KEY`):
+- `or-sonnet-4` - Claude Sonnet 4 via OpenRouter
+- `or-gpt-4` - GPT-4 via OpenRouter
 
 ## Quick Start
 
 ### 1. Setup
 
 ```bash
-# Install dependencies
-uv sync --dev
+# Install dependencies with experiment extras
+uv sync --extra experiments
 
-# Set API key
+# Set API key(s) - at least one required
 export ANTHROPIC_API_KEY="your-key-here"
+export OPENAI_API_KEY="your-key-here"        # optional
+export OPENROUTER_API_KEY="your-key-here"    # optional
 ```
 
 ### 2. Run Quick Test
@@ -32,16 +51,22 @@ python experiments/run_experiment.py --quick
 ### 3. Run Custom Experiment
 
 ```bash
-# Compare Sonnet vs Opus on zero-shot
+# Compare Claude Sonnet vs GPT-4 on zero-shot
 python experiments/run_experiment.py \\
-    --models sonnet-4.5 opus-4.1 \\
+    --models sonnet-4.5 gpt-4 \\
     --strategies zero_shot \\
     --test-cases easy
 
-# Test different strategies on Sonnet
+# Test different strategies on multiple models
 python experiments/run_experiment.py \\
-    --models sonnet-4.5 \\
+    --models sonnet-4.5 opus-4.1 gpt-4 \\
     --strategies zero_shot few_shot self_correcting \\
+    --test-cases medium
+
+# Compare OpenAI models
+python experiments/run_experiment.py \\
+    --models gpt-4 gpt-4-turbo gpt-3.5 \\
+    --strategies zero_shot \\
     --test-cases all
 ```
 

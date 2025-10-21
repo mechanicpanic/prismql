@@ -11,11 +11,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-import anthropic
 from prismql import QueryValidator
 from prismql.backends.memory import MemoryBackend
 from prismql.engine import PrismQLEngine
 
+from .providers import LLMProvider
 from .test_cases import TestCase, get_all_required_dictionaries
 
 
@@ -80,7 +80,6 @@ class ExperimentHarness:
 
     def __init__(
         self,
-        api_key: str,
         validator: Optional[QueryValidator] = None,
         engine: Optional[PrismQLEngine] = None,
     ):
@@ -88,11 +87,9 @@ class ExperimentHarness:
         Initialize experiment harness.
 
         Args:
-            api_key: Anthropic API key
             validator: Query validator (default: created with all test dicts)
             engine: Query engine for semantic validation (default: memory backend)
         """
-        self.client = anthropic.Anthropic(api_key=api_key)
 
         # Setup validator with all dictionaries from test cases
         all_dicts = get_all_required_dictionaries()
@@ -112,10 +109,10 @@ class ExperimentHarness:
             self.engine = engine
 
     def generate_query(
-        self, test_case: TestCase, model: str, strategy: PromptStrategy
+        self, test_case: TestCase, provider: LLMProvider, strategy: PromptStrategy
     ) -> list[QueryAttempt]:
         """
-        Generate a query for a test case using specified model and strategy.
+        Generate a query for a test case using specified provider and strategy.
 
         Returns list of attempts (1 if no retries, more if validator feedback enabled).
         """
@@ -137,18 +134,15 @@ class ExperimentHarness:
         validation_feedback = ""
 
         for retry in range(strategy.max_retries):
-            # Call API
-            response = self.client.messages.create(
-                model=model,
+            # Call LLM provider
+            response_text = provider.generate(
+                system_prompt=strategy.system_prompt,
+                user_message=user_message + validation_feedback,
                 max_tokens=500,
-                system=strategy.system_prompt,
-                messages=[
-                    {"role": "user", "content": user_message + validation_feedback}
-                ],
             )
 
             # Extract query from response
-            query = self._extract_query(response.content[0].text)
+            query = self._extract_query(response_text)
 
             # Validate
             validation_result = self.validator.validate(query)
@@ -262,16 +256,16 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
 
     def run_experiment(
         self,
-        models: list[str],
+        providers: list[LLMProvider],
         test_cases: list[TestCase],
         prompt_strategies: list[PromptStrategy],
         rate_limit_delay: float = 1.0,
     ) -> list[ExperimentResult]:
         """
-        Run complete experiment across models, test cases, and strategies.
+        Run complete experiment across providers, test cases, and strategies.
 
         Args:
-            models: List of Anthropic model identifiers
+            providers: List of LLMProvider instances
             test_cases: Test cases to evaluate
             prompt_strategies: Different prompting approaches to test
             rate_limit_delay: Seconds to wait between API calls
@@ -280,33 +274,34 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
             List of ExperimentResults
         """
         results: list[ExperimentResult] = []
-        total = len(models) * len(test_cases) * len(prompt_strategies)
+        total = len(providers) * len(test_cases) * len(prompt_strategies)
         completed = 0
 
         print(f"Starting experiment: {total} total evaluations")
-        print(f"Models: {models}")
+        print(f"Providers: {[p.get_model_name() for p in providers]}")
         print(f"Test cases: {len(test_cases)}")
         print(f"Strategies: {[s.name for s in prompt_strategies]}")
         print()
 
-        for model in models:
+        for provider in providers:
+            model_name = provider.get_model_name()
             for strategy in prompt_strategies:
                 for test_case in test_cases:
                     completed += 1
                     print(
-                        f"[{completed}/{total}] {model} | {strategy.name} | {test_case.id}"
+                        f"[{completed}/{total}] {model_name} | {strategy.name} | {test_case.id}"
                     )
 
                     start_time = time.time()
 
                     try:
-                        attempts = self.generate_query(test_case, model, strategy)
+                        attempts = self.generate_query(test_case, provider, strategy)
                         final_query = attempts[-1].query if attempts else None
 
                         # Calculate metrics
                         result = self._calculate_metrics(
                             test_case=test_case,
-                            model=model,
+                            model=model_name,
                             strategy=strategy,
                             attempts=attempts,
                             final_query=final_query,
@@ -321,7 +316,7 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
                         results.append(
                             ExperimentResult(
                                 test_case_id=test_case.id,
-                                model=model,
+                                model=model_name,
                                 prompt_strategy=strategy.name,
                                 attempts=[],
                                 final_query=None,
@@ -485,19 +480,18 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
 # PROMPT STRATEGIES
 # =============================================================================
 
+# Load QUICK_REFERENCE.md for zero-shot prompt
+_quick_ref_path = Path(__file__).parent.parent / "QUICK_REFERENCE.md"
+with open(_quick_ref_path) as f:
+    _QUICK_REFERENCE = f.read()
+
 ZERO_SHOT_STRATEGY = PromptStrategy(
     name="zero_shot",
-    system_prompt="""You are an expert at writing PrismQL queries. PrismQL is a domain-specific language for pattern matching in conversational data.
+    system_prompt=f"""You are an expert at writing PrismQL queries. Use the reference documentation below to generate accurate queries.
 
-Key syntax:
-- from(user): Messages from a user
-- contains(dict_name): Messages containing words from a dictionary
-- is_question(): Messages that are questions
-- Boolean operators: AND, OR, NOT
-- INWIN N: Co-occurrence within N messages
-- FOLLOWED_BY WITHIN N: Sequential patterns
+{_QUICK_REFERENCE}
 
-Always use fluent syntax (from, contains, is_question) not deprecated syntax (byuser, haswordofdict, hasquestion).""",
+IMPORTANT: Respond with ONLY the PrismQL query, starting with SELECT. Do not include explanations, markdown code blocks, or any other text.""",
     include_examples=False,
     include_full_reference=False,
     use_validator_feedback=False,

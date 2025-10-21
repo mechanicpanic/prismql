@@ -31,6 +31,11 @@ elasticsearch = ["elasticsearch>=8.0.0"]
 nlp = [
     "spacy>=3.0.0",
 ]
+experiments = [
+    "anthropic>=0.40.0",
+    "openai>=1.0.0",
+    "httpx>=0.27.0",
+]
 all = ["prismql[opensearch,elasticsearch,nlp]"]
 dev = [
     "pytest>=7.0.0",

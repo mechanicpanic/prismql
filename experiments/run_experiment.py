@@ -35,6 +35,7 @@ from experiments import (
     WITH_REFERENCE_STRATEGY,
     ZERO_SHOT_STRATEGY,
     ExperimentHarness,
+    create_provider,
 )
 from experiments.analyze import (
     analyze_results,
@@ -45,11 +46,19 @@ from experiments.analyze import (
 )
 from experiments.test_cases import get_test_cases_by_difficulty
 
-# Available models
+# Available models: (provider_type, model_id, friendly_name)
 MODELS = {
-    "sonnet-4.5": "claude-sonnet-4-5-20250929",
-    "opus-4.1": "claude-opus-4-20250514",
-    "haiku-4.5": "claude-haiku-4-5-20250929",
+    # Anthropic models
+    "sonnet-4.5": ("anthropic", "claude-sonnet-4-5-20250929"),
+    "opus-4.1": ("anthropic", "claude-opus-4-20250514"),
+    "haiku-4.5": ("anthropic", "claude-haiku-4-5-20250929"),
+    # OpenAI models
+    "gpt-4": ("openai", "gpt-4"),
+    "gpt-4-turbo": ("openai", "gpt-4-turbo-preview"),
+    "gpt-3.5": ("openai", "gpt-3.5-turbo"),
+    # OpenRouter models
+    "or-sonnet-4": ("openrouter", "anthropic/claude-sonnet-4"),
+    "or-gpt-4": ("openrouter", "openai/gpt-4"),
 }
 
 STRATEGIES = {
@@ -73,13 +82,17 @@ def run_quick_test():
         print("ERROR: ANTHROPIC_API_KEY environment variable not set")
         sys.exit(1)
 
-    harness = ExperimentHarness(api_key=api_key)
+    harness = ExperimentHarness()
+
+    # Create provider
+    provider_type, model_id = MODELS["sonnet-4.5"]
+    provider = create_provider(provider_type, model_id, api_key)
 
     # Just 5 easy test cases
     test_cases = get_test_cases_by_difficulty("easy")[:5]
 
     results = harness.run_experiment(
-        models=[MODELS["sonnet-4.5"]],
+        providers=[provider],
         test_cases=test_cases,
         prompt_strategies=[ZERO_SHOT_STRATEGY],
         rate_limit_delay=0.5,
@@ -118,15 +131,33 @@ def run_full_experiment():
         print("Aborted.")
         return
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("ERROR: ANTHROPIC_API_KEY environment variable not set")
+    # Get API keys for all provider types
+    api_keys = {
+        "anthropic": os.getenv("ANTHROPIC_API_KEY"),
+        "openai": os.getenv("OPENAI_API_KEY"),
+        "openrouter": os.getenv("OPENROUTER_API_KEY"),
+    }
+
+    harness = ExperimentHarness()
+
+    # Create providers for all models
+    providers = []
+    for name, (provider_type, model_id) in MODELS.items():
+        api_key = api_keys.get(provider_type)
+        if api_key:
+            providers.append(create_provider(provider_type, model_id, api_key))
+        else:
+            print(f"Skipping {name}: {provider_type.upper()}_API_KEY not set")
+
+    if not providers:
+        print("ERROR: No API keys set. Set at least one of:")
+        print("  - ANTHROPIC_API_KEY")
+        print("  - OPENAI_API_KEY")
+        print("  - OPENROUTER_API_KEY")
         sys.exit(1)
 
-    harness = ExperimentHarness(api_key=api_key)
-
     results = harness.run_experiment(
-        models=list(MODELS.values()),
+        providers=providers,
         test_cases=ALL_TEST_CASES,
         prompt_strategies=ALL_STRATEGIES,
         rate_limit_delay=1.0,
@@ -145,15 +176,33 @@ def run_full_experiment():
 
 def run_custom_experiment(model_names, strategy_names, test_case_filter):
     """Run custom experiment with specified parameters."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("ERROR: ANTHROPIC_API_KEY environment variable not set")
-        sys.exit(1)
+    # Get API keys for all provider types
+    api_keys = {
+        "anthropic": os.getenv("ANTHROPIC_API_KEY"),
+        "openai": os.getenv("OPENAI_API_KEY"),
+        "openrouter": os.getenv("OPENROUTER_API_KEY"),
+    }
 
-    # Resolve models
-    models = [MODELS[name] for name in model_names if name in MODELS]
-    if not models:
-        print(f"ERROR: No valid models. Available: {list(MODELS.keys())}")
+    # Resolve models and create providers
+    providers = []
+    for name in model_names:
+        if name not in MODELS:
+            print(f"WARNING: Unknown model '{name}', skipping")
+            continue
+
+        provider_type, model_id = MODELS[name]
+        api_key = api_keys.get(provider_type)
+        if not api_key:
+            print(f"Skipping {name}: {provider_type.upper()}_API_KEY not set")
+            continue
+
+        providers.append(create_provider(provider_type, model_id, api_key))
+
+    if not providers:
+        print(f"ERROR: No valid providers. Available models: {list(MODELS.keys())}")
+        print(
+            "Set at least one API key: ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY"
+        )
         sys.exit(1)
 
     # Resolve strategies
@@ -172,16 +221,16 @@ def run_custom_experiment(model_names, strategy_names, test_case_filter):
         sys.exit(1)
 
     print("Running experiment:")
-    print(f"  Models: {[m.split('-')[-1] for m in models]}")
+    print(f"  Providers: {[p.get_model_name() for p in providers]}")
     print(f"  Strategies: {[s.name for s in strategies]}")
     print(f"  Test cases: {len(test_cases)}")
-    print(f"  Total API calls: {len(models) * len(strategies) * len(test_cases)}")
+    print(f"  Total API calls: {len(providers) * len(strategies) * len(test_cases)}")
     print()
 
-    harness = ExperimentHarness(api_key=api_key)
+    harness = ExperimentHarness()
 
     results = harness.run_experiment(
-        models=models,
+        providers=providers,
         test_cases=test_cases,
         prompt_strategies=strategies,
         rate_limit_delay=1.0,

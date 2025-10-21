@@ -10,6 +10,13 @@ from .experiment import (
     ExperimentResult,
     PromptStrategy,
 )
+from .providers import (
+    AnthropicProvider,
+    LLMProvider,
+    OpenAIProvider,
+    OpenRouterProvider,
+    create_provider,
+)
 from .test_cases import ALL_TEST_CASES, TestCase, get_all_required_dictionaries
 
 __all__ = [
@@ -24,4 +31,9 @@ __all__ = [
     "WITH_REFERENCE_STRATEGY",
     "SELF_CORRECTING_STRATEGY",
     "get_all_required_dictionaries",
+    "LLMProvider",
+    "AnthropicProvider",
+    "OpenAIProvider",
+    "OpenRouterProvider",
+    "create_provider",
 ]
