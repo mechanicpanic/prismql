@@ -149,8 +149,8 @@ class OpenAIProvider(LLMProvider):
 
     def supports_extended_thinking(self) -> bool:
         """Check if this model supports reasoning tokens."""
-        # GPT-5 and o1/o3 models support reasoning
-        reasoning_models = ["gpt-5", "o1", "o3", "thinking"]
+        # o1/o3 and GPT-5 models support reasoning
+        reasoning_models = ["o1", "o3", "gpt-5"]
         return any(keyword in self.model.lower() for keyword in reasoning_models)
 
 
@@ -250,6 +250,8 @@ class OpenRouterProvider(LLMProvider):
             "thinking",
             "deepseek-r1",
             "deepseek/r1",
+            "deepseek-v3",
+            "deepseek/v3",
             "gemini-2.0",
             "gemini-2.5",
         ]

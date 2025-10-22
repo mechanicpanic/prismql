@@ -61,6 +61,7 @@ MODELS = {
     "gpt-4": ("openai", "gpt-4"),
     "gpt-4-turbo": ("openai", "gpt-4-turbo-preview"),
     "gpt-3.5": ("openai", "gpt-3.5-turbo"),
+    # OpenAI reasoning models
     "gpt-5": ("openai", "gpt-5"),
     "gpt-5-preview": ("openai", "gpt-5-preview"),
     # OpenRouter models (Claude/OpenAI via OpenRouter)
@@ -68,8 +69,9 @@ MODELS = {
     "or-gpt-4": ("openrouter", "openai/gpt-4"),
     # OpenRouter reasoning models
     "or-gpt-5-thinking": ("openrouter", "openai/gpt-5-thinking"),
-    "or-deepseek-r1": ("openrouter", "deepseek/deepseek-r1"),
-    "or-gemini-2.5-pro": ("openrouter", "google/gemini-2.5-pro-thinking"),
+    "or-deepseek-r1": ("openrouter", "deepseek/deepseek-r1-0528:free"),
+    "or-gemini-2.5-pro": ("openrouter", "google/gemini-2.5-pro"),
+    "or-deepseek-v3.2": ("openrouter", "deepseek/deepseek-v3.2-exp"),
     # OpenRouter models (Other comprehensive models)
     "or-glm-4-air": ("openrouter", "z-ai/glm-4.5-air:free"),
     "or-qwen-coder-72b": ("openrouter", "qwen/qwen-3-coder-72b"),
@@ -116,6 +118,7 @@ def create_provider_for_model(model_key: str, api_key: str) -> LLMProvider:
     reasoning_keys = [
         "or-gpt-5-thinking",
         "or-deepseek-r1",
+        "or-deepseek-v3.2",
         "or-gemini-2.5-pro",
     ]
     if model_key in reasoning_keys:
