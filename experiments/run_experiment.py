@@ -75,6 +75,10 @@ MODELS = {
     "or-gpt-5-thinking": ("openrouter", "openai/gpt-5-thinking"),
     "or-o3-pro": ("openrouter", "openai/o3-pro"),
     "or-deepseek-r1": ("openrouter", "deepseek/deepseek-r1-0528:free"),
+    "or-deepseek-r1-qwen3-8b": (
+        "openrouter",
+        "deepseek/deepseek-r1-0528-qwen3-8b:free",
+    ),
     "or-gemini-2.5-pro": ("openrouter", "google/gemini-2.5-pro"),
     "or-deepseek-v3.2": ("openrouter", "deepseek/deepseek-v3.2-exp"),
     # OpenRouter models (Other comprehensive models)
@@ -84,10 +88,6 @@ MODELS = {
     "or-mixtral-8x22b": ("openrouter", "mistralai/mixtral-8x22b-instruct"),
     "or-llama-4-maverick": ("openrouter", "meta-llama/llama-4-maverick:free"),
     "or-llama-3.3-8b": ("openrouter", "meta-llama/llama-3.3-8b-instruct:free"),
-    "or-deepseek-r1-qwen3-8b": (
-        "openrouter",
-        "deepseek/deepseek-r1-0528-qwen3-8b:free",
-    ),
     "or-ministral-8b": ("openrouter", "mistralai/ministral-8b"),
 }
 
@@ -127,6 +127,7 @@ def create_provider_for_model(model_key: str, api_key: str) -> LLMProvider:
         "or-gpt-5-thinking",
         "or-o3-pro",
         "or-deepseek-r1",
+        "or-deepseek-r1-qwen3-8b",
         "or-deepseek-v3.2",
         "or-gemini-2.5-pro",
     ]
