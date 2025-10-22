@@ -128,7 +128,7 @@ def main():
     if len(result) > 0:
         for i, group in enumerate(result[:3]):
             named = result.get_named_group(i)
-            print(f"  Interaction {i+1}:")
+            print(f"  Interaction {i + 1}:")
             print(f"    Customer message: {named['customer']}")
             print(f"    Agent response: {named['agent']}")
 
@@ -142,7 +142,7 @@ def main():
     if len(result) > 0:
         for i, group in enumerate(result):
             named = result.get_named_group(i)
-            print(f"  Ticket {i+1}:")
+            print(f"  Ticket {i + 1}:")
             print(f"    Request: msg {named['request']}")
             print(f"    Response: msg {named['response']}")
             print(f"    Thanks: msg {named['thanks']}")
@@ -177,7 +177,7 @@ def main():
     if len(result) > 0:
         for i, group in enumerate(result):
             named = result.get_named_group(i)
-            print(f"  Escalation {i+1}:")
+            print(f"  Escalation {i + 1}:")
             print(f"    Customer opens: msg {named['initial']}")
             print(f"    Support triages: msg {named['first_agent']}")
             print(f"    Specialist handles: msg {named['specialist']}")
@@ -192,7 +192,7 @@ def main():
     print(f"\nIterating over {len(result)} results:")
     for i, group in enumerate(result[:3]):
         # Can iterate like a normal list
-        print(f"  Group {i+1}: {group}")
+        print(f"  Group {i + 1}: {group}")
         # Or access as named dict
         named = result.get_named_group(i)
         print(f"    As dict: {named}")
@@ -236,7 +236,7 @@ def main():
     if len(result) > 0:
         for i, group in enumerate(result[:3]):
             named = result.get_named_group(i)
-            print(f"  Interaction {i+1}:")
+            print(f"  Interaction {i + 1}:")
             print(f"    Question: msg {named['question']}")
             print(f"    Answer: msg {named['answer']}")
             print(f"    Confirm: msg {named['confirm']}")

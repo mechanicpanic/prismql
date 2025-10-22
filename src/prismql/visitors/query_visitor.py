@@ -530,7 +530,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         for i, result in enumerate(subquery_results):
             if isinstance(result, (AggregateResult, GroupedResult)):
                 raise ValueError(
-                    f"Subquery {i+1} contains aggregation/grouping which is not "
+                    f"Subquery {i + 1} contains aggregation/grouping which is not "
                     "supported in query sequences. Apply aggregation at the top level."
                 )
 

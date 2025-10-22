@@ -198,7 +198,7 @@ class TestBetweenFiltering:
     def test_between_with_dates(self, engine):
         """Test BETWEEN with date-only timestamps."""
         result = engine.execute(
-            "SELECT from(alice) OR from(bob) " 'BETWEEN("2024-01-15", "2024-01-17")'
+            'SELECT from(alice) OR from(bob) BETWEEN("2024-01-15", "2024-01-17")'
         )
 
         # Should get messages from Jan 15-16 (date-only parses as midnight)
@@ -313,8 +313,7 @@ class TestTemporalGroupingWithAggregation:
     def test_group_by_day_with_count(self, engine):
         """Test GROUP BY DAY with COUNT."""
         result = engine.execute(
-            "SELECT from(alice) OR from(bob) "
-            "GROUP BY DAY(timestamp) AGGREGATE count()"
+            "SELECT from(alice) OR from(bob) GROUP BY DAY(timestamp) AGGREGATE count()"
         )
 
         assert isinstance(result, AggregateResult)
@@ -441,8 +440,7 @@ class TestEdgeCases:
         start = BASE_TIME + timedelta(days=100)
         end = BASE_TIME + timedelta(days=200)
         result = engine.execute(
-            f"SELECT from(alice) "
-            f'BETWEEN("{start.isoformat()}", "{end.isoformat()}")'
+            f'SELECT from(alice) BETWEEN("{start.isoformat()}", "{end.isoformat()}")'
         )
 
         assert len(result) == 0
@@ -459,7 +457,7 @@ class TestEdgeCases:
         """Test temporal filtering with aggregation on empty results."""
         very_late = BASE_TIME + timedelta(days=400)
         result = engine.execute(
-            f'SELECT from(alice) AFTER("{very_late.isoformat()}") ' "AGGREGATE count()"
+            f'SELECT from(alice) AFTER("{very_late.isoformat()}") AGGREGATE count()'
         )
 
         assert isinstance(result, AggregateResult)
@@ -504,8 +502,7 @@ class TestGroupByFieldNames:
     def test_to_dict_with_temporal_grouping(self, engine):
         """Test to_dict with temporal grouping."""
         result = engine.execute(
-            "SELECT from(alice) OR from(bob) "
-            "GROUP BY DAY(timestamp) AGGREGATE count()"
+            "SELECT from(alice) OR from(bob) GROUP BY DAY(timestamp) AGGREGATE count()"
         )
 
         result_dict = result.to_dict()

@@ -36,6 +36,9 @@ experiments = [
     "openai>=1.0.0",
     "httpx>=0.27.0",
 ]
+highlighting = [
+    "pygments>=2.0.0",
+]
 all = ["prismql[opensearch,elasticsearch,nlp]"]
 dev = [
     "pytest>=7.0.0",
@@ -53,6 +56,9 @@ Homepage = "https://github.com/prismql/prismql"
 Documentation = "https://prismql.readthedocs.io"
 Repository = "https://github.com/prismql/prismql"
 Issues = "https://github.com/prismql/prismql/issues"
+
+[project.entry-points."pygments.lexers"]
+prismql = "prismql.highlighting:PrismQLLexer"
 
 [build-system]
 requires = ["hatchling"]
@@ -103,6 +109,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "ANN201", "ANN001", "B017", "E712"]
+"tests/test_highlighting.py" = ["E402"]  # pytest.importorskip() must be called before imports
 "examples/*" = ["ANN201", "ANN001", "E501", "W291"]
 "scripts/*" = ["S602", "ANN201", "ANN001"]
 "src/prismql/grammar/generated/*" = ["ALL"]
@@ -153,9 +160,14 @@ module = [
     "prismql.grammar.generated.*",
     "psycopg2.*",
     "duckdb.*",
+    "pygments.*",
 ]
 ignore_missing_imports = true
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "prismql.highlighting.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

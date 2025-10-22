@@ -69,7 +69,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns where team members converse without manager:")
     for i, group in enumerate(result[:3]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
     print("(These represent direct peer-to-peer conversations)")
 
     # Example 2: NOT at first position
@@ -81,7 +81,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} greetings from team members (not manager):")
     for i, group in enumerate(result[:3]):
-        print(f"  Greeting {i+1}: Messages {group}")
+        print(f"  Greeting {i + 1}: Messages {group}")
 
     # Example 3: NOT at last position
     print("\n3. NOT at Last Position: Manager -> Thanks -> (Not Manager)")
@@ -94,7 +94,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns:")
     for i, group in enumerate(result[:3]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
 
     # Example 4: Multiple NOT operators
     print("\n4. Multiple NOT Operators: (Not Manager) -> (Not Bob) -> Alice")
@@ -105,7 +105,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns:")
     for i, group in enumerate(result[:2]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
     print("(Useful for finding specific conversation flows)")
 
     # Example 5: NOT with pattern variables
@@ -117,7 +117,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} back-and-forth patterns (no manager involvement):")
     for i, group in enumerate(result[:3]):
-        print(f"  Conversation {i+1}: Messages {group}")
+        print(f"  Conversation {i + 1}: Messages {group}")
 
     # Example 6: NOT with boolean operators
     print("\n6. NOT with Boolean Operators: (Alice OR Bob) -> NOT (Manager OR Charlie)")
@@ -130,7 +130,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns:")
     for i, group in enumerate(result[:3]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
 
     # Example 7: NOT excluding specific content
     print("\n7. Excluding Specific Content: Question -> (Not Thanks) -> Bob")
@@ -141,7 +141,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns:")
     for i, group in enumerate(result[:3]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
 
     # Example 8: NOT with named groups
     print("\n8. NOT with Named Pattern Groups")
@@ -165,7 +165,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns where team discusses after manager input:")
     for i, group in enumerate(result[:3]):
-        print(f"  Discussion {i+1}: Messages {group}")
+        print(f"  Discussion {i + 1}: Messages {group}")
 
     # Example 10: Practical use case - Unmediated conversations
     print("\n10. Practical: Finding Direct Peer Conversations")
@@ -179,7 +179,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} direct peer-to-peer exchanges:")
     for i, group in enumerate(result[:5]):
-        print(f"  Exchange {i+1}: Messages {group}")
+        print(f"  Exchange {i + 1}: Messages {group}")
 
     # Example 11: Double negation
     print("\n11. Double Negation: NOT NOT equals affirmative")

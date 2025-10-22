@@ -1,6 +1,5 @@
 """Tests for query validator."""
 
-
 from prismql.validator import QueryValidator, validate_query
 
 

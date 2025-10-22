@@ -236,11 +236,14 @@ class TestPrismQLEngineIntegration:
         }
 
         # Mock ImportError for OpenSearch backend
-        with patch.object(
-            BackendFactory,
-            "_create_opensearch_backend",
-            side_effect=ImportError("OpenSearch backend is not available"),
-        ), pytest.raises(ImportError, match="OpenSearch backend is not available"):
+        with (
+            patch.object(
+                BackendFactory,
+                "_create_opensearch_backend",
+                side_effect=ImportError("OpenSearch backend is not available"),
+            ),
+            pytest.raises(ImportError, match="OpenSearch backend is not available"),
+        ):
             PrismQLEngine.from_config(config)
 
     def test_engine_methods_with_factory_creation(self):

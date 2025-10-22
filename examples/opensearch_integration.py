@@ -124,7 +124,7 @@ def main():
 
             # Show first few results
             for i, group in enumerate(results[:3]):
-                print(f"    Group {i+1}: {group}")
+                print(f"    Group {i + 1}: {group}")
 
             if len(results) > 3:
                 print(f"    ... and {len(results) - 3} more groups")

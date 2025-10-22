@@ -70,7 +70,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} burst patterns:")
     for i, group in enumerate(result[:3]):
-        print(f"  Burst {i+1}: Messages {group}")
+        print(f"  Burst {i + 1}: Messages {group}")
     print("(Useful for detecting concentrated activity)")
 
     # Example 2: Quantifier with multiple users
@@ -82,7 +82,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns:")
     for i, group in enumerate(result[:3]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
     print("(Detects response patterns after user activity)")
 
     # Example 3: Large quantifier for extended activity
@@ -94,7 +94,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} extended activity patterns:")
     for i, group in enumerate(result[:2]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
 
     # Example 4: Quantifiers with variables
     print("\n4. Quantifiers with Pattern Variables")
@@ -105,7 +105,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns:")
     for i, group in enumerate(result[:3]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
     print("(Variables work with quantifiers for flexible matching)")
 
     # Example 5: Multiple quantifiers in one pattern
@@ -117,7 +117,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} back-and-forth patterns:")
     for i, group in enumerate(result[:2]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
     print("(Detects extended exchanges between users)")
 
     # Example 6: Quantifiers with named groups
@@ -133,7 +133,7 @@ def main():
         # The quantifier {4} expands to 4 positions, all named "deployment"
         # Plus one position named "ack"
         for i, group in enumerate(result[:1]):
-            print(f"  Pattern {i+1}: {group}")
+            print(f"  Pattern {i + 1}: {group}")
             named = result.get_named_group(i)
             print(f"    Deployment: {named['deployment']}")
             print(f"    Acknowledgment: {named['ack']}")
@@ -147,7 +147,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns:")
     for i, group in enumerate(result[:3]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
     print("(Quantifiers work on complex boolean expressions)")
 
     # Example 8: Quantifiers with content conditions
@@ -159,7 +159,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns of repeated positive sentiment:")
     for i, group in enumerate(result[:2]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
 
     # Example 9: At-least quantifiers (current implementation uses minimum)
     print("\n9. At-Least Quantifiers {n,}")
@@ -171,7 +171,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns:")
     for i, group in enumerate(result[:3]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
 
     # Example 10: Range quantifiers (current implementation uses minimum)
     print("\n10. Range Quantifiers {n,m}")
@@ -183,7 +183,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} patterns:")
     for i, group in enumerate(result[:3]):
-        print(f"  Pattern {i+1}: Messages {group}")
+        print(f"  Pattern {i + 1}: Messages {group}")
 
     # Example 11: Quantifiers with aggregation
     print("\n11. Quantifiers with Aggregation")
@@ -203,7 +203,7 @@ def main():
     result = engine.execute(query)
     print(f"Found {len(result)} complete deployment sequences:")
     for i, group in enumerate(result[:2]):
-        print(f"  Deployment {i+1}: Messages {group}")
+        print(f"  Deployment {i + 1}: Messages {group}")
     print("(Useful for detecting multi-step workflows)")
 
     print("\n" + "=" * 70)

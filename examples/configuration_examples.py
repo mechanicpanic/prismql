@@ -304,9 +304,9 @@ def example_configuration_validation():
     for i, config in enumerate(invalid_configs):
         try:
             BackendFactory.validate_config(config)
-            print(f"  ✗ Invalid config {i+1} should have failed")
+            print(f"  ✗ Invalid config {i + 1} should have failed")
         except ValueError:
-            print(f"  ✓ Invalid config {i+1} correctly rejected")
+            print(f"  ✓ Invalid config {i + 1} correctly rejected")
 
 
 def main():
@@ -334,7 +334,7 @@ def main():
 
     print("\n7. Available example configs:")
     examples = PrismQLEngine.get_example_configs()
-    for name in examples.keys():
+    for name in examples:
         print(f"  - {name}")
 
 

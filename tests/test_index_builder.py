@@ -1,6 +1,5 @@
 """Tests for IndexBuilder utility."""
 
-
 from prismql import IndexBuilder, PrecomputedIndexes
 
 
