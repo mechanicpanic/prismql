@@ -141,6 +141,13 @@ def analyze_results(
     return metrics_map
 
 
+def _truncate_name(name: str, max_length: int = 28) -> str:
+    """Truncate long names for table display."""
+    if len(name) <= max_length:
+        return name
+    return name[: max_length - 3] + "..."
+
+
 def print_summary(metrics_map: dict[str, ModelMetrics]) -> None:
     """Print a summary table of results."""
     print("=" * 120)
@@ -158,8 +165,9 @@ def print_summary(metrics_map: dict[str, ModelMetrics]) -> None:
     sorted_metrics = sorted(metrics_map.values(), key=lambda m: (m.model, m.strategy))
 
     for m in sorted_metrics:
+        model_display = _truncate_name(m.model, 30)
         print(
-            f"{m.model:<30} {m.strategy:<20} {m.total_tests:<8} "
+            f"{model_display:<30} {m.strategy:<20} {m.total_tests:<8} "
             f"{m.syntax_accuracy:>5.1f}%   {m.semantic_accuracy:>5.1f}%   "
             f"{m.fluent_syntax_rate:>5.1f}%    "
             f"{m.avg_edit_distance:>6.1f}    {m.avg_time_ms:>8.0f}"
@@ -232,8 +240,9 @@ def compare_models(
     print("-" * 80)
 
     for rank, m in enumerate(sorted_models, 1):
+        model_display = _truncate_name(m.model, 35)
         print(
-            f"{rank:<6} {m.model:<35} {m.syntax_accuracy:>6.1f}%     "
+            f"{rank:<6} {model_display:<35} {m.syntax_accuracy:>6.1f}%     "
             f"{m.semantic_accuracy:>6.1f}%     {m.fluent_syntax_rate:>6.1f}%"
         )
 
@@ -241,7 +250,8 @@ def compare_models(
 def compare_strategies(metrics_map: dict[str, ModelMetrics], model: str) -> None:
     """Compare different strategies for the same model."""
     print(f"\n{'=' * 80}")
-    print(f"STRATEGY COMPARISON (Model: {model})")
+    model_display = _truncate_name(model, 60)
+    print(f"STRATEGY COMPARISON (Model: {model_display})")
     print(f"{'=' * 80}\n")
 
     # Filter to specific model
