@@ -163,7 +163,7 @@ def run_quick_test():
         providers=[provider],
         test_cases=test_cases,
         prompt_strategies=[ZERO_SHOT_STRATEGY],
-        rate_limit_delay=0.5,
+        # No rate limiting for paid models (default 0.0)
         free_tier_delay=5.0,
     )
 
@@ -229,7 +229,7 @@ def run_full_experiment():
         providers=providers,
         test_cases=ALL_TEST_CASES,
         prompt_strategies=ALL_STRATEGIES,
-        rate_limit_delay=1.0,
+        # No rate limiting for paid models (default 0.0)
         free_tier_delay=10.0,
     )
 
@@ -303,7 +303,7 @@ def run_custom_experiment(model_names, strategy_names, test_case_filter):
         providers=providers,
         test_cases=test_cases,
         prompt_strategies=strategies,
-        rate_limit_delay=1.0,
+        # No rate limiting for paid models (default 0.0)
         free_tier_delay=10.0,
     )
 

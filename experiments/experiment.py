@@ -264,7 +264,7 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
         providers: list[LLMProvider],
         test_cases: list[TestCase],
         prompt_strategies: list[PromptStrategy],
-        rate_limit_delay: float = 1.0,
+        rate_limit_delay: float = 0.0,
         free_tier_delay: float = 5.0,
     ) -> list[ExperimentResult]:
         """
@@ -274,8 +274,8 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
             providers: List of LLMProvider instances
             test_cases: Test cases to evaluate
             prompt_strategies: Different prompting approaches to test
-            rate_limit_delay: Seconds to wait between API calls (paid models)
-            free_tier_delay: Seconds to wait between API calls (free-tier models)
+            rate_limit_delay: Seconds to wait between API calls (paid models, default 0)
+            free_tier_delay: Seconds to wait between API calls (free-tier models, default 5s)
 
         Returns:
             List of ExperimentResults
