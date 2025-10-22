@@ -68,6 +68,8 @@ MODELS = {
     "or-gpt-4": ("openrouter", "openai/gpt-4"),
     # OpenRouter reasoning models
     "or-gpt-5-thinking": ("openrouter", "openai/gpt-5-thinking"),
+    "or-deepseek-r1": ("openrouter", "deepseek/deepseek-r1"),
+    "or-gemini-2.5-pro": ("openrouter", "google/gemini-2.5-pro-thinking"),
     # OpenRouter models (Other comprehensive models)
     "or-glm-4-air": ("openrouter", "z-ai/glm-4.5-air:free"),
     "or-qwen-coder-72b": ("openrouter", "qwen/qwen-3-coder-72b"),
@@ -103,10 +105,21 @@ def create_provider_for_model(model_key: str, api_key: str) -> LLMProvider:
     """
     provider_type, model_id = MODELS[model_key]
 
-    # Enable extended thinking for specific models
+    # Configure reasoning/thinking for supported models
     kwargs = {}
+
+    # Anthropic extended thinking
     if model_key == "sonnet-4.5-thinking":
         kwargs["extended_thinking"] = True
+
+    # OpenRouter reasoning models
+    reasoning_keys = [
+        "or-gpt-5-thinking",
+        "or-deepseek-r1",
+        "or-gemini-2.5-pro",
+    ]
+    if model_key in reasoning_keys:
+        kwargs["enable_reasoning"] = True
 
     return create_provider(provider_type, model_id, api_key, **kwargs)
 

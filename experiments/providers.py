@@ -157,7 +157,13 @@ class OpenAIProvider(LLMProvider):
 class OpenRouterProvider(LLMProvider):
     """OpenRouter API provider (any model)."""
 
-    def __init__(self, model: str, api_key: str, site_url: Optional[str] = None):
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        site_url: Optional[str] = None,
+        enable_reasoning: bool = False,
+    ):
         """
         Initialize OpenRouter provider.
 
@@ -165,6 +171,7 @@ class OpenRouterProvider(LLMProvider):
             model: Model ID (e.g., "anthropic/claude-sonnet-4", "openai/gpt-4")
             api_key: OpenRouter API key
             site_url: Optional site URL for rankings
+            enable_reasoning: Enable reasoning tokens for supported models
         """
         import openai
 
@@ -175,6 +182,7 @@ class OpenRouterProvider(LLMProvider):
             api_key=api_key,
         )
         self.site_url = site_url
+        self.enable_reasoning = enable_reasoning
 
     def generate(
         self, system_prompt: str, user_message: str, max_tokens: int = 500
@@ -184,25 +192,46 @@ class OpenRouterProvider(LLMProvider):
         if self.site_url:
             extra_headers["HTTP-Referer"] = self.site_url
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            messages=[
+        # Build request kwargs
+        request_kwargs: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            extra_headers=extra_headers,
-        )
+            "extra_headers": extra_headers,
+        }
+
+        # Enable reasoning for supported models
+        if self.enable_reasoning and self.supports_extended_thinking():
+            request_kwargs["extra_body"] = {"reasoning": {"enabled": True}}
+
+        response = self.client.chat.completions.create(**request_kwargs)
 
         choice = response.choices[0]
         content = choice.message.content or ""
 
-        # Extract reasoning tokens if available
+        # Extract reasoning tokens (OpenRouter format: reasoning_details array)
         reasoning = None
-        if (
-            hasattr(choice.message, "reasoning_content")
-            and choice.message.reasoning_content
-        ):
+
+        # Check for reasoning_details (OpenRouter's format)
+        if hasattr(choice.message, "reasoning_details"):
+            reasoning_details = choice.message.reasoning_details
+            if reasoning_details:
+                # Combine all reasoning blocks
+                reasoning_parts = []
+                for detail in reasoning_details:
+                    detail_type = detail.get("type", "")
+                    if detail_type == "reasoning.text":
+                        reasoning_parts.append(detail.get("text", ""))
+                    elif detail_type == "reasoning.summary":
+                        reasoning_parts.append(f"[Summary] {detail.get('text', '')}")
+                if reasoning_parts:
+                    reasoning = "\n\n".join(reasoning_parts)
+
+        # Fallback: Check for reasoning_content (OpenAI's format)
+        if not reasoning and hasattr(choice.message, "reasoning_content"):
             reasoning = choice.message.reasoning_content
 
         return content, reasoning
@@ -214,7 +243,16 @@ class OpenRouterProvider(LLMProvider):
     def supports_extended_thinking(self) -> bool:
         """Check if this model supports reasoning tokens."""
         # Check if it's a reasoning model
-        reasoning_models = ["gpt-5", "o1", "o3", "thinking"]
+        reasoning_models = [
+            "gpt-5",
+            "o1",
+            "o3",
+            "thinking",
+            "deepseek-r1",
+            "deepseek/r1",
+            "gemini-2.0",
+            "gemini-2.5",
+        ]
         return any(keyword in self.model.lower() for keyword in reasoning_models)
 
 
