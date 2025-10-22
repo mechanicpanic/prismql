@@ -44,21 +44,30 @@ from experiments.analyze import (
     print_detailed_analysis,
     print_summary,
 )
+from experiments.providers import LLMProvider
 from experiments.test_cases import get_test_cases_by_difficulty
 
 # Available models: (provider_type, model_id, friendly_name)
 MODELS = {
     # Anthropic models
     "sonnet-4.5": ("anthropic", "claude-sonnet-4-5-20250929"),
+    "sonnet-4.5-thinking": (
+        "anthropic",
+        "claude-sonnet-4-5-20250929",
+    ),  # Extended thinking
     "opus-4.1": ("anthropic", "claude-opus-4-1-20250805"),
     "haiku-4.5": ("anthropic", "claude-haiku-4-5-20251001"),
     # OpenAI models
     "gpt-4": ("openai", "gpt-4"),
     "gpt-4-turbo": ("openai", "gpt-4-turbo-preview"),
     "gpt-3.5": ("openai", "gpt-3.5-turbo"),
+    "gpt-5": ("openai", "gpt-5"),
+    "gpt-5-preview": ("openai", "gpt-5-preview"),
     # OpenRouter models (Claude/OpenAI via OpenRouter)
     "or-sonnet-4": ("openrouter", "anthropic/claude-sonnet-4"),
     "or-gpt-4": ("openrouter", "openai/gpt-4"),
+    # OpenRouter reasoning models
+    "or-gpt-5-thinking": ("openrouter", "openai/gpt-5-thinking"),
     # OpenRouter models (Other comprehensive models)
     "or-glm-4-air": ("openrouter", "z-ai/glm-4.5-air:free"),
     "or-qwen-coder-72b": ("openrouter", "qwen/qwen-3-coder-72b"),
@@ -79,6 +88,27 @@ STRATEGIES = {
     "with_reference": WITH_REFERENCE_STRATEGY,
     "self_correcting": SELF_CORRECTING_STRATEGY,
 }
+
+
+def create_provider_for_model(model_key: str, api_key: str) -> LLMProvider:
+    """
+    Create a provider for the given model key with appropriate settings.
+
+    Args:
+        model_key: Key from MODELS dict (e.g., "sonnet-4.5-thinking")
+        api_key: API key for the provider
+
+    Returns:
+        Configured LLMProvider instance
+    """
+    provider_type, model_id = MODELS[model_key]
+
+    # Enable extended thinking for specific models
+    kwargs = {}
+    if model_key == "sonnet-4.5-thinking":
+        kwargs["extended_thinking"] = True
+
+    return create_provider(provider_type, model_id, api_key, **kwargs)
 
 
 def run_quick_test():

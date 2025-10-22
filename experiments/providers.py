@@ -17,8 +17,15 @@ class LLMProvider(ABC):
     @abstractmethod
     def generate(
         self, system_prompt: str, user_message: str, max_tokens: int = 500
-    ) -> str:
-        """Generate a completion given system and user messages."""
+    ) -> tuple[str, Optional[str]]:
+        """
+        Generate a completion given system and user messages.
+
+        Returns:
+            Tuple of (content, chain_of_thought)
+            - content: The main response text
+            - chain_of_thought: Reasoning/thinking tokens if available, None otherwise
+        """
         pass
 
     @abstractmethod
@@ -31,38 +38,67 @@ class LLMProvider(ABC):
         model_name = self.get_model_name()
         return ":free" in model_name.lower()
 
+    def supports_extended_thinking(self) -> bool:
+        """Check if this model supports extended thinking mode."""
+        return False
+
 
 class AnthropicProvider(LLMProvider):
     """Anthropic API provider (Claude models)."""
 
-    def __init__(self, model: str, api_key: str):
+    def __init__(self, model: str, api_key: str, extended_thinking: bool = False):
         """
         Initialize Anthropic provider.
 
         Args:
             model: Model ID (e.g., "claude-sonnet-4-5-20250929")
             api_key: Anthropic API key
+            extended_thinking: Enable extended thinking mode (captures thinking blocks)
         """
         import anthropic
 
         self.model = model
         self.client = anthropic.Anthropic(api_key=api_key)
+        self.extended_thinking = extended_thinking
 
     def generate(
         self, system_prompt: str, user_message: str, max_tokens: int = 500
-    ) -> str:
+    ) -> tuple[str, Optional[str]]:
         """Generate completion using Anthropic API."""
+        # Use extended thinking if enabled
+        thinking_config = (
+            {"type": "enabled", "budget_tokens": 5000}
+            if self.extended_thinking
+            else {"type": "disabled"}
+        )
+
         response = self.client.messages.create(
             model=self.model,
             max_tokens=max_tokens,
             system=system_prompt,
             messages=[{"role": "user", "content": user_message}],
+            thinking=thinking_config,
         )
-        return response.content[0].text
+
+        # Extract content and thinking blocks
+        content_text = ""
+        thinking_text = ""
+
+        for block in response.content:
+            if block.type == "thinking":
+                thinking_text += block.thinking + "\n"
+            elif block.type == "text":
+                content_text += block.text
+
+        return content_text, thinking_text if thinking_text else None
 
     def get_model_name(self) -> str:
         """Get model identifier."""
         return self.model
+
+    def supports_extended_thinking(self) -> bool:
+        """Check if this model supports extended thinking mode."""
+        return self.extended_thinking
 
 
 class OpenAIProvider(LLMProvider):
@@ -73,7 +109,7 @@ class OpenAIProvider(LLMProvider):
         Initialize OpenAI provider.
 
         Args:
-            model: Model ID (e.g., "gpt-4", "gpt-3.5-turbo")
+            model: Model ID (e.g., "gpt-4", "gpt-3.5-turbo", "gpt-5")
             api_key: OpenAI API key
         """
         import openai
@@ -83,7 +119,7 @@ class OpenAIProvider(LLMProvider):
 
     def generate(
         self, system_prompt: str, user_message: str, max_tokens: int = 500
-    ) -> str:
+    ) -> tuple[str, Optional[str]]:
         """Generate completion using OpenAI API."""
         response = self.client.chat.completions.create(
             model=self.model,
@@ -93,11 +129,29 @@ class OpenAIProvider(LLMProvider):
                 {"role": "user", "content": user_message},
             ],
         )
-        return response.choices[0].message.content or ""
+
+        choice = response.choices[0]
+        content = choice.message.content or ""
+
+        # Extract reasoning tokens if available (for o1/o3/gpt-5-thinking models)
+        reasoning = None
+        if (
+            hasattr(choice.message, "reasoning_content")
+            and choice.message.reasoning_content
+        ):
+            reasoning = choice.message.reasoning_content
+
+        return content, reasoning
 
     def get_model_name(self) -> str:
         """Get model identifier."""
         return self.model
+
+    def supports_extended_thinking(self) -> bool:
+        """Check if this model supports reasoning tokens."""
+        # GPT-5 and o1/o3 models support reasoning
+        reasoning_models = ["gpt-5", "o1", "o3", "thinking"]
+        return any(keyword in self.model.lower() for keyword in reasoning_models)
 
 
 class OpenRouterProvider(LLMProvider):
@@ -124,7 +178,7 @@ class OpenRouterProvider(LLMProvider):
 
     def generate(
         self, system_prompt: str, user_message: str, max_tokens: int = 500
-    ) -> str:
+    ) -> tuple[str, Optional[str]]:
         """Generate completion using OpenRouter API."""
         extra_headers = {}
         if self.site_url:
@@ -139,11 +193,29 @@ class OpenRouterProvider(LLMProvider):
             ],
             extra_headers=extra_headers,
         )
-        return response.choices[0].message.content or ""
+
+        choice = response.choices[0]
+        content = choice.message.content or ""
+
+        # Extract reasoning tokens if available
+        reasoning = None
+        if (
+            hasattr(choice.message, "reasoning_content")
+            and choice.message.reasoning_content
+        ):
+            reasoning = choice.message.reasoning_content
+
+        return content, reasoning
 
     def get_model_name(self) -> str:
         """Get model identifier."""
         return self.model
+
+    def supports_extended_thinking(self) -> bool:
+        """Check if this model supports reasoning tokens."""
+        # Check if it's a reasoning model
+        reasoning_models = ["gpt-5", "o1", "o3", "thinking"]
+        return any(keyword in self.model.lower() for keyword in reasoning_models)
 
 
 def create_provider(
@@ -169,9 +241,9 @@ def create_provider(
     provider_type = provider_type.lower()
 
     if provider_type == "anthropic":
-        return AnthropicProvider(model, api_key)
+        return AnthropicProvider(model, api_key, **kwargs)
     if provider_type == "openai":
-        return OpenAIProvider(model, api_key)
+        return OpenAIProvider(model, api_key, **kwargs)
     if provider_type == "openrouter":
         return OpenRouterProvider(model, api_key, **kwargs)
 

@@ -38,6 +38,7 @@ class QueryAttempt:
     query: str
     validation_result: Optional[dict[str, Any]] = None
     retry_number: int = 0
+    chain_of_thought: Optional[str] = None  # Reasoning/thinking tokens
 
 
 @dataclass
@@ -62,6 +63,9 @@ class ExperimentResult:
     syntax_errors: list[str]
     semantic_errors: list[str]
     warnings: list[str]
+    # Reasoning/thinking
+    has_chain_of_thought: bool = False
+    final_chain_of_thought: Optional[str] = None
 
 
 class ExperimentHarness:
@@ -134,8 +138,8 @@ class ExperimentHarness:
         validation_feedback = ""
 
         for retry in range(strategy.max_retries):
-            # Call LLM provider
-            response_text = provider.generate(
+            # Call LLM provider (returns content and optional chain-of-thought)
+            response_text, chain_of_thought = provider.generate(
                 system_prompt=strategy.system_prompt,
                 user_message=user_message + validation_feedback,
                 max_tokens=500,
@@ -156,6 +160,7 @@ class ExperimentHarness:
                     "infos": [str(i) for i in validation_result.infos],
                 },
                 retry_number=retry,
+                chain_of_thought=chain_of_thought,
             )
             attempts.append(attempt)
 
@@ -371,6 +376,8 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
                 syntax_errors=["No query generated"],
                 semantic_errors=[],
                 warnings=[],
+                has_chain_of_thought=False,
+                final_chain_of_thought=None,
             )
 
         validation = attempts[-1].validation_result
@@ -406,6 +413,10 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
             final_query.lower(), test_case.ground_truth_query.lower()
         )
 
+        # Check if any attempt has chain-of-thought
+        has_cot = any(attempt.chain_of_thought for attempt in attempts)
+        final_cot = attempts[-1].chain_of_thought if attempts else None
+
         return ExperimentResult(
             test_case_id=test_case.id,
             model=model,
@@ -422,6 +433,8 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
             syntax_errors=syntax_errors,
             semantic_errors=semantic_errors,
             warnings=warnings,
+            has_chain_of_thought=has_cot,
+            final_chain_of_thought=final_cot,
         )
 
     def _queries_equivalent(self, query1: str, query2: str) -> bool:
