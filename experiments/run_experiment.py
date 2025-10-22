@@ -56,6 +56,7 @@ MODELS = {
         "claude-sonnet-4-5-20250929",
     ),  # Extended thinking
     "opus-4.1": ("anthropic", "claude-opus-4-1-20250805"),
+    "opus-4.1-thinking": ("anthropic", "claude-opus-4-1-20250805"),  # Extended thinking
     "haiku-4.5": ("anthropic", "claude-haiku-4-5-20251001"),
     # OpenAI models
     "gpt-4": ("openai", "gpt-4"),
@@ -68,7 +69,11 @@ MODELS = {
     "or-sonnet-4": ("openrouter", "anthropic/claude-sonnet-4"),
     "or-gpt-4": ("openrouter", "openai/gpt-4"),
     # OpenRouter reasoning models
+    "or-gpt-5": ("openrouter", "openai/gpt-5"),
+    "or-gpt-5-preview": ("openrouter", "openai/gpt-5-preview"),
+    "or-gpt-5-pro": ("openrouter", "openai/gpt-5-pro"),
     "or-gpt-5-thinking": ("openrouter", "openai/gpt-5-thinking"),
+    "or-o3-pro": ("openrouter", "openai/o3-pro"),
     "or-deepseek-r1": ("openrouter", "deepseek/deepseek-r1-0528:free"),
     "or-gemini-2.5-pro": ("openrouter", "google/gemini-2.5-pro"),
     "or-deepseek-v3.2": ("openrouter", "deepseek/deepseek-v3.2-exp"),
@@ -111,12 +116,16 @@ def create_provider_for_model(model_key: str, api_key: str) -> LLMProvider:
     kwargs = {}
 
     # Anthropic extended thinking
-    if model_key == "sonnet-4.5-thinking":
+    if model_key in ["sonnet-4.5-thinking", "opus-4.1-thinking"]:
         kwargs["extended_thinking"] = True
 
     # OpenRouter reasoning models
     reasoning_keys = [
+        "or-gpt-5",
+        "or-gpt-5-preview",
+        "or-gpt-5-pro",
         "or-gpt-5-thinking",
+        "or-o3-pro",
         "or-deepseek-r1",
         "or-deepseek-v3.2",
         "or-gemini-2.5-pro",
