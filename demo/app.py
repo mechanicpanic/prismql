@@ -74,9 +74,22 @@ def display_query_with_highlighting(query: str) -> None:
     """Display query with syntax highlighting if available."""
     if HAS_HIGHLIGHTING:
         lexer = PrismQLLexer()
-        formatter = HtmlFormatter(style="monokai", noclasses=True)
+        formatter = HtmlFormatter(
+            style="monokai",
+            noclasses=True,
+            cssclass="highlight",
+        )
         highlighted = highlight(query, lexer, formatter)
-        st.markdown(highlighted, unsafe_allow_html=True)
+        # Add monospace font styling
+        styled_html = f"""
+        <style>
+        .highlight {{
+            font-family: 'Courier New', Courier, monospace !important;
+        }}
+        </style>
+        {highlighted}
+        """
+        st.markdown(styled_html, unsafe_allow_html=True)
     else:
         st.code(query, language=None)
 
