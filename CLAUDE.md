@@ -6,6 +6,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PrismQL is a domain-specific language (DSL) for pattern matching in conversational data. It uses ANTLR4 for parsing and implements a visitor pattern for query execution. The language is backend-agnostic, supporting any search engine (OpenSearch, Elasticsearch, in-memory) and optional NLP backends (spaCy).
 
+## Project History
+
+PrismQL is a complete redevelopment of the **Chat-Corpora-Annotator** project (2020 undergrad thesis at SPbU). The original project was a C# desktop application with a query language called "Macther" for Boolean retrieval and pattern matching in chat datasets.
+
+**Original Repository:** https://github.com/yakovypg/Chat-Corpora-Annotator
+
+**Key improvements in PrismQL:**
+- Python-based library (vs C# desktop app)
+- Backend-agnostic architecture (vs tied to Lucene/CoreNLP)
+- Advanced pattern matching (FOLLOWED_BY, variables, quantifiers)
+- Comprehensive test coverage (331+ tests)
+- Publishable as library
+
+**Where to consult original implementation:**
+
+1. **Histogram-based window merging algorithm:**
+   - File: `Chat-Corpora-Annotator/Infrastructure/Helpers/WindowIndexer.cs`
+   - Method: `GetIndexesInWindow()`
+   - This is the original algorithm for finding message combinations within windows
+   - Used as reference for `src/prismql/processors/window.py`
+
+2. **Operator implementations:**
+   - Directory: `Chat-Corpora-Annotator/Model/Parsers/Macther/QueryExecutorComponents/`
+   - `IRestriction.cs` - Base restriction interface
+   - `AndRestriction.cs`, `OrRestriction.cs`, `NotRestriction.cs` - Boolean operators
+   - `InwinRestriction.cs` - Window constraint operator
+   - Original semantics for INWIN and Boolean operations
+
+3. **ANTLR4 grammar:**
+   - File: `Chat-Corpora-Annotator/Model/Parsers/Macther/Macther.g4`
+   - Original grammar for Boolean retrieval language
+   - Reference for operator precedence and syntax design
+
+**Note:** When implementing new features or debugging algorithms, the C# codebase can be consulted for original semantics and algorithm details.
+
 ## Development Commands
 
 ### Environment Setup
