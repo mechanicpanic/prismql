@@ -219,26 +219,17 @@ def main():
                     if len(result) > 0:
                         st.markdown("### Results")
 
-                        # Show in tabs for better organization
-                        if len(result) <= 10:
-                            # Show all results
-                            for i, group in enumerate(result, 1):
-                                with st.expander(
-                                    f"Result {i} - {len(group)} message(s)",
-                                    expanded=(i == 1),
-                                ):
-                                    st.markdown(format_result_group(group, engine))
-                        else:
-                            # Show first 10 with pagination
+                        # Show results (limit to 20 for performance)
+                        display_limit = 20
+                        if len(result) > display_limit:
                             st.warning(
-                                f"Showing first 10 of {len(result)} results. Use LIMIT in query for more control."
+                                f"Showing first {display_limit} of {len(result)} results. Use LIMIT in query for more control."
                             )
-                            for i, group in enumerate(result[:10], 1):
-                                with st.expander(
-                                    f"Result {i} - {len(group)} message(s)",
-                                    expanded=(i == 1),
-                                ):
-                                    st.markdown(format_result_group(group, engine))
+
+                        for i, group in enumerate(result[:display_limit], 1):
+                            st.markdown(f"**Result {i}** - {len(group)} message(s)")
+                            st.markdown(format_result_group(group, engine))
+                            st.markdown("---")
                     else:
                         st.info("No results found")
                 else:

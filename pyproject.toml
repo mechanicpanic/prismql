@@ -44,6 +44,7 @@ repl = [
 ]
 demo = [
     "streamlit>=1.28.0",
+    "pandas>=1.5.0",
 ]
 all = ["prismql[opensearch,elasticsearch,nlp,repl,highlighting,demo]"]
 dev = [
