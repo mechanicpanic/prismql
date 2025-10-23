@@ -372,6 +372,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if ctx.Contains():
             dict_name = ctx.hdict().getText()
 
+            # Check if this is wildcard - match all messages
+            if dict_name == "*":
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
+
             # Check if this is a variable
             if dict_name.startswith("$"):
                 # Variables in contains() not yet supported - would need text field tracking
@@ -388,6 +393,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # from(username) - same as byuser
         if ctx.From():
             username = ctx.huser().getText()
+
+            # Check if this is wildcard - match all users/messages
+            if username == "*":
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
 
             # Check if this is a variable
             if username.startswith("$"):
@@ -409,6 +419,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # mentions_user(username) - same as hasusermentioned
         if ctx.MentionsUser():
             username = ctx.huser().getText()
+
+            # Check if this is wildcard - match all messages
+            if username == "*":
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
+
             # First check precomputed index
             if username in self.precomputed_indexes.user_mentions:
                 return self.precomputed_indexes.user_mentions[username]
@@ -440,6 +456,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 stacklevel=2,
             )
             dict_name = ctx.hdict().getText()
+
+            # Check if this is wildcard - match all messages
+            if dict_name == "*":
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
+
             if dict_name not in self.user_dictionaries:
                 raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
             words = self.user_dictionaries[dict_name]
@@ -453,6 +475,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 stacklevel=2,
             )
             username = ctx.huser().getText()
+
+            # Check if this is wildcard - match all users/messages
+            if username == "*":
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
 
             # Check if this is a variable
             if username.startswith("$"):
@@ -479,6 +506,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 stacklevel=2,
             )
             username = ctx.huser().getText()
+
+            # Check if this is wildcard - match all messages
+            if username == "*":
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
+
             if username in self.precomputed_indexes.user_mentions:
                 return self.precomputed_indexes.user_mentions[username]
             return self.search_backend.search_text([username], field="text")

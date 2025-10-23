@@ -14,7 +14,7 @@ def serializedATN():
     return [
         4,
         1,
-        65,
+        66,
         379,
         2,
         0,
@@ -860,7 +860,7 @@ def serializedATN():
         62,
         62,
         64,
-        64,
+        65,
         411,
         0,
         50,
@@ -3370,7 +3370,74 @@ class PrismQLParser(Parser):
 
     sharedContextCache = PredictionContextCache()
 
-    literalNames = ["<INVALID>", "';'", "'('", "')'", "','", "'{'", "'}'"]
+    literalNames = [
+        "<INVALID>",
+        "';'",
+        "'('",
+        "')'",
+        "','",
+        "'{'",
+        "'}'",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "<INVALID>",
+        "'*'",
+    ]
 
     symbolicNames = [
         "<INVALID>",
@@ -3438,6 +3505,7 @@ class PrismQLParser(Parser):
         "STRING",
         "QUOTED_STRING",
         "VARIABLE",
+        "WILDCARD",
         "WS",
     ]
 
@@ -3560,7 +3628,8 @@ class PrismQLParser(Parser):
     STRING = 62
     QUOTED_STRING = 63
     VARIABLE = 64
-    WS = 65
+    WILDCARD = 65
+    WS = 66
 
     def __init__(self, input: TokenStream, output: TextIO = sys.stdout):
         super().__init__(input, output)
@@ -5724,6 +5793,9 @@ class PrismQLParser(Parser):
         def VARIABLE(self):
             return self.getToken(PrismQLParser.VARIABLE, 0)
 
+        def WILDCARD(self):
+            return self.getToken(PrismQLParser.WILDCARD, 0)
+
         def getRuleIndex(self):
             return PrismQLParser.RULE_hdict
 
@@ -5741,7 +5813,7 @@ class PrismQLParser(Parser):
             self.enterOuterAlt(localctx, 1)
             self.state = 372
             _la = self._input.LA(1)
-            if not (_la == 62 or _la == 64):
+            if not (((_la - 62) & ~0x3F) == 0 and ((1 << (_la - 62)) & 13) != 0):
                 self._errHandler.recoverInline(self)
             else:
                 self._errHandler.reportMatch(self)
@@ -5769,6 +5841,9 @@ class PrismQLParser(Parser):
         def VARIABLE(self):
             return self.getToken(PrismQLParser.VARIABLE, 0)
 
+        def WILDCARD(self):
+            return self.getToken(PrismQLParser.WILDCARD, 0)
+
         def getRuleIndex(self):
             return PrismQLParser.RULE_huser
 
@@ -5786,7 +5861,7 @@ class PrismQLParser(Parser):
             self.enterOuterAlt(localctx, 1)
             self.state = 374
             _la = self._input.LA(1)
-            if not (_la == 62 or _la == 64):
+            if not (((_la - 62) & ~0x3F) == 0 and ((1 << (_la - 62)) & 13) != 0):
                 self._errHandler.recoverInline(self)
             else:
                 self._errHandler.reportMatch(self)

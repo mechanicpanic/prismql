@@ -152,8 +152,8 @@ time_unit
 
 // Rule references
 number : INTEGER;
-hdict : STRING | VARIABLE;
-huser : STRING | VARIABLE;
+hdict : STRING | VARIABLE | WILDCARD;
+huser : STRING | VARIABLE | WILDCARD;
 field_name : STRING;
 
 // Keywords (case-insensitive)
@@ -231,6 +231,7 @@ INTEGER : DIGIT+;
 STRING  : (LETTER | DIGIT)+;
 QUOTED_STRING : '"' (~["])* '"' | '\'' (~['])* '\'';
 VARIABLE : '$' (LETTER | DIGIT)+;
+WILDCARD : '*';
 
 // Whitespace (skip)
 WS: [ \n\r\t] -> skip;
