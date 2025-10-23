@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 from prismql.backends.memory import MemoryBackend
 from prismql.engine import PrismQLEngine
 from prismql.exceptions import PrismQLRuntimeError, PrismQLSyntaxError
@@ -80,16 +81,24 @@ def display_query_with_highlighting(query: str) -> None:
             cssclass="highlight",
         )
         highlighted = highlight(query, lexer, formatter)
-        # Add monospace font styling
+        # Add monospace font styling and proper HTML structure
         styled_html = f"""
         <style>
         .highlight {{
+            font-family: 'Courier New', Courier, monospace !important;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }}
+        .highlight pre {{
+            margin: 0;
             font-family: 'Courier New', Courier, monospace !important;
         }}
         </style>
         {highlighted}
         """
-        st.markdown(styled_html, unsafe_allow_html=True)
+        # Use components.html for proper HTML rendering
+        components.html(styled_html, height=100, scrolling=True)
     else:
         st.code(query, language=None)
 
