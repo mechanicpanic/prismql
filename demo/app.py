@@ -124,6 +124,12 @@ EXAMPLE_QUERIES = {
         "Greeting and thanks together": "SELECT contains(greetings), contains(thanks) INWIN 10",
         "Multiple users same window": "SELECT from(alice), from(bob), from(charlie) INWIN 10",
     },
+    "Sequential Patterns (FOLLOWED_BY)": {
+        "Customer then support": "SELECT from(alice) FOLLOWED_BY from(support_sarah) WITHIN 5",
+        "Problem then solution": "SELECT contains(problems) FOLLOWED_BY contains(solutions) WITHIN 10",
+        "Three-way sequence": "SELECT from(alice) FOLLOWED_BY from(support_sarah) WITHIN 3 FOLLOWED_BY from(alice) WITHIN 3",
+        "Question then answer": "SELECT contains(questions) FOLLOWED_BY contains(solutions) WITHIN 5",
+    },
     "Pattern Variables": {
         "Same user posting twice": "SELECT from($user), from($user) INWIN 5",
         "Any user with problems": "SELECT from($user) AND contains(problems)",
@@ -131,13 +137,18 @@ EXAMPLE_QUERIES = {
     },
     "Quantifiers": {
         "Alice posting 3 times": "SELECT from(alice){3} INWIN 10",
-        "Same user posting twice": "SELECT from($user){2} INWIN 10",
-        "User posting 3+ times": "SELECT from($user){3} INWIN 5",
+        "Support posting 2 times": "SELECT from(support_sarah){2} INWIN 5",
+        "Bob posting 3+ times": "SELECT from(bob){3} INWIN 10",
     },
     "Advanced": {
         "Complex boolean": "SELECT (contains(problems) OR contains(questions)) AND NOT from(support_sarah)",
         "Multiple dictionaries": "SELECT contains(greetings), contains(problems), contains(questions) INWIN 10",
-        "User pattern with quantifier": "SELECT from($user){2}, contains(problems) INWIN 10",
+    },
+    "Understanding INWIN (Important!)": {
+        "❌ Common mistake": "SELECT from(alice){2}, contains(solutions) INWIN 10",
+        "✅ Alice WITH solutions": "SELECT from(alice) AND contains(solutions)",
+        "✅ Two alice, both solutions": "SELECT (from(alice) AND contains(solutions)){2} INWIN 10",
+        "✅ Two alice, one solutions": "SELECT (from(alice) AND contains(solutions)), from(alice) INWIN 10",
     },
 }
 
@@ -164,6 +175,22 @@ def main():
 
         # Example queries in category
         if category:
+            # Show explanation for INWIN category
+            if category == "Understanding INWIN (Important!)":
+                st.info(
+                    """
+                    **INWIN is unordered!** It finds ANY combination of messages
+                    within the window, even if they satisfy different restrictions.
+
+                    `from(alice){2}, contains(solutions) INWIN 10` means:
+                    - 2 messages from alice
+                    - 1 message with solutions
+                    - Can be from ANYONE (including bob!)
+
+                    Use AND to filter properly!
+                    """
+                )
+
             st.markdown(f"**{category}**")
             for description, query in EXAMPLE_QUERIES[category].items():
                 if st.button(description, key=f"btn_{query}", use_container_width=True):

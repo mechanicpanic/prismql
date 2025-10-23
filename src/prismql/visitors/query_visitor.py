@@ -78,8 +78,15 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # Step 2: Process either restrictions or query sequence to get base results
         if ctx.restrictions():
             # Single query with comma-separated restrictions
-            restriction_results = self.visitRestrictions(ctx.restrictions())
-            results = self._merge_restrictions(restriction_results, window_size)
+            restriction_results, is_sequential = self.visitRestrictions(
+                ctx.restrictions()
+            )
+            # If the result is from a single FOLLOWED_BY/PRECEDED_BY operator,
+            # return the pairs directly without merging
+            if is_sequential and len(ctx.restrictions().named_restriction()) == 1:
+                results = restriction_results
+            else:
+                results = self._merge_restrictions(restriction_results, window_size)
         elif ctx.query_seq():
             # Multiple subqueries in sequence
             subquery_results = self.visitQuery_seq(ctx.query_seq())
@@ -248,15 +255,18 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def visitRestrictions(
         self, ctx: PrismQLParser.RestrictionsContext
-    ) -> list[MessageGroup]:
+    ) -> tuple[list[MessageGroup], bool]:
         """
         Process comma-separated restrictions.
 
-        Returns a list of message groups, one for each restriction.
+        Returns a tuple of (list of message groups, is_sequential_result).
+        The is_sequential_result flag indicates if the result contains
+        pre-computed sequences from FOLLOWED_BY/PRECEDED_BY operators.
         If UNR flag is present, returns all permutations.
         Handles quantifiers by expanding restrictions.
         """
         restriction_results = []
+        has_sequential_operator = False
 
         # Process each named restriction
         for named_restriction_ctx in ctx.named_restriction():
@@ -271,25 +281,70 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # Extract quantifier if present
             min_count, max_count = self._extract_quantifier(named_restriction_ctx)
 
+            # Track how many constraints exist before visiting this restriction
+            num_constraints_before = len(self.variable_constraints)
+
             # Process the underlying restriction
             result = self.visitRestriction(named_restriction_ctx.restriction())
-            # Convert set to sorted list
-            sorted_result = sorted(result)
 
-            # Apply quantifier by expanding the restriction
-            # For now, we use min_count (exact or minimum)
-            # TODO: Support range matching (min to max)
-            if min_count > 1:
-                # Expand the restriction min_count times
-                for _ in range(min_count):
+            # Check if any new constraints were added (indicating a variable was used)
+            new_constraints = self.variable_constraints[num_constraints_before:]
+
+            # Check if result is a sequence (from FOLLOWED_BY/PRECEDED_BY) or a set
+            if isinstance(result, list):
+                # Result is already a list of message groups (sequences)
+                has_sequential_operator = True
+                # For quantifiers on sequences, we need enough groups
+                if min_count > 1:
+                    # We need at least min_count groups
+                    # For now, just take the first min_count groups
+                    # TODO: Support range matching and finding all combinations
+                    if len(result) < min_count:
+                        # Not enough matching sequences - return empty
+                        return ([], False)
+                    # Add each group separately
+                    for group in result[:min_count]:
+                        restriction_results.append(sorted(group))
+                        self.pattern_names.append(pattern_name)
+                        self.current_restriction_position += 1
+                else:
+                    # No quantifier - add all groups
+                    for group in result:
+                        restriction_results.append(sorted(group))
+                        self.pattern_names.append(pattern_name)
+                        self.current_restriction_position += 1
+            else:
+                # Result is a set of message IDs (normal restriction)
+                # Convert set to sorted list
+                sorted_result = sorted(result)
+
+                # Apply quantifier by expanding the restriction
+                # For now, we use min_count (exact or minimum)
+                # TODO: Support range matching (min to max)
+                if min_count > 1:
+                    # Expand the restriction min_count times
+                    for i in range(min_count):
+                        restriction_results.append(sorted_result)
+                        self.pattern_names.append(pattern_name)
+
+                        # If this restriction added variable constraints and it's not the first occurrence,
+                        # duplicate those constraints for this position
+                        if i > 0 and new_constraints:
+                            for constraint in new_constraints:
+                                self.variable_constraints.append(
+                                    VariableConstraint(
+                                        variable_name=constraint.variable_name,
+                                        field_name=constraint.field_name,
+                                        position=self.current_restriction_position,
+                                    )
+                                )
+
+                        self.current_restriction_position += 1
+                else:
+                    # No quantifier or {1} - process normally
                     restriction_results.append(sorted_result)
                     self.pattern_names.append(pattern_name)
                     self.current_restriction_position += 1
-            else:
-                # No quantifier or {1} - process normally
-                restriction_results.append(sorted_result)
-                self.pattern_names.append(pattern_name)
-                self.current_restriction_position += 1
 
         # Handle UNR (unrelated) flag - generate permutations
         if ctx.Unr():
@@ -297,22 +352,41 @@ class PrismQLVisitor(BasePrismQLVisitor):
             permutations = []
             for perm in itertools.product(*restriction_results):
                 permutations.append(list(perm))
-            return permutations
-        # Return as-is (will be merged by window processor)
-        return restriction_results
+            return (permutations, False)  # UNR results are not sequential
+        # Return as-is (will be merged by window processor or returned directly if sequential)
+        return (restriction_results, has_sequential_operator)
 
-    def visitRestriction(self, ctx: PrismQLParser.RestrictionContext) -> set[MessageId]:
-        """Process a single restriction with boolean operators."""
+    def visitRestriction(
+        self, ctx: PrismQLParser.RestrictionContext
+    ) -> Union[set[MessageId], list[MessageGroup]]:
+        """
+        Process a single restriction with boolean operators.
+
+        Returns either a set of message IDs (for normal restrictions) or
+        a list of message groups (for sequential operators like FOLLOWED_BY).
+        """
         # Handle AND operator
         if ctx.And():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
+            # AND requires both operands to be sets, not sequences
+            if isinstance(lhs, list) or isinstance(rhs, list):
+                raise PrismQLRuntimeError(
+                    "AND operator cannot be used with sequential operators (FOLLOWED_BY, PRECEDED_BY). "
+                    "Sequential operators return message sequences, not individual messages."
+                )
             return lhs & rhs  # Set intersection
 
         # Handle OR operator
         if ctx.Or():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
+            # OR requires both operands to be sets, not sequences
+            if isinstance(lhs, list) or isinstance(rhs, list):
+                raise PrismQLRuntimeError(
+                    "OR operator cannot be used with sequential operators (FOLLOWED_BY, PRECEDED_BY). "
+                    "Sequential operators return message sequences, not individual messages."
+                )
             return lhs | rhs  # Set union
 
         # Handle FOLLOWED_BY operator (lookahead)
@@ -320,20 +394,65 @@ class PrismQLVisitor(BasePrismQLVisitor):
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
             window = int(ctx.number().getText())
-            return self._apply_followed_by(lhs, rhs, window)
+
+            # Check if lhs is a sequence (from chained FOLLOWED_BY)
+            if isinstance(lhs, list):
+                # Extend existing sequences with rhs messages
+                # rhs must be a set for now (no double nesting)
+                if isinstance(rhs, list):
+                    raise PrismQLRuntimeError(
+                        "Complex nested sequential operators are not yet supported"
+                    )
+                return self._extend_sequences_followed_by(lhs, rhs, window)
+
+            # Simple case: both lhs and rhs are sets
+            # rhs could be a list if it's nested on the right side
+            if isinstance(rhs, list):
+                raise PrismQLRuntimeError(
+                    "FOLLOWED_BY requires simple conditions, not nested sequences"
+                )
+            # Create pairs using the existing logic
+            matching_lhs = self._apply_followed_by(lhs, rhs, window)
+            return self._create_sequential_pairs(
+                matching_lhs, rhs, window, forward=True
+            )
 
         # Handle PRECEDED_BY operator (lookbehind)
         if ctx.PrecededBy():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
             window = int(ctx.number().getText())
-            return self._apply_preceded_by(lhs, rhs, window)
+
+            # Check if lhs is a sequence (from chained PRECEDED_BY)
+            if isinstance(lhs, list):
+                # Extend existing sequences with rhs messages
+                if isinstance(rhs, list):
+                    raise PrismQLRuntimeError(
+                        "Complex nested sequential operators are not yet supported"
+                    )
+                return self._extend_sequences_preceded_by(lhs, rhs, window)
+
+            # Simple case: both lhs and rhs are sets
+            if isinstance(rhs, list):
+                raise PrismQLRuntimeError(
+                    "PRECEDED_BY requires simple conditions, not nested sequences"
+                )
+            # Create pairs using the existing logic
+            matching_lhs = self._apply_preceded_by(lhs, rhs, window)
+            return self._create_sequential_pairs(
+                matching_lhs, rhs, window, forward=False
+            )
 
         # Handle NOT_FOLLOWED_BY operator (negative lookahead)
         if ctx.NotFollowedBy():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
             window = int(ctx.number().getText())
+            # NOT_FOLLOWED_BY returns only the LHS messages, not pairs
+            if isinstance(lhs, list) or isinstance(rhs, list):
+                raise PrismQLRuntimeError(
+                    "NOT_FOLLOWED_BY cannot be chained with other sequential operators"
+                )
             return self._apply_not_followed_by(lhs, rhs, window)
 
         # Handle NOT_PRECEDED_BY operator (negative lookbehind)
@@ -341,11 +460,22 @@ class PrismQLVisitor(BasePrismQLVisitor):
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
             window = int(ctx.number().getText())
+            # NOT_PRECEDED_BY returns only the LHS messages, not pairs
+            if isinstance(lhs, list) or isinstance(rhs, list):
+                raise PrismQLRuntimeError(
+                    "NOT_PRECEDED_BY cannot be chained with other sequential operators"
+                )
             return self._apply_not_preceded_by(lhs, rhs, window)
 
         # Handle NOT operator
         if ctx.Not():
             excluded = self.visitRestriction(ctx.restriction(0))
+            # NOT requires a set, not sequences
+            if isinstance(excluded, list):
+                raise PrismQLRuntimeError(
+                    "NOT operator cannot be used with sequential operators (FOLLOWED_BY, PRECEDED_BY). "
+                    "Sequential operators return message sequences, not individual messages."
+                )
             # Get all message IDs up to a reasonable limit
             total_docs = min(
                 self.MAX_MESSAGES_NOT, self.search_backend.get_total_documents()
@@ -767,6 +897,100 @@ class PrismQLVisitor(BasePrismQLVisitor):
                         # Found a match - create a pair (RHS first, then LHS for chronological order)
                         result.append([all_ids[i], lhs_msg])
                         break
+
+        return result
+
+    def _extend_sequences_followed_by(
+        self,
+        lhs_sequences: list[MessageGroup],
+        rhs_messages: set[MessageId],
+        window: int,
+    ) -> list[MessageGroup]:
+        """
+        Extend existing message sequences with messages from rhs that follow.
+
+        Used for chained FOLLOWED_BY: (A FOLLOWED_BY B) FOLLOWED_BY C
+        where lhs_sequences contains pairs [A, B] and we need to extend with C.
+
+        Args:
+            lhs_sequences: List of message groups (sequences from previous FOLLOWED_BY)
+            rhs_messages: Set of message IDs to look for
+            window: Window size for the sequential constraint
+
+        Returns:
+            List of extended message groups, each with one additional message appended
+        """
+        if not lhs_sequences or not rhs_messages:
+            return []
+
+        # Get all document IDs to establish the full sequence
+        all_ids = sorted(
+            self.search_backend.get_all_document_ids(limit=self.MAX_MESSAGES_NOT)
+        )
+        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+
+        result = []
+        for sequence in lhs_sequences:
+            # Get the last message in the sequence
+            last_msg = sequence[-1]
+            if last_msg not in id_to_pos:
+                continue
+            pos = id_to_pos[last_msg]
+
+            # Look for a message from rhs that follows within window
+            for i in range(pos + 1, min(pos + 1 + window, len(all_ids))):
+                if all_ids[i] in rhs_messages:
+                    # Found a match - extend the sequence
+                    extended = sequence + [all_ids[i]]
+                    result.append(extended)
+                    break
+
+        return result
+
+    def _extend_sequences_preceded_by(
+        self,
+        lhs_sequences: list[MessageGroup],
+        rhs_messages: set[MessageId],
+        window: int,
+    ) -> list[MessageGroup]:
+        """
+        Extend existing message sequences with messages from rhs that precede.
+
+        Used for chained PRECEDED_BY: (A PRECEDED_BY B) PRECEDED_BY C
+        where lhs_sequences contains pairs [B, A] and we need to prepend C.
+
+        Args:
+            lhs_sequences: List of message groups (sequences from previous PRECEDED_BY)
+            rhs_messages: Set of message IDs to look for
+            window: Window size for the sequential constraint
+
+        Returns:
+            List of extended message groups, each with one additional message prepended
+        """
+        if not lhs_sequences or not rhs_messages:
+            return []
+
+        # Get all document IDs to establish the full sequence
+        all_ids = sorted(
+            self.search_backend.get_all_document_ids(limit=self.MAX_MESSAGES_NOT)
+        )
+        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+
+        result = []
+        for sequence in lhs_sequences:
+            # Get the first message in the sequence
+            first_msg = sequence[0]
+            if first_msg not in id_to_pos:
+                continue
+            pos = id_to_pos[first_msg]
+
+            # Look for a message from rhs that precedes within window
+            for i in range(max(0, pos - window), pos):
+                if all_ids[i] in rhs_messages:
+                    # Found a match - prepend to the sequence
+                    extended = [all_ids[i]] + sequence
+                    result.append(extended)
+                    break
 
         return result
 
