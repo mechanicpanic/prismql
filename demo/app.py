@@ -130,6 +130,7 @@ def main():
             for description, query in EXAMPLE_QUERIES[category].items():
                 if st.button(description, key=f"btn_{query}", use_container_width=True):
                     st.session_state.query = query
+                    st.rerun()
 
         st.markdown("---")
 
