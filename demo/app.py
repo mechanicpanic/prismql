@@ -118,21 +118,16 @@ EXAMPLE_QUERIES = {
         "Messages NOT from support": "SELECT NOT from(support_sarah)",
         "Anyone with greetings": "SELECT from(*) AND contains(greetings)",
     },
-    "Sequential Patterns": {
-        "Customer then support response": "SELECT from(alice) FOLLOWED_BY from(support_sarah) WITHIN 3",
-        "Problem then solution": "SELECT contains(problems) FOLLOWED_BY contains(solutions) WITHIN 5",
-        "Greeting then question": "SELECT contains(greetings) FOLLOWED_BY contains(questions) WITHIN 2",
-        "Customer NOT followed by support": "SELECT from(alice) NOT_FOLLOWED_BY from(support_sarah) WITHIN 10",
-    },
-    "Window Patterns (Unordered)": {
-        "Customer and support together": "SELECT from(alice), from(support_sarah) INWIN 3",
+    "Window Patterns": {
+        "Alice and support together": "SELECT from(alice), from(support_sarah) INWIN 5",
         "Problem and solution nearby": "SELECT contains(problems), contains(solutions) INWIN 5",
         "Greeting and thanks together": "SELECT contains(greetings), contains(thanks) INWIN 10",
+        "Multiple users same window": "SELECT from(alice), from(bob), from(charlie) INWIN 10",
     },
     "Pattern Variables": {
-        "Same user posting twice": "SELECT from($user), from($user) INWIN 3",
-        "User then support then user": "SELECT from($customer) FOLLOWED_BY from(support_sarah) WITHIN 5 FOLLOWED_BY from($customer) WITHIN 5",
-        "Same user three times": "SELECT from($user) FOLLOWED_BY from($user) WITHIN 2 FOLLOWED_BY from($user) WITHIN 2",
+        "Same user posting twice": "SELECT from($user), from($user) INWIN 5",
+        "Any user with problems": "SELECT from($user) AND contains(problems)",
+        "Any user with questions": "SELECT from($user) AND contains(questions)",
     },
     "Quantifiers": {
         "Alice posting 3 times": "SELECT from(alice){3} INWIN 10",
@@ -140,9 +135,9 @@ EXAMPLE_QUERIES = {
         "User posting 3+ times": "SELECT from($user){3} INWIN 5",
     },
     "Advanced": {
-        "Escalation pattern": "SELECT contains(problems) FOLLOWED_BY contains(urgent) WITHIN 3 FOLLOWED_BY from(manager_john) WITHIN 5",
-        "Question-answer-thanks": "SELECT contains(questions) FOLLOWED_BY from(support_sarah) WITHIN 3 FOLLOWED_BY contains(thanks) WITHIN 3",
-        "Multiple customers same issue": "SELECT from(alice), from(bob), from(charlie) INWIN 5",
+        "Complex boolean": "SELECT (contains(problems) OR contains(questions)) AND NOT from(support_sarah)",
+        "Multiple dictionaries": "SELECT contains(greetings), contains(problems), contains(questions) INWIN 10",
+        "User pattern with quantifier": "SELECT from($user){2}, contains(problems) INWIN 10",
     },
 }
 
