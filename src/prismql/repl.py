@@ -19,7 +19,7 @@ try:
     from prompt_toolkit.styles import Style  # type: ignore[import-not-found]
 
     try:
-        from ..highlighting import PrismQLLexer  # type: ignore[import-untyped]
+        from .highlighting import PrismQLLexer
 
         HAS_SYNTAX_HIGHLIGHTING = True
     except ImportError:
