@@ -158,14 +158,93 @@ class PrismQLVisitor(BasePrismQLVisitor):
     def visitQuery_seq(
         self, ctx: PrismQLParser.Query_seqContext
     ) -> list[Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]]:
-        """Process a sequence of subqueries."""
-        results: list[
-            Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]
-        ] = []
-        for query_ctx in ctx.query():
-            result = self.visitQuery(query_ctx)
-            results.append(result)
-        return results
+        """
+        Process a sequence of subqueries.
+
+        Handles both:
+        - Unordered subqueries (semicolon-separated): collected for later INWIN merging
+        - Positional subqueries (FOLLOWED_BY/PRECEDED_BY): merged sequentially
+        """
+        # Get all query contexts
+        query_contexts = ctx.query()
+
+        # Get all continuations
+        continuations = (
+            ctx.query_seq_continuation()
+            if hasattr(ctx, "query_seq_continuation")
+            else []
+        )
+
+        # If no continuations, just return the single query result as a list
+        if not continuations:
+            result = self.visitQuery(query_contexts[0])
+            return [result]
+
+        # Check if we have any positional operators
+        has_positional = any(
+            isinstance(cont, PrismQLParser.PositionalSubqueryContext)
+            for cont in continuations
+        )
+
+        # If all unordered (semicolons), collect all results for later merging
+        if not has_positional:
+            results: list[
+                Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]
+            ] = []
+            for query_ctx in query_contexts:
+                result = self.visitQuery(query_ctx)
+                results.append(result)
+            return results
+
+        # Otherwise, process sequentially with positional operators
+        # Start with the first query
+        current_result = self.visitQuery(query_contexts[0])
+
+        # Unwrap if NamedQueryResult
+        if isinstance(current_result, NamedQueryResult):
+            current_result = current_result.to_list()
+
+        # Validate that it's a QueryResult (not aggregated/grouped)
+        if isinstance(current_result, (AggregateResult, GroupedResult)):
+            raise ValueError(
+                "Positional operators between subqueries require non-aggregated results"
+            )
+
+        # Process each continuation
+        for i, continuation in enumerate(continuations):
+            next_query = self.visitQuery(query_contexts[i + 1])
+
+            # Unwrap if NamedQueryResult
+            if isinstance(next_query, NamedQueryResult):
+                next_query = next_query.to_list()
+
+            # Validate
+            if isinstance(next_query, (AggregateResult, GroupedResult)):
+                raise ValueError(
+                    "Positional operators between subqueries require non-aggregated results"
+                )
+
+            if isinstance(continuation, PrismQLParser.PositionalSubqueryContext):
+                # Get operator and window
+                op = continuation.positional_op()
+                window = int(continuation.number().getText())
+
+                # Apply positional operator
+                current_result = self._merge_subqueries_positional(
+                    current_result,
+                    next_query,
+                    op,
+                    window,
+                )
+            else:
+                # UnorderedSubquery - this shouldn't happen in our simplified model
+                # but if it does, we'd need to collect and merge with INWIN
+                raise ValueError(
+                    "Mixing semicolon and positional operators in subqueries is not supported"
+                )
+
+        # Return as a list with single merged result
+        return [current_result]
 
     def visitRestrictions(
         self, ctx: PrismQLParser.RestrictionsContext
@@ -543,6 +622,120 @@ class PrismQLVisitor(BasePrismQLVisitor):
         from ..processors.window import WindowProcessor
 
         return WindowProcessor.merge_queries(all_groups, window_size)
+
+    def _merge_subqueries_positional(
+        self,
+        lhs_result: QueryResult,
+        rhs_result: QueryResult,
+        operator_ctx: Any,
+        window: int,
+    ) -> QueryResult:
+        """
+        Merge two subquery results using a positional operator.
+
+        Args:
+            lhs_result: Result from the left subquery
+            rhs_result: Result from the right subquery
+            operator_ctx: The positional operator context (FollowedBy, PrecededBy, etc.)
+            window: Window size for the operator
+
+        Returns:
+            Merged query result with groups that satisfy the positional constraint
+        """
+        # Flatten subquery results into sets of message IDs
+        lhs_messages = set()
+        for group in lhs_result:
+            lhs_messages.update(group)
+
+        rhs_messages = set()
+        for group in rhs_result:
+            rhs_messages.update(group)
+
+        # Determine the operator type and apply it
+        operator_text = operator_ctx.getText().upper()
+
+        if "FOLLOWEDBY" in operator_text or "FOLLOWED_BY" in operator_text:
+            # LHS messages that are followed by RHS messages
+            matching_lhs = self._apply_followed_by(lhs_messages, rhs_messages, window)
+            # Find matching pairs
+            return self._create_sequential_pairs(
+                matching_lhs, rhs_messages, window, forward=True
+            )
+        if "PRECEDEDBY" in operator_text or "PRECEDED_BY" in operator_text:
+            # LHS messages that are preceded by RHS messages
+            matching_lhs = self._apply_preceded_by(lhs_messages, rhs_messages, window)
+            # Find matching pairs
+            return self._create_sequential_pairs(
+                matching_lhs, rhs_messages, window, forward=False
+            )
+        if "NOTFOLLOWEDBY" in operator_text or "NOT_FOLLOWED_BY" in operator_text:
+            # LHS messages that are NOT followed by RHS messages
+            matching_lhs = self._apply_not_followed_by(
+                lhs_messages, rhs_messages, window
+            )
+            # Return just the matching LHS messages as single-element groups
+            return [[msg] for msg in sorted(matching_lhs)]
+        if "NOTPRECEDEDBY" in operator_text or "NOT_PRECEDED_BY" in operator_text:
+            # LHS messages that are NOT preceded by RHS messages
+            matching_lhs = self._apply_not_preceded_by(
+                lhs_messages, rhs_messages, window
+            )
+            # Return just the matching LHS messages as single-element groups
+            return [[msg] for msg in sorted(matching_lhs)]
+
+        raise ValueError(f"Unknown positional operator: {operator_text}")
+
+    def _create_sequential_pairs(
+        self,
+        lhs_messages: set[MessageId],
+        rhs_messages: set[MessageId],
+        window: int,
+        forward: bool,
+    ) -> QueryResult:
+        """
+        Create pairs of messages that satisfy a sequential constraint.
+
+        Args:
+            lhs_messages: Left-hand side message IDs (already filtered to matching ones)
+            rhs_messages: Right-hand side message IDs
+            window: Window size
+            forward: True for FOLLOWED_BY (look forward), False for PRECEDED_BY (look backward)
+
+        Returns:
+            List of message groups, each containing a pair [lhs_msg, rhs_msg]
+        """
+        if not lhs_messages or not rhs_messages:
+            return []
+
+        # Get all document IDs to establish the full sequence
+        all_ids = sorted(
+            self.search_backend.get_all_document_ids(limit=self.MAX_MESSAGES_NOT)
+        )
+        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+
+        result = []
+        for lhs_msg in sorted(lhs_messages):
+            if lhs_msg not in id_to_pos:
+                continue
+            pos = id_to_pos[lhs_msg]
+
+            # Find the closest matching RHS message within window
+            if forward:
+                # Look forward (FOLLOWED_BY)
+                for i in range(pos + 1, min(pos + 1 + window, len(all_ids))):
+                    if all_ids[i] in rhs_messages:
+                        # Found a match - create a pair
+                        result.append([lhs_msg, all_ids[i]])
+                        break
+            else:
+                # Look backward (PRECEDED_BY)
+                for i in range(max(0, pos - window), pos):
+                    if all_ids[i] in rhs_messages:
+                        # Found a match - create a pair (RHS first, then LHS for chronological order)
+                        result.append([all_ids[i], lhs_msg])
+                        break
+
+        return result
 
     def _parse_time_window(self, ctx: Any) -> int:
         """

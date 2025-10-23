@@ -137,12 +137,16 @@ class ExperimentHarness:
 
         validation_feedback = ""
 
+        # Use larger max_tokens for models with extended thinking/reasoning
+        # (they need at least 1024 tokens for thinking + response)
+        max_tokens = 2000 if provider.supports_extended_thinking() else 500
+
         for retry in range(strategy.max_retries):
             # Call LLM provider (returns content and optional chain-of-thought)
             response_text, chain_of_thought = provider.generate(
                 system_prompt=strategy.system_prompt,
                 user_message=user_message + validation_feedback,
-                max_tokens=500,
+                max_tokens=max_tokens,
             )
 
             # Extract query from response
@@ -259,13 +263,14 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
 
         return text.strip()
 
-    def run_experiment(
+    def run_experiment(  # noqa: C901
         self,
         providers: list[LLMProvider],
         test_cases: list[TestCase],
         prompt_strategies: list[PromptStrategy],
         rate_limit_delay: float = 0.0,
         free_tier_delay: float = 5.0,
+        output_file: Optional[str] = None,
     ) -> list[ExperimentResult]:
         """
         Run complete experiment across providers, test cases, and strategies.
@@ -276,6 +281,7 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
             prompt_strategies: Different prompting approaches to test
             rate_limit_delay: Seconds to wait between API calls (paid models, default 0)
             free_tier_delay: Seconds to wait between API calls (free-tier models, default 5s)
+            output_file: Optional filename to save results incrementally (recommended!)
 
         Returns:
             List of ExperimentResults
@@ -284,10 +290,36 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
         total = len(providers) * len(test_cases) * len(prompt_strategies)
         completed = 0
 
+        # Setup output file path if provided
+        output_path = None
+        if output_file:
+            output_dir = Path(__file__).parent / "results"
+            output_dir.mkdir(exist_ok=True)
+            output_path = output_dir / output_file
+
+            # Load existing results if file exists (resume support)
+            if output_path.exists():
+                print(f"Found existing results file: {output_path}")
+                print("Loading previous results...")
+                try:
+                    with open(output_path) as f:
+                        data = json.load(f)
+                        existing_results = data.get("results", [])
+                        # Convert dicts back to ExperimentResult objects
+                        for r in existing_results:
+                            results.append(ExperimentResult(**r))
+                        print(f"Loaded {len(results)} existing results")
+                except Exception as e:
+                    print(f"Warning: Could not load existing results: {e}")
+                    print("Starting fresh...")
+                    results = []
+
         print(f"Starting experiment: {total} total evaluations")
         print(f"Providers: {[p.get_model_name() for p in providers]}")
         print(f"Test cases: {len(test_cases)}")
         print(f"Strategies: {[s.name for s in prompt_strategies]}")
+        if output_path:
+            print(f"Saving to: {output_path}")
         print()
 
         for provider in providers:
@@ -339,6 +371,10 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
                                 warnings=[],
                             )
                         )
+
+                    # Save incrementally after each result
+                    if output_path:
+                        self._save_results_to_file(results, output_path)
 
                     # Rate limiting (longer delay for free-tier models)
                     delay = (
@@ -441,15 +477,36 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
         """
         Check if two queries are semantically equivalent.
 
-        For now, just normalized string comparison.
-        TODO: Parse and compare ASTs, or execute and compare results.
+        Handles variable renaming: $asker vs $speaker are equivalent.
         """
+        import re
+
+        def normalize_variables(q: str) -> str:
+            """Replace pattern variables with canonical names based on order of appearance."""
+            # Find all pattern variables ($variable)
+            variables = re.findall(r"\$\w+", q)
+
+            # Create mapping: first unique var -> $var0, second -> $var1, etc.
+            var_mapping = {}
+            var_counter = 0
+
+            for var in variables:
+                if var not in var_mapping:
+                    var_mapping[var] = f"$var{var_counter}"
+                    var_counter += 1
+
+            # Replace variables with canonical names
+            result = q
+            for original, canonical in var_mapping.items():
+                result = result.replace(original, canonical)
+
+            return result
 
         def normalize(q: str) -> str:
-            # Remove extra whitespace
-            import re
-
-            return re.sub(r"\s+", " ", q.strip().lower())
+            # Normalize whitespace and case
+            normalized = re.sub(r"\s+", " ", q.strip().lower())
+            # Normalize variable names
+            return normalize_variables(normalized)
 
         return normalize(query1) == normalize(query2)
 
@@ -474,13 +531,10 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
 
         return previous_row[-1]
 
-    def save_results(self, results: list[ExperimentResult], filename: str) -> None:
-        """Save experiment results to JSON file."""
-        output_dir = Path(__file__).parent / "results"
-        output_dir.mkdir(exist_ok=True)
-
-        output_path = output_dir / filename
-
+    def _save_results_to_file(
+        self, results: list[ExperimentResult], output_path: Path
+    ) -> None:
+        """Internal method to save results to file (used for incremental saves)."""
         # Convert to dict for JSON serialization
         data = {
             "timestamp": datetime.now().isoformat(),
@@ -488,9 +542,21 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
             "results": [asdict(r) for r in results],
         }
 
-        with open(output_path, "w") as f:
+        # Write atomically (write to temp file, then rename)
+        temp_path = output_path.with_suffix(".tmp")
+        with open(temp_path, "w") as f:
             json.dump(data, f, indent=2)
 
+        # Atomic rename (safer than direct write)
+        temp_path.replace(output_path)
+
+    def save_results(self, results: list[ExperimentResult], filename: str) -> None:
+        """Save experiment results to JSON file."""
+        output_dir = Path(__file__).parent / "results"
+        output_dir.mkdir(exist_ok=True)
+        output_path = output_dir / filename
+
+        self._save_results_to_file(results, output_path)
         print(f"Results saved to {output_path}")
 
 

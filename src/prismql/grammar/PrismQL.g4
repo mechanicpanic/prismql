@@ -13,7 +13,18 @@ body
 
 query_seq
     :
-    '(' query ')' ( ';' '(' query ')' )*
+    '(' query ')' query_seq_continuation*
+    ;
+
+query_seq_continuation
+    :
+    ';' '(' query ')'                                      # UnorderedSubquery
+    | positional_op '(' query ')' Within number            # PositionalSubquery
+    ;
+
+positional_op
+    :
+    FollowedBy | PrecededBy | NotFollowedBy | NotPrecededBy
     ;
 
 restrictions

@@ -10,8 +10,13 @@ import json
 import sys
 from pathlib import Path
 
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-def show_chain_of_thought(
+from experiments.test_cases import ALL_TEST_CASES
+
+
+def show_chain_of_thought(  # noqa: C901
     results_file: str, test_case_filter: str | None = None
 ) -> None:
     """Display chain-of-thought from experiment results."""
@@ -25,6 +30,9 @@ def show_chain_of_thought(
         data = json.load(f)
 
     results = data.get("results", [])
+
+    # Build test case lookup
+    test_case_map = {tc.id: tc for tc in ALL_TEST_CASES}
 
     print("=" * 80)
     print("CHAIN-OF-THOUGHT ANALYSIS")
@@ -54,6 +62,17 @@ def show_chain_of_thought(
         print(f"Strategy: {result['prompt_strategy']}")
         print(f"{'=' * 80}\n")
 
+        # Show test case details
+        test_case_id = result["test_case_id"]
+        if test_case_id in test_case_map:
+            tc = test_case_map[test_case_id]
+            print("--- Test Description ---")
+            print(f"{tc.description}")
+            print()
+            print("--- Ground Truth Query ---")
+            print(f"{tc.ground_truth_query}")
+            print()
+
         # Show all attempts with CoT
         for i, attempt in enumerate(result.get("attempts", []), 1):
             cot = attempt.get("chain_of_thought")
@@ -73,9 +92,23 @@ def show_chain_of_thought(
             print(final_cot)
             print()
 
+        print("--- Results ---")
         print(f"Syntax Correct: {result['syntax_correct']}")
         print(f"Semantically Correct: {result['semantically_correct']}")
-        print(f"Edit Distance: {result['edit_distance_from_ground_truth']}")
+        print(
+            f"Edit Distance from Ground Truth: {result['edit_distance_from_ground_truth']}"
+        )
+
+        # Show final query vs ground truth comparison
+        final_query = result.get("final_query", "")
+        if test_case_id in test_case_map:
+            gt_query = test_case_map[test_case_id].ground_truth_query
+            if final_query and final_query.strip().lower() == gt_query.strip().lower():
+                print("Match: ✓ Generated query matches ground truth exactly")
+            elif final_query:
+                print("Match: ✗ Generated query differs from ground truth")
+                print(f"  Expected: {gt_query}")
+                print(f"  Got:      {final_query}")
         print()
 
     print("=" * 80)

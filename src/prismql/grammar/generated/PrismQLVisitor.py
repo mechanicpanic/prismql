@@ -22,6 +22,18 @@ class PrismQLVisitor(ParseTreeVisitor):
     def visitQuery_seq(self, ctx: PrismQLParser.Query_seqContext):
         return self.visitChildren(ctx)
 
+    # Visit a parse tree produced by PrismQLParser#UnorderedSubquery.
+    def visitUnorderedSubquery(self, ctx: PrismQLParser.UnorderedSubqueryContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#PositionalSubquery.
+    def visitPositionalSubquery(self, ctx: PrismQLParser.PositionalSubqueryContext):
+        return self.visitChildren(ctx)
+
+    # Visit a parse tree produced by PrismQLParser#positional_op.
+    def visitPositional_op(self, ctx: PrismQLParser.Positional_opContext):
+        return self.visitChildren(ctx)
+
     # Visit a parse tree produced by PrismQLParser#restrictions.
     def visitRestrictions(self, ctx: PrismQLParser.RestrictionsContext):
         return self.visitChildren(ctx)

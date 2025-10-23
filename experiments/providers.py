@@ -66,11 +66,17 @@ class AnthropicProvider(LLMProvider):
     ) -> tuple[str, Optional[str]]:
         """Generate completion using Anthropic API."""
         # Use extended thinking if enabled
-        thinking_config = (
-            {"type": "enabled", "budget_tokens": 5000}
-            if self.extended_thinking
-            else {"type": "disabled"}
-        )
+        # budget_tokens must be >= 1024 and < max_tokens
+        if self.extended_thinking:
+            # Need at least 1024 for thinking + some for response
+            thinking_budget = max(1024, min(max_tokens - 200, 2000))
+            if max_tokens <= 1224:  # 1024 + 200 minimum
+                # Not enough room for thinking, disable it
+                thinking_config = {"type": "disabled"}
+            else:
+                thinking_config = {"type": "enabled", "budget_tokens": thinking_budget}
+        else:
+            thinking_config = {"type": "disabled"}
 
         response = self.client.messages.create(
             model=self.model,
@@ -86,7 +92,12 @@ class AnthropicProvider(LLMProvider):
 
         for block in response.content:
             if block.type == "thinking":
-                thinking_text += block.thinking + "\n"
+                # Thinking blocks use 'thinking' attribute for content
+                if hasattr(block, "thinking"):
+                    thinking_text += block.thinking + "\n"
+                elif hasattr(block, "text"):
+                    # Fallback to 'text' attribute if 'thinking' doesn't exist
+                    thinking_text += block.text + "\n"
             elif block.type == "text":
                 content_text += block.text
 

@@ -152,12 +152,15 @@ def run_quick_test():
 
     harness = ExperimentHarness()
 
-    # Create provider
-    provider_type, model_id = MODELS["sonnet-4.5"]
-    provider = create_provider(provider_type, model_id, api_key)
+    # Create provider (use create_provider_for_model for correct settings)
+    provider = create_provider_for_model("sonnet-4.5", api_key)
 
     # Just 5 easy test cases
     test_cases = get_test_cases_by_difficulty("easy")[:5]
+
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"quick_test_{timestamp}.json"
 
     results = harness.run_experiment(
         providers=[provider],
@@ -165,12 +168,8 @@ def run_quick_test():
         prompt_strategies=[ZERO_SHOT_STRATEGY],
         # No rate limiting for paid models (default 0.0)
         free_tier_delay=5.0,
+        output_file=filename,  # Save incrementally!
     )
-
-    # Save results
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"quick_test_{timestamp}.json"
-    harness.save_results(results, filename)
 
     # Analyze
     tc_map = {
@@ -211,10 +210,11 @@ def run_full_experiment():
 
     # Create providers for all models
     providers = []
-    for name, (provider_type, model_id) in MODELS.items():
+    for name, (provider_type, _) in MODELS.items():
         api_key = api_keys.get(provider_type)
         if api_key:
-            providers.append(create_provider(provider_type, model_id, api_key))
+            # Use create_provider_for_model to get correct thinking/reasoning settings
+            providers.append(create_provider_for_model(name, api_key))
         else:
             print(f"Skipping {name}: {provider_type.upper()}_API_KEY not set")
 
@@ -225,22 +225,22 @@ def run_full_experiment():
         print("  - OPENROUTER_API_KEY")
         sys.exit(1)
 
-    results = harness.run_experiment(
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"full_experiment_{timestamp}.json"
+
+    _ = harness.run_experiment(
         providers=providers,
         test_cases=ALL_TEST_CASES,
         prompt_strategies=ALL_STRATEGIES,
         # No rate limiting for paid models (default 0.0)
         free_tier_delay=10.0,
+        output_file=filename,  # Save incrementally!
     )
 
-    # Save results
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"full_experiment_{timestamp}.json"
-    harness.save_results(results, filename)
-
-    print(f"\n\nResults saved to: {filename}")
+    print(f"\n\nResults saved to: experiments/results/{filename}")
     print(
-        "Run analysis with: python experiments/run_experiment.py --analyze {filename}"
+        f"Run analysis with: python experiments/run_experiment.py --analyze experiments/results/{filename}"
     )
 
 
@@ -260,13 +260,14 @@ def run_custom_experiment(model_names, strategy_names, test_case_filter):
             print(f"WARNING: Unknown model '{name}', skipping")
             continue
 
-        provider_type, model_id = MODELS[name]
+        provider_type, _ = MODELS[name]
         api_key = api_keys.get(provider_type)
         if not api_key:
             print(f"Skipping {name}: {provider_type.upper()}_API_KEY not set")
             continue
 
-        providers.append(create_provider(provider_type, model_id, api_key))
+        # Use create_provider_for_model to get correct thinking/reasoning settings
+        providers.append(create_provider_for_model(name, api_key))
 
     if not providers:
         print(f"ERROR: No valid providers. Available models: {list(MODELS.keys())}")
@@ -299,18 +300,18 @@ def run_custom_experiment(model_names, strategy_names, test_case_filter):
 
     harness = ExperimentHarness()
 
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"custom_experiment_{timestamp}.json"
+
     results = harness.run_experiment(
         providers=providers,
         test_cases=test_cases,
         prompt_strategies=strategies,
         # No rate limiting for paid models (default 0.0)
         free_tier_delay=10.0,
+        output_file=filename,  # Save incrementally!
     )
-
-    # Save results
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"custom_experiment_{timestamp}.json"
-    harness.save_results(results, filename)
 
     # Analyze
     tc_map = {
