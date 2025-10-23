@@ -10,15 +10,15 @@
 
 - ✅ **Phase 1.1:** Aggregation operators (COUNT, SUM, AVG, MIN, MAX, DISTINCT, GROUP BY, ORDER BY, LIMIT)
 - ✅ **Phase 1.2:** Temporal operators (BEFORE, AFTER, BETWEEN, temporal grouping by HOUR/DAY/WEEK/MONTH/YEAR)
-- 🚧 **Phase 1.3:** Advanced pattern matching (in progress)
+- ✅ **Phase 1.3:** Advanced pattern matching (COMPLETE)
   - ✅ Pattern Variables (backreferences with $var syntax)
   - ✅ Named Pattern Groups (AS keyword for labeling)
   - ✅ Negative Patterns (NOT operator in sequences)
   - ✅ Counting Constraints (quantifiers)
-  - ⏳ Lookahead/Lookbehind (context-aware matching)
+  - ✅ Lookahead/Lookbehind (context-aware matching with bug fixes)
 
-**Test Coverage:** 249 tests passing (223 + 26 new)
-**Last Updated:** 2025-10-20
+**Test Coverage:** 331 tests passing (all features + bug fixes)
+**Last Updated:** 2025-10-23
 
 ---
 
@@ -119,6 +119,8 @@ AGGREGATE count()
    - "alice then bob, but NOT if charlie spoke 5 messages before alice"
    - Four operators: FOLLOWED_BY, PRECEDED_BY, NOT_FOLLOWED_BY, NOT_PRECEDED_BY
    - Position-based windows over full message sequence
+   - **Returns complete sequences**: `[[1, 2], [3, 4]]` pairs instead of just LHS messages
+   - **Chained sequences supported**: `A FOLLOWED_BY B WITHIN 3 FOLLOWED_BY C WITHIN 3` returns triples
    - 27 comprehensive tests covering all use cases
    - See [LOOKAHEAD_LOOKBEHIND.md](LOOKAHEAD_LOOKBEHIND.md) for documentation
 
@@ -129,6 +131,29 @@ AGGREGATE count()
 - [x] Add support for all four operator variants
 - [x] Create comprehensive test suite (27 tests)
 - [x] Document with examples
+- [x] Fix FOLLOWED_BY to return complete sequences (commit 3a00cd6)
+- [x] Fix variable constraints with quantifiers (commit 3a00cd6)
+
+**Recent Bug Fixes (Commit 3a00cd6):**
+
+1. **FOLLOWED_BY now returns complete sequences** ✅
+   - **Before**: Returned only LHS messages `[[1], [3]]`
+   - **After**: Returns complete pairs `[[1, 2], [3, 4]]`
+   - Chained operators return complete sequences: `[[1, 2, 3], [4, 5, 6]]`
+   - Implementation: Changed `visitRestriction()` return type to support both sets and lists
+   - Added `_create_sequential_pairs()` and `_extend_sequences_*()` helper methods
+
+2. **Variable constraints with quantifiers** ✅
+   - **Before**: `SELECT from($user){2} INWIN 10` could return `[alice, bob]` (mixed users)
+   - **After**: Only returns `[alice, alice]` or `[bob, bob]` (same user)
+   - Implementation: Track and duplicate variable constraints for each quantifier position
+   - Known limitation: Window processor's greedy algorithm may miss some valid combinations
+
+3. **Demo enhancements** ✅
+   - Added "Understanding INWIN (Important!)" section to explain common pitfalls
+   - INWIN is unordered - finds ANY combination of messages within window
+   - Example: `from(alice){2}, contains(solutions) INWIN 10` can match alice + bob's message
+   - Use AND to filter properly: `from(alice) AND contains(solutions)`
 
 ---
 
@@ -486,5 +511,6 @@ This roadmap is a living document. Contributions and feedback are welcome!
 
 ---
 
-*Last updated: 2025-10-19*
-*Current phase: 1.3 (Advanced Pattern Matching)*
+*Last updated: 2025-10-23*
+*Current phase: 1.3 (Advanced Pattern Matching - COMPLETE)*
+*Latest commit: 3a00cd6 - FOLLOWED_BY bug fixes and variable constraint improvements*
