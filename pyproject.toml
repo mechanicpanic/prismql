@@ -39,7 +39,10 @@ experiments = [
 highlighting = [
     "pygments>=2.0.0",
 ]
-all = ["prismql[opensearch,elasticsearch,nlp]"]
+repl = [
+    "prompt_toolkit>=3.0.0",
+]
+all = ["prismql[opensearch,elasticsearch,nlp,repl,highlighting]"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -56,6 +59,9 @@ Homepage = "https://github.com/prismql/prismql"
 Documentation = "https://prismql.readthedocs.io"
 Repository = "https://github.com/prismql/prismql"
 Issues = "https://github.com/prismql/prismql/issues"
+
+[project.scripts]
+prismql = "prismql.repl:main"
 
 [project.entry-points."pygments.lexers"]
 prismql = "prismql.highlighting:PrismQLLexer"
@@ -140,6 +146,7 @@ ignore = [
 "examples/llm_query_validation.py" = ["E501", "ARG001", "RET505"]  # Long strings, unused arg in mock, unnecessary elif
 "tests/test_validator.py" = ["F841"]  # Unused variable in test
 "experiments/*.py" = ["E501", "ANN001", "ANN201", "ANN204", "E402", "A003", "C401"]  # Experiments: long lines, annotations, imports after path, id shadowing, comprehension
+"src/prismql/repl.py" = ["C901"]  # REPL complexity acceptable
 
 [tool.mypy]
 python_version = "3.9"
