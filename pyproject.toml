@@ -42,7 +42,10 @@ highlighting = [
 repl = [
     "prompt_toolkit>=3.0.0",
 ]
-all = ["prismql[opensearch,elasticsearch,nlp,repl,highlighting]"]
+demo = [
+    "streamlit>=1.28.0",
+]
+all = ["prismql[opensearch,elasticsearch,nlp,repl,highlighting,demo]"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -147,6 +150,7 @@ ignore = [
 "tests/test_validator.py" = ["F841"]  # Unused variable in test
 "experiments/*.py" = ["E501", "ANN001", "ANN201", "ANN204", "E402", "A003", "C401"]  # Experiments: long lines, annotations, imports after path, id shadowing, comprehension
 "src/prismql/repl.py" = ["C901"]  # REPL complexity acceptable
+"demo/*.py" = ["ANN201", "E501", "C901", "S311", "SIM118"]  # Demo code: annotations, line length, complexity, random usage, style
 
 [tool.mypy]
 python_version = "3.9"
