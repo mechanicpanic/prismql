@@ -4,12 +4,26 @@ PrismQL Interactive Demo - Streamlit Web App
 A web-based demonstration of PrismQL query language for conversational data.
 """
 
+import sys
+from pathlib import Path
+
 import streamlit as st
 from prismql.backends.memory import MemoryBackend
 from prismql.engine import PrismQLEngine
 from prismql.exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 
-from .generate_demo_data import generate_demo_conversations, get_demo_dictionaries
+# Handle imports when running directly vs as module
+try:
+    from demo.generate_demo_data import (
+        generate_demo_conversations,
+        get_demo_dictionaries,
+    )
+except ModuleNotFoundError:
+    # Add demo directory to path when running directly
+    demo_dir = Path(__file__).parent
+    if str(demo_dir) not in sys.path:
+        sys.path.insert(0, str(demo_dir))
+    from generate_demo_data import generate_demo_conversations, get_demo_dictionaries
 
 # Page configuration
 st.set_page_config(
@@ -152,26 +166,37 @@ def main():
         for dict_name in engine.user_dictionaries.keys():
             st.code(dict_name, language=None)
 
+    # Custom CSS for monospace input
+    st.markdown(
+        """
+        <style>
+        textarea[aria-label="Enter your PrismQL query:"] {
+            font-family: 'Courier New', Courier, monospace !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     # Main query interface
-    col1, col2 = st.columns([3, 1])
+    query = st.text_area(
+        "Enter your PrismQL query:",
+        value=st.session_state.get("query", "SELECT from(alice)"),
+        height=100,
+        key="query_input",
+        help="Type a PrismQL query or select an example from the sidebar",
+    )
 
+    # Buttons in columns for horizontal layout
+    col1, col2 = st.columns([1, 1])
     with col1:
-        query = st.text_area(
-            "Enter your PrismQL query:",
-            value=st.session_state.get("query", "SELECT from(alice)"),
-            height=100,
-            key="query_input",
-            help="Type a PrismQL query or select an example from the sidebar",
-        )
-
-    with col2:
-        st.markdown("###")
         run_button = st.button("▶️ Run Query", type="primary", use_container_width=True)
+    with col2:
         clear_button = st.button("🗑️ Clear", use_container_width=True)
 
-        if clear_button:
-            st.session_state.query = ""
-            st.rerun()
+    if clear_button:
+        st.session_state.query = ""
+        st.rerun()
 
     # Update session state
     if query != st.session_state.get("query", ""):
