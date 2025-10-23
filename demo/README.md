@@ -29,14 +29,16 @@ The app will open in your browser at `http://localhost:8501`
 
 ### Deploy to Streamlit Cloud (Free)
 
-1. **Fork/Clone this repository**
+**Note:** Streamlit Cloud works with both public and private repositories. For private repos, you'll need to authorize Streamlit to access your GitHub account.
 
-2. **Go to [share.streamlit.io](https://share.streamlit.io)**
+1. **Go to [share.streamlit.io](https://share.streamlit.io)**
+
+2. **Sign in with GitHub** and authorize Streamlit
 
 3. **Click "New app"**
 
 4. **Configure deployment:**
-   - Repository: `your-username/prismql`
+   - Repository: `your-username/prismql` (your private or public repo will appear in the list)
    - Branch: `main`
    - Main file path: `demo/app.py`
    - Python version: `3.9+`
@@ -44,6 +46,8 @@ The app will open in your browser at `http://localhost:8501`
 5. **Click "Deploy"**
 
 Your demo will be live at `https://your-app-name.streamlit.app` in ~2 minutes!
+
+**For private repositories:** The deployed app will be publicly accessible, but the source code remains private in your GitHub repo.
 
 ## Demo Dataset
 
@@ -212,6 +216,22 @@ CMD ["streamlit", "run", "demo/app.py"]
 docker build -t prismql-demo .
 docker run -p 8501:8501 prismql-demo
 ```
+
+### Quick Share (Temporary Demo)
+
+For quick demos without deployment, use ngrok to share your local instance:
+
+```bash
+# Run the app locally
+streamlit run demo/app.py
+
+# In another terminal, expose it with ngrok
+ngrok http 8501
+```
+
+This gives you a public URL (e.g., `https://abc123.ngrok.io`) that you can share. The tunnel stays active while ngrok is running.
+
+**Note:** Free ngrok URLs are temporary and change each time you restart ngrok.
 
 ## Troubleshooting
 
