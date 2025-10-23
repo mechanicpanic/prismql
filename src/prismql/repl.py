@@ -79,6 +79,30 @@ class PrismQLRepl:
             self.lexer = None
             self.style = None
 
+    def _fetch_message(self, msg_id: Any) -> Optional[dict[str, Any]]:
+        """Fetch a single message by ID from the backend."""
+        try:
+            # Get the document from backend
+            docs = self.engine.search_backend.get_documents([msg_id])
+            return docs[0] if docs else None
+        except Exception:
+            return None
+
+    def _format_message(self, msg_id: Any, doc: Optional[dict[str, Any]]) -> str:
+        """Format a single message for display."""
+        if not doc:
+            return f"[{msg_id}]"
+
+        # Extract key fields
+        user = doc.get("user", "?")
+        text = doc.get("text", doc.get("content", ""))
+
+        # Truncate long text
+        if len(text) > 60:
+            text = text[:57] + "..."
+
+        return f"[{msg_id}] {user}: {text}"
+
     def format_result(self, result: Any) -> str:
         """Format query result for display."""
         if isinstance(result, list):
@@ -89,7 +113,10 @@ class PrismQLRepl:
             if all(isinstance(item, list) for item in result):
                 output = [f"Found {len(result)} result(s):\n"]
                 for i, group in enumerate(result, 1):
-                    output.append(f"  {i}. {group}")
+                    output.append(f"  Group {i}:")
+                    for msg_id in group:
+                        doc = self._fetch_message(msg_id)
+                        output.append(f"    {self._format_message(msg_id, doc)}")
                 return "\n".join(output)
 
             # Plain list
@@ -98,18 +125,16 @@ class PrismQLRepl:
         if isinstance(result, NamedQueryResult):
             output = [f"Found {len(result.results)} result(s):\n"]
             for i, group in enumerate(result.results, 1):
-                # Show pattern names if available
+                output.append(f"  Group {i}:")
                 names = result.pattern_names
-                if names and any(n is not None for n in names):
-                    named_items = []
-                    for msg_id, name in zip(group, names):
-                        if name:
-                            named_items.append(f"{name}={msg_id}")
-                        else:
-                            named_items.append(str(msg_id))
-                    output.append(f"  {i}. [{', '.join(named_items)}]")
-                else:
-                    output.append(f"  {i}. {group}")
+                for j, msg_id in enumerate(group):
+                    doc = self._fetch_message(msg_id)
+                    msg_str = self._format_message(msg_id, doc)
+                    # Add pattern name if available
+                    if j < len(names) and names[j]:
+                        output.append(f"    {names[j]}: {msg_str}")
+                    else:
+                        output.append(f"    {msg_str}")
             return "\n".join(output)
 
         if isinstance(result, AggregateResult):
@@ -230,6 +255,18 @@ Press Ctrl+D or type \\quit to exit.
         """Run the REPL loop."""
         print("PrismQL Interactive REPL")
         print("Type \\help for help, \\quit to exit")
+
+        # Show enabled features
+        features = []
+        if HAS_PROMPT_TOOLKIT:
+            features.append("history")
+        if HAS_SYNTAX_HIGHLIGHTING:
+            features.append("syntax highlighting")
+        if features:
+            print(f"Features: {', '.join(features)}")
+        else:
+            print("Tip: Install extras for enhanced experience:")
+            print("  uv pip install '.[repl,highlighting]'")
         print()
 
         while True:
