@@ -96,9 +96,12 @@ Note: Generated files in `src/prismql/grammar/generated/` are excluded from lint
 - Implements boolean operations on message ID sets (AND=intersection, OR=union, NOT=difference)
 - Key methods:
   - `visitCondition()`: Evaluates individual conditions (e.g., `from(alice)`, `is_question()`)
-  - `visitRestriction()`: Handles boolean logic between conditions
-  - `visitRestrictions()`: Processes comma-separated restrictions
+  - `visitRestriction()`: Returns `Union[set[MessageId], list[MessageGroup]]` - handles both normal restrictions (sets) and sequential operators (lists of pairs)
+  - `visitRestrictions()`: Returns `tuple[list[MessageGroup], bool]` - processes comma-separated restrictions and tracks if result is sequential
   - `_merge_restrictions()`: Applies window-based merging
+  - `_create_sequential_pairs()`: Creates message pairs for FOLLOWED_BY/PRECEDED_BY
+  - `_extend_sequences_followed_by()`: Extends sequences for chained FOLLOWED_BY
+  - `_extend_sequences_preceded_by()`: Extends sequences for chained PRECEDED_BY
 
 ### 3. Backend Abstraction
 
@@ -178,6 +181,97 @@ Note: Generated files in `src/prismql/grammar/generated/` are excluded from lint
 
 ## Important Implementation Notes
 
+### FOLLOWED_BY and PRECEDED_BY Return Complete Sequences
+
+**IMPORTANT**: As of commit `3a00cd6`, FOLLOWED_BY and PRECEDED_BY now return complete message sequences (pairs/triples/etc), not just the LHS messages.
+
+```python
+# Query: SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
+# OLD behavior: [[1], [3]]  # Just alice messages
+# NEW behavior: [[1, 2], [3, 4]]  # Complete pairs [alice, bob]
+
+# Chained sequences also work:
+# Query: SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3 FOLLOWED_BY from(charlie) WITHIN 3
+# Returns: [[1, 2, 3], [4, 5, 6]]  # Complete triples
+```
+
+**Why this matters**:
+- Tests in `test_lookahead_lookbehind.py` expect pairs, not individual messages
+- `flatten()` helper is used in tests to get all IDs from result groups
+- PRECEDED_BY returns pairs in chronological order: `[earlier_msg, later_msg]`
+
+**Implementation details**:
+- `visitRestriction()` returns `list[MessageGroup]` for sequential operators
+- `visitRestrictions()` checks if result is sequential and skips window merging
+- `_create_sequential_pairs()` builds the actual pairs
+- Chained operators use `_extend_sequences_*()` to append/prepend to existing sequences
+
+### INWIN is Unordered (Critical Understanding!)
+
+**INWIN finds ANY combination of messages within the window**, even if they satisfy different restrictions.
+
+```python
+# This query is often misunderstood:
+# SELECT from(alice){2}, contains(solutions) INWIN 10
+
+# What it means:
+# - 2 messages from alice
+# - 1 message containing "solutions"
+# - The "solutions" message can be from ANYONE (alice, bob, support, etc.)
+
+# Example result: [27:bob, 35:alice, 37:alice]
+# - 27 is bob with "password" (in solutions dictionary)
+# - 35 and 37 are both alice
+
+# To filter properly, use AND:
+# SELECT from(alice) AND contains(solutions)  # Only alice's messages with solutions
+```
+
+**Common patterns**:
+```sql
+-- ❌ WRONG: Finds alice messages + any solution message
+SELECT from(alice){2}, contains(solutions) INWIN 10
+
+-- ✅ RIGHT: Finds only alice's messages that contain solutions
+SELECT from(alice) AND contains(solutions)
+
+-- ✅ RIGHT: Finds 2 alice messages, both containing solutions
+SELECT (from(alice) AND contains(solutions)){2} INWIN 10
+
+-- ✅ RIGHT: Finds 2 alice messages, at least one with solutions
+SELECT (from(alice) AND contains(solutions)), from(alice) INWIN 10
+```
+
+### Variable Constraints with Quantifiers
+
+Pattern variables with quantifiers now correctly enforce same-value constraints:
+
+```python
+# Query: SELECT from($user){2} INWIN 10
+# OLD behavior: Could return [alice, bob] (mixed users)
+# NEW behavior: Only returns [alice, alice] or [bob, bob] (same user)
+```
+
+**How it works**:
+- Variable constraints are tracked during `visitCondition()` (e.g., `from($user)`)
+- Quantifier expansion in `visitRestrictions()` duplicates constraints for each position
+- `VariableValidator` filters results where variables don't match
+
+**Known limitation**: Window processor's greedy algorithm may miss some valid combinations. For more reliable results, use specific users: `SELECT from(alice){2} INWIN 10`
+
+### Operator Compatibility
+
+**Sequential operators (FOLLOWED_BY, PRECEDED_BY) cannot be combined with AND/OR**:
+```python
+# ❌ ERROR: AND operator cannot be used with sequential operators
+SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3 AND contains(greetings)
+
+# ✅ CORRECT: Put conditions inside the sequence
+SELECT (from(alice) AND contains(greetings)) FOLLOWED_BY from(bob) WITHIN 3
+```
+
+**Reason**: Sequential operators return `list[MessageGroup]` while AND/OR require `set[MessageId]`
+
 ### Message ID Sets
 All backend search methods return `set[MessageId]` to enable efficient set operations:
 - AND = intersection (`&`)
@@ -220,6 +314,68 @@ The window merge algorithm (WindowProcessor) is critical for performance:
 - Strict mode enabled
 - Disallows untyped defs
 - Ignores: antlr4, grammar/generated modules
+
+## Demo Application
+
+The Streamlit demo (`demo/app.py`) provides an interactive interface for testing PrismQL queries.
+
+### Running the Demo
+```bash
+streamlit run demo/app.py
+```
+
+### Demo Features
+- **Interactive query editor** with monospace font
+- **Syntax highlighting** using Pygments
+- **Example queries** organized by category:
+  - Basic Queries
+  - Boolean Operations
+  - Window Patterns
+  - Sequential Patterns (FOLLOWED_BY)
+  - Pattern Variables
+  - Quantifiers
+  - Advanced
+  - **Understanding INWIN (Important!)** - explains common pitfalls
+- **Dataset viewer** (`pages/01_📊_View_Dataset.py`)
+- **Result formatting** with message details
+
+### Understanding INWIN Section
+
+Added in commit `3a00cd6` to help users understand a common pitfall:
+
+The demo includes a dedicated section showing:
+- ❌ Common mistake: `SELECT from(alice){2}, contains(solutions) INWIN 10`
+- ✅ Correct alternatives using AND
+- Info box explaining INWIN is unordered
+
+This section was added because users often expect `from(alice){2}, contains(solutions) INWIN 10` to only return alice's messages, but it actually finds ANY 3 messages within window (2 from alice + 1 with solutions from anyone).
+
+## Recent Changes (Commit 3a00cd6)
+
+### Bug Fixes
+1. **FOLLOWED_BY returns complete sequences** ✅
+   - Previously returned only LHS messages `[[1], [3]]`
+   - Now returns complete pairs `[[1, 2], [3, 4]]`
+   - Chained sequences work: `[[1, 2, 3], [4, 5, 6]]`
+
+2. **Variable constraints with quantifiers** ✅
+   - `SELECT from($user){2}` now enforces same user
+   - Invalid combinations (mixed users) filtered out
+   - Known limitation: May miss some valid combinations due to window processor
+
+3. **Grammar support for quantifiers on FOLLOWED_BY** ❌
+   - Not fixed (requires grammar restructure)
+   - Workaround: Use INWIN or explicit chaining
+
+### Implementation Changes
+- `visitRestriction()`: Return type changed to `Union[set[MessageId], list[MessageGroup]]`
+- `visitRestrictions()`: Return type changed to `tuple[list[MessageGroup], bool]`
+- Added `_extend_sequences_followed_by()` and `_extend_sequences_preceded_by()`
+- Variable constraints duplicated for each quantifier position
+
+### Test Updates
+- 7 tests in `test_lookahead_lookbehind.py` updated to expect pairs
+- All 331 tests passing
 
 ## Publishing
 
