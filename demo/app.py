@@ -136,7 +136,7 @@ EXAMPLE_QUERIES = {
     },
     "Quantifiers": {
         "Alice posting 3 times": "SELECT from(alice){3} INWIN 10",
-        "Customer posting twice then support": "SELECT from(alice){2} FOLLOWED_BY from(support_sarah) WITHIN 5",
+        "Same user posting twice": "SELECT from($user){2} INWIN 10",
         "User posting 3+ times": "SELECT from($user){3} INWIN 5",
     },
     "Advanced": {
