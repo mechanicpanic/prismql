@@ -12,6 +12,16 @@ from prismql.backends.memory import MemoryBackend
 from prismql.engine import PrismQLEngine
 from prismql.exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 
+# Try to import syntax highlighting
+try:
+    from prismql.highlighting import PrismQLLexer
+    from pygments import highlight
+    from pygments.formatters import HtmlFormatter
+
+    HAS_HIGHLIGHTING = True
+except ImportError:
+    HAS_HIGHLIGHTING = False
+
 # Handle imports when running directly vs as module
 try:
     from demo.generate_demo_data import (
@@ -58,6 +68,17 @@ def format_result_group(group: list, engine: PrismQLEngine) -> str:
             msg = docs[0]
             output.append(format_message(msg))
     return "\n\n".join(output)
+
+
+def display_query_with_highlighting(query: str) -> None:
+    """Display query with syntax highlighting if available."""
+    if HAS_HIGHLIGHTING:
+        lexer = PrismQLLexer()
+        formatter = HtmlFormatter(style="monokai", noclasses=True)
+        highlighted = highlight(query, lexer, formatter)
+        st.markdown(highlighted, unsafe_allow_html=True)
+    else:
+        st.code(query, language=None)
 
 
 # Example queries organized by category
@@ -129,7 +150,7 @@ def main():
             st.markdown(f"**{category}**")
             for description, query in EXAMPLE_QUERIES[category].items():
                 if st.button(description, key=f"btn_{query}", use_container_width=True):
-                    st.session_state.query = query
+                    st.session_state.query_input = query
                     st.rerun()
 
         st.markdown("---")
@@ -179,10 +200,13 @@ def main():
         unsafe_allow_html=True,
     )
 
+    # Initialize default query if not set
+    if "query_input" not in st.session_state:
+        st.session_state.query_input = "SELECT from(alice)"
+
     # Main query interface
     query = st.text_area(
         "Enter your PrismQL query:",
-        value=st.session_state.get("query", "SELECT from(alice)"),
         height=100,
         key="query_input",
         help="Type a PrismQL query or select an example from the sidebar",
@@ -196,12 +220,8 @@ def main():
         clear_button = st.button("🗑️ Clear", use_container_width=True)
 
     if clear_button:
-        st.session_state.query = ""
+        st.session_state.query_input = ""
         st.rerun()
-
-    # Update session state
-    if query != st.session_state.get("query", ""):
-        st.session_state.query = query
 
     # Execute query
     if run_button and query:
@@ -211,6 +231,10 @@ def main():
 
                 # Display results
                 st.success("✅ Query executed successfully!")
+
+                # Show the query with syntax highlighting
+                with st.expander("📝 Query", expanded=False):
+                    display_query_with_highlighting(query)
 
                 # Show result count
                 if isinstance(result, list):
