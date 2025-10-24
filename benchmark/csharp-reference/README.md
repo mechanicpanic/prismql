@@ -2,12 +2,14 @@
 
 ## Attribution
 
-This implementation is based on the original work by **Yakov Kuzmin** from the PANDL 2022 paper:
-- Paper: "Pattern Matching in Dialogue Corpora Using Interval Algebra and Finite-State-Automata"
+This implementation is based on the original work by **Yakov Kuzmin**:
+- Paper: "Query Processing and Optimization for a Custom Retrieval Language"
+- Authors: Kuzmin, Smirnova, Slobodkin, Chernishev
+- Conference: PANDL 2022
 - Original repository: https://github.com/yakovypg/Chat-Corpora-Annotator
 - Original file: `Chat-Corpora-Annotator/Infrastructure/Helpers/WindowIndexer.cs`
 
-The histogram-based window merging algorithms (N+NS, N+S, P+NS, P+S) were originally developed by Yakov Kuzmin as part of his undergraduate thesis at SPbU (2020) and later published in PANDL 2022.
+The histogram-based window merging algorithms (N+NS, N+S, P+NS, P+S) were originally developed by Yakov Kuzmin as part of his undergraduate thesis at SPbU (2020) and later published at PANDL 2022.
 
 ## Modifications Made
 
