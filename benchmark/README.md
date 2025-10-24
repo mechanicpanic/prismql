@@ -53,15 +53,20 @@ python3 compare_results.py
 
 ## Verified Results (1M messages)
 
+**Hardware**: Intel Core i7-1260P (12 cores) @ 4.7GHz, 16GB RAM
+
 All implementations produce identical results:
 
-| Query | Groups | Window | Results | Rust P+S | C# P+S | Speedup |
-|-------|--------|--------|---------|----------|--------|---------|
-| Q1    | 3      | 40     | 19      | 1.0ms    | 29.6ms | 29.6x   |
-| Q2    | 5      | 40     | 3,420   | 159.9ms  | 642.7ms| 4.0x    |
-| Q3    | 6      | 60     | 6,370   | 341.0ms  | 1514.9ms| 4.4x   |
+| Query | Groups | Window | Results | Rust P+S | Rust H+P | C# P+S | Rust vs C# |
+|-------|--------|--------|---------|----------|----------|--------|------------|
+| Q1    | 3      | 40     | 19      | 1.1ms    | 2.6ms    | 29.6ms | 26.9x      |
+| Q2    | 5      | 40     | 3,420   | 157.7ms  | 4.9ms    | 642.7ms| 4.1x       |
+| Q3    | 6      | 60     | 6,370   | 442.8ms  | 8.3ms    | 1514.9ms| 3.4x      |
 
-**H+P Algorithm** (Rust-only): 50-150x faster than P+S
+**H+P Algorithm Performance**:
+- Q1 (18 results): 0.42x (slower than P+S due to overhead)
+- Q2 (3,420 results): 32.2x faster than P+S
+- Q3 (6,370 results): 53.3x faster than P+S
 
 ## Algorithm Performance Summary
 
