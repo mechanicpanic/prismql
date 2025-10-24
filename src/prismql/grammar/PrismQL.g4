@@ -69,6 +69,7 @@ condition
     | MentionsPlace '(' ')'
     | MentionsOrg '(' ')'
     | ContainsLink '(' ')'
+    | HasFeature '(' feature_name ')'
 
     // Legacy operators (backward compatibility)
     | HasWordOfDict '(' hdict ')'
@@ -154,6 +155,7 @@ time_unit
 number : INTEGER;
 hdict : STRING | VARIABLE | WILDCARD;
 huser : STRING | VARIABLE | WILDCARD;
+feature_name : STRING;
 field_name : STRING;
 
 // Keywords (case-insensitive)
@@ -214,6 +216,7 @@ MentionsTime     : 'MENTIONS_TIME'    | 'mentions_time'   | 'MENTIONSTIME' | 'me
 MentionsPlace    : 'MENTIONS_PLACE'   | 'mentions_place'  | 'MENTIONSPLACE'| 'mentionsplace';
 MentionsOrg      : 'MENTIONS_ORG'     | 'mentions_org'    | 'MENTIONSORG'  | 'mentionsorg'  ;
 ContainsLink     : 'CONTAINS_LINK'    | 'contains_link'   | 'CONTAINSLINK' | 'containslink' ;
+HasFeature       : 'HAS_FEATURE'      | 'has_feature'     | 'HASFEATURE'   | 'hasfeature'   ;
 
 // Legacy condition keywords (backward compatibility)
 HasWordOfDict    : 'HASWORDOFDICT'    | 'haswordofdict'   ;

@@ -157,72 +157,124 @@ AGGREGATE count()
 
 ---
 
-## Phase 2: NLP & Semantic Features (Medium-term - 4-6 weeks)
+## Phase 2: Feature Annotation & Semantic Queries (Medium-term - 3-4 weeks)
 
-### Phase 2.1: Enhanced NLP Operations
-**Estimated effort:** 2-3 weeks
+**Philosophy:** PrismQL is a pattern matching language, not an NLP pipeline. Features are precomputed during data ingestion from ANY source (LLMs, human annotators, NLP libraries, rule-based systems). PrismQL provides fast boolean index queries over these features.
 
-**Features:**
+### Phase 2.1: Feature Annotation Standards & Query Syntax
+**Estimated effort:** 1-2 weeks
+**Status:** ⏳ In Progress
 
-1. **Sentiment Analysis**
-   ```prismql
-   SELECT SENTIMENT(positive), SENTIMENT(negative) INWIN 5
+**What's Already Done:**
+- ✅ `PrecomputedIndexes` with `custom_features` support
+- ✅ `IndexBuilder` utilities for building indexes from annotations
+- ✅ `IndexBuilder.from_message_annotations()` - Build from embedded annotations
+- ✅ `IndexBuilder.from_separate_annotations()` - Build from external annotation DB
+- ✅ `IndexBuilder.merge()` - Combine indexes from multiple sources
+- ✅ Example: `examples/custom_features_example.py`
+- ✅ Deprecation of `NLPBackend` in favor of precomputed approach
+
+**What Needs Implementation:**
+
+1. **Standardized Feature Naming Conventions**
+   ```python
+   # Document recommended naming patterns
+   'sentiment_positive', 'sentiment_negative', 'sentiment_neutral'
+   'intent_request', 'intent_question', 'intent_confirmation'
+   'topic_bug', 'topic_feature', 'topic_documentation'
+   'priority_high', 'priority_low'
+   'action_item', 'decision', 'blocker'
    ```
-   - Positive/negative/neutral sentiment detection
-   - Integration with spaCy sentiment models
+   - Create feature taxonomy documentation
+   - Provide templates for common use cases
+   - Guidelines for consistent naming
 
-2. **Semantic Similarity**
+2. **Query Syntax for Custom Features**
    ```prismql
-   SELECT SIMILAR_TO("Can you help me?", threshold=0.8)
+   # Check if syntax already exists, otherwise implement:
+   SELECT has_feature(sentiment_positive), has_feature(intent_request) INWIN 5
+   SELECT labeled_as(action_item) FOLLOWED_BY labeled_as(decision) WITHIN 10
    ```
-   - Embedding-based similarity matching
-   - Configurable similarity thresholds
+   - Ergonomic syntax for querying custom features
+   - Integration with existing pattern matching
+   - Support in aggregations: `GROUP BY feature, COUNT(*)`
 
-3. **Intent Detection**
-   ```prismql
-   SELECT INTENT(request), INTENT(confirmation) INWIN 3
-   ```
-   - Common dialogue act classification
-   - Request, confirm, inform, question, etc.
+3. **Validation & Type Safety**
+   - Validate feature names at query time
+   - Helpful error messages when features don't exist
+   - Optional feature schema definition
 
-4. **Coreference Resolution**
-   ```prismql
-   SELECT MENTIONS_ENTITY(person, "Alice"), REFERS_TO("Alice") INWIN 3
-   ```
-   - Track entity references across messages
-   - "she", "they", "it" resolution
-
-**Dependencies:**
-- Enhanced spaCy backend
-- Sentence transformer models (for similarity)
-- Intent classification models
+4. **Documentation**
+   - Feature annotation guide
+   - Best practices for feature naming
+   - Integration patterns with various annotation sources
 
 ---
 
-### Phase 2.2: Custom NLP Pipelines
+### Phase 2.2: LLM & Annotation Platform Integration Examples
 **Estimated effort:** 1-2 weeks
 
 **Features:**
 
-1. **User-Defined Classifiers**
+1. **LLM-Based Annotation Pipelines**
    ```python
-   engine.add_classifier("is_bug_report", bug_classifier_fn)
-   ```
-   ```prismql
-   SELECT IS_BUG_REPORT(), CONTAINS(fixed) INWIN 10
-   ```
+   # Example: GPT-4 based annotation
+   def annotate_with_gpt4(messages):
+       """Generate intent, sentiment, topics from GPT-4."""
+       response = openai.chat.completions.create(
+           model="gpt-4",
+           messages=[{"role": "system", "content": ANNOTATION_PROMPT}]
+       )
+       return parse_annotations(response)
 
-2. **Custom Entity Types**
+   # Build indexes from LLM output
+   indexes = IndexBuilder.from_message_annotations(
+       annotated_messages,
+       custom_fields={'intent': None, 'sentiment': None, 'topics': list}
+   )
+   ```
+   - Example prompts for GPT-4, Claude, Llama
+   - Structured output parsing
+   - Batch processing patterns
+   - Cost optimization strategies
+
+2. **Human Annotation Platform Integration**
    ```python
-   engine.add_entity_type("product_name", product_ner_model)
+   # Example: Load from annotation database
+   annotations = db.get_annotations(conversation_id)
+   indexes = IndexBuilder.from_separate_annotations(
+       annotations,
+       custom_feature_keys=['labels', 'categories']
+   )
    ```
-   ```prismql
-   SELECT MENTIONS_ENTITY(product_name, "API")
-   ```
+   - Integration patterns for Label Studio, Prodigy, etc.
+   - Hybrid workflows (LLM + human verification)
+   - Annotation quality metrics
 
-3. **Plugin Architecture**
-   - Allow third-party NLP providers (Hugging Face, OpenAI, etc.)
-   - Standardized interface for custom processors
+3. **Rule-Based Feature Extractors**
+   ```python
+   # Example: Domain-specific extractors
+   def extract_code_features(messages):
+       """Detect code snippets, error messages, stack traces."""
+       custom_features = {
+           'has_code_block': set(),
+           'has_error_trace': set(),
+           'has_log_output': set()
+       }
+       for msg in messages:
+           if '```' in msg['text']:
+               custom_features['has_code_block'].add(msg['id'])
+           # ... more rules
+       return PrecomputedIndexes(custom_features=custom_features)
+   ```
+   - Domain-specific feature extraction examples
+   - Regex-based extractors
+   - Combining multiple extractor outputs
+
+4. **Comprehensive Examples**
+   - Customer support use case (ticket classification, sentiment tracking)
+   - Research use case (discourse analysis, conversation patterns)
+   - Team collaboration use case (decision tracking, action items)
 
 ---
 

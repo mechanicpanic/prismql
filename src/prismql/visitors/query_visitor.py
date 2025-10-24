@@ -577,6 +577,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if ctx.ContainsLink():
             return self._get_ner_messages("URL")
 
+        # Custom feature lookup
+        if ctx.HasFeature():
+            feature_name = ctx.feature_name().getText()
+            return self._get_custom_feature(feature_name)
+
         # Legacy operators (backward compatibility - DEPRECATED)
         if ctx.HasWordOfDict():
             warnings.warn(
@@ -735,6 +740,49 @@ class PrismQLVisitor(BasePrismQLVisitor):
         raise PrismQLRuntimeError(
             "NER conditions require precomputed indexes for large datasets"
         )
+
+    def _get_custom_feature(self, feature_name: str) -> set[MessageId]:
+        """
+        Get messages with a custom feature.
+
+        This looks up precomputed custom features from the indexes.
+        Features must be precomputed during data ingestion (via LLM annotations,
+        human labels, or other extraction methods).
+
+        Args:
+            feature_name: Name of the custom feature to look up
+
+        Returns:
+            Set of message IDs with this feature
+
+        Raises:
+            PrismQLRuntimeError: If feature not found in precomputed indexes
+
+        Example:
+            >>> # After building indexes with custom features like:
+            >>> # PrecomputedIndexes(custom_features={
+            >>> #     'sentiment_positive': {1, 5, 8},
+            >>> #     'intent_request': {2, 4}
+            >>> # })
+            >>> result = engine.execute("SELECT has_feature(sentiment_positive)")
+        """
+        if feature_name in self.precomputed_indexes.custom_features:
+            return self.precomputed_indexes.custom_features[feature_name]
+
+        # Feature not found - provide helpful error message
+        available_features = list(self.precomputed_indexes.custom_features.keys())
+        if available_features:
+            raise PrismQLRuntimeError(
+                f"Feature '{feature_name}' not found in precomputed indexes. "
+                f"Available features: {', '.join(available_features[:10])}"
+                + ("..." if len(available_features) > 10 else "")
+            )
+        else:
+            raise PrismQLRuntimeError(
+                f"Feature '{feature_name}' not found. No custom features have been "
+                "precomputed. Use IndexBuilder to create feature indexes from your "
+                "annotations (LLM-generated, human labels, etc.)."
+            )
 
     def _merge_restrictions(
         self, groups: list[MessageGroup], window_size: int
