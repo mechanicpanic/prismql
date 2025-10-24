@@ -11,6 +11,7 @@ Perfect for:
 """
 
 import psycopg2
+
 from prismql import IndexBuilder, PrismQLEngine
 from prismql.backends import PostgresBackend
 

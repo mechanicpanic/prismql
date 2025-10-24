@@ -3,9 +3,10 @@ Visual color legend for PrismQL syntax highlighting.
 Shows what color each syntax element gets.
 """
 
-from prismql.highlighting import PrismQLLexer
 from pygments import highlight
 from pygments.formatters import Terminal256Formatter
+
+from prismql.highlighting import PrismQLLexer
 
 
 def show_color_legend():

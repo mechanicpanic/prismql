@@ -1,6 +1,7 @@
 """Tests for PrismQL's new fluent syntax."""
 
 import pytest
+
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 

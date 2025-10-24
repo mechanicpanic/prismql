@@ -5,7 +5,6 @@ import pytest
 # Skip tests if pygments not installed
 pytest.importorskip("pygments")
 
-from prismql.highlighting import PrismQLLexer
 from pygments import highlight
 from pygments.formatters import NullFormatter
 from pygments.lexers import get_lexer_by_name
@@ -18,6 +17,8 @@ from pygments.token import (
     Punctuation,
     String,
 )
+
+from prismql.highlighting import PrismQLLexer
 
 
 class TestPrismQLLexer:

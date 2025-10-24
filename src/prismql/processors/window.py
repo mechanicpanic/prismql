@@ -7,6 +7,7 @@ from ..types import MessageGroup, QueryResult
 # Try to import Rust backend for performance
 try:
     from prismql_rust import merge_histogram_pruned, merge_p_s
+
     RUST_AVAILABLE = True
 except ImportError:
     RUST_AVAILABLE = False

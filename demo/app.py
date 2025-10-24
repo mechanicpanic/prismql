@@ -9,15 +9,18 @@ from pathlib import Path
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+from prismql import PrecomputedIndexes
 from prismql.backends.memory import MemoryBackend
 from prismql.engine import PrismQLEngine
 from prismql.exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 
 # Try to import syntax highlighting
 try:
-    from prismql.highlighting import PrismQLLexer
     from pygments import highlight
     from pygments.formatters import HtmlFormatter
+
+    from prismql.highlighting import PrismQLLexer
 
     HAS_HIGHLIGHTING = True
 except ImportError:
@@ -27,6 +30,7 @@ except ImportError:
 try:
     from demo.generate_demo_data import (
         generate_demo_conversations,
+        generate_demo_custom_features,
         get_demo_dictionaries,
     )
 except ModuleNotFoundError:
@@ -34,7 +38,11 @@ except ModuleNotFoundError:
     demo_dir = Path(__file__).parent
     if str(demo_dir) not in sys.path:
         sys.path.insert(0, str(demo_dir))
-    from generate_demo_data import generate_demo_conversations, get_demo_dictionaries
+    from generate_demo_data import (
+        generate_demo_conversations,
+        generate_demo_custom_features,
+        get_demo_dictionaries,
+    )
 
 # Page configuration
 st.set_page_config(
@@ -51,7 +59,16 @@ def load_engine():
     conversations = generate_demo_conversations()
     backend = MemoryBackend(documents=conversations)
     dictionaries = get_demo_dictionaries()
-    return PrismQLEngine(search_backend=backend, user_dictionaries=dictionaries)
+
+    # Generate custom features (simulated LLM annotations)
+    custom_features = generate_demo_custom_features(conversations)
+    indexes = PrecomputedIndexes(custom_features=custom_features)
+
+    return PrismQLEngine(
+        search_backend=backend,
+        user_dictionaries=dictionaries,
+        precomputed_indexes=indexes,
+    )
 
 
 def format_message(msg: dict) -> str:
@@ -144,6 +161,15 @@ EXAMPLE_QUERIES = {
         "Complex boolean": "SELECT (contains(problems) OR contains(questions)) AND NOT from(support_sarah)",
         "Multiple dictionaries": "SELECT contains(greetings), contains(problems), contains(questions) INWIN 10",
     },
+    "Custom Features (LLM Annotations)": {
+        "All positive sentiment": "SELECT has_feature(sentiment_positive)",
+        "Negative sentiment messages": "SELECT labeled_as(sentiment_negative)",
+        "High priority complaints": "SELECT has_feature(intent_complaint) AND has_feature(priority_high)",
+        "Question with negative sentiment": "SELECT has_feature(intent_question) AND has_feature(sentiment_negative)",
+        "Technical account issues": "SELECT has_feature(topic_technical) AND has_feature(topic_account)",
+        "Complaint then response": "SELECT has_feature(intent_complaint) FOLLOWED_BY has_feature(intent_response) WITHIN 3",
+        "Greeting then thanks": "SELECT labeled_as(intent_greeting), labeled_as(intent_thanks) INWIN 10",
+    },
     "Understanding INWIN (Important!)": {
         "❌ Common mistake": "SELECT from(alice){2}, contains(solutions) INWIN 10",
         "✅ Alice WITH solutions": "SELECT from(alice) AND contains(solutions)",
@@ -205,6 +231,8 @@ def main():
         **Operators:**
         - `from(user)` - messages from user
         - `contains(dict)` - messages with words
+        - `has_feature(name)` - custom features
+        - `labeled_as(name)` - alias for has_feature
         - `from(*)` - wildcard (all messages)
         - `AND`, `OR`, `NOT` - boolean logic
         - `FOLLOWED_BY` - sequential order
@@ -215,8 +243,9 @@ def main():
         **Examples:**
         ```prismql
         SELECT from(alice)
+        SELECT has_feature(sentiment_positive)
         SELECT from(alice) AND contains(problems)
-        SELECT from(*) FOLLOWED_BY from(bob) WITHIN 3
+        SELECT labeled_as(intent_complaint) FOLLOWED_BY from(support_sarah) WITHIN 3
         ```
         """
         )
@@ -231,6 +260,23 @@ def main():
         st.markdown("**Available Dictionaries:**")
         for dict_name in engine.user_dictionaries.keys():
             st.code(dict_name, language=None)
+
+        # Show available custom features
+        st.markdown("**Custom Features (LLM):**")
+        custom_features = list(engine.precomputed_indexes.custom_features.keys())
+        if custom_features:
+            # Show in compact columns
+            features_by_category = {}
+            for f in sorted(custom_features):
+                category = f.split("_")[0]
+                if category not in features_by_category:
+                    features_by_category[category] = []
+                features_by_category[category].append(f)
+
+            for category, features in features_by_category.items():
+                with st.expander(f"📌 {category.title()}", expanded=False):
+                    for feature in features:
+                        st.code(feature, language=None)
 
     # Custom CSS for monospace input
     st.markdown(

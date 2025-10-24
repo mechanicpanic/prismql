@@ -2,8 +2,8 @@
 """Compare results from C# and Rust benchmarks to verify correctness."""
 
 import json
-import sys
 from pathlib import Path
+
 
 def load_results(rust_file, csharp_file):
     """Load results from both JSON files."""
@@ -13,13 +13,16 @@ def load_results(rust_file, csharp_file):
         csharp_data = json.load(f)
     return rust_data, csharp_data
 
+
 def compare_algorithm(algo_name, rust_data, csharp_data):
     """Compare results for a specific algorithm."""
     rust_algo = rust_data.get(algo_name, {})
     cs_algo = csharp_data.get(algo_name, {})
 
     if not rust_algo or not cs_algo:
-        print(f"  ⚠️  {algo_name}: Missing data (Rust: {bool(rust_algo)}, C#: {bool(cs_algo)})")
+        print(
+            f"  ⚠️  {algo_name}: Missing data (Rust: {bool(rust_algo)}, C#: {bool(cs_algo)})"
+        )
         return False
 
     # Handle different field names between Rust and C#
@@ -45,8 +48,10 @@ def compare_algorithm(algo_name, rust_data, csharp_data):
 
     # Print results
     status = "✅" if count_match and results_match else "❌"
-    print(f"  {status} {algo_name:6} | Count: {rust_count:6} vs {cs_count:6} | "
-          f"Time: {rust_time:8.1f}ms vs {cs_time:8.1f}ms | Speedup: {speedup:.2f}x")
+    print(
+        f"  {status} {algo_name:6} | Count: {rust_count:6} vs {cs_count:6} | "
+        f"Time: {rust_time:8.1f}ms vs {cs_time:8.1f}ms | Speedup: {speedup:.2f}x"
+    )
 
     if not count_match:
         print(f"      ❌ Count mismatch: Rust={rust_count}, C#={cs_count}")
@@ -66,10 +71,12 @@ def compare_algorithm(algo_name, rust_data, csharp_data):
 
     return count_match and results_match
 
+
 def main():
     queries = ["q1", "q2", "q3"]
 
     import os
+
     base_dir = "/tmp/csharp-benchmark/standalone"
     if not os.getcwd().endswith("standalone"):
         os.chdir(base_dir)
@@ -85,7 +92,9 @@ def main():
 
         if not Path(rust_file).exists() or not Path(csharp_file).exists():
             print(f"⚠️  Skipping {query.upper()}: Missing files")
-            print(f"   Rust: {Path(rust_file).exists()}, C#: {Path(csharp_file).exists()}")
+            print(
+                f"   Rust: {Path(rust_file).exists()}, C#: {Path(csharp_file).exists()}"
+            )
             print()
             continue
 
@@ -104,8 +113,10 @@ def main():
         # Check H+P if present in Rust (not in C#)
         if "H+P" in rust_data:
             hp_data = rust_data["H+P"]
-            print(f"  ℹ️  H+P    | Count: {hp_data['count']:6}    | "
-                  f"Time: {hp_data['time_ms']:8.1f}ms (Rust only)")
+            print(
+                f"  ℹ️  H+P    | Count: {hp_data['count']:6}    | "
+                f"Time: {hp_data['time_ms']:8.1f}ms (Rust only)"
+            )
 
         if all_match:
             print(f"  ✅ All algorithms match for {query.upper()}!")
@@ -120,6 +131,7 @@ def main():
     print("❌ = Results differ")
     print("ℹ️ = Information only")
     print("=" * 80)
+
 
 if __name__ == "__main__":
     main()

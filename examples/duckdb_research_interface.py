@@ -11,6 +11,7 @@ This example shows all the ways to use DuckDB with PrismQL.
 """
 
 import pandas as pd
+
 from prismql import IndexBuilder, PrismQLEngine
 from prismql.backends import DuckDBBackend
 

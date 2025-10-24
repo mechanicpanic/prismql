@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from prismql.backends.base import PrecomputedIndexes
 from prismql.backends.factory import BackendFactory
 from prismql.backends.memory import MemoryBackend

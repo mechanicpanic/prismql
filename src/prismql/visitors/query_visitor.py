@@ -589,6 +589,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if ctx.HasFeature():
             feature_name = ctx.feature_name().getText()
             return self._get_custom_feature(feature_name)
+        if ctx.LabeledAs():
+            feature_name = ctx.feature_name().getText()
+            return self._get_custom_feature(feature_name)
 
         # Legacy operators (backward compatibility - DEPRECATED)
         if ctx.HasWordOfDict():
@@ -785,12 +788,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 f"Available features: {', '.join(available_features[:10])}"
                 + ("..." if len(available_features) > 10 else "")
             )
-        else:
-            raise PrismQLRuntimeError(
-                f"Feature '{feature_name}' not found. No custom features have been "
-                "precomputed. Use IndexBuilder to create feature indexes from your "
-                "annotations (LLM-generated, human labels, etc.)."
-            )
+        raise PrismQLRuntimeError(
+            f"Feature '{feature_name}' not found. No custom features have been "
+            "precomputed. Use IndexBuilder to create feature indexes from your "
+            "annotations (LLM-generated, human labels, etc.)."
+        )
 
     def _merge_restrictions(
         self, groups: list[MessageGroup], window_size: int

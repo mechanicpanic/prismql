@@ -1,6 +1,7 @@
 """Tests for aggregation, grouping, ordering, and limiting features."""
 
 import pytest
+
 from prismql import AggregateResult, GroupedResult, PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 

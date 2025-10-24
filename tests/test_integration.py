@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from prismql import PrismQLEngine
 from prismql.backends.factory import BackendFactory
 

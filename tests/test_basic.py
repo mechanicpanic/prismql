@@ -1,6 +1,7 @@
 """Basic tests for PrismQL functionality."""
 
 import pytest
+
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 from prismql.exceptions import PrismQLRuntimeError, PrismQLSyntaxError

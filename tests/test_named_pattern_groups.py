@@ -1,6 +1,7 @@
 """Tests for named pattern groups."""
 
 import pytest
+
 from prismql import NamedQueryResult, PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 

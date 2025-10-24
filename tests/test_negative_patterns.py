@@ -1,6 +1,7 @@
 """Tests for negative patterns (NOT operator in sequences)."""
 
 import pytest
+
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 
