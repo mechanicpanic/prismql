@@ -180,15 +180,18 @@ class PrismQLVisitor(BasePrismQLVisitor):
         - Unordered subqueries (semicolon-separated): collected for later INWIN merging
         - Positional subqueries (FOLLOWED_BY/PRECEDED_BY): merged sequentially
         """
-        # Get all query contexts
-        query_contexts = ctx.query()
+        # Get first query context (grammar: '(' query ')' query_seq_continuation*)
+        first_query = ctx.query()
 
-        # Get all continuations
+        # Get all continuations (each has its own query)
         continuations = (
             ctx.query_seq_continuation()
             if hasattr(ctx, "query_seq_continuation")
             else []
         )
+
+        # Build list of all query contexts
+        query_contexts = [first_query] + [cont.query() for cont in continuations]
 
         # If no continuations, just return the single query result as a list
         if not continuations:
@@ -941,8 +944,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 return rust_merge_followed_by(
                     list(lhs_messages), list(rhs_messages), window
                 )
-            except Exception:
-                # Fall back to Python on any error
+            except Exception:  # noqa: S110
+                # Fall back to Python on any error (intentional)
                 pass
 
         # Python fallback implementation
