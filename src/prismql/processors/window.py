@@ -6,7 +6,7 @@ from ..types import MessageGroup, QueryResult
 
 # Try to import Rust backend for performance
 try:
-    from prismql_rust import merge_histogram_pruned, merge_p_s
+    from prismql_rust import merge_histogram_pruned
 
     RUST_AVAILABLE = True
 except ImportError:
@@ -56,9 +56,9 @@ class WindowProcessor:
             if all_messages and all(isinstance(msg_id, int) for msg_id in all_messages):
                 # Use Rust for 50-100x speedup!
                 try:
-                    return merge_histogram_pruned(groups, window_size)
-                except Exception:
-                    # Fall back to Python on any error
+                    return merge_histogram_pruned(groups, window_size)  # type: ignore[no-any-return]
+                except Exception:  # noqa: S110
+                    # Fall back to Python on any error (intentional)
                     pass
 
         # Get all unique messages and sort them

@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from .duckdb import DuckDBBackend
     from .opensearch import OpenSearchBackend
     from .postgres import PostgresBackend
+    from .rust_memory import RustMemoryBackend
     from .spacy import SpacyBackend
 else:
     try:
@@ -27,6 +28,11 @@ else:
         from .postgres import PostgresBackend
     except ImportError:
         PostgresBackend = Any  # type: ignore[misc,assignment]
+
+    try:
+        from .rust_memory import RustMemoryBackend
+    except ImportError:
+        RustMemoryBackend = Any  # type: ignore[misc,assignment]
 
     try:
         from .spacy import SpacyBackend
@@ -46,5 +52,6 @@ __all__ = [
     "DuckDBBackend",
     "OpenSearchBackend",
     "PostgresBackend",
+    "RustMemoryBackend",
     "SpacyBackend",
 ]

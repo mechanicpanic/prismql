@@ -941,7 +941,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             and all(isinstance(msg_id, int) for msg_id in rhs_messages)
         ):
             try:
-                return rust_merge_followed_by(
+                return rust_merge_followed_by(  # type: ignore[no-any-return]
                     list(lhs_messages), list(rhs_messages), window
                 )
             except Exception:  # noqa: S110
