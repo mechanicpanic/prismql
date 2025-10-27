@@ -180,15 +180,18 @@ class PrismQLVisitor(BasePrismQLVisitor):
         - Unordered subqueries (semicolon-separated): collected for later INWIN merging
         - Positional subqueries (FOLLOWED_BY/PRECEDED_BY): merged sequentially
         """
-        # Get all query contexts
-        query_contexts = ctx.query()
+        # Get first query context (grammar: '(' query ')' query_seq_continuation*)
+        first_query = ctx.query()
 
-        # Get all continuations
+        # Get all continuations (each has its own query)
         continuations = (
             ctx.query_seq_continuation()
             if hasattr(ctx, "query_seq_continuation")
             else []
         )
+
+        # Build list of all query contexts
+        query_contexts = [first_query] + [cont.query() for cont in continuations]
 
         # If no continuations, just return the single query result as a list
         if not continuations:
@@ -589,6 +592,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if ctx.HasFeature():
             feature_name = ctx.feature_name().getText()
             return self._get_custom_feature(feature_name)
+        if ctx.LabeledAs():
+            feature_name = ctx.feature_name().getText()
+            return self._get_custom_feature(feature_name)
 
         # Legacy operators (backward compatibility - DEPRECATED)
         if ctx.HasWordOfDict():
@@ -785,12 +791,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 f"Available features: {', '.join(available_features[:10])}"
                 + ("..." if len(available_features) > 10 else "")
             )
-        else:
-            raise PrismQLRuntimeError(
-                f"Feature '{feature_name}' not found. No custom features have been "
-                "precomputed. Use IndexBuilder to create feature indexes from your "
-                "annotations (LLM-generated, human labels, etc.)."
-            )
+        raise PrismQLRuntimeError(
+            f"Feature '{feature_name}' not found. No custom features have been "
+            "precomputed. Use IndexBuilder to create feature indexes from your "
+            "annotations (LLM-generated, human labels, etc.)."
+        )
 
     def _merge_restrictions(
         self, groups: list[MessageGroup], window_size: int
@@ -936,11 +941,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
             and all(isinstance(msg_id, int) for msg_id in rhs_messages)
         ):
             try:
-                return rust_merge_followed_by(
+                return rust_merge_followed_by(  # type: ignore[no-any-return]
                     list(lhs_messages), list(rhs_messages), window
                 )
-            except Exception:
-                # Fall back to Python on any error
+            except Exception:  # noqa: S110
+                # Fall back to Python on any error (intentional)
                 pass
 
         # Python fallback implementation

@@ -1,6 +1,7 @@
 """Tests for lookahead and lookbehind positional operators."""
 
 import pytest
+
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 

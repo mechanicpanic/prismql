@@ -1,6 +1,7 @@
 """Tests for counting constraints (quantifiers) in pattern sequences."""
 
 import pytest
+
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 

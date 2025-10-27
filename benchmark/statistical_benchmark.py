@@ -5,15 +5,15 @@ Runs multiple iterations and calculates confidence intervals
 """
 
 import json
-import subprocess
-import numpy as np
-from scipy import stats
-import time
-from datetime import datetime
 import platform
-import psutil
-import os
+import subprocess
+from datetime import datetime
 from pathlib import Path
+
+import numpy as np
+import psutil
+from scipy import stats
+
 
 def get_hardware_info():
     """Gather system hardware information."""
@@ -30,15 +30,16 @@ def get_hardware_info():
 
     # Get CPU model on Linux
     try:
-        with open('/proc/cpuinfo') as f:
+        with open("/proc/cpuinfo") as f:
             for line in f:
-                if 'model name' in line:
-                    info["cpu_model"] = line.split(':')[1].strip()
+                if "model name" in line:
+                    info["cpu_model"] = line.split(":")[1].strip()
                     break
     except:
         info["cpu_model"] = platform.processor()
 
     return info
+
 
 def run_rust_benchmark(iterations=10):
     """Run Rust benchmark multiple times and collect results."""
@@ -50,15 +51,15 @@ def run_rust_benchmark(iterations=10):
         return None
 
     all_results = {
-        'Q1': {'N+NS': [], 'N+S': [], 'P+NS': [], 'P+S': [], 'H+P': []},
-        'Q2': {'N+NS': [], 'N+S': [], 'P+NS': [], 'P+S': [], 'H+P': []},
-        'Q3': {'N+NS': [], 'N+S': [], 'P+NS': [], 'P+S': [], 'H+P': []},
+        "Q1": {"N+NS": [], "N+S": [], "P+NS": [], "P+S": [], "H+P": []},
+        "Q2": {"N+NS": [], "N+S": [], "P+NS": [], "P+S": [], "H+P": []},
+        "Q3": {"N+NS": [], "N+S": [], "P+NS": [], "P+S": [], "H+P": []},
     }
 
     print(f"Running {iterations} iterations of Rust benchmark...")
 
     for i in range(iterations):
-        print(f"  Iteration {i+1}/{iterations}...", end='', flush=True)
+        print(f"  Iteration {i + 1}/{iterations}...", end="", flush=True)
 
         try:
             # Run benchmark
@@ -66,7 +67,7 @@ def run_rust_benchmark(iterations=10):
                 [rust_binary],
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minute timeout
+                timeout=300,  # 5 minute timeout
             )
 
             if result.returncode != 0:
@@ -74,17 +75,19 @@ def run_rust_benchmark(iterations=10):
                 continue
 
             # Parse output for timings
-            lines = result.stdout.split('\n')
+            lines = result.stdout.split("\n")
             current_query = None
 
             for line in lines:
-                if 'Q1:' in line:
-                    current_query = 'Q1'
-                elif 'Q2:' in line:
-                    current_query = 'Q2'
-                elif 'Q3:' in line:
-                    current_query = 'Q3'
-                elif current_query and any(algo in line for algo in ['N+NS', 'N+S', 'P+NS', 'P+S', 'H+P']):
+                if "Q1:" in line:
+                    current_query = "Q1"
+                elif "Q2:" in line:
+                    current_query = "Q2"
+                elif "Q3:" in line:
+                    current_query = "Q3"
+                elif current_query and any(
+                    algo in line for algo in ["N+NS", "N+S", "P+NS", "P+S", "H+P"]
+                ):
                     # Extract timing from line like: "P+S                  207.0             1.1       193.19x              18"
                     parts = line.split()
                     if len(parts) >= 3:
@@ -101,21 +104,22 @@ def run_rust_benchmark(iterations=10):
 
     return all_results
 
+
 def run_csharp_benchmark(iterations=10):
     """Run C# benchmark multiple times and collect results."""
     csharp_project = "/home/aleph/projects/prismql/benchmark/csharp-reference"
     csv_file = "/home/aleph/projects/prismql/data/freecodecamp_casual_chatroom.csv"
 
     all_results = {
-        'Q1': {'P+NS': [], 'P+S': []},
-        'Q2': {'P+NS': [], 'P+S': []},
-        'Q3': {'P+NS': [], 'P+S': []},
+        "Q1": {"P+NS": [], "P+S": []},
+        "Q2": {"P+NS": [], "P+S": []},
+        "Q3": {"P+NS": [], "P+S": []},
     }
 
     print(f"Running {iterations} iterations of C# benchmark...")
 
     for i in range(iterations):
-        print(f"  Iteration {i+1}/{iterations}...", end='', flush=True)
+        print(f"  Iteration {i + 1}/{iterations}...", end="", flush=True)
 
         try:
             # Run benchmark
@@ -124,7 +128,7 @@ def run_csharp_benchmark(iterations=10):
                 cwd=csharp_project,
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=300,
             )
 
             if result.returncode != 0:
@@ -132,17 +136,17 @@ def run_csharp_benchmark(iterations=10):
                 continue
 
             # Parse output for timings
-            lines = result.stdout.split('\n')
+            lines = result.stdout.split("\n")
             current_query = None
 
             for line in lines:
-                if 'Q1:' in line:
-                    current_query = 'Q1'
-                elif 'Q2:' in line:
-                    current_query = 'Q2'
-                elif 'Q3:' in line:
-                    current_query = 'Q3'
-                elif current_query and any(algo in line for algo in ['P+NS', 'P+S']):
+                if "Q1:" in line:
+                    current_query = "Q1"
+                elif "Q2:" in line:
+                    current_query = "Q2"
+                elif "Q3:" in line:
+                    current_query = "Q3"
+                elif current_query and any(algo in line for algo in ["P+NS", "P+S"]):
                     # Extract timing from line like: "P+S                   29.6              19"
                     parts = line.split()
                     if len(parts) >= 2:
@@ -159,6 +163,7 @@ def run_csharp_benchmark(iterations=10):
 
     return all_results
 
+
 def calculate_statistics(times):
     """Calculate mean, std dev, and 95% confidence interval."""
     if not times:
@@ -171,18 +176,19 @@ def calculate_statistics(times):
 
     # 95% confidence interval
     confidence = 0.95
-    ci = stats.t.interval(confidence, len(times)-1, loc=mean, scale=sem)
+    ci = stats.t.interval(confidence, len(times) - 1, loc=mean, scale=sem)
 
     return {
-        'mean': mean,
-        'std': std,
-        'min': np.min(times),
-        'max': np.max(times),
-        'ci_lower': ci[0],
-        'ci_upper': ci[1],
-        'n': len(times),
-        'raw_times': times.tolist()
+        "mean": mean,
+        "std": std,
+        "min": np.min(times),
+        "max": np.max(times),
+        "ci_lower": ci[0],
+        "ci_upper": ci[1],
+        "n": len(times),
+        "raw_times": times.tolist(),
     }
+
 
 def generate_report(rust_results, csharp_results, hardware_info):
     """Generate comprehensive benchmark report."""
@@ -195,36 +201,42 @@ def generate_report(rust_results, csharp_results, hardware_info):
     # Hardware info
     report.append("## Hardware Specifications")
     report.append(f"- CPU: {hardware_info.get('cpu_model', 'Unknown')}")
-    report.append(f"- Cores: {hardware_info['cpu_count']} physical, {hardware_info['cpu_threads']} threads")
+    report.append(
+        f"- Cores: {hardware_info['cpu_count']} physical, {hardware_info['cpu_threads']} threads"
+    )
     report.append(f"- Memory: {hardware_info['memory_gb']} GB")
     report.append(f"- Platform: {hardware_info['platform']}")
     report.append(f"- Timestamp: {hardware_info['timestamp']}")
     report.append("")
 
     # Results for each query
-    for query in ['Q1', 'Q2', 'Q3']:
+    for query in ["Q1", "Q2", "Q3"]:
         report.append(f"## {query} Results")
         report.append("")
 
         # Table header
-        report.append("| Algorithm | Implementation | Mean (ms) | 95% CI | Std Dev | Speedup |")
-        report.append("|-----------|---------------|-----------|--------|---------|---------|")
+        report.append(
+            "| Algorithm | Implementation | Mean (ms) | 95% CI | Std Dev | Speedup |"
+        )
+        report.append(
+            "|-----------|---------------|-----------|--------|---------|---------|"
+        )
 
         # Get P+S baseline for speedup calculation
         rust_ps = None
-        if rust_results and query in rust_results and 'P+S' in rust_results[query]:
-            rust_ps = calculate_statistics(rust_results[query]['P+S'])
+        if rust_results and query in rust_results and "P+S" in rust_results[query]:
+            rust_ps = calculate_statistics(rust_results[query]["P+S"])
 
         # Rust results
         if rust_results and query in rust_results:
-            for algo in ['N+NS', 'N+S', 'P+NS', 'P+S', 'H+P']:
+            for algo in ["N+NS", "N+S", "P+NS", "P+S", "H+P"]:
                 if algo in rust_results[query]:
                     stats = calculate_statistics(rust_results[query][algo])
                     if stats:
                         speedup = ""
-                        if rust_ps and algo != 'P+S':
+                        if rust_ps and algo != "P+S":
                             speedup = f"{rust_ps['mean'] / stats['mean']:.2f}x"
-                        elif algo == 'P+S':
+                        elif algo == "P+S":
                             speedup = "baseline"
 
                         report.append(
@@ -235,7 +247,7 @@ def generate_report(rust_results, csharp_results, hardware_info):
 
         # C# results
         if csharp_results and query in csharp_results:
-            for algo in ['P+NS', 'P+S']:
+            for algo in ["P+NS", "P+S"]:
                 if algo in csharp_results[query]:
                     stats = calculate_statistics(csharp_results[query][algo])
                     if stats:
@@ -253,50 +265,48 @@ def generate_report(rust_results, csharp_results, hardware_info):
 
         # H+P vs P+S comparison
         if rust_results and query in rust_results:
-            if 'H+P' in rust_results[query] and 'P+S' in rust_results[query]:
-                hp_stats = calculate_statistics(rust_results[query]['H+P'])
-                ps_stats = calculate_statistics(rust_results[query]['P+S'])
+            if "H+P" in rust_results[query] and "P+S" in rust_results[query]:
+                hp_stats = calculate_statistics(rust_results[query]["H+P"])
+                ps_stats = calculate_statistics(rust_results[query]["P+S"])
                 if hp_stats and ps_stats:
-                    speedup = ps_stats['mean'] / hp_stats['mean']
+                    speedup = ps_stats["mean"] / hp_stats["mean"]
                     report.append(f"**H+P vs P+S speedup: {speedup:.2f}x**")
                     report.append("")
 
     return "\n".join(report)
 
+
 def save_results(rust_results, csharp_results, hardware_info):
     """Save detailed results to JSON."""
-    output = {
-        'hardware': hardware_info,
-        'rust': {},
-        'csharp': {}
-    }
+    output = {"hardware": hardware_info, "rust": {}, "csharp": {}}
 
     # Process Rust results
     if rust_results:
         for query in rust_results:
-            output['rust'][query] = {}
+            output["rust"][query] = {}
             for algo in rust_results[query]:
                 stats = calculate_statistics(rust_results[query][algo])
                 if stats:
-                    output['rust'][query][algo] = stats
+                    output["rust"][query][algo] = stats
 
     # Process C# results
     if csharp_results:
         for query in csharp_results:
-            output['csharp'][query] = {}
+            output["csharp"][query] = {}
             for algo in csharp_results[query]:
                 stats = calculate_statistics(csharp_results[query][algo])
                 if stats:
-                    output['csharp'][query][algo] = stats
+                    output["csharp"][query][algo] = stats
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"benchmark_results_{timestamp}.json"
 
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         json.dump(output, f, indent=2)
 
     print(f"\nDetailed results saved to: {filename}")
     return filename
+
 
 def main():
     """Run statistical benchmarks."""
@@ -323,9 +333,10 @@ def main():
     # Save report
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_file = f"benchmark_report_{timestamp}.md"
-    with open(report_file, 'w') as f:
+    with open(report_file, "w") as f:
         f.write(report)
     print(f"Report saved to: {report_file}")
+
 
 if __name__ == "__main__":
     main()

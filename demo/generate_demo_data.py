@@ -312,6 +312,97 @@ def get_demo_dictionaries() -> dict[str, list[str]]:
     }
 
 
+def generate_demo_custom_features(
+    conversations: list[dict[str, Any]],
+) -> dict[str, set[int]]:
+    """
+    Generate custom feature annotations for demo conversations.
+
+    Simulates LLM/NLP annotations with features like sentiment, intent, priority.
+    """
+    custom_features: dict[str, set[int]] = {
+        "sentiment_positive": set(),
+        "sentiment_negative": set(),
+        "sentiment_neutral": set(),
+        "intent_greeting": set(),
+        "intent_question": set(),
+        "intent_complaint": set(),
+        "intent_thanks": set(),
+        "intent_response": set(),
+        "priority_high": set(),
+        "priority_normal": set(),
+        "topic_technical": set(),
+        "topic_account": set(),
+        "topic_payment": set(),
+    }
+
+    for msg in conversations:
+        text = msg["text"].lower()
+        msg_id = msg["id"]
+
+        # Sentiment analysis (rule-based simulation)
+        positive_keywords = [
+            "thank",
+            "great",
+            "perfect",
+            "appreciate",
+            "good",
+            "back online",
+            "fixed",
+            "resolved",
+        ]
+        negative_keywords = [
+            "problem",
+            "issue",
+            "error",
+            "broken",
+            "urgent",
+            "unacceptable",
+            "deleted",
+            "failed",
+        ]
+
+        if any(kw in text for kw in positive_keywords):
+            custom_features["sentiment_positive"].add(msg_id)
+        elif any(kw in text for kw in negative_keywords):
+            custom_features["sentiment_negative"].add(msg_id)
+        else:
+            custom_features["sentiment_neutral"].add(msg_id)
+
+        # Intent classification
+        if any(kw in text for kw in ["hi", "hello", "hey", "good morning"]):
+            custom_features["intent_greeting"].add(msg_id)
+        if any(kw in text for kw in ["what", "when", "where", "how", "why", "?"]):
+            custom_features["intent_question"].add(msg_id)
+        if any(
+            kw in text
+            for kw in ["problem", "issue", "unacceptable", "urgent", "broken"]
+        ):
+            custom_features["intent_complaint"].add(msg_id)
+        if any(kw in text for kw in ["thank", "thanks", "appreciate"]):
+            custom_features["intent_thanks"].add(msg_id)
+        if msg["user"].startswith("support") or msg["user"].startswith("manager"):
+            custom_features["intent_response"].add(msg_id)
+
+        # Priority classification
+        if any(
+            kw in text for kw in ["urgent", "critical", "deleted", "serious", "asap"]
+        ):
+            custom_features["priority_high"].add(msg_id)
+        else:
+            custom_features["priority_normal"].add(msg_id)
+
+        # Topic classification
+        if any(kw in text for kw in ["error", "system", "loading", "slow", "website"]):
+            custom_features["topic_technical"].add(msg_id)
+        if any(kw in text for kw in ["account", "locked", "password", "login"]):
+            custom_features["topic_account"].add(msg_id)
+        if any(kw in text for kw in ["payment", "charged", "refund"]):
+            custom_features["topic_payment"].add(msg_id)
+
+    return custom_features
+
+
 if __name__ == "__main__":
     # Generate and print sample data
     conversations = generate_demo_conversations()
@@ -319,3 +410,9 @@ if __name__ == "__main__":
     print("\nSample messages:")
     for msg in conversations[:10]:
         print(f"[{msg['id']}] {msg['user']}: {msg['text']}")
+
+    # Generate custom features
+    features = generate_demo_custom_features(conversations)
+    print(f"\nGenerated {len(features)} custom features")
+    for feature_name, msg_ids in sorted(features.items()):
+        print(f"  {feature_name}: {len(msg_ids)} messages")

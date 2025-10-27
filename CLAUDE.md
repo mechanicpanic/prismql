@@ -52,6 +52,35 @@ uv sync --dev
 source .venv/bin/activate
 ```
 
+### Rust Backend (Optional but Recommended)
+
+PrismQL includes an optional high-performance Rust backend that provides **50-100x speedup** for window merge operations and FOLLOWED_BY queries.
+
+**Building and Installing:**
+```bash
+# Install maturin (Python build tool for Rust extensions)
+uv pip install maturin
+
+# Build and install the Rust module (from prismql-rust directory)
+uv run python -m maturin develop --release --manifest-path ../prismql-rust/Cargo.toml
+```
+
+**What gets accelerated:**
+- Window merge operations (`INWIN` clause): Uses `merge_histogram_pruned()` algorithm
+- FOLLOWED_BY queries: Uses `merge_followed_by()` algorithm
+- Both algorithms use Rust only for numeric message IDs, falling back to Python for strings
+
+**Verification:**
+```bash
+# Test that Rust backend is installed
+uv run python -c "import prismql_rust; print('Rust backend available!')"
+
+# Run tests with Rust backend
+uv run pytest tests/
+```
+
+**Note:** The Python implementation serves as a reference and fallback. The Rust backend is automatically used when available and when message IDs are numeric.
+
 ### Testing
 ```bash
 # Run all tests
@@ -183,7 +212,36 @@ Note: Generated files in `src/prismql/grammar/generated/` are excluded from lint
 - For numeric IDs: distance = `abs(id1 - id2)`
 - For string IDs: distance = position difference in sorted list
 
-### 5. Type System
+### 5. Rust Backend (Performance Layer)
+
+**Location**: `/Users/asmirnov/Projects/vibes/prismql-rust/`
+
+The Rust backend provides high-performance implementations of computationally expensive algorithms:
+
+**Implemented Functions** (`src/prismql_rust/src/lib.rs`):
+- `merge_histogram_pruned()`: Optimized window merge using histogram with progressive pruning (50-100x faster than Python)
+- `merge_followed_by()`: Optimized sequential pattern matching for FOLLOWED_BY operator (10-100x faster)
+- `merge_p_s()`, `merge_p_ns()`, `merge_n_s()`, `merge_n_ns()`: Reference implementations from PANDL 2022 paper
+
+**Integration Points**:
+- `src/prismql/processors/window.py:59`: Uses `merge_histogram_pruned()` when available
+- `src/prismql/visitors/query_visitor.py:944`: Uses `merge_followed_by()` when available
+- Both locations check `RUST_AVAILABLE` and fall back to Python if:
+  - Rust module not installed
+  - Message IDs are strings (Rust only handles numeric IDs)
+  - Any runtime error occurs
+
+**Building**:
+- Uses PyO3 0.23+ for Python bindings
+- Uses Maturin for building Python wheels
+- Requires Rust toolchain (cargo)
+
+**Algorithm Details**:
+- **Greedy matching**: FOLLOWED_BY returns only the closest match for each LHS message, not all possible matches
+- **Histogram approach**: Deduplicates and sorts message IDs before processing
+- **Progressive pruning**: Builds results iteratively, pruning invalid combinations early
+
+### 6. Type System
 
 **Types**: `src/prismql/types.py`
 - `MessageId`: Union[int, str] - flexible ID type

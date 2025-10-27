@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 
 import pytest
+
 from prismql import AggregateResult, GroupedResult, PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 

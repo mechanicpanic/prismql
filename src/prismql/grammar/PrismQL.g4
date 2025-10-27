@@ -70,6 +70,7 @@ condition
     | MentionsOrg '(' ')'
     | ContainsLink '(' ')'
     | HasFeature '(' feature_name ')'
+    | LabeledAs '(' feature_name ')'
 
     // Legacy operators (backward compatibility)
     | HasWordOfDict '(' hdict ')'
@@ -217,6 +218,7 @@ MentionsPlace    : 'MENTIONS_PLACE'   | 'mentions_place'  | 'MENTIONSPLACE'| 'me
 MentionsOrg      : 'MENTIONS_ORG'     | 'mentions_org'    | 'MENTIONSORG'  | 'mentionsorg'  ;
 ContainsLink     : 'CONTAINS_LINK'    | 'contains_link'   | 'CONTAINSLINK' | 'containslink' ;
 HasFeature       : 'HAS_FEATURE'      | 'has_feature'     | 'HASFEATURE'   | 'hasfeature'   ;
+LabeledAs        : 'LABELED_AS'       | 'labeled_as'      | 'LABELEDAS'    | 'labeledas'    ;
 
 // Legacy condition keywords (backward compatibility)
 HasWordOfDict    : 'HASWORDOFDICT'    | 'haswordofdict'   ;

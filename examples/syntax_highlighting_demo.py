@@ -11,10 +11,11 @@ Then run this script:
 """
 
 try:
-    from prismql.highlighting import PrismQLLexer
     from pygments import highlight
     from pygments.formatters import Terminal256Formatter
     from pygments.styles import get_all_styles
+
+    from prismql.highlighting import PrismQLLexer
 except ImportError:
     print("Error: pygments not installed")
     print("Install with: pip install pygments")

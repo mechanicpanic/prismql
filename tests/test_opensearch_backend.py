@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+
 from prismql.backends.opensearch import OpenSearchBackend
 
 

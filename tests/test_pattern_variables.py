@@ -1,6 +1,7 @@
 """Tests for pattern variable support."""
 
 import pytest
+
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 

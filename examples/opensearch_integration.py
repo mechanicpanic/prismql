@@ -7,6 +7,7 @@ and spaCy NLP processing for production use.
 
 import spacy
 from opensearchpy import OpenSearch
+
 from prismql import PrismQLEngine
 
 
