@@ -19,10 +19,13 @@ from ..types import MessageGroup, MessageId, NamedQueryResult, QueryResult
 # Try to import Rust backend for performance
 try:
     from prismql_rust import merge_followed_by as rust_merge_followed_by
+    from prismql_rust import merge_preceded_by as rust_merge_preceded_by
 
     RUST_FOLLOWED_BY_AVAILABLE = True
+    RUST_PRECEDED_BY_AVAILABLE = True
 except ImportError:
     RUST_FOLLOWED_BY_AVAILABLE = False
+    RUST_PRECEDED_BY_AVAILABLE = False
 
 
 class PrismQLVisitor(BasePrismQLVisitor):
@@ -950,7 +953,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
         """
         Create pairs of messages that satisfy a sequential constraint.
 
-        Uses Rust backend when available for 10-100x speedup on FOLLOWED_BY queries.
+        Uses Rust backend when available for 10-100x speedup on FOLLOWED_BY and
+        PRECEDED_BY queries.
 
         Args:
             lhs_messages: Left-hand side message IDs (already filtered to matching ones)
@@ -973,6 +977,21 @@ class PrismQLVisitor(BasePrismQLVisitor):
         ):
             try:
                 return rust_merge_followed_by(  # type: ignore[no-any-return]
+                    list(lhs_messages), list(rhs_messages), window
+                )
+            except Exception:  # noqa: S110
+                # Fall back to Python on any error (intentional)
+                pass
+
+        # Try Rust backend for PRECEDED_BY with numeric IDs (massive performance boost!)
+        if (
+            not forward
+            and RUST_PRECEDED_BY_AVAILABLE
+            and all(isinstance(msg_id, int) for msg_id in lhs_messages)
+            and all(isinstance(msg_id, int) for msg_id in rhs_messages)
+        ):
+            try:
+                return rust_merge_preceded_by(  # type: ignore[no-any-return]
                     list(lhs_messages), list(rhs_messages), window
                 )
             except Exception:  # noqa: S110
