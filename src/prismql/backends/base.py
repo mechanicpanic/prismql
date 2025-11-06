@@ -32,6 +32,55 @@ class SearchBackend(ABC):
         """
         pass
 
+    def search_tokens(
+        self, terms: Sequence[str], field: str = "text", operator: str = "OR"
+    ) -> set[MessageId]:
+        """
+        Search for messages containing tokens (Unicode-aware).
+
+        This is similar to search_text() but uses Unicode-aware tokenization
+        that preserves punctuation in meaningful contexts:
+        - Emails: user@example.com
+        - URLs: http://example.com
+        - Programming terms: C++, C#, F#
+        - Contractions: don't, isn't
+
+        This is optional - backends can implement if they support token-based
+        indexing. By default, falls back to search_text().
+
+        Args:
+            terms: List of tokens to search for
+            field: Field to search in (default: "text")
+            operator: Boolean operator - "OR" or "AND"
+
+        Returns:
+            Set of message IDs matching the search
+        """
+        # Default fallback: use word-based search
+        return self.search_text(terms, field, operator)
+
+    def search_phrase(self, phrase: str, field: str = "text") -> set[MessageId]:
+        """
+        Search for messages containing a specific phrase.
+
+        This uses precomputed n-gram indexes for fast O(1) phrase lookup.
+        If n-gram indexes are not available, falls back to substring matching.
+
+        This is optional - backends can implement if they support n-gram
+        indexing. By default, raises NotImplementedError.
+
+        Args:
+            phrase: Phrase to search for (e.g., "thank you", "out of memory")
+            field: Field to search in (default: "text")
+
+        Returns:
+            Set of message IDs matching the search
+
+        Raises:
+            NotImplementedError: If backend doesn't support phrase search
+        """
+        raise NotImplementedError("Phrase search not supported by this backend")
+
     @abstractmethod
     def search_by_field(
         self, field: str, value: str, exact: bool = True

@@ -1,4 +1,4 @@
-# Generated from /home/user/prismql/src/prismql/grammar/PrismQL.g4 by ANTLR 4.13.1
+# Generated from /Users/asmirnov/Projects/vibes/prismql/src/prismql/grammar/PrismQL.g4 by ANTLR 4.13.1
 from antlr4 import *
 
 if "." in __name__:

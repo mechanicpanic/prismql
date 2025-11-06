@@ -61,6 +61,8 @@ condition
     :
     // New fluent operators (preferred)
     Contains '(' hdict ')'
+    | ContainsTokens '(' hdict ')'
+    | ContainsPhrase '(' QUOTED_STRING ')'
     | From '(' huser ')'
     | MentionsUser '(' huser ')'
     | IsQuestion '(' ')'
@@ -209,6 +211,8 @@ Years     : 'YEARS'   | 'years'   | 'YEAR'   | 'year'   ;
 
 // New fluent condition keywords (preferred)
 Contains         : 'CONTAINS'         | 'contains'        ;
+ContainsTokens   : 'CONTAINS_TOKENS'  | 'contains_tokens' | 'CONTAINSTOKENS' | 'containstokens' ;
+ContainsPhrase   : 'CONTAINS_PHRASE'  | 'contains_phrase' | 'CONTAINSPHRASE' | 'containsphrase' ;
 From             : 'FROM'             | 'from'            ;
 MentionsUser     : 'MENTIONS_USER'    | 'mentions_user'   | 'MENTIONSUSER' | 'mentionsuser' ;
 IsQuestion       : 'IS_QUESTION'      | 'is_question'     | 'ISQUESTION'   | 'isquestion'   ;

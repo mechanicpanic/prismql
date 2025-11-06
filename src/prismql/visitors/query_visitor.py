@@ -531,6 +531,37 @@ class PrismQLVisitor(BasePrismQLVisitor):
             words = self.user_dictionaries[dict_name]
             return self.search_backend.search_text(words, field="text", operator="OR")
 
+        # contains_tokens(dict_name) - Unicode-aware token matching
+        if ctx.ContainsTokens():
+            dict_name = ctx.hdict().getText()
+
+            # Check if this is wildcard - match all messages
+            if dict_name == "*":
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
+
+            # Check if this is a variable
+            if dict_name.startswith("$"):
+                # Variables in contains_tokens() not yet supported
+                raise PrismQLRuntimeError(
+                    "Variables in contains_tokens() not yet supported. "
+                    "Use from($user) for user-based variables."
+                )
+
+            if dict_name not in self.user_dictionaries:
+                raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
+            tokens = self.user_dictionaries[dict_name]
+            return self.search_backend.search_tokens(
+                tokens, field="text", operator="OR"
+            )
+
+        # contains_phrase("phrase") - N-gram based phrase matching
+        if ctx.ContainsPhrase():
+            phrase_text = ctx.QUOTED_STRING().getText()
+            # Remove surrounding quotes
+            phrase = phrase_text[1:-1]  # Strip first and last character
+            return self.search_backend.search_phrase(phrase, field="text")
+
         # from(username) - same as byuser
         if ctx.From():
             username = ctx.huser().getText()
