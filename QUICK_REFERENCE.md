@@ -21,7 +21,9 @@ PrismQL is a domain-specific query language for pattern matching in conversation
 | Operator | Description | Example |
 |----------|-------------|---------|
 | `from(user)` | Messages from specific user | `from(alice)` |
-| `contains(dict)` | Messages containing dictionary words | `contains(greetings)` |
+| `contains(dict)` | Messages containing dictionary words (alphanumeric) | `contains(greetings)` |
+| `contains_tokens(dict)` | Messages containing tokens (preserves C++, emails, URLs) | `contains_tokens(tech_terms)` |
+| `contains_phrase("phrase")` | Messages containing exact phrase (fast n-gram lookup) | `contains_phrase("thank you")` |
 | `is_question()` | Messages that are questions | `is_question()` |
 | `mentions_user(user)` | Messages mentioning a user | `mentions_user(bob)` |
 | `mentions_date()` | Messages mentioning dates | `mentions_date()` |
@@ -114,6 +116,59 @@ SELECT from($user), from($user) INWIN 5
 
 -- Any user followed by themselves
 SELECT from($speaker) FOLLOWED_BY from($speaker) WITHIN 2
+```
+
+### Token vs Word vs Phrase Matching
+
+**Three matching modes for different use cases:**
+
+```prismql
+-- Word matching: Simple alphanumeric (default)
+SELECT contains(tech_terms)
+-- "C++" → matches "c" only (loses punctuation)
+-- Fast, good for general text
+
+-- Token matching: Preserves punctuation (NEW!)
+SELECT contains_tokens(tech_terms)
+-- "C++" → matches "c++" exactly
+-- "user@example.com" → kept as single token
+-- Good for: technical discussions, emails, URLs, programming terms
+
+-- Phrase matching: Multi-word expressions (NEW!)
+SELECT contains_phrase("thank you")
+SELECT contains_phrase("out of memory")
+-- O(1) lookup via n-gram index (super fast!)
+-- Good for: common expressions, fixed phrases
+```
+
+**When to use which:**
+
+| Use Case | Operator | Example |
+|----------|----------|---------|
+| General keywords | `contains(dict)` | "error", "bug", "issue" |
+| Technical terms with punctuation | `contains_tokens(dict)` | "C++", "alice@company.com" |
+| Multi-word phrases | `contains_phrase("phrase")` | "thank you", "out of memory" |
+| Contractions | `contains_tokens(dict)` | "don't", "can't", "won't" |
+
+**Configuration (for n-gram indexing):**
+
+```python
+from prismql.backends import MemoryBackend
+from prismql.config import BackendConfig
+
+# Enable n-gram phrase matching
+config = BackendConfig(
+    tokenizer="unicode",        # Use Unicode tokenizer
+    enable_ngrams=True,         # Build n-gram indexes
+    ngram_sizes=[2, 3],         # Bigrams and trigrams
+    ngram_min_frequency=2,      # Filter rare phrases (saves memory)
+)
+
+backend = MemoryBackend(messages, config=config)
+engine = PrismQLEngine(backend)
+
+# Now you can use contains_phrase()
+result = engine.execute('SELECT contains_phrase("thank you")')
 ```
 
 ### Temporal Operators
@@ -384,6 +439,33 @@ SELECT from(alice), from(bob) INWIN 5
 SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 5
 ```
 
+### ✅ Important: INWIN never returns duplicate messages
+
+```prismql
+-- If message 42 contains words from BOTH dictionaries:
+SELECT contains(problems), contains(solutions) INWIN 5
+
+-- You'll get:
+-- ✅ [40, 42] - message 40 (problems) paired with 42 (solutions)
+-- ✅ [42, 44] - message 42 (problems) paired with 44 (solutions)
+-- ❌ [42, 42] - NEVER - same message can't pair with itself
+
+-- This is by design: you're looking for DIFFERENT messages within a window
+```
+
+**Why this is correct:**
+- INWIN finds conversations/interactions between different elements
+- `[42, 42]` would be trivial and uninformative
+- To find messages with multiple characteristics, use AND instead:
+
+```prismql
+-- Find messages that have BOTH properties:
+SELECT contains(problems) AND contains(solutions)
+
+-- Or use parentheses in INWIN:
+SELECT (contains(problems) AND contains(solutions)), from(support) INWIN 5
+```
+
 ### ❌ Wrong: Forgetting to define dictionaries
 
 ```python
@@ -509,6 +591,8 @@ for attempt in range(max_attempts):
 -- Basic filtering
 SELECT from(alice)
 SELECT contains(greetings)
+SELECT contains_tokens(tech_terms)      -- NEW: Preserves C++, emails
+SELECT contains_phrase("thank you")     -- NEW: Multi-word phrases
 SELECT is_question()
 
 -- Boolean logic
@@ -539,6 +623,10 @@ SELECT from(alice) AFTER "2024-01-01"
 
 -- Aggregation
 SELECT from(alice) GROUP BY user AGGREGATE count
+
+-- Phrase patterns (NEW)
+SELECT contains_phrase("out of memory") AND from(user)
+SELECT contains_phrase("thank you") FOLLOWED_BY from(support) WITHIN 3
 ```
 
 ---
