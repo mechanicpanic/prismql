@@ -8,7 +8,7 @@ query
 
 body
     :
-    (query_seq | restrictions) ';'? (InWindow number | InWin number | Within time_value)? temporal_filter? groupby_clause? aggregate_clause? orderby_clause? limit_clause?
+    (query_seq | restrictions) ';'? (InWindow number | InWin number | During time_value | Within time_value)? temporal_filter? groupby_clause? aggregate_clause? orderby_clause? limit_clause?
     ;
 
 query_seq
@@ -169,9 +169,10 @@ field_name : STRING;
 // Keywords (case-insensitive)
 Select   : 'SELECT'   | 'select'  ;
 As       : 'AS'       | 'as'      ;
-InWindow : 'INWINDOW' | 'inwindow' | 'IN_WINDOW' | 'in_window' ;  // New unified positional operator
+InWindow : 'INWINDOW' | 'inwindow' | 'IN_WINDOW' | 'in_window' ;  // Unified positional operator
 InWin    : 'INWIN'    | 'inwin'   ;  // Deprecated: use INWINDOW instead
-Within   : 'WITHIN'   | 'within'  ;  // For temporal filters or deprecated positional use
+During   : 'DURING'   | 'during'  ;  // Temporal window operator (time-based filtering)
+Within   : 'WITHIN'   | 'within'  ;  // Deprecated: use DURING for temporal, INWINDOW for positional
 Unr      : 'UNR'      | 'unr'     ;
 Not      : 'NOT'      | 'not'     ;
 And      : 'AND'      | 'and'     ;

@@ -80,14 +80,17 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # Step 1: Extract window size if specified (position-based or time-based)
         window_size = self.DEFAULT_WINDOW_SIZE
         if ctx.InWindow():
-            # New unified positional window operator
+            # Unified positional window operator
             window_size = int(ctx.number().getText())
         elif ctx.InWin():
             # Deprecated: use INWINDOW instead
             window_size = int(ctx.number().getText())
+        elif ctx.During():
+            # Temporal window operator (time-based filtering)
+            # TODO: Implement proper temporal windowing with timestamps
+            window_size = self._parse_time_window(ctx.time_value())
         elif ctx.Within():
-            # Time-based window - convert to position-based for now
-            # TODO: Implement proper temporal windowing
+            # Deprecated: use DURING for temporal, INWINDOW for positional
             window_size = self._parse_time_window(ctx.time_value())
 
         # Step 2: Process either restrictions or query sequence to get base results

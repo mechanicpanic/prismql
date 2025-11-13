@@ -6,9 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PrismQL is a domain-specific language (DSL) for pattern matching in conversational data. It uses ANTLR4 for parsing and implements a visitor pattern for query execution. The language is backend-agnostic, supporting any search engine (OpenSearch, Elasticsearch, in-memory) and optional NLP backends (spaCy).
 
-## Important: INWINDOW Operator (Nov 2025 Update)
+## Important: Operator Naming (Nov 2025 Update)
 
-**PrismQL now uses `INWINDOW` as the unified positional window operator!**
+**PrismQL now has clear, unambiguous operator names!**
+
+### Positional Operators (Message Distance)
 
 ```prismql
 # ✅ Current (recommended):
@@ -20,16 +22,30 @@ SELECT from(alice), from(bob) INWIN 5
 SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
 ```
 
-**Why the change?**
-- **INWIN** and **WITHIN** were confusing - same concept, different names
-- **INWINDOW** clearly indicates **positional** distance (not temporal)
-- Frees up **WITHIN** for future temporal filtering: `SELECT from(alice) DURING 5 days`
-
-**Key Point:** `INWINDOW` measures distance in **message positions**, not time!
+**INWINDOW** measures distance in **message positions**, not time:
 - Numeric IDs: `distance = abs(id1 - id2)`
 - String IDs: Position difference in sorted list
 
-See `INWINDOW_UNIFICATION.md` for full details.
+### Temporal Operators (Time-Based)
+
+```prismql
+# ✅ Current (recommended):
+SELECT from(alice) DURING 5 days
+SELECT from(alice) DURING 2 hours
+
+# ⚠️ Deprecated (still works for backward compatibility):
+SELECT from(alice) WITHIN 5 days
+```
+
+**DURING** filters by time duration (when fully implemented).
+
+### Summary
+
+- **INWINDOW** = positional/distance-based
+- **DURING** = temporal/time-based
+- No more confusion!
+
+See `INWINDOW_UNIFICATION.md` and `DURING_RENAME.md` for full details.
 
 ## Project History
 
