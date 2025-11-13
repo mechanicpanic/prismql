@@ -205,12 +205,16 @@ User: "Find messages from alice"
 Query: SELECT from(alice)
 
 Window query:
-User: "Find questions followed by answers within 5 messages"
-Query: SELECT is_question(), from(support) INWIN 5
+User: "Find questions and answers within 5 messages"
+Query: SELECT is_question(), from(support) INWINDOW 5
 
 Boolean query:
 User: "Find questions from alice or bob"
 Query: SELECT (from(alice) OR from(bob)) AND is_question()
+
+Sequential query:
+User: "Find alice followed by bob within 3 messages"
+Query: SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3
 
 """
 
@@ -585,16 +589,16 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
 # PROMPT STRATEGIES
 # =============================================================================
 
-# Load QUICK_REFERENCE.md for zero-shot prompt
-_quick_ref_path = Path(__file__).parent.parent / "QUICK_REFERENCE.md"
-with open(_quick_ref_path) as f:
-    _QUICK_REFERENCE = f.read()
+# Load LANGUAGE_REFERENCE.md for zero-shot prompt
+_lang_ref_path = Path(__file__).parent.parent / "LANGUAGE_REFERENCE.md"
+with open(_lang_ref_path) as f:
+    _LANGUAGE_REFERENCE = f.read()
 
 ZERO_SHOT_STRATEGY = PromptStrategy(
     name="zero_shot",
     system_prompt=f"""You are an expert at writing PrismQL queries. Use the reference documentation below to generate accurate queries.
 
-{_QUICK_REFERENCE}
+{_LANGUAGE_REFERENCE}
 
 IMPORTANT: Respond with ONLY the PrismQL query, starting with SELECT. Do not include explanations, markdown code blocks, or any other text.""",
     include_examples=False,

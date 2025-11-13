@@ -1,6 +1,8 @@
 # PrismQL Quick Reference
 
-**For LLM Agents**: This document provides complete syntax and examples for evaluating PrismQL.
+**⚠️ DEPRECATED**: This document is deprecated for LLM query generation. Use `LANGUAGE_REFERENCE.md` instead.
+
+**For Human Users**: This document provides examples and explanations for understanding PrismQL.
 
 ## What is PrismQL?
 

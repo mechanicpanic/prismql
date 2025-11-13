@@ -705,14 +705,14 @@ REALISTIC_USE_CASE_QUERIES = [
     TestCase(
         id="usecase_003",
         description="Find unresolved issues: problem mentioned but no solution within 50 messages",
-        ground_truth_query="SELECT contains(problems), NOT contains(solutions) INWINDOW 50",
+        ground_truth_query="SELECT contains(problems) NOT_FOLLOWED_BY contains(solutions) INWINDOW 50",
         category="realistic_use_cases",
         difficulty="medium",
         required_dictionaries={
             "problems": ["error", "issue", "problem", "bug"],
             "solutions": ["fixed", "resolved", "solution", "solved"],
         },
-        notes="Negative pattern for issue tracking",
+        notes="Negative sequential pattern - problems NOT followed by solutions (better than co-occurrence)",
     ),
     TestCase(
         id="usecase_004",
