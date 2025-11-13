@@ -296,6 +296,12 @@ class OpenRouterProvider(LLMProvider):
             "deepseek/v3",
             "gemini-2.0",
             "gemini-2.5",
+            # New 2025 reasoning models
+            "qwen3",
+            "openreasoning-nemotron",
+            "acereason-nemotron",
+            "phi-4-reasoning",
+            "nemotron",  # Covers all Nemotron reasoning variants
         ]
         return any(keyword in self.model.lower() for keyword in reasoning_models)
 
