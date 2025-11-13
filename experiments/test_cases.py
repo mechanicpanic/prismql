@@ -214,11 +214,11 @@ COMPLEX_QUERIES = [
     TestCase(
         id="complex_004",
         description="Find customer greeting followed by support greeting within 3 messages, then followed by customer question within 2 more messages",
-        ground_truth_query="SELECT (from(customer) AND contains(greetings)) FOLLOWED_BY (from(support) AND contains(greetings)) WITHIN 3 FOLLOWED_BY (from(customer) AND is_question()) INWINDOW 2",
+        ground_truth_query="SELECT (from(customer) AND contains(greetings)) FOLLOWED_BY (from(support) AND contains(greetings)) INWINDOW 3 FOLLOWED_BY (from(customer) AND is_question()) INWINDOW 2",
         category="complex_patterns",
         difficulty="hard",
         required_dictionaries={"greetings": ["hello", "hi", "hey", "good morning"]},
-        notes="Chained sequential pattern with separate WITHIN constraints for each transition",
+        notes="Chained sequential pattern with separate INWINDOW constraints for each transition",
     ),
     TestCase(
         id="complex_003",
@@ -278,7 +278,7 @@ EDGE_CASE_QUERIES = [
     TestCase(
         id="edge_005",
         description="Find three-way conversation where user1 posts, then user2 responds within 3 messages, then user3 responds within 3 more messages",
-        ground_truth_query="SELECT from($user1) FOLLOWED_BY from($user2) WITHIN 3 FOLLOWED_BY from($user3) INWINDOW 3",
+        ground_truth_query="SELECT from($user1) FOLLOWED_BY from($user2) INWINDOW 3 FOLLOWED_BY from($user3) INWINDOW 3",
         category="edge_cases",
         difficulty="hard",
         required_dictionaries={},
@@ -328,7 +328,7 @@ PATTERN_VARIABLE_QUERIES = [
     TestCase(
         id="pvar_002",
         description="Find someone asking a question, Bob responding within 5 messages, then the original person following up within 5 more messages",
-        ground_truth_query="SELECT from($asker) AND is_question() FOLLOWED_BY from(bob) WITHIN 5 FOLLOWED_BY from($asker) INWINDOW 5",
+        ground_truth_query="SELECT from($asker) AND is_question() FOLLOWED_BY from(bob) INWINDOW 5 FOLLOWED_BY from($asker) INWINDOW 5",
         category="pattern_variables",
         difficulty="hard",
         required_dictionaries={},
@@ -337,7 +337,7 @@ PATTERN_VARIABLE_QUERIES = [
     TestCase(
         id="pvar_003",
         description="Find two-person back-and-forth alternating conversation pattern with responses within 2 messages each",
-        ground_truth_query="SELECT from($person1) FOLLOWED_BY from($person2) WITHIN 2 FOLLOWED_BY from($person1) WITHIN 2 FOLLOWED_BY from($person2) INWINDOW 2",
+        ground_truth_query="SELECT from($person1) FOLLOWED_BY from($person2) INWINDOW 2 FOLLOWED_BY from($person1) INWINDOW 2 FOLLOWED_BY from($person2) INWINDOW 2",
         category="pattern_variables",
         difficulty="hard",
         required_dictionaries={},
@@ -346,7 +346,7 @@ PATTERN_VARIABLE_QUERIES = [
     TestCase(
         id="pvar_004",
         description="Find the same user posting three consecutive messages (immediately after each other)",
-        ground_truth_query="SELECT from($user) FOLLOWED_BY from($user) WITHIN 1 FOLLOWED_BY from($user) INWINDOW 1",
+        ground_truth_query="SELECT from($user) FOLLOWED_BY from($user) INWINDOW 1 FOLLOWED_BY from($user) INWINDOW 1",
         category="pattern_variables",
         difficulty="hard",
         required_dictionaries={},
@@ -420,7 +420,7 @@ QUANTIFIER_QUERIES = [
         category="quantifiers",
         difficulty="medium",
         required_dictionaries={},
-        notes="WITHIN 1 means immediately adjacent - no messages in between",
+        notes="INWINDOW 1 means immediately adjacent - no messages in between",
     ),
 ]
 
@@ -450,7 +450,7 @@ NEGATIVE_PATTERN_QUERIES = [
     TestCase(
         id="neg_003",
         description="Find messages containing question words, then a non-thank-you response within 3 messages, then bob responding within 3 more messages",
-        ground_truth_query="SELECT contains(questions) FOLLOWED_BY NOT contains(thanks) WITHIN 3 FOLLOWED_BY from(bob) INWINDOW 3",
+        ground_truth_query="SELECT contains(questions) FOLLOWED_BY NOT contains(thanks) INWINDOW 3 FOLLOWED_BY from(bob) INWINDOW 3",
         category="negative_patterns",
         difficulty="hard",
         required_dictionaries={
@@ -549,7 +549,7 @@ SEQUENTIAL_SUBQUERY_QUERIES = [
     TestCase(
         id="seqsub_002",
         description="Find question from user1, then answer from user2 within 5 messages, then thanks from user1 within 5 more messages (in sequence)",
-        ground_truth_query="SELECT from(user1) AND is_question() FOLLOWED_BY from(user2) AND contains(answers) WITHIN 5 FOLLOWED_BY from(user1) AND contains(thanks) INWINDOW 5",
+        ground_truth_query="SELECT from(user1) AND is_question() FOLLOWED_BY from(user2) AND contains(answers) INWINDOW 5 FOLLOWED_BY from(user1) AND contains(thanks) INWINDOW 5",
         category="sequential_subqueries",
         difficulty="hard",
         required_dictionaries={
@@ -570,7 +570,7 @@ SEQUENTIAL_SUBQUERY_QUERIES = [
     TestCase(
         id="seqsub_004",
         description="Find customer problem (within 3 messages), then escalation from same customer (within 2 messages) within 10 messages, then manager response within 10 more messages (in sequence)",
-        ground_truth_query="SELECT (SELECT contains(problems), from(customer) INWINDOW 3) FOLLOWED_BY (SELECT contains(escalation), from(customer) INWINDOW 2) WITHIN 10 FOLLOWED_BY (SELECT from(manager)) INWINDOW 10",
+        ground_truth_query="SELECT (SELECT contains(problems), from(customer) INWINDOW 3) FOLLOWED_BY (SELECT contains(escalation), from(customer) INWINDOW 2) INWINDOW 10 FOLLOWED_BY (SELECT from(manager)) INWINDOW 10",
         category="sequential_subqueries",
         difficulty="hard",
         required_dictionaries={
@@ -578,6 +578,150 @@ SEQUENTIAL_SUBQUERY_QUERIES = [
             "escalation": ["manager", "escalate", "urgent"],
         },
         notes="Sequential: customer problem cluster THEN customer escalation cluster THEN manager message (ordered escalation pattern)",
+    ),
+]
+
+# =============================================================================
+# TEMPORAL QUERIES (Using DURING operator with timestamps)
+# =============================================================================
+
+TEMPORAL_QUERIES = [
+    TestCase(
+        id="temporal_001",
+        description="Find messages from alice and bob appearing within 1 hour of each other",
+        ground_truth_query="SELECT from(alice), from(bob) DURING 1 hour",
+        category="temporal_patterns",
+        difficulty="medium",
+        required_dictionaries={},
+        notes="DURING uses actual timestamps - keeps only pairs within 1 hour time span",
+    ),
+    TestCase(
+        id="temporal_002",
+        description="Find problem mentions and support responses within 30 seconds",
+        ground_truth_query="SELECT contains(problems), from(support) DURING 30 seconds",
+        category="temporal_patterns",
+        difficulty="medium",
+        required_dictionaries={"problems": ["error", "issue", "problem", "bug"]},
+        notes="Real-time response detection using timestamps",
+    ),
+    TestCase(
+        id="temporal_003",
+        description="Find the same user posting twice within 5 minutes",
+        ground_truth_query="SELECT from($user), from($user) DURING 5 minutes",
+        category="temporal_patterns",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Pattern variable with temporal window - detects rapid posting",
+    ),
+    TestCase(
+        id="temporal_004",
+        description="Find customer questions followed by support responses, all within 2 minutes",
+        ground_truth_query="SELECT from(customer) AND is_question(), from(support) DURING 2 minutes",
+        category="temporal_patterns",
+        difficulty="medium",
+        required_dictionaries={},
+        notes="Combines condition AND with temporal window",
+    ),
+    TestCase(
+        id="temporal_005",
+        description="Find three messages from alice all appearing within 10 minutes",
+        ground_truth_query="SELECT from(alice), from(alice), from(alice) DURING 10 minutes",
+        category="temporal_patterns",
+        difficulty="medium",
+        required_dictionaries={},
+        notes="Temporal burst detection - all three messages within time window",
+    ),
+]
+
+# =============================================================================
+# ADVANCED OPERATOR COMBINATIONS
+# =============================================================================
+
+ADVANCED_COMBINATION_QUERIES = [
+    TestCase(
+        id="advanced_001",
+        description="Find alice mentioning problems in greeting messages",
+        ground_truth_query="SELECT from(alice) AND contains(greetings) AND contains(problems)",
+        category="advanced_combinations",
+        difficulty="medium",
+        required_dictionaries={
+            "greetings": ["hello", "hi", "hey"],
+            "problems": ["error", "issue", "problem"],
+        },
+        notes="Triple AND - tests complex boolean logic",
+    ),
+    TestCase(
+        id="advanced_002",
+        description="Find questions that are NOT from alice or bob",
+        ground_truth_query="SELECT is_question() AND NOT (from(alice) OR from(bob))",
+        category="advanced_combinations",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Nested NOT with OR - tests operator precedence understanding",
+    ),
+    TestCase(
+        id="advanced_003",
+        description="Find messages containing either problems or questions, from support",
+        ground_truth_query="SELECT (contains(problems) OR is_question()) AND from(support)",
+        category="advanced_combinations",
+        difficulty="medium",
+        required_dictionaries={"problems": ["error", "issue", "problem"]},
+        notes="(A OR B) AND C pattern - common filtering pattern",
+    ),
+    TestCase(
+        id="advanced_004",
+        description="Find two different users both mentioning the same problem, within 5 messages",
+        ground_truth_query="SELECT from($user1) AND contains(problems), from($user2) AND contains(problems) INWINDOW 5",
+        category="advanced_combinations",
+        difficulty="hard",
+        required_dictionaries={"problems": ["error", "issue", "problem"]},
+        notes="Two distinct pattern variables - tests variable constraint understanding",
+    ),
+]
+
+# =============================================================================
+# REALISTIC USE CASES
+# =============================================================================
+
+REALISTIC_USE_CASE_QUERIES = [
+    TestCase(
+        id="usecase_001",
+        description="Find support handoff: customer question, support response, then manager message, all within 20 messages",
+        ground_truth_query="SELECT from(customer) AND is_question(), from(support), from(manager) INWINDOW 20",
+        category="realistic_use_cases",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Escalation pattern detection - unordered within window",
+    ),
+    TestCase(
+        id="usecase_002",
+        description="Find thank you responses: someone asks question, gets response, then thanks within 10 messages",
+        ground_truth_query="SELECT from($user) AND is_question(), from($responder), from($user) AND contains(gratitude) INWINDOW 10",
+        category="realistic_use_cases",
+        difficulty="hard",
+        required_dictionaries={"gratitude": ["thank", "thanks", "appreciate"]},
+        notes="Question-Answer-Acknowledgment pattern with variables",
+    ),
+    TestCase(
+        id="usecase_003",
+        description="Find unresolved issues: problem mentioned but no solution within 50 messages",
+        ground_truth_query="SELECT contains(problems), NOT contains(solutions) INWINDOW 50",
+        category="realistic_use_cases",
+        difficulty="medium",
+        required_dictionaries={
+            "problems": ["error", "issue", "problem", "bug"],
+            "solutions": ["fixed", "resolved", "solution", "solved"],
+        },
+        notes="Negative pattern for issue tracking",
+    ),
+    TestCase(
+        id="usecase_004",
+        description="Find conversation starters: first greeting followed by another person's greeting within 3 messages",
+        ground_truth_query="SELECT from($starter) AND contains(greetings) FOLLOWED_BY from($responder) AND contains(greetings) INWINDOW 3",
+        category="realistic_use_cases",
+        difficulty="hard",
+        required_dictionaries={"greetings": ["hello", "hi", "hey", "good morning"]},
+        notes="Sequential conversation initiation with distinct users",
     ),
 ]
 
@@ -598,6 +742,9 @@ ALL_TEST_CASES = (
     + AGGREGATION_QUERIES
     + SUBQUERY_QUERIES
     + SEQUENTIAL_SUBQUERY_QUERIES
+    + TEMPORAL_QUERIES
+    + ADVANCED_COMBINATION_QUERIES
+    + REALISTIC_USE_CASE_QUERIES
 )
 
 
