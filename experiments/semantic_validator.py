@@ -144,6 +144,41 @@ class SemanticValidator:
             notes=notes,
         )
 
+    def _normalize_query_structure(self, query: str) -> str:
+        """
+        Normalize query structure for comparison.
+
+        Handles:
+        - Whitespace normalization
+        - INWINDOW restriction order (unordered)
+        - Quantifier expansion
+        """
+        import re
+
+        # Normalize whitespace
+        query = re.sub(r'\s+', ' ', query.strip())
+
+        # Normalize INWINDOW restriction order (they're unordered)
+        # from(alice), from(bob) INWINDOW 5 === from(bob), from(alice) INWINDOW 5
+        def sort_inwindow_restrictions(match):
+            restrictions = match.group(1)
+            window_clause = match.group(2)
+
+            # Split by comma and sort
+            parts = [r.strip() for r in restrictions.split(',')]
+            parts.sort()
+
+            return 'SELECT ' + ', '.join(parts) + ' ' + window_clause
+
+        query = re.sub(
+            r'SELECT\s+(.*?)\s+(INWINDOW\s+\d+)',
+            sort_inwindow_restrictions,
+            query,
+            flags=re.IGNORECASE
+        )
+
+        return query
+
     def _results_equal(self, result1: QueryResult, result2: QueryResult) -> bool:
         """
         Check if two query results are equal.
