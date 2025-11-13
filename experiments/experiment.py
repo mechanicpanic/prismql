@@ -16,6 +16,7 @@ from prismql.backends.memory import MemoryBackend
 from prismql.engine import PrismQLEngine
 
 from .providers import LLMProvider
+from .semantic_validator import SemanticValidator, create_test_data_for_case
 from .test_cases import TestCase, get_all_required_dictionaries
 
 
@@ -86,6 +87,7 @@ class ExperimentHarness:
         self,
         validator: Optional[QueryValidator] = None,
         engine: Optional[PrismQLEngine] = None,
+        use_semantic_validation: bool = True,
     ):
         """
         Initialize experiment harness.
@@ -93,6 +95,7 @@ class ExperimentHarness:
         Args:
             validator: Query validator (default: created with all test dicts)
             engine: Query engine for semantic validation (default: memory backend)
+            use_semantic_validation: Whether to use semantic validator (executes queries)
         """
 
         # Setup validator with all dictionaries from test cases
@@ -103,14 +106,19 @@ class ExperimentHarness:
 
         # Setup engine for semantic validation
         if engine is None:
-            # Create simple test data
-            test_messages = [
-                {"id": i, "text": f"Message {i}", "user": "alice"} for i in range(10)
-            ]
+            # Create realistic test data that covers various patterns
+            test_messages = create_test_data_for_case(None)
             backend = MemoryBackend(test_messages)
             self.engine = PrismQLEngine(backend, user_dictionaries=all_dicts)
         else:
             self.engine = engine
+
+        # Setup semantic validator
+        self.use_semantic_validation = use_semantic_validation
+        if use_semantic_validation:
+            self.semantic_validator = SemanticValidator(self.engine)
+        else:
+            self.semantic_validator = None
 
     def generate_query(
         self, test_case: TestCase, provider: LLMProvider, strategy: PromptStrategy
@@ -434,15 +442,28 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
         semantic_errors = []
 
         if syntax_correct:
-            # TODO: Actually execute and compare results
-            # For now, just compare query strings
-            semantically_correct = self._queries_equivalent(
-                final_query, test_case.ground_truth_query
-            )
-            if not semantically_correct:
-                semantic_errors.append(
-                    f"Query differs from ground truth: {test_case.ground_truth_query}"
+            if self.use_semantic_validation and self.semantic_validator:
+                # Use semantic validator to execute and compare queries
+                try:
+                    sem_result = self.semantic_validator.validate(
+                        final_query, test_case.ground_truth_query, test_case.description
+                    )
+                    semantically_correct = sem_result.queries_equivalent
+                    if not semantically_correct:
+                        semantic_errors.extend(sem_result.differences)
+                        semantic_errors.extend(sem_result.semantic_errors)
+                except Exception as e:
+                    semantic_errors.append(f"Semantic validation error: {e}")
+                    semantically_correct = False
+            else:
+                # Fall back to string comparison
+                semantically_correct = self._queries_equivalent(
+                    final_query, test_case.ground_truth_query
                 )
+                if not semantically_correct:
+                    semantic_errors.append(
+                        f"Query differs from ground truth: {test_case.ground_truth_query}"
+                    )
 
         # Edit distance
         edit_dist = self._levenshtein_distance(

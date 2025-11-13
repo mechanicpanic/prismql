@@ -29,6 +29,7 @@ from experiments.test_cases import (
     SEQUENTIAL_SUBQUERY_QUERIES,
     SUBQUERY_QUERIES,
     WINDOW_QUERIES,
+    get_all_required_dictionaries,
 )
 
 
@@ -161,7 +162,8 @@ def review_all_test_cases(verbose=False, filter_category=None, filter_difficulty
     ]
 
     backend = MemoryBackend(documents=sample_messages)
-    engine = PrismQLEngine(search_backend=backend)
+    all_dicts = get_all_required_dictionaries()
+    engine = PrismQLEngine(search_backend=backend, user_dictionaries=all_dicts)
 
     # Collect all test cases
     all_test_suites = [

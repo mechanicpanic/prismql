@@ -57,7 +57,7 @@ def test_large_window_warning():
         user_dictionaries={"greetings": ["hi"]}, check_performance=True
     )
 
-    result = validator.validate("SELECT contains(greetings), from(alice) INWIN 500")
+    result = validator.validate("SELECT contains(greetings), from(alice) INWINDOW 500")
 
     assert result.valid
     assert len(result.warnings) > 0
@@ -102,7 +102,7 @@ def test_named_groups_suggestion():
     """Test suggestion to use named groups."""
     validator = QueryValidator(user_dictionaries={"a": ["x"], "b": ["y"], "c": ["z"]})
 
-    result = validator.validate("SELECT contains(a), contains(b), contains(c) INWIN 5")
+    result = validator.validate("SELECT contains(a), contains(b), contains(c) INWINDOW 5")
 
     assert result.valid
     assert len(result.infos) > 0
@@ -180,7 +180,7 @@ def test_disable_performance_check():
     """Test disabling performance checks."""
     validator = QueryValidator(check_performance=False)
 
-    result = validator.validate("SELECT from(alice), from(bob) INWIN 500")
+    result = validator.validate("SELECT from(alice), from(bob) INWINDOW 500")
 
     assert result.valid
     # No large window warning

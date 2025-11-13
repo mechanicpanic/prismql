@@ -58,6 +58,11 @@ MODELS = {
     "opus-4.1": ("anthropic", "claude-opus-4-1-20250805"),
     "opus-4.1-thinking": ("anthropic", "claude-opus-4-1-20250805"),  # Extended thinking
     "haiku-4.5": ("anthropic", "claude-haiku-4-5-20251001"),
+    # MiniMax models (Anthropic-compatible API)
+    "minimax-m2": ("minimax", "MiniMax-M2"),
+    "minimax-m2-thinking": ("minimax", "MiniMax-M2"),  # Extended thinking
+    "minimax-m2-stable": ("minimax", "MiniMax-M2-Stable"),
+    "minimax-m2-stable-thinking": ("minimax", "MiniMax-M2-Stable"),  # Extended thinking
     # OpenAI models
     "gpt-4": ("openai", "gpt-4"),
     "gpt-4-turbo": ("openai", "gpt-4-turbo-preview"),
@@ -81,6 +86,7 @@ MODELS = {
     ),
     "or-gemini-2.5-pro": ("openrouter", "google/gemini-2.5-pro"),
     "or-deepseek-v3.2": ("openrouter", "deepseek/deepseek-v3.2-exp"),
+    "or-kimi-k2-thinking": ("openrouter", "moonshotai/kimi-k2-thinking"),
     # OpenRouter models (Other comprehensive models)
     "or-glm-4-air": ("openrouter", "z-ai/glm-4.5-air:free"),
     "or-qwen-coder-72b": ("openrouter", "qwen/qwen-3-coder-72b"),
@@ -119,6 +125,10 @@ def create_provider_for_model(model_key: str, api_key: str) -> LLMProvider:
     if model_key in ["sonnet-4.5-thinking", "opus-4.1-thinking"]:
         kwargs["extended_thinking"] = True
 
+    # MiniMax extended thinking
+    if model_key in ["minimax-m2-thinking", "minimax-m2-stable-thinking"]:
+        kwargs["extended_thinking"] = True
+
     # OpenRouter reasoning models
     reasoning_keys = [
         "or-gpt-5",
@@ -130,6 +140,7 @@ def create_provider_for_model(model_key: str, api_key: str) -> LLMProvider:
         "or-deepseek-r1-qwen3-8b",
         "or-deepseek-v3.2",
         "or-gemini-2.5-pro",
+        "or-kimi-k2-thinking",
     ]
     if model_key in reasoning_keys:
         kwargs["enable_reasoning"] = True
@@ -204,6 +215,7 @@ def run_full_experiment():
         "anthropic": os.getenv("ANTHROPIC_API_KEY"),
         "openai": os.getenv("OPENAI_API_KEY"),
         "openrouter": os.getenv("OPENROUTER_API_KEY"),
+        "minimax": os.getenv("MINIMAX_API_KEY"),
     }
 
     harness = ExperimentHarness()
@@ -223,6 +235,7 @@ def run_full_experiment():
         print("  - ANTHROPIC_API_KEY")
         print("  - OPENAI_API_KEY")
         print("  - OPENROUTER_API_KEY")
+        print("  - MINIMAX_API_KEY")
         sys.exit(1)
 
     # Generate filename with timestamp
@@ -251,6 +264,7 @@ def run_custom_experiment(model_names, strategy_names, test_case_filter):
         "anthropic": os.getenv("ANTHROPIC_API_KEY"),
         "openai": os.getenv("OPENAI_API_KEY"),
         "openrouter": os.getenv("OPENROUTER_API_KEY"),
+        "minimax": os.getenv("MINIMAX_API_KEY"),
     }
 
     # Resolve models and create providers
@@ -272,7 +286,7 @@ def run_custom_experiment(model_names, strategy_names, test_case_filter):
     if not providers:
         print(f"ERROR: No valid providers. Available models: {list(MODELS.keys())}")
         print(
-            "Set at least one API key: ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY"
+            "Set at least one API key: ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, or MINIMAX_API_KEY"
         )
         sys.exit(1)
 

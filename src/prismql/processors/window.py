@@ -61,6 +61,17 @@ class WindowProcessor:
                     # Fall back to Python on any error (intentional)
                     pass
 
+        # Python implementation using backtracking to find ALL valid combinations
+        return WindowProcessor._merge_with_backtracking(groups, window_size)
+
+    @staticmethod
+    def _merge_with_backtracking(groups: list[MessageGroup], window_size: int) -> QueryResult:
+        """
+        Merge groups using backtracking to find ALL valid combinations.
+
+        This replaces the old greedy algorithm which missed combinations.
+        Uses recursive backtracking to explore all possible message selections.
+        """
         # Get all unique messages and sort them
         all_messages = set()
         for group in groups:
@@ -75,50 +86,93 @@ class WindowProcessor:
             for msg_id in group:
                 message_to_groups[msg_id].add(group_idx)
 
-        # Find valid combinations within windows
+        # Store results
         results = []
+        seen_combinations = set()
 
-        # For each message, try to find a valid combination starting with it
-        for start_idx, start_msg in enumerate(sorted_messages):
-            # Try to build combinations for any group that contains this message
-            for start_group in message_to_groups[start_msg]:
-                combination = [start_msg]
-                groups_used = {start_group}
+        def check_distance(msg1, msg2, max_dist):
+            """Check if two messages are within distance."""
+            if isinstance(msg1, int) and isinstance(msg2, int):
+                return abs(msg1 - msg2) <= max_dist
+            else:
+                # For strings, use position in sorted list
+                idx1 = sorted_messages.index(msg1)
+                idx2 = sorted_messages.index(msg2)
+                return abs(idx1 - idx2) <= max_dist
 
-                # Look for messages from other groups within the window
-                for msg_idx in range(len(sorted_messages)):
-                    if msg_idx == start_idx:
-                        continue
+        def is_within_window(combination):
+            """Check if all messages in combination are within window."""
+            if len(combination) <= 1:
+                return True
 
-                    msg = sorted_messages[msg_idx]
+            # Check all pairs are within window
+            for i in range(len(combination)):
+                for j in range(i + 1, len(combination)):
+                    if not check_distance(combination[i], combination[j], window_size):
+                        return False
+            return True
 
-                    # Check if within window (both directions)
-                    # For numeric IDs, use distance; for others, use position
-                    # in sorted list
-                    if isinstance(start_msg, int) and isinstance(msg, int):
-                        if abs(msg - start_msg) > window_size:
-                            continue
-                    else:
-                        # For string IDs or mixed types, use position difference
-                        if abs(msg_idx - start_idx) > window_size:
-                            continue
+        def backtrack(combination, groups_used, start_idx):
+            """Recursively build all valid combinations."""
+            # Base case: found message from all groups
+            if len(groups_used) == len(groups):
+                # Check if all messages are within window
+                if is_within_window(combination):
+                    # Sort for consistent ordering and dedupe
+                    sorted_combo = sorted(combination)
+                    combo_key = tuple(sorted_combo)
+                    if combo_key not in seen_combinations:
+                        seen_combinations.add(combo_key)
+                        results.append(sorted_combo)
+                return
 
-                    # Check which groups this message belongs to
-                    msg_groups = message_to_groups[msg]
+            # Find next group we need to fill
+            next_group = None
+            for g in range(len(groups)):
+                if g not in groups_used:
+                    next_group = g
+                    break
 
-                    # Find a group we haven't used yet
-                    for group_idx in msg_groups:
-                        if group_idx not in groups_used:
-                            combination.append(msg)
-                            groups_used.add(group_idx)
-                            break
+            if next_group is None:
+                return
 
-                    # If we've found messages from all groups, we have a valid result
-                    if len(groups_used) == len(groups):
-                        combination.sort()  # Sort for consistent ordering
-                        if combination not in results:
-                            results.append(list(combination))
+            # Try each message from next_group starting from start_idx
+            for msg_idx in range(start_idx, len(sorted_messages)):
+                msg = sorted_messages[msg_idx]
+
+                # Skip if not in the group we need
+                if next_group not in message_to_groups[msg]:
+                    continue
+
+                # Skip if already used
+                if msg in combination:
+                    continue
+
+                # Check if within window of ALL existing messages (early pruning)
+                within_window = True
+                for existing_msg in combination:
+                    if not check_distance(existing_msg, msg, window_size):
+                        within_window = False
                         break
+
+                if not within_window:
+                    # If this message is too far from start, all later ones will be too
+                    if combination and isinstance(msg, int) and isinstance(combination[0], int):
+                        if msg - min(combination) > window_size:
+                            break
+                    continue
+
+                # Recursively try adding this message
+                backtrack(
+                    combination + [msg],
+                    groups_used | {next_group},
+                    msg_idx + 1  # Only consider messages after this one
+                )
+
+        # Start backtracking from each message that belongs to group 0
+        for msg_idx, start_msg in enumerate(sorted_messages):
+            if 0 in message_to_groups[start_msg]:
+                backtrack([start_msg], {0}, msg_idx + 1)
 
         return results
 

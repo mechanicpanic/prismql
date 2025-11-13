@@ -43,7 +43,7 @@ SELECT (from(alice) OR from(bob)) AND is_question()  -- Grouping
 
 **Precedence**: Parentheses > NOT > AND > OR
 
-### Window Constraints (INWIN)
+### Window Constraints (INWIN) - UNORDERED Co-occurrence
 
 Find co-occurring patterns within a message window.
 
@@ -65,9 +65,9 @@ SELECT from(support), from(customer), contains(solution) INWIN 10
 - Order of restrictions in the query does NOT affect results
 - `SELECT A, B INWIN 5` is identical to `SELECT B, A INWIN 5`
 
-### Positional Operators
+### Positional Operators - ORDERED Sequences
 
-Sequential pattern matching:
+Sequential pattern matching with strict ordering.
 
 ```prismql
 -- Positive lookahead: alice followed by bob
@@ -83,9 +83,11 @@ SELECT from(alice) NOT_FOLLOWED_BY from(bob) WITHIN 5
 SELECT from(bob) NOT_PRECEDED_BY from(charlie) WITHIN 3
 ```
 
+**Key characteristic: ORDERED** - the first pattern must appear before/after the second.
+
 **Difference from INWIN:**
-- `INWIN`: Co-occurrence (unordered)
-- `FOLLOWED_BY/PRECEDED_BY`: Sequential (ordered)
+- `INWIN`: Co-occurrence (unordered) - messages can appear in any order
+- `FOLLOWED_BY/PRECEDED_BY`: Sequential (ordered) - strict temporal ordering required
 
 ### Quantifiers
 
@@ -186,9 +188,18 @@ SELECT from(alice) BETWEEN "2024-01-01" AND "2024-06-30"
 Analyze query results:
 
 ```prismql
-SELECT from(alice) GROUP BY user AGGREGATE count
-SELECT from(alice) GROUP BY topic AGGREGATE count, avg_length
+-- Count total results
+SELECT from(alice) AGGREGATE count()
+
+-- Count pattern occurrences
+SELECT from($user), from($user) INWIN 3 AGGREGATE count()
+
+-- IMPORTANT: Use count() with parentheses, not SQL-style GROUP BY
 ```
+
+**Note:** PrismQL aggregation syntax is different from SQL:
+- ✅ Correct: `AGGREGATE count()`
+- ❌ Wrong: `GROUP BY user AGGREGATE count` (SQL syntax)
 
 ### Subqueries (Nested Patterns)
 
@@ -204,9 +215,9 @@ SELECT
 
 **How it works:**
 - Each `(SELECT ...)` executes independently
-- Results are merged based on the outer `INWIN` window
+- Results are merged based on the outer `INWIN` or `FOLLOWED_BY` window
 - Semicolons separate subqueries
-- Useful for complex multi-stage patterns
+- **Preserves grouping semantics** - results from same subquery stay together
 
 **Examples:**
 
@@ -231,6 +242,13 @@ SELECT
     (SELECT contains(escalation), from(customer) INWIN 2) ;
     (SELECT from(manager) INWIN 2)
     INWIN 20
+
+-- Sequential subqueries: problem THEN solution (ordered)
+SELECT
+    (SELECT from(customer), contains(problems) INWIN 3)
+    FOLLOWED_BY
+    (SELECT from(support), contains(solutions) INWIN 3)
+    WITHIN 10
 ```
 
 **When to use subqueries:**
@@ -238,10 +256,27 @@ SELECT
 - ✓ Escalation detection (repeated mentions → manager involvement)
 - ✓ Complex workflows with distinct phases
 - ✓ When you need to group conditions before merging
+- ✓ When grouping semantics matter (alice+bob as one group, charlie separate)
 
 **When NOT to use subqueries:**
 - ✗ Simple co-occurrence patterns (use `SELECT A, B INWIN N` instead)
 - ✗ Single-stage patterns (simpler syntax available)
+
+**⚠️ CRITICAL: Do NOT flatten subquery structure**
+
+```prismql
+-- ✅ CORRECT: Preserves grouping (alice+bob together, charlie separate)
+SELECT (SELECT from(alice), from(bob) INWIN 3) ;
+       (SELECT from(charlie) INWIN 2) INWIN 8
+
+-- ❌ WRONG: Loses grouping semantics (all three mixed)
+SELECT from(alice), from(bob), from(charlie) INWIN 8
+```
+
+**Why this matters:**
+- The correct query finds windows with {alice+bob group} and {charlie separate}
+- The flattened query finds windows with {any alice + any bob + any charlie}
+- Different semantic meaning, different results!
 
 ## Real-World Examples
 
@@ -427,76 +462,40 @@ stats = backend.execute_query(f"""
 """)
 ```
 
-## Common Pitfalls
+## Common Mistakes
 
-### ❌ Wrong: Confusing INWIN with FOLLOWED_BY
-
-```prismql
--- This finds co-occurrence (unordered)
-SELECT from(alice), from(bob) INWIN 5
-
--- This finds sequence (ordered)
-SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 5
-```
-
-### ✅ Important: INWIN never returns duplicate messages
+### ❌ Mistake 1: Using SQL syntax for aggregation
 
 ```prismql
--- If message 42 contains words from BOTH dictionaries:
-SELECT contains(problems), contains(solutions) INWIN 5
+-- ❌ WRONG: SQL-style GROUP BY
+SELECT from($user), from($user) INWIN 3 GROUP BY user AGGREGATE count
 
--- You'll get:
--- ✅ [40, 42] - message 40 (problems) paired with 42 (solutions)
--- ✅ [42, 44] - message 42 (problems) paired with 44 (solutions)
--- ❌ [42, 42] - NEVER - same message can't pair with itself
-
--- This is by design: you're looking for DIFFERENT messages within a window
+-- ✅ CORRECT: PrismQL uses count() with parentheses
+SELECT from($user), from($user) INWIN 3 AGGREGATE count()
 ```
 
-**Why this is correct:**
-- INWIN finds conversations/interactions between different elements
-- `[42, 42]` would be trivial and uninformative
-- To find messages with multiple characteristics, use AND instead:
+### ❌ Mistake 2: Flattening subquery structure
 
 ```prismql
--- Find messages that have BOTH properties:
-SELECT contains(problems) AND contains(solutions)
+-- ❌ WRONG: Loses subquery grouping
+SELECT from(customer) AND contains(problems),
+       from(support) AND contains(solutions) INWIN 10
 
--- Or use parentheses in INWIN:
-SELECT (contains(problems) AND contains(solutions)), from(support) INWIN 5
+-- ✅ CORRECT: Preserves subquery structure
+SELECT (SELECT from(customer), contains(problems) INWIN 3) ;
+       (SELECT from(support), contains(solutions) INWIN 3) INWIN 10
 ```
 
-### ❌ Wrong: Forgetting to define dictionaries
+**When subqueries are needed:** Multiple groups with internal co-occurrence (INWIN) that need to be related to each other.
 
-```python
-# This will error: Dictionary 'greetings' not found
-engine.execute("SELECT contains(greetings)")
-
-# Need to define first:
-engine = PrismQLEngine(backend, user_dictionaries={
-    "greetings": ["hello", "hi", "hey"]
-})
-```
-
-### ❌ Wrong: Using AND/OR without parentheses
+### ❌ Mistake 3: Pattern variables vs literals
 
 ```prismql
--- Precedence may not be what you expect
-SELECT from(alice) OR from(bob) FOLLOWED_BY from(charlie) WITHIN 2
+-- Pattern variable (matches ANY user, enforces same value):
+SELECT from($user) AND is_question()
 
--- Use parentheses to be explicit
-SELECT (from(alice) OR from(bob)) FOLLOWED_BY from(charlie) WITHIN 2
-```
-
-### ✅ Correct: Check precomputed indexes first
-
-```python
-# Efficient: Use precomputed indexes
-indexes = IndexBuilder.from_message_annotations(messages, custom_fields={...})
-engine = PrismQLEngine(backend, precomputed_indexes=indexes)
-
-# Inefficient: Query NLP features on every query
-engine = PrismQLEngine(backend, nlp_backend=SpacyBackend())
+-- Literal username (matches specific user "alice"):
+SELECT from(alice) AND is_question()
 ```
 
 ## Language Design Goals
@@ -621,12 +620,15 @@ SELECT from($user), from($user) INWIN 5
 -- Temporal
 SELECT from(alice) AFTER "2024-01-01"
 
--- Aggregation
-SELECT from(alice) GROUP BY user AGGREGATE count
+-- Aggregation (use parentheses!)
+SELECT from($user), from($user) INWIN 3 AGGREGATE count()
 
--- Phrase patterns (NEW)
+-- Phrase patterns
 SELECT contains_phrase("out of memory") AND from(user)
 SELECT contains_phrase("thank you") FOLLOWED_BY from(support) WITHIN 3
+
+-- Subqueries (preserve grouping!)
+SELECT (SELECT from(alice), from(bob) INWIN 3) ; (SELECT from(charlie)) INWIN 8
 ```
 
 ---

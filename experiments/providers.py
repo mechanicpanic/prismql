@@ -46,7 +46,13 @@ class LLMProvider(ABC):
 class AnthropicProvider(LLMProvider):
     """Anthropic API provider (Claude models)."""
 
-    def __init__(self, model: str, api_key: str, extended_thinking: bool = False):
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        extended_thinking: bool = False,
+        base_url: str | None = None,
+    ):
         """
         Initialize Anthropic provider.
 
@@ -54,11 +60,15 @@ class AnthropicProvider(LLMProvider):
             model: Model ID (e.g., "claude-sonnet-4-5-20250929")
             api_key: Anthropic API key
             extended_thinking: Enable extended thinking mode (captures thinking blocks)
+            base_url: Optional custom base URL (e.g., for MiniMax compatibility)
         """
         import anthropic
 
         self.model = model
-        self.client = anthropic.Anthropic(api_key=api_key)
+        if base_url:
+            self.client = anthropic.Anthropic(api_key=api_key, base_url=base_url)
+        else:
+            self.client = anthropic.Anthropic(api_key=api_key)
         self.extended_thinking = extended_thinking
 
     def generate(
@@ -110,6 +120,27 @@ class AnthropicProvider(LLMProvider):
     def supports_extended_thinking(self) -> bool:
         """Check if this model supports extended thinking mode."""
         return self.extended_thinking
+
+
+class MinimaxProvider(AnthropicProvider):
+    """MiniMax API provider (Anthropic-compatible)."""
+
+    def __init__(self, model: str, api_key: str, extended_thinking: bool = False):
+        """
+        Initialize MiniMax provider.
+
+        Args:
+            model: Model ID (e.g., "MiniMax-M2", "MiniMax-M2-Stable")
+            api_key: MiniMax API key
+            extended_thinking: Enable extended thinking mode (captures thinking blocks)
+        """
+        # MiniMax uses Anthropic-compatible API
+        super().__init__(
+            model=model,
+            api_key=api_key,
+            extended_thinking=extended_thinking,
+            base_url="https://api.minimax.io/anthropic",
+        )
 
 
 class OpenAIProvider(LLMProvider):
@@ -276,7 +307,7 @@ def create_provider(
     Factory function to create LLM providers.
 
     Args:
-        provider_type: One of "anthropic", "openai", "openrouter"
+        provider_type: One of "anthropic", "openai", "openrouter", "minimax"
         model: Model identifier
         api_key: API key for the provider
         **kwargs: Additional provider-specific arguments
@@ -288,6 +319,7 @@ def create_provider(
         >>> provider = create_provider("anthropic", "claude-sonnet-4-5-20250929", api_key)
         >>> provider = create_provider("openai", "gpt-4", api_key)
         >>> provider = create_provider("openrouter", "anthropic/claude-sonnet-4", api_key)
+        >>> provider = create_provider("minimax", "MiniMax-M2", api_key)
     """
     provider_type = provider_type.lower()
 
@@ -297,8 +329,10 @@ def create_provider(
         return OpenAIProvider(model, api_key, **kwargs)
     if provider_type == "openrouter":
         return OpenRouterProvider(model, api_key, **kwargs)
+    if provider_type == "minimax":
+        return MinimaxProvider(model, api_key, **kwargs)
 
     raise ValueError(
         f"Unknown provider type: {provider_type}. "
-        "Must be one of: anthropic, openai, openrouter"
+        "Must be one of: anthropic, openai, openrouter, minimax"
     )
