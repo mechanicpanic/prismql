@@ -306,26 +306,159 @@ class OpenRouterProvider(LLMProvider):
         return any(keyword in self.model.lower() for keyword in reasoning_models)
 
 
+class VLLMProvider(LLMProvider):
+    """vLLM local inference provider."""
+
+    def __init__(
+        self,
+        model: str,
+        base_url: str = "http://localhost:8000/v1",
+        api_key: str = "EMPTY",
+    ):
+        """
+        Initialize vLLM provider.
+
+        Args:
+            model: Model name (must match vLLM server model)
+            base_url: vLLM server URL (default: http://localhost:8000/v1)
+            api_key: API key (default: "EMPTY" for local vLLM)
+        """
+        import openai
+
+        self.model = model
+        # vLLM uses OpenAI-compatible API
+        self.client = openai.OpenAI(
+            base_url=base_url,
+            api_key=api_key,
+        )
+
+    def generate(
+        self, system_prompt: str, user_message: str, max_tokens: int = 500
+    ) -> tuple[str, Optional[str]]:
+        """Generate completion using vLLM server."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+        )
+
+        choice = response.choices[0]
+        content = choice.message.content or ""
+
+        # vLLM doesn't expose reasoning tokens by default
+        # but some models may include them in the response
+        return content, None
+
+    def get_model_name(self) -> str:
+        """Get model identifier."""
+        return self.model
+
+    def supports_extended_thinking(self) -> bool:
+        """Check if this model supports reasoning."""
+        reasoning_models = [
+            "qwen3",
+            "nemotron",
+            "phi-4-reasoning",
+            "deepseek-r1",
+            "r1-distill",
+        ]
+        return any(keyword in self.model.lower() for keyword in reasoning_models)
+
+
+class OllamaProvider(LLMProvider):
+    """Ollama local inference provider."""
+
+    def __init__(
+        self,
+        model: str,
+        base_url: str = "http://localhost:11434",
+    ):
+        """
+        Initialize Ollama provider.
+
+        Args:
+            model: Model name (e.g., "qwen3:14b", "deepseek-r1:32b")
+            base_url: Ollama server URL (default: http://localhost:11434)
+        """
+        import requests
+
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.requests = requests
+
+    def generate(
+        self, system_prompt: str, user_message: str, max_tokens: int = 500
+    ) -> tuple[str, Optional[str]]:
+        """Generate completion using Ollama API."""
+        response = self.requests.post(
+            f"{self.base_url}/api/chat",
+            json={
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                "stream": False,
+                "options": {
+                    "num_predict": max_tokens,
+                },
+            },
+        )
+        response.raise_for_status()
+
+        data = response.json()
+        content = data.get("message", {}).get("content", "")
+
+        # Ollama doesn't separate reasoning tokens
+        # but they may be embedded in the response for reasoning models
+        return content, None
+
+    def get_model_name(self) -> str:
+        """Get model identifier."""
+        return self.model
+
+    def supports_extended_thinking(self) -> bool:
+        """Check if this model supports reasoning."""
+        reasoning_models = [
+            "qwen3",
+            "nemotron",
+            "phi-4",
+            "deepseek-r1",
+            "r1",
+        ]
+        return any(keyword in self.model.lower() for keyword in reasoning_models)
+
+
 def create_provider(
-    provider_type: str, model: str, api_key: str, **kwargs: Any
+    provider_type: str, model: str, api_key: str = "EMPTY", **kwargs: Any
 ) -> LLMProvider:
     """
     Factory function to create LLM providers.
 
     Args:
-        provider_type: One of "anthropic", "openai", "openrouter", "minimax"
+        provider_type: One of "anthropic", "openai", "openrouter", "minimax", "vllm", "ollama"
         model: Model identifier
-        api_key: API key for the provider
+        api_key: API key for the provider (default "EMPTY" for local providers)
         **kwargs: Additional provider-specific arguments
 
     Returns:
         LLMProvider instance
 
     Example:
+        >>> # API providers
         >>> provider = create_provider("anthropic", "claude-sonnet-4-5-20250929", api_key)
         >>> provider = create_provider("openai", "gpt-4", api_key)
         >>> provider = create_provider("openrouter", "anthropic/claude-sonnet-4", api_key)
         >>> provider = create_provider("minimax", "MiniMax-M2", api_key)
+
+        >>> # Local inference providers
+        >>> provider = create_provider("vllm", "Qwen/Qwen3-14B")
+        >>> provider = create_provider("ollama", "qwen3:14b")
+        >>> provider = create_provider("vllm", "nvidia/OpenReasoning-Nemotron-32B",
+        ...                           base_url="http://192.168.1.100:8000/v1")
     """
     provider_type = provider_type.lower()
 
@@ -337,8 +470,12 @@ def create_provider(
         return OpenRouterProvider(model, api_key, **kwargs)
     if provider_type == "minimax":
         return MinimaxProvider(model, api_key, **kwargs)
+    if provider_type == "vllm":
+        return VLLMProvider(model, **kwargs)
+    if provider_type == "ollama":
+        return OllamaProvider(model, **kwargs)
 
     raise ValueError(
         f"Unknown provider type: {provider_type}. "
-        "Must be one of: anthropic, openai, openrouter, minimax"
+        "Must be one of: anthropic, openai, openrouter, minimax, vllm, ollama"
     )
