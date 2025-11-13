@@ -6,6 +6,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PrismQL is a domain-specific language (DSL) for pattern matching in conversational data. It uses ANTLR4 for parsing and implements a visitor pattern for query execution. The language is backend-agnostic, supporting any search engine (OpenSearch, Elasticsearch, in-memory) and optional NLP backends (spaCy).
 
+## Important: INWINDOW Operator (Nov 2025 Update)
+
+**PrismQL now uses `INWINDOW` as the unified positional window operator!**
+
+```prismql
+# ✅ Current (recommended):
+SELECT from(alice), from(bob) INWINDOW 5
+SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3
+
+# ⚠️ Deprecated (still works for backward compatibility):
+SELECT from(alice), from(bob) INWIN 5
+SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
+```
+
+**Why the change?**
+- **INWIN** and **WITHIN** were confusing - same concept, different names
+- **INWINDOW** clearly indicates **positional** distance (not temporal)
+- Frees up **WITHIN** for future temporal filtering: `SELECT from(alice) DURING 5 days`
+
+**Key Point:** `INWINDOW` measures distance in **message positions**, not time!
+- Numeric IDs: `distance = abs(id1 - id2)`
+- String IDs: Position difference in sorted list
+
+See `INWINDOW_UNIFICATION.md` for full details.
+
 ## Project History
 
 PrismQL is a complete redevelopment of the **Chat-Corpora-Annotator** project (2020 undergrad thesis at SPbU). The original project was a C# desktop application with a query language called "Macther" for Boolean retrieval and pattern matching in chat datasets.

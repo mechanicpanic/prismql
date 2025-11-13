@@ -251,7 +251,7 @@ class TestRustMemoryBackendIntegration:
         engine = PrismQLEngine(backend)
 
         # Test INWIN
-        result = engine.execute("SELECT from(alice), from(bob) INWIN 3")
+        result = engine.execute("SELECT from(alice), from(bob) INWINDOW 3")
         # Should find pairs where alice and bob messages are within 3 positions
         assert len(result) > 0
 

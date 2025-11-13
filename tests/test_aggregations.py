@@ -40,7 +40,7 @@ class TestCountAggregation:
     def test_count_with_window(self, engine):
         """Test counting results with window constraint."""
         result = engine.execute(
-            "SELECT from(alice), from(bob) INWIN 3 AGGREGATE count()"
+            "SELECT from(alice), from(bob) INWINDOW 3 AGGREGATE count()"
         )
 
         assert isinstance(result, AggregateResult)
@@ -238,7 +238,7 @@ class TestCombinedFeatures:
     def test_window_with_aggregation(self, engine):
         """Test window constraint with aggregation."""
         result = engine.execute(
-            "SELECT from(alice), from(bob) INWIN 5 AGGREGATE count()"
+            "SELECT from(alice), from(bob) INWINDOW 5 AGGREGATE count()"
         )
 
         assert isinstance(result, AggregateResult)

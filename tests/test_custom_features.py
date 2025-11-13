@@ -144,7 +144,7 @@ def test_has_feature_with_user_filter():
 
 
 def test_has_feature_with_inwin():
-    """Test has_feature() with INWIN clause."""
+    """Test has_feature() with INWINDOW clause."""
     messages = [
         {"id": 1, "text": "We should decide on the API", "user": "alice"},
         {"id": 2, "text": "I agree with REST", "user": "bob"},
@@ -169,7 +169,7 @@ def test_has_feature_with_inwin():
     # Find decision-making patterns
     result = engine.execute(
         "SELECT has_feature(decision_needed), has_feature(proposal), "
-        "has_feature(decision_made) INWIN 5"
+        "has_feature(decision_made) INWINDOW 5"
     )
     assert len(result) >= 1
     # Should find the pattern in messages 1, 2, 3
@@ -423,7 +423,7 @@ def test_has_feature_with_quantifiers():
     engine = PrismQLEngine(search_backend=backend, precomputed_indexes=indexes)
 
     # Find at least 2 action items in a window
-    result = engine.execute("SELECT has_feature(action_item){2} INWIN 5")
+    result = engine.execute("SELECT has_feature(action_item){2} INWINDOW 5")
     assert len(result) >= 1
 
 

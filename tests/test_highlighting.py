@@ -42,14 +42,14 @@ class TestPrismQLLexer:
     def test_basic_query_tokens(self) -> None:
         """Test tokenization of basic query."""
         lexer = PrismQLLexer()
-        query = "SELECT from(alice) INWIN 10"
+        query = "SELECT from(alice) INWINDOW 10"
         tokens = list(lexer.get_tokens(query))
 
         token_types = [t[0] for t in tokens if t[1].strip()]
 
         assert Keyword.Reserved in token_types  # SELECT
         assert Name.Builtin in token_types  # from
-        assert Keyword in token_types  # INWIN
+        assert Keyword in token_types  # INWINDOW
         assert Number.Integer in token_types  # 10
 
     def test_keywords_highlighted(self) -> None:
@@ -153,9 +153,9 @@ class TestPrismQLLexer:
         query = """
         -- Find customer support escalations
         SELECT
-            (SELECT from(customer), contains(problems) INWIN 3) ;
-            (SELECT from(support), contains(solutions) INWIN 3)
-        INWIN 15
+            (SELECT from(customer), contains(problems) INWINDOW 3) ;
+            (SELECT from(support), contains(solutions) INWINDOW 3)
+        INWINDOW 15
         GROUP BY customer
         AGGREGATE count()
         """
@@ -174,7 +174,7 @@ class TestPrismQLLexer:
     def test_highlighting_with_formatter(self) -> None:
         """Test that highlighting works with formatters."""
         lexer = PrismQLLexer()
-        query = "SELECT from(alice), is_question() INWIN 3"
+        query = "SELECT from(alice), is_question() INWINDOW 3"
 
         # Use NullFormatter (no color codes, just text)
         result = highlight(query, lexer, NullFormatter())

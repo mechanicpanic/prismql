@@ -56,7 +56,7 @@ def test_wildcard_in_pattern():
     engine = PrismQLEngine(search_backend=backend)
 
     # alice followed by anyone within 3 messages
-    result = engine.execute("SELECT from(alice) FOLLOWED_BY from(*) WITHIN 3")
+    result = engine.execute("SELECT from(alice) FOLLOWED_BY from(*) INWINDOW 3")
 
     # Should match alice (id=1) followed by any message
     assert len(result) >= 1
@@ -75,7 +75,7 @@ def test_wildcard_in_window():
     engine = PrismQLEngine(search_backend=backend)
 
     # alice and anyone within 3 messages
-    result = engine.execute("SELECT from(alice), from(*) INWIN 3")
+    result = engine.execute("SELECT from(alice), from(*) INWINDOW 3")
 
     # Should find alice with bob and alice with charlie
     assert len(result) >= 2

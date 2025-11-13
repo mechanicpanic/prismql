@@ -8,7 +8,7 @@ query
 
 body
     :
-    (query_seq | restrictions) ';'? (InWin number | Within time_value)? temporal_filter? groupby_clause? aggregate_clause? orderby_clause? limit_clause?
+    (query_seq | restrictions) ';'? (InWindow number | InWin number | Within time_value)? temporal_filter? groupby_clause? aggregate_clause? orderby_clause? limit_clause?
     ;
 
 query_seq
@@ -19,7 +19,8 @@ query_seq
 query_seq_continuation
     :
     ';' '(' query ')'                                      # UnorderedSubquery
-    | positional_op '(' query ')' Within number            # PositionalSubquery
+    | positional_op '(' query ')' InWindow number          # PositionalSubquery
+    | positional_op '(' query ')' Within number            # PositionalSubqueryDeprecated
     ;
 
 positional_op
@@ -48,6 +49,10 @@ restriction
     :
     restriction And restriction
     | restriction Or restriction
+    | restriction FollowedBy restriction InWindow number
+    | restriction PrecededBy restriction InWindow number
+    | restriction NotFollowedBy restriction InWindow number
+    | restriction NotPrecededBy restriction InWindow number
     | restriction FollowedBy restriction Within number
     | restriction PrecededBy restriction Within number
     | restriction NotFollowedBy restriction Within number
@@ -162,14 +167,15 @@ feature_name : STRING;
 field_name : STRING;
 
 // Keywords (case-insensitive)
-Select : 'SELECT' | 'select';
-As     : 'AS'     | 'as'    ;
-InWin  : 'INWIN'  | 'inwin' ;
-Within : 'WITHIN' | 'within' ;
-Unr    : 'UNR'    | 'unr'   ;
-Not    : 'NOT'    | 'not'   ;
-And    : 'AND'    | 'and'   ;
-Or     : 'OR'     | 'or'    ;
+Select   : 'SELECT'   | 'select'  ;
+As       : 'AS'       | 'as'      ;
+InWindow : 'INWINDOW' | 'inwindow' | 'IN_WINDOW' | 'in_window' ;  // New unified positional operator
+InWin    : 'INWIN'    | 'inwin'   ;  // Deprecated: use INWINDOW instead
+Within   : 'WITHIN'   | 'within'  ;  // For temporal filters or deprecated positional use
+Unr      : 'UNR'      | 'unr'     ;
+Not      : 'NOT'      | 'not'     ;
+And      : 'AND'      | 'and'     ;
+Or       : 'OR'       | 'or'      ;
 
 // Positional operators for lookahead/lookbehind
 FollowedBy     : 'FOLLOWED_BY'     | 'followed_by'     | 'FOLLOWEDBY'    | 'followedby'    ;

@@ -136,3 +136,6 @@ examples/lmsys_sample_10k.parquet
 examples/*.csv
 examples/*.parquet
 experiment_results.json
+data/
+*.csv
+*.zip

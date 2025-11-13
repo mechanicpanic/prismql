@@ -96,7 +96,7 @@ def test_boolean_operators():
 
 
 def test_window_constraints():
-    """Test INWIN window constraints."""
+    """Test INWINDOW window constraints."""
     messages = [
         {"id": 1, "text": "I have a problem", "user": "user"},
         {"id": 2, "text": "What's wrong?", "user": "support"},
@@ -115,7 +115,7 @@ def test_window_constraints():
     )
 
     # Find problem-solution pairs within window of 3
-    results = engine.execute("SELECT contains(problems), contains(solutions) INWIN 3")
+    results = engine.execute("SELECT contains(problems), contains(solutions) INWINDOW 3")
     print(f"Window test results: {results}")
 
     # Should find (1,3) since they're 2 apart, and (10,11) since they're 1 apart

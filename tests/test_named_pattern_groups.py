@@ -32,7 +32,7 @@ class TestBasicNamedGroups:
 
     def test_single_named_pattern(self, engine):
         """Test pattern with single named position."""
-        result = engine.execute('SELECT from(alice) AS "sender" INWIN 5')
+        result = engine.execute('SELECT from(alice) AS "sender" INWINDOW 5')
 
         # Should return NamedQueryResult
         assert isinstance(result, NamedQueryResult)
@@ -49,7 +49,7 @@ class TestBasicNamedGroups:
     def test_two_named_patterns(self, engine):
         """Test pattern with two named positions."""
         result = engine.execute(
-            'SELECT from(alice) AS "asker", from(bob) AS "responder" INWIN 5'
+            'SELECT from(alice) AS "asker", from(bob) AS "responder" INWINDOW 5'
         )
 
         assert isinstance(result, NamedQueryResult)
@@ -64,7 +64,7 @@ class TestBasicNamedGroups:
     def test_all_positions_named(self, engine):
         """Test pattern where all positions are named."""
         result = engine.execute(
-            'SELECT from(alice) AS "first_msg", from(bob) AS "second_msg", from(charlie) AS "third_msg" INWIN 10'
+            'SELECT from(alice) AS "first_msg", from(bob) AS "second_msg", from(charlie) AS "third_msg" INWINDOW 10'
         )
 
         if isinstance(result, NamedQueryResult):
@@ -83,7 +83,7 @@ class TestMixedNamedUnnamed:
 
     def test_first_named_second_unnamed(self, engine):
         """Test pattern with first position named, second unnamed."""
-        result = engine.execute('SELECT from(alice) AS "sender", from(bob) INWIN 5')
+        result = engine.execute('SELECT from(alice) AS "sender", from(bob) INWINDOW 5')
 
         assert isinstance(result, NamedQueryResult)
         assert result.pattern_names == ["sender", None]
@@ -96,7 +96,7 @@ class TestMixedNamedUnnamed:
     def test_middle_position_named(self, engine):
         """Test pattern with only middle position named."""
         result = engine.execute(
-            'SELECT from(alice), from(bob) AS "middle", from(charlie) INWIN 10'
+            'SELECT from(alice), from(bob) AS "middle", from(charlie) INWINDOW 10'
         )
 
         if isinstance(result, NamedQueryResult):
@@ -115,7 +115,7 @@ class TestListCompatibility:
     def test_iteration(self, engine):
         """Test that NamedQueryResult can be iterated."""
         result = engine.execute(
-            'SELECT from(alice) AS "sender", from(bob) AS "receiver" INWIN 5'
+            'SELECT from(alice) AS "sender", from(bob) AS "receiver" INWINDOW 5'
         )
 
         assert isinstance(result, NamedQueryResult)
@@ -127,7 +127,7 @@ class TestListCompatibility:
 
     def test_len(self, engine):
         """Test that len() works on NamedQueryResult."""
-        result = engine.execute('SELECT from(alice) AS "sender" INWIN 5')
+        result = engine.execute('SELECT from(alice) AS "sender" INWINDOW 5')
 
         assert isinstance(result, NamedQueryResult)
         assert len(result) >= 0
@@ -135,7 +135,7 @@ class TestListCompatibility:
 
     def test_indexing(self, engine):
         """Test that indexing works on NamedQueryResult."""
-        result = engine.execute('SELECT from(alice) AS "a", from(bob) AS "b" INWIN 5')
+        result = engine.execute('SELECT from(alice) AS "a", from(bob) AS "b" INWINDOW 5')
 
         assert isinstance(result, NamedQueryResult)
 
@@ -147,7 +147,7 @@ class TestListCompatibility:
 
     def test_to_list(self, engine):
         """Test converting NamedQueryResult to plain list."""
-        result = engine.execute('SELECT from(alice) AS "sender" INWIN 5')
+        result = engine.execute('SELECT from(alice) AS "sender" INWINDOW 5')
 
         assert isinstance(result, NamedQueryResult)
 
@@ -162,7 +162,7 @@ class TestNoNamedGroups:
 
     def test_no_as_keyword(self, engine):
         """Test that query without AS returns plain list."""
-        result = engine.execute("SELECT from(alice), from(bob) INWIN 5")
+        result = engine.execute("SELECT from(alice), from(bob) INWINDOW 5")
 
         # Should return plain list, not NamedQueryResult
         assert isinstance(result, list)
@@ -172,7 +172,7 @@ class TestNoNamedGroups:
         """Test that having all None names doesn't wrap result."""
         # This is implicitly tested by test_no_as_keyword
         # but emphasizes the behavior
-        result = engine.execute("SELECT from(alice), from(bob) INWIN 5")
+        result = engine.execute("SELECT from(alice), from(bob) INWINDOW 5")
 
         # Even though internally pattern_names might be [None, None],
         # the result should not be wrapped
@@ -185,7 +185,7 @@ class TestNamedGroupsWithBooleanOps:
     def test_named_with_and(self, engine):
         """Test naming a boolean AND expression."""
         result = engine.execute(
-            'SELECT from(alice) AND from(alice) AS "alice_only" INWIN 5'
+            'SELECT from(alice) AND from(alice) AS "alice_only" INWINDOW 5'
         )
 
         # The entire AND expression is named
@@ -194,7 +194,7 @@ class TestNamedGroupsWithBooleanOps:
 
     def test_named_with_or(self, engine):
         """Test naming a boolean OR expression."""
-        result = engine.execute('SELECT from(alice) OR from(bob) AS "either" INWIN 5')
+        result = engine.execute('SELECT from(alice) OR from(bob) AS "either" INWINDOW 5')
 
         assert isinstance(result, NamedQueryResult)
         assert result.pattern_names == ["either"]
@@ -208,7 +208,7 @@ class TestNamedGroupsWithDictionaries:
         engine.add_dictionary("greetings", ["Hello", "Hi"])
 
         result = engine.execute(
-            'SELECT contains(greetings) AS "greeting", from(alice) AS "sender" INWIN 5'
+            'SELECT contains(greetings) AS "greeting", from(alice) AS "sender" INWINDOW 5'
         )
 
         assert isinstance(result, NamedQueryResult)
@@ -225,7 +225,7 @@ class TestErrorHandling:
 
     def test_get_named_group_invalid_index(self, engine):
         """Test that invalid index raises IndexError."""
-        result = engine.execute('SELECT from(alice) AS "sender" INWIN 5')
+        result = engine.execute('SELECT from(alice) AS "sender" INWINDOW 5')
 
         assert isinstance(result, NamedQueryResult)
 
@@ -234,7 +234,7 @@ class TestErrorHandling:
 
     def test_get_named_group_negative_index(self, engine):
         """Test that negative index raises IndexError."""
-        result = engine.execute('SELECT from(alice) AS "sender" INWIN 5')
+        result = engine.execute('SELECT from(alice) AS "sender" INWINDOW 5')
 
         assert isinstance(result, NamedQueryResult)
 
@@ -250,7 +250,7 @@ class TestNamedGroupsWithAggregation:
         from prismql import AggregateResult
 
         result = engine.execute(
-            'SELECT from(alice) AS "sender" INWIN 5 AGGREGATE count()'
+            'SELECT from(alice) AS "sender" INWINDOW 5 AGGREGATE count()'
         )
 
         # Aggregation should return AggregateResult, not NamedQueryResult
@@ -261,7 +261,7 @@ class TestNamedGroupsWithAggregation:
         """Test that GROUP BY with AS returns GroupedResult."""
         from prismql import GroupedResult
 
-        result = engine.execute('SELECT from(alice) AS "sender" INWIN 5 GROUP BY user')
+        result = engine.execute('SELECT from(alice) AS "sender" INWINDOW 5 GROUP BY user')
 
         # GROUP BY should return GroupedResult, not NamedQueryResult
         assert isinstance(result, GroupedResult)
@@ -274,7 +274,7 @@ class TestNamedGroupsWithVariables:
     def test_named_groups_with_variables(self, engine):
         """Test combining named groups and pattern variables."""
         result = engine.execute(
-            'SELECT from($user) AS "first_user", from($user) AS "second_user" INWIN 5'
+            'SELECT from($user) AS "first_user", from($user) AS "second_user" INWINDOW 5'
         )
 
         # Should work with both features
@@ -295,7 +295,7 @@ class TestRepr:
     def test_repr(self, engine):
         """Test that repr works correctly."""
         result = engine.execute(
-            'SELECT from(alice) AS "sender", from(bob) AS "receiver" INWIN 5'
+            'SELECT from(alice) AS "sender", from(bob) AS "receiver" INWINDOW 5'
         )
 
         assert isinstance(result, NamedQueryResult)

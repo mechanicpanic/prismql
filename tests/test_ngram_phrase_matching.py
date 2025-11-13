@@ -274,7 +274,7 @@ class TestContainsPhraseQuery:
     def test_contains_phrase_in_window(self, engine_with_ngrams):
         """Test phrase search with window constraint."""
         result = engine_with_ngrams.execute(
-            'SELECT contains_phrase("thank you"), from(bob) INWIN 10'
+            'SELECT contains_phrase("thank you"), from(bob) INWINDOW 10'
         )
         # Should find windows where both phrase and user match
         assert len(result) > 0

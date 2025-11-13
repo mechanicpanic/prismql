@@ -157,7 +157,7 @@ class TestAfterFiltering:
         """Test AFTER combined with INWIN."""
         cutoff = BASE_TIME + timedelta(hours=1)
         result = engine.execute(
-            f'SELECT from(alice), from(bob) AFTER("{cutoff.isoformat()}") INWIN 3'
+            f'SELECT from(alice), from(bob) AFTER("{cutoff.isoformat()}") INWINDOW 3'
         )
 
         # Should find pairs after the cutoff time

@@ -79,7 +79,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Step 1: Extract window size if specified (position-based or time-based)
         window_size = self.DEFAULT_WINDOW_SIZE
-        if ctx.InWin():
+        if ctx.InWindow():
+            # New unified positional window operator
+            window_size = int(ctx.number().getText())
+        elif ctx.InWin():
+            # Deprecated: use INWINDOW instead
             window_size = int(ctx.number().getText())
         elif ctx.Within():
             # Time-based window - convert to position-based for now

@@ -36,7 +36,7 @@ class TestBasicVariables:
     def test_single_variable_same_user_pattern(self, engine):
         """Test pattern where same user appears twice."""
         # Find: user posts, then same user posts again within 3 messages
-        result = engine.execute("SELECT from($user), from($user) INWIN 3")
+        result = engine.execute("SELECT from($user), from($user) INWINDOW 3")
 
         # Should find patterns where same user has consecutive messages
         # alice: 1,3,6,11,13
@@ -57,7 +57,7 @@ class TestBasicVariables:
     def test_single_variable_with_intervening_message(self, engine):
         """Test pattern: user, someone else, same user."""
         # Find: user posts, someone posts, original user responds
-        result = engine.execute("SELECT from($user), from(bob), from($user) INWIN 5")
+        result = engine.execute("SELECT from($user), from(bob), from($user) INWINDOW 5")
 
         # Valid patterns:
         # alice -> bob -> alice: [1,2,3]
@@ -72,10 +72,10 @@ class TestBasicVariables:
     def test_variable_no_matches(self, engine):
         """Test variable pattern with tight window."""
         # Find same user within 1 message window (consecutive only)
-        result = engine.execute("SELECT from($user), from($user) INWIN 1")
+        result = engine.execute("SELECT from($user), from($user) INWINDOW 1")
 
         # Only charlie has consecutive messages (7,8)
-        # (8,10) is 2 apart so doesn't match INWIN 1
+        # (8,10) is 2 apart so doesn't match INWINDOW 1
         assert len(result) == 1
 
 
@@ -85,7 +85,7 @@ class TestMultipleVariables:
     def test_two_variables_conversation(self, engine):
         """Test pattern with two distinct users."""
         # Find: user1 posts, user2 responds, user1 responds back
-        result = engine.execute("SELECT from($u1), from($u2), from($u1) INWIN 4")
+        result = engine.execute("SELECT from($u1), from($u2), from($u1) INWINDOW 4")
 
         # Valid patterns:
         # alice -> bob -> alice: [1,2,3]
@@ -108,7 +108,7 @@ class TestVariableWithOtherConditions:
 
         # Find: user posts greeting, someone responds, original user responds
         result = engine.execute(
-            "SELECT contains(greetings), from(bob), from($user) INWIN 5"
+            "SELECT contains(greetings), from(bob), from($user) INWINDOW 5"
         )
 
         # Should find patterns starting with greetings
@@ -118,7 +118,7 @@ class TestVariableWithOtherConditions:
         """Test variables with aggregation."""
         # Count same-user consecutive patterns
         result = engine.execute(
-            "SELECT from($user), from($user) INWIN 3 AGGREGATE count()"
+            "SELECT from($user), from($user) INWINDOW 3 AGGREGATE count()"
         )
 
         from prismql import AggregateResult
@@ -134,7 +134,7 @@ class TestVariableEdgeCases:
         """Test that undefined variables work correctly."""
         # Both occurrences of $user define the same variable
         # This should work fine - first occurrence binds, second matches
-        result = engine.execute("SELECT from($user), from($user) INWIN 5")
+        result = engine.execute("SELECT from($user), from($user) INWINDOW 5")
 
         assert isinstance(result, list)
 
@@ -142,7 +142,7 @@ class TestVariableEdgeCases:
         """Test variable pattern with impossible constraint."""
         # Same user, then specific different user, then same user again
         # This is impossible - can't have $user be bob and not be bob
-        result = engine.execute("SELECT from($user), from(bob), from($user) INWIN 3")
+        result = engine.execute("SELECT from($user), from(bob), from($user) INWINDOW 3")
 
         # Should find patterns where someone (not bob) posts,
         # bob responds, then original person responds
@@ -152,7 +152,7 @@ class TestVariableEdgeCases:
     def test_multiple_same_variables(self, engine):
         """Test pattern with same variable appearing multiple times."""
         # Same user appears 3 times in pattern
-        result = engine.execute("SELECT from($user), from($user), from($user) INWIN 3")
+        result = engine.execute("SELECT from($user), from($user), from($user) INWINDOW 3")
 
         # Only charlie has 3 consecutive messages close together: 7,8,10
         assert len(result) >= 1
@@ -163,7 +163,7 @@ class TestVariableWithLegacySyntax:
 
     def test_byuser_variable(self, engine):
         """Test variable with legacy from() operator."""
-        result = engine.execute("SELECT from($user), from($user) INWIN 3")
+        result = engine.execute("SELECT from($user), from($user) INWINDOW 3")
 
         # Should work the same as from($user)
         assert len(result) > 0
@@ -175,7 +175,7 @@ class TestVariablePositionTracking:
     def test_four_restriction_pattern(self, engine):
         """Test pattern with 4 restrictions including variables."""
         result = engine.execute(
-            "SELECT from($u1), from($u2), from($u1), from($u2) INWIN 5"
+            "SELECT from($u1), from($u2), from($u1), from($u2) INWINDOW 5"
         )
 
         # Find alternating conversation patterns
@@ -191,7 +191,7 @@ class TestVariableValidation:
     def test_inconsistent_variables_filtered(self, engine):
         """Test that results with inconsistent variables are filtered out."""
         # This pattern should only match if same user appears at positions 0 and 2
-        result = engine.execute("SELECT from($user), from(bob), from($user) INWIN 5")
+        result = engine.execute("SELECT from($user), from(bob), from($user) INWINDOW 5")
 
         # Verify that middle message is always from bob
         # and first/last are from same user (not bob)
@@ -203,7 +203,7 @@ class TestVariableBindings:
 
     def test_variable_bindings_available(self, engine):
         """Test that we can extract variable bindings from results."""
-        result = engine.execute("SELECT from($user), from($user) INWIN 3")
+        result = engine.execute("SELECT from($user), from($user) INWINDOW 3")
 
         # Results should be queryable for their bindings
         assert len(result) > 0
@@ -222,7 +222,7 @@ class TestComplexVariablePatterns:
         engine.add_dictionary("thanks_words", ["Thanks", "Perfect", "great"])
 
         result = engine.execute(
-            "SELECT from($asker), from(bob), contains(thanks_words) INWIN 5"
+            "SELECT from($asker), from(bob), contains(thanks_words) INWINDOW 5"
         )
 
         # Should find patterns where someone asks, bob responds, they thank
@@ -232,7 +232,7 @@ class TestComplexVariablePatterns:
         """Test multi-turn conversation between two users."""
         # Find back-and-forth between two specific users
         result = engine.execute(
-            "SELECT from($u1), from($u2), from($u1), from($u2), from($u1) INWIN 6"
+            "SELECT from($u1), from($u2), from($u1), from($u2), from($u1) INWINDOW 6"
         )
 
         # Should find longer conversation patterns
@@ -248,6 +248,6 @@ class TestErrorHandling:
 
         # Variables in contains() not yet supported
         with pytest.raises(PrismQLRuntimeError) as exc_info:
-            engine.execute("SELECT contains($word), contains($word) INWIN 3")
+            engine.execute("SELECT contains($word), contains($word) INWINDOW 3")
 
         assert "not yet supported" in str(exc_info.value).lower()

@@ -34,7 +34,7 @@ class TestBasicNegativePatterns:
         """Test NOT at middle position in 3-part pattern."""
         # Pattern: alice -> (not bob) -> alice
         result = engine.execute(
-            "SELECT from(alice), NOT from(bob), from(alice) INWIN 5"
+            "SELECT from(alice), NOT from(bob), from(alice) INWINDOW 5"
         )
 
         # Should find patterns where position 1 is NOT from bob
@@ -50,7 +50,7 @@ class TestBasicNegativePatterns:
         """Test NOT at first position."""
         # Pattern: (not alice) -> bob -> charlie
         result = engine.execute(
-            "SELECT NOT from(alice), from(bob), from(charlie) INWIN 5"
+            "SELECT NOT from(alice), from(bob), from(charlie) INWINDOW 5"
         )
 
         # Should find patterns where first position is NOT alice
@@ -60,7 +60,7 @@ class TestBasicNegativePatterns:
         """Test NOT at last position."""
         # Pattern: alice -> bob -> (not charlie)
         result = engine.execute(
-            "SELECT from(alice), from(bob), NOT from(charlie) INWIN 5"
+            "SELECT from(alice), from(bob), NOT from(charlie) INWINDOW 5"
         )
 
         # Should find patterns where last position is NOT charlie
@@ -74,7 +74,7 @@ class TestMultipleNotPatterns:
         """Test pattern with two NOT operators."""
         # Pattern: alice -> (not bob) -> (not charlie)
         result = engine.execute(
-            "SELECT from(alice), NOT from(bob), NOT from(charlie) INWIN 5"
+            "SELECT from(alice), NOT from(bob), NOT from(charlie) INWINDOW 5"
         )
 
         # Should find patterns where positions 1 and 2 are not bob/charlie
@@ -84,7 +84,7 @@ class TestMultipleNotPatterns:
         """Test pattern with all NOT operators."""
         # Pattern: (not alice) -> (not bob) -> (not charlie)
         result = engine.execute(
-            "SELECT NOT from(alice), NOT from(bob), NOT from(charlie) INWIN 5"
+            "SELECT NOT from(alice), NOT from(bob), NOT from(charlie) INWINDOW 5"
         )
 
         # Should find patterns where all positions avoid those users
@@ -100,7 +100,7 @@ class TestNotWithBooleanOperators:
         # Pattern: (alice AND has question) -> (not bob)
         engine.add_dictionary("questions", ["How", "?"])
         result = engine.execute(
-            "SELECT from(alice) AND contains(questions), NOT from(bob) INWIN 5"
+            "SELECT from(alice) AND contains(questions), NOT from(bob) INWINDOW 5"
         )
 
         assert isinstance(result, list)
@@ -109,7 +109,7 @@ class TestNotWithBooleanOperators:
         """Test NOT combined with OR."""
         # Pattern: (alice OR bob) -> (not charlie)
         result = engine.execute(
-            "SELECT from(alice) OR from(bob), NOT from(charlie) INWIN 5"
+            "SELECT from(alice) OR from(bob), NOT from(charlie) INWINDOW 5"
         )
 
         assert len(result) > 0
@@ -118,7 +118,7 @@ class TestNotWithBooleanOperators:
         """Test complex boolean expression with NOT."""
         # Pattern: (alice OR bob) -> NOT (charlie OR alice)
         result = engine.execute(
-            "SELECT from(alice) OR from(bob), NOT (from(charlie) OR from(alice)) INWIN 5"
+            "SELECT from(alice) OR from(bob), NOT (from(charlie) OR from(alice)) INWINDOW 5"
         )
 
         assert isinstance(result, list)
@@ -133,7 +133,7 @@ class TestNotWithDictionaries:
 
         # Pattern: alice -> (not greeting) -> bob
         result = engine.execute(
-            "SELECT from(alice), NOT contains(greetings), from(bob) INWIN 5"
+            "SELECT from(alice), NOT contains(greetings), from(bob) INWINDOW 5"
         )
 
         assert isinstance(result, list)
@@ -144,7 +144,7 @@ class TestNotWithDictionaries:
 
         # Pattern: (not alice) -> contains(farewells) -> bob
         result = engine.execute(
-            "SELECT NOT from(alice), contains(farewells), from(bob) INWIN 5"
+            "SELECT NOT from(alice), contains(farewells), from(bob) INWINDOW 5"
         )
 
         assert isinstance(result, list)
@@ -157,7 +157,7 @@ class TestNotWithVariables:
         """Test NOT with pattern variables."""
         # Pattern: $user -> (not bob) -> $user (same user responds, but bob doesn't interrupt)
         result = engine.execute(
-            "SELECT from($user), NOT from(bob), from($user) INWIN 5"
+            "SELECT from($user), NOT from(bob), from($user) INWINDOW 5"
         )
 
         assert isinstance(result, list)
@@ -171,7 +171,7 @@ class TestNotWithVariables:
         # So this query might not make semantic sense as written
 
         # For now, let's test a simpler case: alice -> NOT from($anyone)
-        result = engine.execute("SELECT from(alice), NOT from($user) INWIN 3")
+        result = engine.execute("SELECT from(alice), NOT from($user) INWINDOW 3")
 
         # This should work but might have unexpected semantics
         assert isinstance(result, list)
@@ -186,7 +186,7 @@ class TestNotWithNamedGroups:
 
         # Pattern with names: alice AS sender -> (not bob) AS middle -> charlie AS receiver
         result = engine.execute(
-            'SELECT from(alice) AS "sender", NOT from(bob) AS "middle", from(charlie) AS "receiver" INWIN 5'
+            'SELECT from(alice) AS "sender", NOT from(bob) AS "middle", from(charlie) AS "receiver" INWINDOW 5'
         )
 
         # Should return NamedQueryResult when using AS keyword
@@ -199,8 +199,8 @@ class TestNotEdgeCases:
 
     def test_not_with_tight_window(self, engine):
         """Test NOT with very tight window."""
-        # INWIN 1 means consecutive messages only
-        result = engine.execute("SELECT from(alice), NOT from(bob) INWIN 1")
+        # INWINDOW 1 means consecutive messages only
+        result = engine.execute("SELECT from(alice), NOT from(bob) INWINDOW 1")
 
         # Should find cases where alice is immediately followed by someone other than bob
         assert isinstance(result, list)
@@ -210,7 +210,7 @@ class TestNotEdgeCases:
         # If we say alice -> NOT (bob OR charlie OR alice), and those are the only users,
         # we should get no results
         result = engine.execute(
-            "SELECT from(alice), NOT (from(bob) OR from(charlie) OR from(alice)) INWIN 5"
+            "SELECT from(alice), NOT (from(bob) OR from(charlie) OR from(alice)) INWINDOW 5"
         )
 
         # Should be empty
@@ -219,8 +219,8 @@ class TestNotEdgeCases:
     def test_double_negation(self, engine):
         """Test double negation."""
         # NOT NOT from(alice) should be equivalent to from(alice)
-        result1 = engine.execute("SELECT NOT NOT from(alice) INWIN 5")
-        result2 = engine.execute("SELECT from(alice) INWIN 5")
+        result1 = engine.execute("SELECT NOT NOT from(alice) INWINDOW 5")
+        result2 = engine.execute("SELECT from(alice) INWINDOW 5")
 
         # Results should be the same
         assert len(result1) == len(result2)
@@ -233,12 +233,12 @@ class TestNotSemantics:
         """Verify NOT excludes specified user at that specific position."""
         # Get pattern with bob at position 1
         with_bob = engine.execute(
-            "SELECT from(alice), from(bob), from(charlie) INWIN 5"
+            "SELECT from(alice), from(bob), from(charlie) INWINDOW 5"
         )
 
         # Get pattern with NOT bob at position 1
         without_bob = engine.execute(
-            "SELECT from(alice), NOT from(bob), from(charlie) INWIN 5"
+            "SELECT from(alice), NOT from(bob), from(charlie) INWINDOW 5"
         )
 
         # without_bob should not include any of the with_bob patterns
@@ -249,7 +249,7 @@ class TestNotSemantics:
     def test_not_matches_others(self, engine):
         """Verify NOT matches other users correctly."""
         # alice -> (not bob) should match alice -> charlie and alice -> alice
-        result = engine.execute("SELECT from(alice), NOT from(bob) INWIN 5")
+        result = engine.execute("SELECT from(alice), NOT from(bob) INWINDOW 5")
 
         # Should have results
         assert len(result) > 0
@@ -261,7 +261,7 @@ class TestNotWithAggregation:
     def test_not_with_count(self, engine):
         """Test counting NOT patterns."""
         result = engine.execute(
-            "SELECT from(alice), NOT from(bob) INWIN 5 AGGREGATE count()"
+            "SELECT from(alice), NOT from(bob) INWINDOW 5 AGGREGATE count()"
         )
 
         from prismql import AggregateResult
@@ -272,7 +272,7 @@ class TestNotWithAggregation:
     def test_not_with_group_by(self, engine):
         """Test NOT patterns with GROUP BY."""
         result = engine.execute(
-            "SELECT from(alice), NOT from(bob) INWIN 5 GROUP BY user"
+            "SELECT from(alice), NOT from(bob) INWINDOW 5 GROUP BY user"
         )
 
         from prismql import GroupedResult
@@ -286,7 +286,7 @@ class TestNotWithTemporalFilters:
     def test_not_with_before(self, engine):
         """Test NOT pattern with BEFORE filter."""
         result = engine.execute(
-            'SELECT from(alice), NOT from(bob) INWIN 5 BEFORE("2025-01-01")'
+            'SELECT from(alice), NOT from(bob) INWINDOW 5 BEFORE("2025-01-01")'
         )
 
         assert isinstance(result, list)
@@ -294,7 +294,7 @@ class TestNotWithTemporalFilters:
     def test_not_with_between(self, engine):
         """Test NOT pattern with BETWEEN filter."""
         result = engine.execute(
-            'SELECT from(alice), NOT from(bob) INWIN 5 BETWEEN("2020-01-01", "2025-01-01")'
+            'SELECT from(alice), NOT from(bob) INWINDOW 5 BETWEEN("2020-01-01", "2025-01-01")'
         )
 
         assert isinstance(result, list)

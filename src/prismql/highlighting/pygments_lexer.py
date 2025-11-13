@@ -28,7 +28,7 @@ class PrismQLLexer(RegexLexer):
 
     Example::
 
-        SELECT from(alice), contains(problems) INWIN 10
+        SELECT from(alice), contains(problems) INWINDOW 10
 
     .. versionadded:: 1.0
     """
@@ -52,7 +52,9 @@ class PrismQLLexer(RegexLexer):
             (
                 words(
                     (
-                        "INWIN",
+                        "INWINDOW",
+                        "IN_WINDOW",
+                        "INWIN",  # Deprecated: use INWINDOW
                         "WITHIN",
                         "UNR",
                         "AS",
