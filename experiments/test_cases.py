@@ -165,6 +165,24 @@ SEQUENTIAL_QUERIES = [
         },
         notes="Order matters: problem THEN solution (not solution then problem)",
     ),
+    TestCase(
+        id="seq_006",
+        description="Find messages from support that are preceded by a question within 3 messages",
+        ground_truth_query="SELECT from(support) PRECEDED_BY is_question() WITHIN 3",
+        category="sequential_patterns",
+        difficulty="medium",
+        required_dictionaries={},
+        notes="Order matters: question THEN support (PRECEDED_BY is reverse of FOLLOWED_BY)",
+    ),
+    TestCase(
+        id="seq_007",
+        description="Find support messages that are NOT preceded by a question within 5 messages",
+        ground_truth_query="SELECT from(support) NOT_PRECEDED_BY is_question() WITHIN 5",
+        category="sequential_patterns",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Tests understanding of negative lookbehind - support messages without prior questions",
+    ),
 ]
 
 # =============================================================================
@@ -245,6 +263,27 @@ EDGE_CASE_QUERIES = [
         required_dictionaries={"gratitude": ["thank", "thanks", "appreciate"]},
         notes="Sequential pattern: user asks THEN thanks (same user, ordered)",
     ),
+    TestCase(
+        id="edge_004",
+        description="Find messages that are from alice or bob, and also contain greetings or thanks",
+        ground_truth_query="SELECT (from(alice) OR from(bob)) AND (contains(greetings) OR contains(gratitude))",
+        category="edge_cases",
+        difficulty="medium",
+        required_dictionaries={
+            "greetings": ["hello", "hi", "hey"],
+            "gratitude": ["thank", "thanks", "appreciate"],
+        },
+        notes="Tests nested parentheses and operator precedence - (A OR B) AND (C OR D)",
+    ),
+    TestCase(
+        id="edge_005",
+        description="Find three-way conversation where user1 posts, then user2 responds within 3 messages, then user3 responds within 3 more messages",
+        ground_truth_query="SELECT from($user1) FOLLOWED_BY from($user2) WITHIN 3 FOLLOWED_BY from($user3) WITHIN 3",
+        category="edge_cases",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Three different pattern variables - tests LLM understanding of multiple distinct users",
+    ),
 ]
 
 # =============================================================================
@@ -263,7 +302,7 @@ AMBIGUOUS_QUERIES = [
     ),
     TestCase(
         id="ambig_002",
-        description="Find messages about problems from customers",
+        description="Find messages about problems from customer",
         ground_truth_query="SELECT from(customer) AND contains(problems)",
         category="ambiguous",
         difficulty="easy",
@@ -279,25 +318,25 @@ AMBIGUOUS_QUERIES = [
 PATTERN_VARIABLE_QUERIES = [
     TestCase(
         id="pvar_001",
-        description="Find the same user posting consecutively within 3 messages",
-        ground_truth_query="SELECT from($user), from($user) INWIN 3",
+        description="Find the same user posting twice in a row within 3 messages",
+        ground_truth_query="SELECT from($user) FOLLOWED_BY from($user) WITHIN 3",
         category="pattern_variables",
         difficulty="hard",
         required_dictionaries={},
-        notes="Self-continuation pattern - same user posts multiple times",
+        notes="Sequential self-continuation: same user posts, then posts again (ordered)",
     ),
     TestCase(
         id="pvar_002",
-        description="Find someone asking, Bob responding, then the original person following up",
-        ground_truth_query="SELECT from($asker) FOLLOWED_BY from(bob) WITHIN 5 FOLLOWED_BY from($asker) WITHIN 5",
+        description="Find someone asking a question, Bob responding within 5 messages, then the original person following up within 5 more messages",
+        ground_truth_query="SELECT from($asker) AND is_question() FOLLOWED_BY from(bob) WITHIN 5 FOLLOWED_BY from($asker) WITHIN 5",
         category="pattern_variables",
         difficulty="hard",
         required_dictionaries={},
-        notes="Sequential question-answer-acknowledgment: $asker THEN bob THEN $asker (ordered)",
+        notes="Sequential question-answer-acknowledgment: $asker asks THEN bob THEN $asker (ordered)",
     ),
     TestCase(
         id="pvar_003",
-        description="Find two-person back-and-forth alternating conversation pattern",
+        description="Find two-person back-and-forth alternating conversation pattern with responses within 2 messages each",
         ground_truth_query="SELECT from($person1) FOLLOWED_BY from($person2) WITHIN 2 FOLLOWED_BY from($person1) WITHIN 2 FOLLOWED_BY from($person2) WITHIN 2",
         category="pattern_variables",
         difficulty="hard",
@@ -306,12 +345,21 @@ PATTERN_VARIABLE_QUERIES = [
     ),
     TestCase(
         id="pvar_004",
-        description="Find the same user posting three consecutive messages",
+        description="Find the same user posting three consecutive messages (immediately after each other)",
         ground_truth_query="SELECT from($user) FOLLOWED_BY from($user) WITHIN 1 FOLLOWED_BY from($user) WITHIN 1",
         category="pattern_variables",
         difficulty="hard",
         required_dictionaries={},
         notes="Sequential self-continuation: $user THEN $user THEN $user (consecutive, no gaps)",
+    ),
+    TestCase(
+        id="pvar_005",
+        description="Find any user asking twice and getting a support response, all within 8 messages",
+        ground_truth_query="SELECT from($user) AND is_question(), from($user) AND is_question(), from(support) INWIN 8",
+        category="pattern_variables",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Pattern variable with INWIN - same user asks twice (unordered) + support responds (unordered)",
     ),
 ]
 
@@ -331,7 +379,7 @@ QUANTIFIER_QUERIES = [
     ),
     TestCase(
         id="quant_002",
-        description="Find alice posting twice then bob responding",
+        description="Find alice posting twice then bob responding within 5 messages",
         ground_truth_query="SELECT from(alice){2} FOLLOWED_BY from(bob) WITHIN 5",
         category="quantifiers",
         difficulty="hard",
@@ -340,7 +388,7 @@ QUANTIFIER_QUERIES = [
     ),
     TestCase(
         id="quant_003",
-        description="Find any user posting 3 times then someone else responding",
+        description="Find any user posting 3 times then someone else responding immediately after",
         ground_truth_query="SELECT from($user){3} FOLLOWED_BY NOT from($user) WITHIN 1",
         category="quantifiers",
         difficulty="hard",
@@ -349,12 +397,30 @@ QUANTIFIER_QUERIES = [
     ),
     TestCase(
         id="quant_004",
-        description="Find bob posting twice then alice posting twice",
+        description="Find bob posting twice then alice posting twice within 5 messages",
         ground_truth_query="SELECT from(bob){2} FOLLOWED_BY from(alice){2} WITHIN 5",
         category="quantifiers",
         difficulty="hard",
         required_dictionaries={},
         notes="Sequential with quantifiers: bob twice THEN alice twice (ordered)",
+    ),
+    TestCase(
+        id="quant_005",
+        description="Find the same user posting exactly 2 messages within 5 positions",
+        ground_truth_query="SELECT from($user){2} INWIN 5",
+        category="quantifiers",
+        difficulty="hard",
+        required_dictionaries={},
+        notes="Pattern variable with quantifier - finds bursts from same user (unordered)",
+    ),
+    TestCase(
+        id="quant_006",
+        description="Find alice posting immediately followed by bob within 1 message (consecutive messages with no gap)",
+        ground_truth_query="SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 1",
+        category="quantifiers",
+        difficulty="medium",
+        required_dictionaries={},
+        notes="WITHIN 1 means immediately adjacent - no messages in between",
     ),
 ]
 
@@ -365,12 +431,12 @@ QUANTIFIER_QUERIES = [
 NEGATIVE_PATTERN_QUERIES = [
     TestCase(
         id="neg_001",
-        description="Find same user posting twice with no manager message in between",
+        description="Find windows with two messages from the same user and no messages from manager, all within 5 messages",
         ground_truth_query="SELECT from($user), NOT from(manager), from($user) INWIN 5",
         category="negative_patterns",
         difficulty="hard",
         required_dictionaries={},
-        notes="NOT in middle position - peer-to-peer conversations",
+        notes="INWIN is unordered - finds windows with 2 user messages + 0 manager messages (positions can be any order)",
     ),
     TestCase(
         id="neg_002",
@@ -383,7 +449,7 @@ NEGATIVE_PATTERN_QUERIES = [
     ),
     TestCase(
         id="neg_003",
-        description="Find questions with a non-thank-you response then bob responding",
+        description="Find messages containing question words, then a non-thank-you response within 3 messages, then bob responding within 3 more messages",
         ground_truth_query="SELECT contains(questions) FOLLOWED_BY NOT contains(thanks) WITHIN 3 FOLLOWED_BY from(bob) WITHIN 3",
         category="negative_patterns",
         difficulty="hard",
@@ -391,7 +457,7 @@ NEGATIVE_PATTERN_QUERIES = [
             "questions": ["what", "how", "when", "where", "why"],
             "thanks": ["thank", "thanks", "appreciate"],
         },
-        notes="Sequential: question THEN non-thank-you response THEN bob (3-part ordered sequence)",
+        notes="Sequential: question words THEN non-thank-you response THEN bob (3-part ordered sequence)",
     ),
 ]
 
@@ -402,7 +468,7 @@ NEGATIVE_PATTERN_QUERIES = [
 AGGREGATION_QUERIES = [
     TestCase(
         id="agg_001",
-        description="Count total self-continuation instances",
+        description="Count total self-continuation instances (same user posting twice within 3 messages)",
         ground_truth_query="SELECT from($user), from($user) INWIN 3 AGGREGATE count()",
         category="aggregation",
         difficulty="hard",
@@ -418,7 +484,7 @@ AGGREGATION_QUERIES = [
 SUBQUERY_QUERIES = [
     TestCase(
         id="sub_001",
-        description="Find customer and problem mentions appearing together, and support with solution appearing together, all within 15 messages (any order)",
+        description="Find customer and problem mentions within 3 messages of each other, and support with solution within 3 messages of each other, all within 15 messages (any order)",
         ground_truth_query="SELECT (SELECT from(customer), contains(problems) INWIN 3) ; (SELECT from(support), contains(solutions) INWIN 3) INWIN 15",
         category="subqueries",
         difficulty="hard",
@@ -431,35 +497,35 @@ SUBQUERY_QUERIES = [
     TestCase(
         id="sub_002",
         description="Find question from user1, answer from user2, and thanks from user1 all appearing within 10 messages (any order)",
-        ground_truth_query="SELECT (SELECT is_question(), from(user1) INWIN 2) ; (SELECT from(user2), contains(answers) INWIN 2) ; (SELECT from(user1), contains(thanks) INWIN 2) INWIN 10",
+        ground_truth_query="SELECT from(user1) AND is_question(), from(user2) AND contains(answers), from(user1) AND contains(thanks) INWIN 10",
         category="subqueries",
         difficulty="hard",
         required_dictionaries={
             "answers": ["yes", "no", "here", "this"],
             "thanks": ["thank", "thanks", "appreciate"],
         },
-        notes="Three groups merged with INWIN - can appear in any order (not a sequence!)",
+        notes="Three elements merged with INWIN - can appear in any order (not a sequence!)",
     ),
     TestCase(
         id="sub_003",
-        description="Find alice-bob conversation and charlie message appearing within 8 messages (any order)",
-        ground_truth_query="SELECT (SELECT from(alice), from(bob) INWIN 3) ; (SELECT from(charlie) INWIN 2) INWIN 8",
+        description="Find alice-bob conversation (within 3 messages of each other) and charlie message appearing within 8 messages (any order)",
+        ground_truth_query="SELECT (SELECT from(alice), from(bob) INWIN 3) ; from(charlie) INWIN 8",
         category="subqueries",
         difficulty="hard",
         required_dictionaries={},
-        notes="Two groups with INWIN - charlie could appear before or after alice-bob",
+        notes="Subquery defines alice-bob cluster, then merged with charlie using INWIN - charlie could appear before or after alice-bob",
     ),
     TestCase(
         id="sub_004",
-        description="Find customer problem, customer escalation, and manager message all within 20 messages (any order)",
-        ground_truth_query="SELECT (SELECT contains(problems), from(customer) INWIN 3) ; (SELECT contains(escalation), from(customer) INWIN 2) ; (SELECT from(manager) INWIN 2) INWIN 20",
+        description="Find customer problem (within 3 messages), customer escalation (within 2 messages), and manager message all within 20 messages (any order)",
+        ground_truth_query="SELECT (SELECT contains(problems), from(customer) INWIN 3) ; (SELECT contains(escalation), from(customer) INWIN 2) ; from(manager) INWIN 20",
         category="subqueries",
         difficulty="hard",
         required_dictionaries={
             "problems": ["error", "issue", "broken"],
             "escalation": ["manager", "escalate", "urgent"],
         },
-        notes="Three groups merged with INWIN - order not guaranteed (unordered co-occurrence)",
+        notes="Two subqueries define customer clusters, merged with manager message - order not guaranteed (unordered co-occurrence)",
     ),
 ]
 
@@ -470,7 +536,7 @@ SUBQUERY_QUERIES = [
 SEQUENTIAL_SUBQUERY_QUERIES = [
     TestCase(
         id="seqsub_001",
-        description="Find customer with problem mention, then support with solution mention within 10 messages",
+        description="Find customer with problem mention (within 3 messages of each other), then support with solution mention (within 3 messages of each other) within 10 messages",
         ground_truth_query="SELECT (SELECT from(customer), contains(problems) INWIN 3) FOLLOWED_BY (SELECT from(support), contains(solutions) INWIN 3) WITHIN 10",
         category="sequential_subqueries",
         difficulty="hard",
@@ -482,28 +548,28 @@ SEQUENTIAL_SUBQUERY_QUERIES = [
     ),
     TestCase(
         id="seqsub_002",
-        description="Find question from user1, then answer from user2, then thanks from user1 in sequence",
-        ground_truth_query="SELECT (SELECT is_question(), from(user1) INWIN 2) FOLLOWED_BY (SELECT from(user2), contains(answers) INWIN 2) WITHIN 5 FOLLOWED_BY (SELECT from(user1), contains(thanks) INWIN 2) WITHIN 5",
+        description="Find question from user1, then answer from user2 within 5 messages, then thanks from user1 within 5 more messages (in sequence)",
+        ground_truth_query="SELECT from(user1) AND is_question() FOLLOWED_BY from(user2) AND contains(answers) WITHIN 5 FOLLOWED_BY from(user1) AND contains(thanks) WITHIN 5",
         category="sequential_subqueries",
         difficulty="hard",
         required_dictionaries={
             "answers": ["yes", "no", "here", "this"],
             "thanks": ["thank", "thanks", "appreciate"],
         },
-        notes="Three subqueries in sequence: question THEN answer THEN thanks (ordered chain)",
+        notes="Three-part sequence: user1 question THEN user2 answer THEN user1 thanks (ordered chain)",
     ),
     TestCase(
         id="seqsub_003",
-        description="Find alice-bob conversation followed by charlie responding within 8 messages",
+        description="Find alice-bob conversation (within 3 messages of each other) followed by charlie responding within 8 messages",
         ground_truth_query="SELECT (SELECT from(alice), from(bob) INWIN 3) FOLLOWED_BY (SELECT from(charlie)) WITHIN 8",
         category="sequential_subqueries",
         difficulty="hard",
         required_dictionaries={},
-        notes="Sequential: alice-bob group THEN charlie message (charlie responds after conversation)",
+        notes="Sequential: alice-bob cluster THEN charlie message (charlie responds after conversation)",
     ),
     TestCase(
         id="seqsub_004",
-        description="Find customer problem, then escalation from same customer, then manager response in sequence",
+        description="Find customer problem (within 3 messages), then escalation from same customer (within 2 messages) within 10 messages, then manager response within 10 more messages (in sequence)",
         ground_truth_query="SELECT (SELECT contains(problems), from(customer) INWIN 3) FOLLOWED_BY (SELECT contains(escalation), from(customer) INWIN 2) WITHIN 10 FOLLOWED_BY (SELECT from(manager)) WITHIN 10",
         category="sequential_subqueries",
         difficulty="hard",
@@ -511,7 +577,7 @@ SEQUENTIAL_SUBQUERY_QUERIES = [
             "problems": ["error", "issue", "broken"],
             "escalation": ["manager", "escalate", "urgent"],
         },
-        notes="Three sequential groups: problem THEN escalation THEN manager (ordered escalation pattern)",
+        notes="Sequential: customer problem cluster THEN customer escalation cluster THEN manager message (ordered escalation pattern)",
     ),
 ]
 
