@@ -163,9 +163,22 @@ SELECT
     FOLLOWED_BY
     (SELECT from(support), contains(solutions) INWINDOW 3)
     INWINDOW 10
+
+-- Sequential subqueries with single restriction (still needs SELECT!)
+SELECT
+    (SELECT from(alice), from(bob) INWINDOW 3)
+    FOLLOWED_BY
+    (SELECT from(charlie))
+    INWINDOW 8
 ```
 
-**Critical**: Do NOT flatten subqueries - grouping semantics matter!
+**Critical rules for subqueries**:
+
+1. **Always use SELECT wrapper** - Even for single restrictions in subqueries:
+   - ✅ CORRECT: `FOLLOWED_BY (SELECT from(charlie))`
+   - ❌ WRONG: `FOLLOWED_BY from(charlie)` (syntax error!)
+
+2. **Do NOT flatten subqueries** - Grouping semantics matter!
 
 ```prismql
 -- ✅ CORRECT: Preserves grouping (alice+bob together, charlie separate)
