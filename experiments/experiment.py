@@ -262,18 +262,27 @@ Respond with ONLY the PrismQL query, starting with SELECT. Do not include any ex
                 (
                     "AND",
                     "OR",
-                    "INWIN",
+                    "INWINDOW",
+                    "DURING",
                     "FOLLOWED_BY",
                     "PRECEDED_BY",
                     "NOT_FOLLOWED_BY",
                     "NOT_PRECEDED_BY",
                     "AS",
-                    "WITHIN",
+                    "AGGREGATE",
                 )
             ):
                 text = lines[0].strip()
 
-        return text.strip()
+        # Normalize whitespace: replace newlines with spaces
+        # This handles multi-line queries like:
+        #   SELECT from(alice)
+        #   FOLLOWED_BY from(bob)
+        # Converting to: SELECT from(alice) FOLLOWED_BY from(bob)
+        import re
+        text = re.sub(r'\s+', ' ', text.strip())
+
+        return text
 
     def run_experiment(  # noqa: C901
         self,
