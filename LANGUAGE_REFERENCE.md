@@ -24,6 +24,7 @@ contains(dictionary_name)         -- Messages containing dictionary words
 contains_tokens(dictionary_name)  -- Token-based matching (preserves C++, emails)
 contains_phrase("phrase")         -- Exact phrase matching
 is_question()                     -- Messages that are questions
+has_feature(feature_name)         -- Messages with custom annotated feature
 mentions_user(username)           -- Messages mentioning a user
 mentions_date()                   -- Messages mentioning dates
 mentions_time()                   -- Messages mentioning times
@@ -289,24 +290,6 @@ SELECT from(alice){5,}
        NOT_PRECEDED_BY from(bob) INWINDOW 10
        NOT_FOLLOWED_BY from(bob) INWINDOW 10
 ```
-
-## Deprecated Syntax
-
-**Do NOT use these operators** (deprecated, will be removed):
-
-```prismql
--- ❌ DEPRECATED
-byuser(alice)              -- Use: from(alice)
-haswordofdict(dict)        -- Use: contains(dict)
-WITHIN N                   -- Use: INWINDOW N (for positional)
-INWIN N                    -- Use: INWINDOW N (old name)
-```
-
-**Always use modern syntax**:
-- `from(user)` not `byuser(user)`
-- `contains(dict)` not `haswordofdict(dict)`
-- `INWINDOW N` not `WITHIN N` or `INWIN N`
-- `DURING TIME` for temporal windows
 
 ## Grammar Rules
 

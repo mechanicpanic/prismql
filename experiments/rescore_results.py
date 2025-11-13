@@ -125,13 +125,19 @@ def check_relaxed_equivalence(generated: str, ground_truth: str, description: st
             return (True, "user1/user2/user3 equivalent to $user1/$user2/$user3")
 
     # Check if quantifier vs explicit repetition (some cases use {2} vs two separate conditions)
-    # These are semantically equivalent - quantifier just has a bug causing fewer results
+    # These are semantically equivalent in INTENT, but quantifiers have a known bug causing different results
+    # The LLM's interpretation with quantifiers is often CORRECT, just hits the bug
     gen_expanded = generated
     gt_expanded = ground_truth
 
-    # Expand quantifiers in both directions for comparison
+    # Normalize quantifiers in both directions for comparison
+    # from($user){2} should be equivalent to from($user), from($user)
+    # but currently has a bug causing result count mismatch
     gen_expanded = re.sub(r'from\(\$user\)\{2\}', 'from($user), from($user)', gen_expanded)
+    gen_expanded = re.sub(r'from\(\$\w+\)\{2\}', lambda m: m.group(0).replace('{2}', '') + ', ' + m.group(0).replace('{2}', ''), gen_expanded)
+
     gt_expanded = re.sub(r'from\(\$user\)\{2\}', 'from($user), from($user)', gt_expanded)
+    gt_expanded = re.sub(r'from\(\$\w+\)\{2\}', lambda m: m.group(0).replace('{2}', '') + ', ' + m.group(0).replace('{2}', ''), gt_expanded)
 
     # Also handle is_question() variations
     gen_expanded = re.sub(r'from\(\$user\) AND is_question\(\)\{2\}', 'from($user) AND is_question(), from($user) AND is_question()', gen_expanded)

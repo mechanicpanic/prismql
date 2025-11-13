@@ -204,13 +204,13 @@ Basic query:
 User: "Find messages from alice"
 Query: SELECT from(alice)
 
-Window query:
-User: "Find questions and answers within 5 messages"
-Query: SELECT is_question(), from(support) INWINDOW 5
-
 Boolean query:
 User: "Find questions from alice or bob"
 Query: SELECT (from(alice) OR from(bob)) AND is_question()
+
+Window query:
+User: "Find questions and support responses within 5 messages"
+Query: SELECT is_question(), from(support) INWINDOW 5
 
 Sequential query:
 User: "Find alice followed by bob within 3 messages"
