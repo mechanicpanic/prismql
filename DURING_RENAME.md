@@ -122,19 +122,19 @@ SELECT from(alice) WITHIN 5 days  # Use DURING
 
 ## Examples
 
-### Temporal Filtering (Future Feature)
+### Temporal Window Filtering
 
-When temporal filtering is fully implemented:
+DURING filters results to only keep message groups where all messages are within the specified time window:
 
 ```prismql
-# Find alice messages in last 5 days
-SELECT from(alice) DURING 5 days
+# Find alice and bob messages appearing within 1 hour of each other
+SELECT from(alice), from(bob) DURING 1 hour
 
-# Find alice messages in last 2 hours
-SELECT from(alice) DURING 2 hours
+# Find problem mentions and support responses within 30 seconds
+SELECT contains(problems), from(support) DURING 30 seconds
 
-# Find problem mentions in last week
-SELECT contains(problems) DURING 1 week
+# Find same user posting twice within 5 minutes
+SELECT from($user), from($user) DURING 5 minutes
 ```
 
 ### Combined Positional + Temporal
@@ -176,16 +176,13 @@ SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3 DURING 1 week
 ### ✅ Complete
 - Grammar: DURING keyword added
 - Parser: Regenerated
-- Visitor: Recognizes During token
-- Tests: All pass (437 passing)
-- Backward compat: WITHIN temporal still works
-
-### 🚧 Not Yet Implemented
-- Actual temporal filtering with timestamps
+- Visitor: Recognizes During token and uses real timestamps
+- **Temporal filtering with timestamps** - FULLY IMPLEMENTED!
 - Duration calculations based on message timestamps
-- Temporal aggregations (e.g., "messages per day")
+- Backward compat: WITHIN temporal still works
+- Tests: All pass including 8 new temporal tests
 
-**Note:** DURING currently converts to positional window as placeholder. Full temporal implementation requires timestamp support in documents.
+**Note:** DURING now uses actual timestamps from documents! Requires documents to have a timestamp field (default: "timestamp", configurable via `timestamp_field` parameter).
 
 ---
 

@@ -79,6 +79,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Step 1: Extract window size if specified (position-based or time-based)
         window_size = self.DEFAULT_WINDOW_SIZE
+        temporal_window = None  # Will be set if using temporal DURING
+
         if ctx.InWindow():
             # Unified positional window operator
             window_size = int(ctx.number().getText())
@@ -86,11 +88,13 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # Deprecated: use INWINDOW instead
             window_size = int(ctx.number().getText())
         elif ctx.During():
-            # Temporal window operator (time-based filtering)
-            # TODO: Implement proper temporal windowing with timestamps
+            # Temporal window operator (time-based filtering with actual timestamps)
+            temporal_window = self._parse_time_window_to_timedelta(ctx.time_value())
+            # Also use a large positional window as pre-filter for efficiency
             window_size = self._parse_time_window(ctx.time_value())
         elif ctx.Within():
             # Deprecated: use DURING for temporal, INWINDOW for positional
+            temporal_window = self._parse_time_window_to_timedelta(ctx.time_value())
             window_size = self._parse_time_window(ctx.time_value())
 
         # Step 2: Process either restrictions or query sequence to get base results
@@ -103,6 +107,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # return the pairs directly without merging
             if is_sequential and len(ctx.restrictions().named_restriction()) == 1:
                 results = restriction_results
+            elif temporal_window is not None:
+                # For temporal windows, generate ALL possible combinations
+                # (not just non-overlapping pairs from greedy algorithm)
+                results = self._generate_all_combinations(restriction_results)
             else:
                 results = self._merge_restrictions(restriction_results, window_size)
         elif ctx.query_seq():
@@ -127,6 +135,22 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 self.search_backend, self.variable_constraints
             )
             results = validator.validate_results(results)
+
+        # Step 2.4: Apply temporal window filtering if DURING was used
+        if temporal_window is not None:
+            # Retrieve documents for temporal analysis
+            # Collect all message IDs from results
+            all_msg_ids = set()
+            for group in results:
+                all_msg_ids.update(group)
+
+            # Get documents with timestamps
+            documents = self.search_backend.get_documents(list(all_msg_ids))
+
+            # Apply temporal window filter
+            results = TemporalProcessor.filter_by_time_window(
+                results, documents, self.timestamp_field, temporal_window
+            )
 
         # Step 2.5: Apply temporal filtering if specified (BEFORE, AFTER, BETWEEN)
         if ctx.temporal_filter():
@@ -838,6 +862,33 @@ class PrismQLVisitor(BasePrismQLVisitor):
             "annotations (LLM-generated, human labels, etc.)."
         )
 
+    def _generate_all_combinations(self, groups: list[MessageGroup]) -> QueryResult:
+        """
+        Generate ALL possible combinations of messages from restriction groups.
+
+        This is used for temporal windows where we want all combinations,
+        not just non-overlapping pairs from the greedy algorithm.
+
+        Args:
+            groups: List of message groups (one per restriction)
+
+        Returns:
+            All possible combinations (cartesian product)
+        """
+        if not groups:
+            return []
+
+        # If single group, each message becomes its own result group
+        if len(groups) == 1:
+            return [[msg_id] for msg_id in groups[0]]
+
+        # Generate cartesian product of all groups
+        import itertools
+
+        all_combinations = list(itertools.product(*groups))
+        # Convert tuples to lists
+        return [list(combo) for combo in all_combinations]
+
     def _merge_restrictions(
         self, groups: list[MessageGroup], window_size: int
     ) -> QueryResult:
@@ -1172,6 +1223,41 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         multiplier = conversions.get(unit_text, 1)
         return number * multiplier
+
+    def _parse_time_window_to_timedelta(self, ctx: Any) -> "timedelta":
+        """
+        Parse time-based window and convert to timedelta for temporal filtering.
+
+        Args:
+            ctx: time_value context from parser
+
+        Returns:
+            timedelta representing the time window
+        """
+        from datetime import timedelta
+
+        if ctx is None:
+            # Default to a large time window
+            return timedelta(days=365)
+
+        # Get the number and unit
+        number = int(ctx.number().getText())
+        unit_text = ctx.time_unit().getText().lower()
+
+        # Convert to timedelta
+        if unit_text in ("s", "second", "seconds"):
+            return timedelta(seconds=number)
+        elif unit_text in ("m", "minute", "minutes"):
+            return timedelta(minutes=number)
+        elif unit_text in ("h", "hour", "hours"):
+            return timedelta(hours=number)
+        elif unit_text in ("d", "day", "days"):
+            return timedelta(days=number)
+        elif unit_text in ("w", "week", "weeks"):
+            return timedelta(weeks=number)
+        else:
+            # Default fallback
+            return timedelta(days=number)
 
     def _extract_group_by_fields(self, ctx: Any) -> list[str]:
         """

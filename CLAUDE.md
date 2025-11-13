@@ -30,14 +30,18 @@ SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
 
 ```prismql
 # ✅ Current (recommended):
-SELECT from(alice) DURING 5 days
+SELECT from(alice), from(bob) DURING 1 hour
 SELECT from(alice) DURING 2 hours
 
 # ⚠️ Deprecated (still works for backward compatibility):
 SELECT from(alice) WITHIN 5 days
 ```
 
-**DURING** filters by time duration (when fully implemented).
+**DURING** filters by actual time duration using timestamps:
+- Generates ALL possible combinations of matching restrictions
+- Filters results to only keep groups where all messages are within the time window
+- Requires documents to have a timestamp field (default: "timestamp", configurable)
+- Example: `DURING 1 hour` keeps only message groups spanning ≤ 1 hour
 
 ### Summary
 
