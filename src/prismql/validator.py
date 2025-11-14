@@ -196,9 +196,40 @@ class QueryValidator:
         """Check semantic validity of the query."""
         issues: list[ValidationIssue] = []
 
-        # Check for undefined dictionaries
         import re
 
+        # Check for sequential operators without windows
+        # Match FOLLOWED_BY/PRECEDED_BY/etc that are NOT followed by INWINDOW/DURING/WITHIN
+        sequential_ops = r'(FOLLOWED_BY|PRECEDED_BY|NOT_FOLLOWED_BY|NOT_PRECEDED_BY)'
+        window_ops = r'(INWINDOW|DURING|WITHIN)'
+
+        # Find all sequential operators
+        for match in re.finditer(sequential_ops, query, re.IGNORECASE):
+            op_pos = match.end()
+            # Check what comes after this operator (skip whitespace and content until next keyword)
+            remaining = query[op_pos:]
+
+            # Look for the next sequential operator or window operator
+            next_seq = re.search(sequential_ops, remaining, re.IGNORECASE)
+            next_window = re.search(window_ops, remaining, re.IGNORECASE)
+
+            # If there's another sequential operator before a window operator, that's a chain
+            # The final operator in the chain must have a window
+            if next_seq and (not next_window or next_seq.start() < next_window.start()):
+                # This is a chained operator, continue to check the next one
+                continue
+            elif not next_window:
+                # No window operator found after this sequential operator
+                issues.append(
+                    ValidationIssue(
+                        level=ValidationLevel.ERROR,
+                        message=f"Sequential operator {match.group(1)} must be followed by a window constraint (INWINDOW or DURING)",
+                        suggestion="Add INWINDOW <number> or DURING <time> after the final sequential operator",
+                        code="MISSING_WINDOW_CONSTRAINT",
+                    )
+                )
+
+        # Check for undefined dictionaries
         dict_pattern = r"contains\((\w+)\)"
         for match in re.finditer(dict_pattern, query):
             dict_name = match.group(1)
@@ -278,9 +309,9 @@ class QueryValidator:
         # Check for very large windows
         import re
 
-        window_pattern = r"INWIN\s+(\d+)|WITHIN\s+(\d+)"
+        window_pattern = r"INWINDOW\s+(\d+)|INWIN\s+(\d+)|WITHIN\s+(\d+)"
         for match in re.finditer(window_pattern, query):
-            size = int(match.group(1) or match.group(2))
+            size = int(match.group(1) or match.group(2) or match.group(3))
             if size > 100:
                 issues.append(
                     ValidationIssue(

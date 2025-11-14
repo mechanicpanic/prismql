@@ -14,7 +14,14 @@ from ..grammar.generated.PrismQLParser import PrismQLParser
 from ..grammar.generated.PrismQLVisitor import PrismQLVisitor as BasePrismQLVisitor
 from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..processors.variables import VariableConstraint, VariableValidator
-from ..types import MessageGroup, MessageId, NamedQueryResult, QueryResult
+from ..types import (
+    MessageGroup,
+    MessageId,
+    NamedQueryResult,
+    PartialSequence,
+    QueryResult,
+    WindowConstraint,
+)
 
 # Try to import Rust backend for performance
 try:
@@ -60,6 +67,35 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Pattern naming for result labeling
         self.pattern_names: list[Optional[str]] = []
+
+    def _extract_window_constraint(
+        self, ctx: Any
+    ) -> Optional[WindowConstraint]:
+        """
+        Extract window constraint from context.
+
+        Args:
+            ctx: Parse tree context that may have InWindow, During, or Within
+
+        Returns:
+            WindowConstraint (int for INWINDOW, tuple for DURING) or None
+        """
+        # Check for INWINDOW (positional)
+        if hasattr(ctx, 'InWindow') and ctx.InWindow():
+            return int(ctx.number().getText())
+
+        # Check for DURING (temporal)
+        if hasattr(ctx, 'During') and ctx.During():
+            time_value_ctx = ctx.time_value()
+            value = int(time_value_ctx.number().getText())
+            unit = time_value_ctx.time_unit().getText().lower()
+            return (value, unit)
+
+        # Check for deprecated WITHIN (positional - backward compatibility)
+        if hasattr(ctx, 'Within') and ctx.Within():
+            return int(ctx.number().getText())
+
+        return None
 
     def visitQuery(
         self, ctx: PrismQLParser.QueryContext
@@ -403,19 +439,21 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def visitRestriction(
         self, ctx: PrismQLParser.RestrictionContext
-    ) -> Union[set[MessageId], list[MessageGroup]]:
+    ) -> Union[set[MessageId], list[MessageGroup], PartialSequence]:
         """
         Process a single restriction with boolean operators.
 
-        Returns either a set of message IDs (for normal restrictions) or
-        a list of message groups (for sequential operators like FOLLOWED_BY).
+        Returns:
+            - set[MessageId] for normal restrictions
+            - list[MessageGroup] for evaluated sequential operators
+            - PartialSequence for sequential operators without window constraint
         """
         # Handle AND operator
         if ctx.And():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
-            # AND requires both operands to be sets, not sequences
-            if isinstance(lhs, list) or isinstance(rhs, list):
+            # AND requires both operands to be sets, not sequences or partial sequences
+            if isinstance(lhs, (list, PartialSequence)) or isinstance(rhs, (list, PartialSequence)):
                 raise PrismQLRuntimeError(
                     "AND operator cannot be used with sequential operators (FOLLOWED_BY, PRECEDED_BY). "
                     "Sequential operators return message sequences, not individual messages."
@@ -426,8 +464,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if ctx.Or():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
-            # OR requires both operands to be sets, not sequences
-            if isinstance(lhs, list) or isinstance(rhs, list):
+            # OR requires both operands to be sets, not sequences or partial sequences
+            if isinstance(lhs, (list, PartialSequence)) or isinstance(rhs, (list, PartialSequence)):
                 raise PrismQLRuntimeError(
                     "OR operator cannot be used with sequential operators (FOLLOWED_BY, PRECEDED_BY). "
                     "Sequential operators return message sequences, not individual messages."
@@ -438,7 +476,23 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if ctx.FollowedBy():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
-            window = int(ctx.number().getText())
+            window = self._extract_window_constraint(ctx)
+
+            # If no window, return PartialSequence for deferred evaluation
+            if window is None:
+                return PartialSequence(lhs, rhs, "FOLLOWED_BY")
+
+            # TODO: Add DURING support for sequential operators
+            if isinstance(window, tuple):
+                raise PrismQLRuntimeError(
+                    "DURING (temporal windows) are not yet supported for sequential operators. "
+                    "Use INWINDOW for positional windows instead."
+                )
+            window_size: int = window
+
+            # Evaluate any partial sequences
+            lhs = self._evaluate_partial_sequence(lhs, window)
+            rhs = self._evaluate_partial_sequence(rhs, window)
 
             # Check if lhs is a sequence (from chained FOLLOWED_BY)
             if isinstance(lhs, list):
@@ -448,7 +502,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     raise PrismQLRuntimeError(
                         "Complex nested sequential operators are not yet supported"
                     )
-                return self._extend_sequences_followed_by(lhs, rhs, window)
+                return self._extend_sequences_followed_by(lhs, rhs, window_size)
 
             # Simple case: both lhs and rhs are sets
             # rhs could be a list if it's nested on the right side
@@ -457,16 +511,32 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     "FOLLOWED_BY requires simple conditions, not nested sequences"
                 )
             # Create pairs using the existing logic
-            matching_lhs = self._apply_followed_by(lhs, rhs, window)
+            matching_lhs = self._apply_followed_by(lhs, rhs, window_size)
             return self._create_sequential_pairs(
-                matching_lhs, rhs, window, forward=True
+                matching_lhs, rhs, window_size, forward=True
             )
 
         # Handle PRECEDED_BY operator (lookbehind)
         if ctx.PrecededBy():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
-            window = int(ctx.number().getText())
+            window = self._extract_window_constraint(ctx)
+
+            # If no window, return PartialSequence for deferred evaluation
+            if window is None:
+                return PartialSequence(lhs, rhs, "PRECEDED_BY")
+
+            # TODO: Add DURING support for sequential operators
+            if isinstance(window, tuple):
+                raise PrismQLRuntimeError(
+                    "DURING (temporal windows) are not yet supported for sequential operators. "
+                    "Use INWINDOW for positional windows instead."
+                )
+            window_size: int = window
+
+            # Evaluate any partial sequences
+            lhs = self._evaluate_partial_sequence(lhs, window)
+            rhs = self._evaluate_partial_sequence(rhs, window)
 
             # Check if lhs is a sequence (from chained PRECEDED_BY)
             if isinstance(lhs, list):
@@ -475,7 +545,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     raise PrismQLRuntimeError(
                         "Complex nested sequential operators are not yet supported"
                     )
-                return self._extend_sequences_preceded_by(lhs, rhs, window)
+                return self._extend_sequences_preceded_by(lhs, rhs, window_size)
 
             # Simple case: both lhs and rhs are sets
             if isinstance(rhs, list):
@@ -483,34 +553,72 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     "PRECEDED_BY requires simple conditions, not nested sequences"
                 )
             # Create pairs using the existing logic
-            matching_lhs = self._apply_preceded_by(lhs, rhs, window)
+            matching_lhs = self._apply_preceded_by(lhs, rhs, window_size)
             return self._create_sequential_pairs(
-                matching_lhs, rhs, window, forward=False
+                matching_lhs, rhs, window_size, forward=False
             )
 
         # Handle NOT_FOLLOWED_BY operator (negative lookahead)
         if ctx.NotFollowedBy():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
-            window = int(ctx.number().getText())
+            window = self._extract_window_constraint(ctx)
+
+            # NOT_FOLLOWED_BY must have a window (cannot be chained)
+            if window is None:
+                raise PrismQLRuntimeError(
+                    "NOT_FOLLOWED_BY requires a window constraint (INWINDOW or DURING)"
+                )
+
+            # TODO: Add DURING support for sequential operators
+            if isinstance(window, tuple):
+                raise PrismQLRuntimeError(
+                    "DURING (temporal windows) are not yet supported for sequential operators. "
+                    "Use INWINDOW for positional windows instead."
+                )
+            window_size: int = window
+
+            # Evaluate any partial sequences
+            lhs = self._evaluate_partial_sequence(lhs, window)
+            rhs = self._evaluate_partial_sequence(rhs, window)
+
             # NOT_FOLLOWED_BY returns only the LHS messages, not pairs
             if isinstance(lhs, list) or isinstance(rhs, list):
                 raise PrismQLRuntimeError(
                     "NOT_FOLLOWED_BY cannot be chained with other sequential operators"
                 )
-            return self._apply_not_followed_by(lhs, rhs, window)
+            return self._apply_not_followed_by(lhs, rhs, window_size)
 
         # Handle NOT_PRECEDED_BY operator (negative lookbehind)
         if ctx.NotPrecededBy():
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
-            window = int(ctx.number().getText())
+            window = self._extract_window_constraint(ctx)
+
+            # NOT_PRECEDED_BY must have a window (cannot be chained)
+            if window is None:
+                raise PrismQLRuntimeError(
+                    "NOT_PRECEDED_BY requires a window constraint (INWINDOW or DURING)"
+                )
+
+            # TODO: Add DURING support for sequential operators
+            if isinstance(window, tuple):
+                raise PrismQLRuntimeError(
+                    "DURING (temporal windows) are not yet supported for sequential operators. "
+                    "Use INWINDOW for positional windows instead."
+                )
+            window_size: int = window
+
+            # Evaluate any partial sequences
+            lhs = self._evaluate_partial_sequence(lhs, window)
+            rhs = self._evaluate_partial_sequence(rhs, window)
+
             # NOT_PRECEDED_BY returns only the LHS messages, not pairs
             if isinstance(lhs, list) or isinstance(rhs, list):
                 raise PrismQLRuntimeError(
                     "NOT_PRECEDED_BY cannot be chained with other sequential operators"
                 )
-            return self._apply_not_preceded_by(lhs, rhs, window)
+            return self._apply_not_preceded_by(lhs, rhs, window_size)
 
         # Handle NOT operator
         if ctx.Not():
@@ -1000,6 +1108,90 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return [[msg] for msg in sorted(matching_lhs)]
 
         raise ValueError(f"Unknown positional operator: {operator_text}")
+
+    def _evaluate_partial_sequence(
+        self,
+        value: Union[set[MessageId], list[MessageGroup], PartialSequence],
+        window: WindowConstraint,
+    ) -> Union[set[MessageId], list[MessageGroup]]:
+        """
+        Recursively evaluate a PartialSequence with the given window constraint.
+
+        Args:
+            value: Either a concrete value (set/list) or PartialSequence to evaluate
+            window: Window constraint to use for evaluation
+
+        Returns:
+            Evaluated result (set or list, never PartialSequence)
+        """
+        # Base case: already evaluated
+        if not isinstance(value, PartialSequence):
+            return value
+
+        # Recursive case: evaluate partial sequence
+        partial = value
+
+        # Convert window constraint to int
+        # TODO: Add DURING support for sequential operators
+        if isinstance(window, tuple):
+            raise PrismQLRuntimeError(
+                "DURING (temporal windows) are not yet supported for sequential operators. "
+                "Use INWINDOW for positional windows instead."
+            )
+        window_size: int = window
+
+        # Recursively evaluate LHS and RHS
+        lhs = self._evaluate_partial_sequence(partial.lhs, window)
+        rhs = self._evaluate_partial_sequence(partial.rhs, window)
+
+        # Apply the operator with the window
+        if partial.operator == "FOLLOWED_BY":
+            # Check if lhs is a sequence (from nested evaluation)
+            if isinstance(lhs, list):
+                if isinstance(rhs, list):
+                    raise PrismQLRuntimeError(
+                        "Complex nested sequential operators are not yet supported"
+                    )
+                return self._extend_sequences_followed_by(lhs, rhs, window_size)
+
+            if isinstance(rhs, list):
+                raise PrismQLRuntimeError(
+                    "FOLLOWED_BY requires simple conditions, not nested sequences"
+                )
+            matching_lhs = self._apply_followed_by(lhs, rhs, window_size)
+            return self._create_sequential_pairs(matching_lhs, rhs, window_size, forward=True)
+
+        elif partial.operator == "PRECEDED_BY":
+            if isinstance(lhs, list):
+                if isinstance(rhs, list):
+                    raise PrismQLRuntimeError(
+                        "Complex nested sequential operators are not yet supported"
+                    )
+                return self._extend_sequences_preceded_by(lhs, rhs, window_size)
+
+            if isinstance(rhs, list):
+                raise PrismQLRuntimeError(
+                    "PRECEDED_BY requires simple conditions, not nested sequences"
+                )
+            matching_lhs = self._apply_preceded_by(lhs, rhs, window_size)
+            return self._create_sequential_pairs(matching_lhs, rhs, window_size, forward=False)
+
+        elif partial.operator == "NOT_FOLLOWED_BY":
+            if isinstance(lhs, list) or isinstance(rhs, list):
+                raise PrismQLRuntimeError(
+                    "NOT_FOLLOWED_BY cannot be chained with other sequential operators"
+                )
+            return self._apply_not_followed_by(lhs, rhs, window_size)
+
+        elif partial.operator == "NOT_PRECEDED_BY":
+            if isinstance(lhs, list) or isinstance(rhs, list):
+                raise PrismQLRuntimeError(
+                    "NOT_PRECEDED_BY cannot be chained with other sequential operators"
+                )
+            return self._apply_not_preceded_by(lhs, rhs, window_size)
+
+        else:
+            raise ValueError(f"Unknown sequential operator: {partial.operator}")
 
     def _create_sequential_pairs(
         self,

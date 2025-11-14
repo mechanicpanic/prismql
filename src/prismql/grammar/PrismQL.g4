@@ -47,16 +47,22 @@ quantifier
 
 restriction
     :
-    restriction And restriction
-    | restriction Or restriction
-    | restriction FollowedBy restriction InWindow number
-    | restriction PrecededBy restriction InWindow number
-    | restriction NotFollowedBy restriction InWindow number
-    | restriction NotPrecededBy restriction InWindow number
+    // Sequential operators (lowest precedence - bind loosely)
+    // Window is optional to allow chaining: A FOLLOWED_BY B FOLLOWED_BY C INWINDOW 10
+    // Semantic validation ensures the outermost operator has a window
+    restriction FollowedBy restriction (InWindow number | During time_value)?
+    | restriction PrecededBy restriction (InWindow number | During time_value)?
+    | restriction NotFollowedBy restriction (InWindow number | During time_value)?
+    | restriction NotPrecededBy restriction (InWindow number | During time_value)?
+    // Deprecated WITHIN syntax (backward compatibility)
     | restriction FollowedBy restriction Within number
     | restriction PrecededBy restriction Within number
     | restriction NotFollowedBy restriction Within number
     | restriction NotPrecededBy restriction Within number
+    // Boolean operators (higher precedence than sequential)
+    | restriction And restriction
+    | restriction Or restriction
+    // Grouping and negation (highest precedence - bind tightly)
     | '(' restriction ')'
     | Not restriction
     | condition

@@ -60,11 +60,14 @@ SELECT from(customer), from(support), contains(solution) INWINDOW 15
 
 #### Sequential Operators (ORDERED)
 
-Sequential patterns require strict ordering. Use INWINDOW for the window size.
+Sequential patterns require strict ordering. Supports both positional (INWINDOW) and temporal (DURING) windows.
 
 ```prismql
--- Positive lookahead: A followed by B
+-- Positive lookahead: A followed by B (positional)
 SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3
+
+-- Positive lookahead: A followed by B (temporal)
+SELECT from(alice) FOLLOWED_BY from(bob) DURING 30 seconds
 
 -- Positive lookbehind: B preceded by A
 SELECT from(bob) PRECEDED_BY from(alice) INWINDOW 2
@@ -74,11 +77,27 @@ SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 5
 
 -- Negative lookbehind: B NOT preceded by A
 SELECT from(bob) NOT_PRECEDED_BY from(charlie) INWINDOW 3
+
+-- Complex conditions work naturally with operator precedence
+SELECT from(alice) AND is_question() FOLLOWED_BY from(bob) AND contains(answers) INWINDOW 5
+
+-- Chaining: single window at the end applies to entire chain
+SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(charlie) INWINDOW 10
 ```
 
-**Key characteristic**: ORDERED - first pattern must appear before/after second.
+**Key characteristics**:
+- ORDERED - first pattern must appear before/after second
+- **NEW**: No SELECT wrapper needed! Operator precedence handles it naturally
+- **NEW**: Supports DURING for temporal windows (e.g., `DURING 30 seconds`)
+- **NEW**: Chaining allowed - place window constraint at the end
 
-**CRITICAL**: Sequential operators use `INWINDOW N` for window size, not `WITHIN N`.
+**Window constraint rules**:
+- **Required**: At least one window constraint (INWINDOW or DURING) must appear
+- **Chaining**: `A FOLLOWED_BY B FOLLOWED_BY C INWINDOW 10` - window at end applies to entire chain
+- **Positional**: `INWINDOW N` - messages within N positions
+- **Temporal**: `DURING <time>` - messages within time duration
+
+**DEPRECATED**: `WITHIN` is deprecated, use `INWINDOW` for positional or `DURING` for temporal windows.
 
 #### Temporal Operators (Time-based)
 
@@ -174,9 +193,11 @@ SELECT
 
 **Critical rules for subqueries**:
 
-1. **Always use SELECT wrapper** - Even for single restrictions in subqueries:
-   - ✅ CORRECT: `FOLLOWED_BY (SELECT from(charlie))`
-   - ❌ WRONG: `FOLLOWED_BY from(charlie)` (syntax error!)
+1. **Subqueries require SELECT wrapper** - When using independent subquery syntax `(SELECT ...)`:
+   - ✅ Subquery: `(SELECT from(alice)) FOLLOWED_BY (SELECT from(bob)) INWINDOW 3`
+   - ✅ Simple: `SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3` (no wrapper needed!)
+
+   **Note**: For simple sequential patterns, SELECT wrappers are no longer required. Only use subquery syntax when you need independent query contexts with their own windows.
 
 2. **Do NOT flatten subqueries** - Grouping semantics matter!
 
@@ -213,6 +234,8 @@ SELECT is_question(), contains(answers) INWINDOW 10
 SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3
 SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 5
 SELECT is_question() FOLLOWED_BY contains(answers) INWINDOW 3
+SELECT from(alice) FOLLOWED_BY from(bob) DURING 30 seconds
+SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(charlie) INWINDOW 10
 ```
 
 ### Temporal Patterns
@@ -255,15 +278,26 @@ SELECT from($user) AND is_question()
 
 ## Operator Compatibility
 
-**Sequential operators cannot be combined with AND/OR**:
+**Sequential operators now work naturally with AND/OR** (thanks to proper precedence):
 
 ```prismql
--- ❌ ERROR: Sequential operators incompatible with boolean operators
-SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3 AND contains(greetings)
+-- ✅ CORRECT: AND has higher precedence than FOLLOWED_BY
+SELECT from(alice) AND is_question() FOLLOWED_BY from(bob) AND contains(answers) INWINDOW 5
+-- Parsed as: (from(alice) AND is_question()) FOLLOWED_BY (from(bob) AND contains(answers))
 
--- ✅ CORRECT: Put conditions inside the sequence
-SELECT (from(alice) AND contains(greetings)) FOLLOWED_BY from(bob) INWINDOW 3
+-- ✅ Also correct: Use parentheses for clarity
+SELECT (from(alice) AND is_question()) FOLLOWED_BY (from(bob) AND contains(answers)) INWINDOW 5
+
+-- ✅ CORRECT: Chaining works with complex conditions
+SELECT from(alice) AND contains(problems) FOLLOWED_BY from(bob) FOLLOWED_BY from(charlie) AND contains(solutions) INWINDOW 10
 ```
+
+**Precedence (highest to lowest)**:
+1. `()` - Parentheses
+2. `NOT` - Negation
+3. `AND` - Conjunction
+4. `OR` - Disjunction
+5. `FOLLOWED_BY`, `PRECEDED_BY`, etc. - Sequential operators (lowest)
 
 ## Common Patterns
 
@@ -293,10 +327,8 @@ SELECT from($user) AND is_question(),
        from($user) AND contains(answers)
        INWINDOW 5
 
--- Rapid back-and-forth
-SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 1
-       FOLLOWED_BY from(alice) INWINDOW 1
-       FOLLOWED_BY from(bob) INWINDOW 1
+-- Rapid back-and-forth (chaining with single window)
+SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(alice) FOLLOWED_BY from(bob) INWINDOW 1
 
 -- Monologue detection
 SELECT from(alice){5,}
@@ -362,5 +394,9 @@ Response: SELECT (from(alice) OR from(bob)) AND is_question() INWINDOW 5
 
 ---
 
-**Version**: 0.1.0 (2025-11-13)
-**Operator naming**: INWINDOW (positional), DURING (temporal)
+**Version**: 0.2.0 (2025-11-14) - BREAKING CHANGES
+**Major changes**:
+- Sequential operators no longer require SELECT wrappers
+- DURING support added for temporal sequential patterns
+- Chaining allowed with single window at end
+- Fixed operator precedence (sequential operators have lowest precedence)

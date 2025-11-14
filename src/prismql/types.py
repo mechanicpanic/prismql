@@ -23,6 +23,48 @@ DictEntry: TypeAlias = Sequence[str]
 # NER label types
 NERLabel: TypeAlias = str
 
+# Window constraint types
+WindowConstraint: TypeAlias = Union[int, tuple[int, str]]  # int for INWINDOW, (value, unit) for DURING
+
+
+class PartialSequence:
+    """
+    Represents an unevaluated sequential operation.
+
+    Used when sequential operators (FOLLOWED_BY, PRECEDED_BY) don't have
+    an immediate window constraint. The sequence is evaluated later when
+    a window is encountered.
+
+    Example:
+        A FOLLOWED_BY B FOLLOWED_BY C INWINDOW 10
+
+        Parse tree (bottom-up):
+        1. A FOLLOWED_BY B (no window) → PartialSequence(A, B, "FOLLOWED_BY")
+        2. PartialSequence FOLLOWED_BY C INWINDOW 10 → Evaluate with window=10
+    """
+
+    def __init__(
+        self,
+        lhs: Union[set[MessageId], list[MessageGroup], "PartialSequence"],
+        rhs: Union[set[MessageId], list[MessageGroup], "PartialSequence"],
+        operator: str,  # "FOLLOWED_BY", "PRECEDED_BY", "NOT_FOLLOWED_BY", "NOT_PRECEDED_BY"
+    ):
+        """
+        Initialize a partial sequence.
+
+        Args:
+            lhs: Left-hand side (can be set, list, or another partial sequence)
+            rhs: Right-hand side (can be set, list, or another partial sequence)
+            operator: Sequential operator type
+        """
+        self.lhs = lhs
+        self.rhs = rhs
+        self.operator = operator
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"PartialSequence({self.operator}, lhs={type(self.lhs).__name__}, rhs={type(self.rhs).__name__})"
+
 
 class NamedQueryResult:
     """
