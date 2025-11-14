@@ -335,6 +335,15 @@ pip install -e .[docs]
 cd docs && make html
 ```
 
+## Related Repositories
+
+- **[prismql-research](../prismql-research)** - Research, experiments, and benchmarks for PrismQL
+  - LLM query generation experiments
+  - Performance benchmarks
+  - Training data for LoRA fine-tuning
+  - Research applications and use cases
+  - Academic papers and implementation notes
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

@@ -2,6 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Repository Organization
+
+**This is the main PrismQL package repository.** For research, experiments, benchmarks, and detailed implementation notes, see:
+- **[prismql-research](../prismql-research)** - Research repository containing:
+  - LLM query generation experiments
+  - Performance benchmarks (Python and C# reference implementations)
+  - Training data for LoRA fine-tuning
+  - Detailed architecture documentation
+  - Historical implementation notes and design decisions
+  - Academic papers and references
+
+**This repository contains:**
+- Core PrismQL package (`src/prismql/`)
+- Essential examples (organized in subdirectories)
+- User-facing documentation
+- Test suite
+- CI/CD workflows
+
 ## Project Overview
 
 PrismQL is a domain-specific language (DSL) for pattern matching in conversational data. It uses ANTLR4 for parsing and implements a visitor pattern for query execution. The language is backend-agnostic, supporting any search engine (OpenSearch, Elasticsearch, in-memory) and optional NLP backends (spaCy).
@@ -49,7 +67,7 @@ SELECT from(alice) WITHIN 5 days
 - **DURING** = temporal/time-based
 - No more confusion!
 
-See `INWINDOW_UNIFICATION.md` and `DURING_RENAME.md` for full details.
+For full historical details, see `prismql-research/docs/development/historical-changes/INWINDOW_UNIFICATION.md` and `DURING_RENAME.md`.
 
 ## Project History
 

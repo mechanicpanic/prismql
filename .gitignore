@@ -113,6 +113,7 @@ ipython_config.py
 .env.local
 .env.*.local
 
+# ANTLR files
 # ANTLR generated files
 # Strategy: Tracked in git (so pip install works without Java/ANTLR)
 # but marked as generated in .gitattributes to hide from diffs/PRs
@@ -130,12 +131,18 @@ ipython_config.py
 *.tmp
 *.temp
 
-# Data files (too large for git)
-examples/lmsys_sample_10k.csv
-examples/lmsys_sample_10k.parquet
-examples/*.csv
-examples/*.parquet
-experiment_results.json
+# Data files (moved to prismql-research repository)
 data/
 *.csv
 *.zip
+*.parquet
+
+# Research files (moved to prismql-research repository)
+benchmark/
+experiments/
+papers/
+experiment_results.json
+rust_results_*.json
+
+# Large ANTLR jar (downloaded by script when needed)
+antlr-*.jar
