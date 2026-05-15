@@ -24,7 +24,9 @@ DictEntry: TypeAlias = Sequence[str]
 NERLabel: TypeAlias = str
 
 # Window constraint types
-WindowConstraint: TypeAlias = Union[int, tuple[int, str]]  # int for INWINDOW, (value, unit) for DURING
+WindowConstraint: TypeAlias = Union[
+    int, tuple[int, str]
+]  # int for INWINDOW, (value, unit) for DURING
 
 
 class PartialSequence:

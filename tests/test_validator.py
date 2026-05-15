@@ -102,7 +102,9 @@ def test_named_groups_suggestion():
     """Test suggestion to use named groups."""
     validator = QueryValidator(user_dictionaries={"a": ["x"], "b": ["y"], "c": ["z"]})
 
-    result = validator.validate("SELECT contains(a), contains(b), contains(c) INWINDOW 5")
+    result = validator.validate(
+        "SELECT contains(a), contains(b), contains(c) INWINDOW 5"
+    )
 
     assert result.valid
     assert len(result.infos) > 0

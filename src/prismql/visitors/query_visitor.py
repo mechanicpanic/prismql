@@ -3,7 +3,7 @@
 import itertools
 import warnings
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
 from ..aggregators.aggregator import Aggregator
@@ -68,9 +68,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # Pattern naming for result labeling
         self.pattern_names: list[Optional[str]] = []
 
-    def _extract_window_constraint(
-        self, ctx: Any
-    ) -> Optional[WindowConstraint]:
+    def _extract_window_constraint(self, ctx: Any) -> Optional[WindowConstraint]:
         """
         Extract window constraint from context.
 
@@ -81,18 +79,18 @@ class PrismQLVisitor(BasePrismQLVisitor):
             WindowConstraint (int for INWINDOW, tuple for DURING) or None
         """
         # Check for INWINDOW (positional)
-        if hasattr(ctx, 'InWindow') and ctx.InWindow():
+        if hasattr(ctx, "InWindow") and ctx.InWindow():
             return int(ctx.number().getText())
 
         # Check for DURING (temporal)
-        if hasattr(ctx, 'During') and ctx.During():
+        if hasattr(ctx, "During") and ctx.During():
             time_value_ctx = ctx.time_value()
             value = int(time_value_ctx.number().getText())
             unit = time_value_ctx.time_unit().getText().lower()
             return (value, unit)
 
         # Check for deprecated WITHIN (positional - backward compatibility)
-        if hasattr(ctx, 'Within') and ctx.Within():
+        if hasattr(ctx, "Within") and ctx.Within():
             return int(ctx.number().getText())
 
         return None
@@ -397,7 +395,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             else:
                 # Result is a set of message IDs (normal restriction)
                 # Convert set to sorted list
-                sorted_result = sorted(result)
+                sorted_result = sorted(result)  # type: ignore[arg-type]
 
                 # Apply quantifier by expanding the restriction
                 # For now, we use min_count (exact or minimum)
@@ -453,7 +451,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
             # AND requires both operands to be sets, not sequences or partial sequences
-            if isinstance(lhs, (list, PartialSequence)) or isinstance(rhs, (list, PartialSequence)):
+            if isinstance(lhs, (list, PartialSequence)) or isinstance(
+                rhs, (list, PartialSequence)
+            ):
                 raise PrismQLRuntimeError(
                     "AND operator cannot be used with sequential operators (FOLLOWED_BY, PRECEDED_BY). "
                     "Sequential operators return message sequences, not individual messages."
@@ -465,7 +465,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
             lhs = self.visitRestriction(ctx.restriction(0))
             rhs = self.visitRestriction(ctx.restriction(1))
             # OR requires both operands to be sets, not sequences or partial sequences
-            if isinstance(lhs, (list, PartialSequence)) or isinstance(rhs, (list, PartialSequence)):
+            if isinstance(lhs, (list, PartialSequence)) or isinstance(
+                rhs, (list, PartialSequence)
+            ):
                 raise PrismQLRuntimeError(
                     "OR operator cannot be used with sequential operators (FOLLOWED_BY, PRECEDED_BY). "
                     "Sequential operators return message sequences, not individual messages."
@@ -482,11 +484,17 @@ class PrismQLVisitor(BasePrismQLVisitor):
             if window is None:
                 return PartialSequence(lhs, rhs, "FOLLOWED_BY")
 
-            # TODO: Add DURING support for sequential operators
+            # DURING (temporal) takes a different code path — see below.
             if isinstance(window, tuple):
-                raise PrismQLRuntimeError(
-                    "DURING (temporal windows) are not yet supported for sequential operators. "
-                    "Use INWINDOW for positional windows instead."
+                duration = self._duration_tuple_to_timedelta(window)
+                lhs = self._evaluate_partial_sequence(lhs, window)
+                rhs = self._evaluate_partial_sequence(rhs, window)
+                if isinstance(lhs, list) or isinstance(rhs, list):
+                    raise PrismQLRuntimeError(
+                        "Chained sequential operators with DURING are not yet supported"
+                    )
+                return self._create_sequential_pairs_temporal(
+                    lhs, rhs, duration, forward=True
                 )
             window_size: int = window
 
@@ -526,13 +534,19 @@ class PrismQLVisitor(BasePrismQLVisitor):
             if window is None:
                 return PartialSequence(lhs, rhs, "PRECEDED_BY")
 
-            # TODO: Add DURING support for sequential operators
+            # DURING (temporal) takes a different code path.
             if isinstance(window, tuple):
-                raise PrismQLRuntimeError(
-                    "DURING (temporal windows) are not yet supported for sequential operators. "
-                    "Use INWINDOW for positional windows instead."
+                duration = self._duration_tuple_to_timedelta(window)
+                lhs = self._evaluate_partial_sequence(lhs, window)
+                rhs = self._evaluate_partial_sequence(rhs, window)
+                if isinstance(lhs, list) or isinstance(rhs, list):
+                    raise PrismQLRuntimeError(
+                        "Chained sequential operators with DURING are not yet supported"
+                    )
+                return self._create_sequential_pairs_temporal(
+                    lhs, rhs, duration, forward=False
                 )
-            window_size: int = window
+            window_size: int = window  # type: ignore[no-redef]
 
             # Evaluate any partial sequences
             lhs = self._evaluate_partial_sequence(lhs, window)
@@ -570,13 +584,17 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     "NOT_FOLLOWED_BY requires a window constraint (INWINDOW or DURING)"
                 )
 
-            # TODO: Add DURING support for sequential operators
+            # DURING (temporal): invert the temporal FOLLOWED_BY pairing.
             if isinstance(window, tuple):
-                raise PrismQLRuntimeError(
-                    "DURING (temporal windows) are not yet supported for sequential operators. "
-                    "Use INWINDOW for positional windows instead."
-                )
-            window_size: int = window
+                duration = self._duration_tuple_to_timedelta(window)
+                lhs = self._evaluate_partial_sequence(lhs, window)
+                rhs = self._evaluate_partial_sequence(rhs, window)
+                if isinstance(lhs, list) or isinstance(rhs, list):
+                    raise PrismQLRuntimeError(
+                        "NOT_FOLLOWED_BY cannot be chained with other sequential operators"
+                    )
+                return self._apply_not_followed_by_temporal(lhs, rhs, duration)
+            window_size: int = window  # type: ignore[no-redef]
 
             # Evaluate any partial sequences
             lhs = self._evaluate_partial_sequence(lhs, window)
@@ -601,13 +619,17 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     "NOT_PRECEDED_BY requires a window constraint (INWINDOW or DURING)"
                 )
 
-            # TODO: Add DURING support for sequential operators
+            # DURING (temporal): invert the temporal PRECEDED_BY pairing.
             if isinstance(window, tuple):
-                raise PrismQLRuntimeError(
-                    "DURING (temporal windows) are not yet supported for sequential operators. "
-                    "Use INWINDOW for positional windows instead."
-                )
-            window_size: int = window
+                duration = self._duration_tuple_to_timedelta(window)
+                lhs = self._evaluate_partial_sequence(lhs, window)
+                rhs = self._evaluate_partial_sequence(rhs, window)
+                if isinstance(lhs, list) or isinstance(rhs, list):
+                    raise PrismQLRuntimeError(
+                        "NOT_PRECEDED_BY cannot be chained with other sequential operators"
+                    )
+                return self._apply_not_preceded_by_temporal(lhs, rhs, duration)
+            window_size: int = window  # type: ignore[no-redef]
 
             # Evaluate any partial sequences
             lhs = self._evaluate_partial_sequence(lhs, window)
@@ -634,7 +656,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 self.MAX_MESSAGES_NOT, self.search_backend.get_total_documents()
             )
             all_messages = self.search_backend.get_all_document_ids(limit=total_docs)
-            return all_messages - excluded  # Set difference
+            return all_messages - excluded  # type: ignore[operator]
 
         # Handle parentheses - just visit the inner restriction
         if ctx.getChildCount() == 3 and ctx.getChild(0).getText() == "(":
@@ -1131,12 +1153,13 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # Recursive case: evaluate partial sequence
         partial = value
 
-        # Convert window constraint to int
-        # TODO: Add DURING support for sequential operators
+        # DURING is supported on single sequential operators, but not yet on
+        # chained ones (which is what reaches this method via PartialSequence).
         if isinstance(window, tuple):
             raise PrismQLRuntimeError(
-                "DURING (temporal windows) are not yet supported for sequential operators. "
-                "Use INWINDOW for positional windows instead."
+                "Chained sequential operators with DURING are not yet supported. "
+                "Use INWINDOW for chained sequences, or apply DURING to a single "
+                "FOLLOWED_BY/PRECEDED_BY."
             )
         window_size: int = window
 
@@ -1159,9 +1182,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     "FOLLOWED_BY requires simple conditions, not nested sequences"
                 )
             matching_lhs = self._apply_followed_by(lhs, rhs, window_size)
-            return self._create_sequential_pairs(matching_lhs, rhs, window_size, forward=True)
+            return self._create_sequential_pairs(
+                matching_lhs, rhs, window_size, forward=True
+            )
 
-        elif partial.operator == "PRECEDED_BY":
+        if partial.operator == "PRECEDED_BY":
             if isinstance(lhs, list):
                 if isinstance(rhs, list):
                     raise PrismQLRuntimeError(
@@ -1174,24 +1199,25 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     "PRECEDED_BY requires simple conditions, not nested sequences"
                 )
             matching_lhs = self._apply_preceded_by(lhs, rhs, window_size)
-            return self._create_sequential_pairs(matching_lhs, rhs, window_size, forward=False)
+            return self._create_sequential_pairs(
+                matching_lhs, rhs, window_size, forward=False
+            )
 
-        elif partial.operator == "NOT_FOLLOWED_BY":
+        if partial.operator == "NOT_FOLLOWED_BY":
             if isinstance(lhs, list) or isinstance(rhs, list):
                 raise PrismQLRuntimeError(
                     "NOT_FOLLOWED_BY cannot be chained with other sequential operators"
                 )
             return self._apply_not_followed_by(lhs, rhs, window_size)
 
-        elif partial.operator == "NOT_PRECEDED_BY":
+        if partial.operator == "NOT_PRECEDED_BY":
             if isinstance(lhs, list) or isinstance(rhs, list):
                 raise PrismQLRuntimeError(
                     "NOT_PRECEDED_BY cannot be chained with other sequential operators"
                 )
             return self._apply_not_preceded_by(lhs, rhs, window_size)
 
-        else:
-            raise ValueError(f"Unknown sequential operator: {partial.operator}")
+        raise ValueError(f"Unknown sequential operator: {partial.operator}")
 
     def _create_sequential_pairs(
         self,
@@ -1416,6 +1442,130 @@ class PrismQLVisitor(BasePrismQLVisitor):
         multiplier = conversions.get(unit_text, 1)
         return number * multiplier
 
+    def _duration_tuple_to_timedelta(self, window: tuple[int, str]) -> timedelta:
+        """Convert a (value, unit) DURING tuple to a timedelta."""
+        value, unit = window
+        unit = unit.lower()
+        if unit in ("s", "second", "seconds"):
+            return timedelta(seconds=value)
+        if unit in ("m", "minute", "minutes"):
+            return timedelta(minutes=value)
+        if unit in ("h", "hour", "hours"):
+            return timedelta(hours=value)
+        if unit in ("d", "day", "days"):
+            return timedelta(days=value)
+        if unit in ("w", "week", "weeks"):
+            return timedelta(weeks=value)
+        raise ValueError(f"Unsupported DURING time unit: {unit}")
+
+    def _get_timestamps_for_messages(
+        self, msg_ids: set[MessageId]
+    ) -> dict[MessageId, datetime]:
+        """Fetch and parse timestamps for the given message IDs.
+
+        Skips messages without a parseable timestamp.
+        """
+        if not msg_ids:
+            return {}
+        documents = self.search_backend.get_documents(list(msg_ids))
+        result: dict[MessageId, datetime] = {}
+        for doc in documents:
+            msg_id = doc.get("id")
+            ts = doc.get(self.timestamp_field)
+            if msg_id is None or ts is None:
+                continue
+            try:
+                if isinstance(ts, datetime):
+                    result[msg_id] = ts
+                elif isinstance(ts, (int, float)):
+                    result[msg_id] = datetime.fromtimestamp(ts)
+                else:
+                    result[msg_id] = TemporalProcessor.parse_timestamp(str(ts))
+            except (ValueError, OSError):
+                continue
+        return result
+
+    def _create_sequential_pairs_temporal(
+        self,
+        lhs_messages: set[MessageId],
+        rhs_messages: set[MessageId],
+        duration: timedelta,
+        forward: bool,
+    ) -> QueryResult:
+        """Sequential pairing using time proximity (DURING).
+
+        Mirrors _create_sequential_pairs but measures distance in timestamps
+        instead of position. For each LHS message (in chronological order),
+        emits the first RHS match whose timestamp lies in the directional
+        window of width `duration` around the LHS timestamp.
+
+        Pairs are emitted in chronological order: forward→[lhs, rhs],
+        backward→[rhs, lhs].
+        """
+        if not lhs_messages or not rhs_messages:
+            return []
+
+        timestamps = self._get_timestamps_for_messages(lhs_messages | rhs_messages)
+        lhs_with_ts = sorted(
+            ((mid, timestamps[mid]) for mid in lhs_messages if mid in timestamps),
+            key=lambda x: x[1],
+        )
+        rhs_with_ts = sorted(
+            ((mid, timestamps[mid]) for mid in rhs_messages if mid in timestamps),
+            key=lambda x: x[1],
+        )
+
+        result: QueryResult = []
+        for lhs_msg, t_lhs in lhs_with_ts:
+            if forward:
+                for rhs_msg, t_rhs in rhs_with_ts:
+                    if t_rhs <= t_lhs:
+                        continue
+                    if t_rhs - t_lhs > duration:
+                        break  # rhs sorted ascending; nothing further qualifies
+                    result.append([lhs_msg, rhs_msg])
+                    break
+            else:
+                # PRECEDED_BY: look backward in time, emit chronologically.
+                # Walk rhs descending to find the closest earlier match.
+                for rhs_msg, t_rhs in reversed(rhs_with_ts):
+                    if t_rhs >= t_lhs:
+                        continue
+                    if t_lhs - t_rhs > duration:
+                        break
+                    result.append([rhs_msg, lhs_msg])
+                    break
+        return result
+
+    def _apply_not_followed_by_temporal(
+        self,
+        lhs: set[MessageId],
+        rhs: set[MessageId],
+        duration: timedelta,
+    ) -> QueryResult:
+        """Inverse of temporal FOLLOWED_BY: return single-element groups for
+        LHS messages that have no qualifying RHS within (t_lhs, t_lhs+duration].
+        """
+        pairs = self._create_sequential_pairs_temporal(lhs, rhs, duration, forward=True)
+        matched = {pair[0] for pair in pairs}
+        return [[msg] for msg in sorted(lhs - matched)]
+
+    def _apply_not_preceded_by_temporal(
+        self,
+        lhs: set[MessageId],
+        rhs: set[MessageId],
+        duration: timedelta,
+    ) -> QueryResult:
+        """Inverse of temporal PRECEDED_BY: single-element groups for LHS
+        messages with no qualifying RHS within [t_lhs-duration, t_lhs).
+        """
+        pairs = self._create_sequential_pairs_temporal(
+            lhs, rhs, duration, forward=False
+        )
+        # temporal PRECEDED_BY emits [rhs, lhs] chronologically — lhs is at index 1
+        matched = {pair[1] for pair in pairs}
+        return [[msg] for msg in sorted(lhs - matched)]
+
     def _parse_time_window_to_timedelta(self, ctx: Any) -> "timedelta":
         """
         Parse time-based window and convert to timedelta for temporal filtering.
@@ -1439,17 +1589,16 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # Convert to timedelta
         if unit_text in ("s", "second", "seconds"):
             return timedelta(seconds=number)
-        elif unit_text in ("m", "minute", "minutes"):
+        if unit_text in ("m", "minute", "minutes"):
             return timedelta(minutes=number)
-        elif unit_text in ("h", "hour", "hours"):
+        if unit_text in ("h", "hour", "hours"):
             return timedelta(hours=number)
-        elif unit_text in ("d", "day", "days"):
+        if unit_text in ("d", "day", "days"):
             return timedelta(days=number)
-        elif unit_text in ("w", "week", "weeks"):
+        if unit_text in ("w", "week", "weeks"):
             return timedelta(weeks=number)
-        else:
-            # Default fallback
-            return timedelta(days=number)
+        # Default fallback
+        return timedelta(days=number)
 
     def _extract_group_by_fields(self, ctx: Any) -> list[str]:
         """

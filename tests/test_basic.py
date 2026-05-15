@@ -115,7 +115,9 @@ def test_window_constraints():
     )
 
     # Find problem-solution pairs within window of 3
-    results = engine.execute("SELECT contains(problems), contains(solutions) INWINDOW 3")
+    results = engine.execute(
+        "SELECT contains(problems), contains(solutions) INWINDOW 3"
+    )
     print(f"Window test results: {results}")
 
     # Should find (1,3) since they're 2 apart, and (10,11) since they're 1 apart

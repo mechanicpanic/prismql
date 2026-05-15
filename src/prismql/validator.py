@@ -200,8 +200,8 @@ class QueryValidator:
 
         # Check for sequential operators without windows
         # Match FOLLOWED_BY/PRECEDED_BY/etc that are NOT followed by INWINDOW/DURING/WITHIN
-        sequential_ops = r'(FOLLOWED_BY|PRECEDED_BY|NOT_FOLLOWED_BY|NOT_PRECEDED_BY)'
-        window_ops = r'(INWINDOW|DURING|WITHIN)'
+        sequential_ops = r"(FOLLOWED_BY|PRECEDED_BY|NOT_FOLLOWED_BY|NOT_PRECEDED_BY)"
+        window_ops = r"(INWINDOW|DURING|WITHIN)"
 
         # Find all sequential operators
         for match in re.finditer(sequential_ops, query, re.IGNORECASE):
@@ -218,7 +218,7 @@ class QueryValidator:
             if next_seq and (not next_window or next_seq.start() < next_window.start()):
                 # This is a chained operator, continue to check the next one
                 continue
-            elif not next_window:
+            if not next_window:
                 # No window operator found after this sequential operator
                 issues.append(
                     ValidationIssue(

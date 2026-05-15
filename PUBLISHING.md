@@ -50,10 +50,10 @@ This will automatically run formatting, linting, and type checking before each c
    # Ensure you're on main and up to date
    git checkout main
    git pull origin main
-   
+
    # Run full test suite
    uv run pytest --cov=prismql
-   
+
    # Check code quality
    uv run ruff format .
    uv run ruff check .
@@ -64,10 +64,10 @@ This will automatically run formatting, linting, and type checking before each c
    ```bash
    # Clean previous builds
    rm -rf dist/
-   
+
    # Build package
    uv build
-   
+
    # Check package
    uv run python -m twine check dist/*
    ```
@@ -76,7 +76,7 @@ This will automatically run formatting, linting, and type checking before each c
    ```bash
    # Use the release script
    python scripts/release.py 0.2.0
-   
+
    # Or manually create tag
    git tag v0.2.0
    git push origin v0.2.0

@@ -135,7 +135,9 @@ class TestListCompatibility:
 
     def test_indexing(self, engine):
         """Test that indexing works on NamedQueryResult."""
-        result = engine.execute('SELECT from(alice) AS "a", from(bob) AS "b" INWINDOW 5')
+        result = engine.execute(
+            'SELECT from(alice) AS "a", from(bob) AS "b" INWINDOW 5'
+        )
 
         assert isinstance(result, NamedQueryResult)
 
@@ -194,7 +196,9 @@ class TestNamedGroupsWithBooleanOps:
 
     def test_named_with_or(self, engine):
         """Test naming a boolean OR expression."""
-        result = engine.execute('SELECT from(alice) OR from(bob) AS "either" INWINDOW 5')
+        result = engine.execute(
+            'SELECT from(alice) OR from(bob) AS "either" INWINDOW 5'
+        )
 
         assert isinstance(result, NamedQueryResult)
         assert result.pattern_names == ["either"]
@@ -261,7 +265,9 @@ class TestNamedGroupsWithAggregation:
         """Test that GROUP BY with AS returns GroupedResult."""
         from prismql import GroupedResult
 
-        result = engine.execute('SELECT from(alice) AS "sender" INWINDOW 5 GROUP BY user')
+        result = engine.execute(
+            'SELECT from(alice) AS "sender" INWINDOW 5 GROUP BY user'
+        )
 
         # GROUP BY should return GroupedResult, not NamedQueryResult
         assert isinstance(result, GroupedResult)

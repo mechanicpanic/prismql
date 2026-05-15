@@ -65,7 +65,9 @@ class WindowProcessor:
         return WindowProcessor._merge_with_backtracking(groups, window_size)
 
     @staticmethod
-    def _merge_with_backtracking(groups: list[MessageGroup], window_size: int) -> QueryResult:
+    def _merge_with_backtracking(
+        groups: list[MessageGroup], window_size: int
+    ) -> QueryResult:
         """
         Merge groups using backtracking to find ALL valid combinations.
 
@@ -94,11 +96,10 @@ class WindowProcessor:
             """Check if two messages are within distance."""
             if isinstance(msg1, int) and isinstance(msg2, int):
                 return abs(msg1 - msg2) <= max_dist
-            else:
-                # For strings, use position in sorted list
-                idx1 = sorted_messages.index(msg1)
-                idx2 = sorted_messages.index(msg2)
-                return abs(idx1 - idx2) <= max_dist
+            # For strings, use position in sorted list
+            idx1 = sorted_messages.index(msg1)
+            idx2 = sorted_messages.index(msg2)
+            return abs(idx1 - idx2) <= max_dist
 
         def is_within_window(combination):
             """Check if all messages in combination are within window."""
@@ -157,7 +158,11 @@ class WindowProcessor:
 
                 if not within_window:
                     # If this message is too far from start, all later ones will be too
-                    if combination and isinstance(msg, int) and isinstance(combination[0], int):
+                    if (
+                        combination
+                        and isinstance(msg, int)
+                        and isinstance(combination[0], int)
+                    ):
                         if msg - min(combination) > window_size:
                             break
                     continue
@@ -166,7 +171,7 @@ class WindowProcessor:
                 backtrack(
                     combination + [msg],
                     groups_used | {next_group},
-                    msg_idx + 1  # Only consider messages after this one
+                    msg_idx + 1,  # Only consider messages after this one
                 )
 
         # Start backtracking from each message that belongs to group 0

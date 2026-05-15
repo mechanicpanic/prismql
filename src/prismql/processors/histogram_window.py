@@ -42,10 +42,8 @@ Space Complexity:
 """
 
 import bisect
-from collections import defaultdict
-from typing import Optional
 
-from ..types import MessageGroup, MessageId, QueryResult
+from ..types import MessageGroup, QueryResult
 
 
 class HistogramWindowProcessor:
@@ -97,7 +95,9 @@ class HistogramWindowProcessor:
             all_messages.update(group)
 
         # Check if we have numeric IDs
-        has_numeric_ids = all(isinstance(msg_id, (int, float)) for msg_id in all_messages)
+        has_numeric_ids = all(
+            isinstance(msg_id, (int, float)) for msg_id in all_messages
+        )
 
         if has_numeric_ids:
             # Use message IDs directly as positions
@@ -257,7 +257,9 @@ class HistogramWindowProcessor:
             all_messages.update(group)
 
         # Check if we have numeric IDs
-        has_numeric_ids = all(isinstance(msg_id, (int, float)) for msg_id in all_messages)
+        has_numeric_ids = all(
+            isinstance(msg_id, (int, float)) for msg_id in all_messages
+        )
 
         if has_numeric_ids:
             # Use message IDs directly as positions

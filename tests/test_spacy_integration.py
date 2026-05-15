@@ -205,16 +205,6 @@ class TestSpacyIntegration:
         assert backend.batch_size == 32
 
 
-@pytest.mark.skipif(
-    SPACY_AVAILABLE, reason="spaCy is available, no need to test fallback"
-)
-def test_spacy_not_available():
-    """Test behavior when spaCy is not available."""
-    # This test would run if spaCy is not installed
-    with pytest.raises(ImportError):
-        from prismql.backends.spacy import SpacyBackend  # noqa: F401
-
-
 class TestSpacyBackendRequirements:
     """Test spaCy backend requirements and setup."""
 

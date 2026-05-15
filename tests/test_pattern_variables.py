@@ -152,7 +152,9 @@ class TestVariableEdgeCases:
     def test_multiple_same_variables(self, engine):
         """Test pattern with same variable appearing multiple times."""
         # Same user appears 3 times in pattern
-        result = engine.execute("SELECT from($user), from($user), from($user) INWINDOW 3")
+        result = engine.execute(
+            "SELECT from($user), from($user), from($user) INWINDOW 3"
+        )
 
         # Only charlie has 3 consecutive messages close together: 7,8,10
         assert len(result) >= 1

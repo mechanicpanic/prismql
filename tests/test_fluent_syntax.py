@@ -83,7 +83,9 @@ def test_fluent_window_constraints():
     )
 
     # Test with fluent syntax
-    results = engine.execute("SELECT contains(problems), contains(solutions) INWINDOW 3")
+    results = engine.execute(
+        "SELECT contains(problems), contains(solutions) INWINDOW 3"
+    )
     assert len(results) == 2
     assert [1, 3] in results
     assert [10, 11] in results

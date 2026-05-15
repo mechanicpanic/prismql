@@ -2,7 +2,7 @@
 name = "prismql"
 version = "0.1.0"
 description = "Pattern Recognition in Sequential Messages Query Language - A DSL for chat corpora analysis"
-authors = [{name = "PrismQL Contributors", email = "prismql@example.com"}]
+authors = [{name = "Anna Smirnova", email = "anna.smirnova@unil.ch"}]
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
@@ -16,14 +16,13 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Text Processing :: Linguistic",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
 dependencies = [
-    "anthropic>=0.71.0",
     "antlr4-python3-runtime==4.13.1",
-    "openai>=2.6.0",
     "typing-extensions>=4.0.0",
 ]
 
@@ -32,11 +31,6 @@ opensearch = ["opensearch-py>=2.0.0"]
 elasticsearch = ["elasticsearch>=8.0.0"]
 nlp = [
     "spacy>=3.0.0",
-]
-experiments = [
-    "anthropic>=0.40.0",
-    "openai>=1.0.0",
-    "httpx>=0.27.0",
 ]
 highlighting = [
     "pygments>=2.0.0",
@@ -62,10 +56,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/prismql/prismql"
-Documentation = "https://prismql.readthedocs.io"
-Repository = "https://github.com/prismql/prismql"
-Issues = "https://github.com/prismql/prismql/issues"
+Homepage = "https://github.com/mechanicpanic/prismql"
+Repository = "https://github.com/mechanicpanic/prismql"
+Issues = "https://github.com/mechanicpanic/prismql/issues"
 
 [project.scripts]
 prismql = "prismql.repl:main"
@@ -94,6 +87,7 @@ packages = ["src/prismql"]
 [tool.ruff]
 line-length = 88
 target-version = "py39"
+extend-exclude = ["src/prismql/grammar/generated"]
 
 [tool.ruff.lint]
 select = [
@@ -123,14 +117,17 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "ANN201", "ANN001", "B017", "E712"]
 "tests/test_highlighting.py" = ["E402"]  # pytest.importorskip() must be called before imports
-"examples/*" = ["ANN201", "ANN001", "E501", "W291"]
+"examples/**/*" = ["ANN201", "ANN001", "E501", "W291", "C901", "B007"]
 "scripts/*" = ["S602", "ANN201", "ANN001"]
 "src/prismql/grammar/generated/*" = ["ALL"]
 "src/prismql/visitors/*" = ["N802", "C901", "E501"]  # ANTLR patterns, complexity, long lines
 "src/prismql/engine.py" = ["N802", "N803", "ARG002", "E501"]  # ANTLR interface requirements, long deprecation msg
 "src/prismql/backends/factory.py" = ["C901"]  # Complexity - future refactor candidate
-"src/prismql/backends/spacy.py" = ["S110"]  # Intentional except pass
-"src/prismql/processors/window.py" = ["C901"]  # Complexity - future refactor candidate
+"src/prismql/backends/spacy.py" = ["S110", "C901"]  # Intentional except pass, complexity
+"src/prismql/processors/window.py" = ["C901", "ANN001", "ANN202", "SIM102"]  # Complexity, helper-closure annotations
+"src/prismql/processors/histogram_window.py" = ["C901", "ANN001", "ANN202", "ANN204", "B007", "E501"]  # Performance-critical helpers
+"src/prismql/highlighting/pygments_lexer.py" = ["E501"]  # Long regex strings
+"tests/test_quantifier_fix.py" = ["E501"]  # Long query strings
 "src/prismql/processors/temporal.py" = ["C901", "ARG004"]  # Complexity & unused args
 "src/prismql/processors/variables.py" = ["E501", "ARG002"]  # Line length & unused args
 "src/prismql/aggregators/aggregator.py" = ["C901"]  # Complexity - future refactor
@@ -185,6 +182,17 @@ ignore_errors = true
 module = "prismql.highlighting.*"
 ignore_missing_imports = true
 
+# Pre-existing type debt in performance-critical processors.
+# These modules type-annotate the public interface but use Union[int, str]
+# polymorphism internally that mypy can't narrow; cleaning up requires a
+# dedicated pass and is tracked separately.
+[[tool.mypy.overrides]]
+module = [
+    "prismql.processors.window",
+    "prismql.processors.histogram_window",
+]
+ignore_errors = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -226,4 +234,6 @@ dev = [
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
     "twine>=6.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
 ]

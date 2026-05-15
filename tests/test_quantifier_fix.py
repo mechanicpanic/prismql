@@ -31,7 +31,9 @@ def engine_with_test_data():
     return PrismQLEngine(backend)
 
 
-@pytest.mark.xfail(reason="Known issue: quantifiers use position-based constraints in INWINDOW (see QUANTIFIER_BUG_ANALYSIS.md)")
+@pytest.mark.xfail(
+    reason="Known issue: quantifiers use position-based constraints in INWINDOW (see QUANTIFIER_BUG_ANALYSIS.md)"
+)
 def test_quantifier_equals_explicit_repetition(engine_with_test_data):
     """Test that from($user){2} produces same results as from($user), from($user)."""
     engine = engine_with_test_data
@@ -53,11 +55,14 @@ def test_quantifier_equals_explicit_repetition(engine_with_test_data):
     print(f"Explicit results: {len(result_explicit)} combinations")
 
     # Should find the same combinations
-    assert set_quantifier == set_explicit, \
+    assert set_quantifier == set_explicit, (
         f"Quantifier found {len(result_quantifier)} results, explicit found {len(result_explicit)}"
+    )
 
 
-@pytest.mark.xfail(reason="Known issue: quantifiers use position-based constraints in INWINDOW (see QUANTIFIER_BUG_ANALYSIS.md)")
+@pytest.mark.xfail(
+    reason="Known issue: quantifiers use position-based constraints in INWINDOW (see QUANTIFIER_BUG_ANALYSIS.md)"
+)
 def test_quantifier_with_simple_case(engine_with_test_data):
     """Test quantifier with simpler case - same user posting twice."""
     engine = engine_with_test_data
@@ -71,12 +76,16 @@ def test_quantifier_with_simple_case(engine_with_test_data):
     set_quantifier = {frozenset(group) for group in result_quantifier}
     set_explicit = {frozenset(group) for group in result_explicit}
 
-    print(f"\nSimple case - Quantifier: {len(result_quantifier)}, Explicit: {len(result_explicit)}")
+    print(
+        f"\nSimple case - Quantifier: {len(result_quantifier)}, Explicit: {len(result_explicit)}"
+    )
 
     assert set_quantifier == set_explicit
 
 
-@pytest.mark.xfail(reason="Known issue: quantifiers use position-based constraints in INWINDOW (see QUANTIFIER_BUG_ANALYSIS.md)")
+@pytest.mark.xfail(
+    reason="Known issue: quantifiers use position-based constraints in INWINDOW (see QUANTIFIER_BUG_ANALYSIS.md)"
+)
 def test_quantifier_three_times(engine_with_test_data):
     """Test quantifier {3} for three occurrences."""
     engine = engine_with_test_data
@@ -90,12 +99,16 @@ def test_quantifier_three_times(engine_with_test_data):
     set_quantifier = {frozenset(group) for group in result_quantifier}
     set_explicit = {frozenset(group) for group in result_explicit}
 
-    print(f"\nTriple case - Quantifier: {len(result_quantifier)}, Explicit: {len(result_explicit)}")
+    print(
+        f"\nTriple case - Quantifier: {len(result_quantifier)}, Explicit: {len(result_explicit)}"
+    )
 
     assert set_quantifier == set_explicit
 
 
-@pytest.mark.skip(reason="Backtracking algorithm still has limitations - see QUANTIFIER_BUG_ANALYSIS.md")
+@pytest.mark.skip(
+    reason="Backtracking algorithm still has limitations - see QUANTIFIER_BUG_ANALYSIS.md"
+)
 def test_backtracking_finds_all_combinations():
     """Test that backtracking algorithm finds all valid combinations."""
     documents = [

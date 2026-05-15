@@ -1,6 +1,7 @@
 """Tests for n-gram phrase matching."""
 
 import pytest
+
 from prismql.backends.memory import MemoryBackend
 from prismql.config import BALANCED_CONFIG, MINIMAL_CONFIG, BackendConfig
 from prismql.engine import PrismQLEngine

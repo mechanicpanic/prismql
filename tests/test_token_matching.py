@@ -1,6 +1,7 @@
 """Tests for token-based matching (Unicode-aware tokenization)."""
 
 import pytest
+
 from prismql.backends.memory import MemoryBackend
 from prismql.engine import PrismQLEngine
 from prismql.tokenizers import (

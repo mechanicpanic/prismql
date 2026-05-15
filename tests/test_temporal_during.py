@@ -1,7 +1,8 @@
 """Tests for temporal DURING operator with real timestamps."""
 
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
 
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
@@ -79,7 +80,9 @@ def test_temporal_during_seconds(engine_with_timestamps):
     assert len(result) > 0
 
     # Verify all pairs are within 20 seconds of each other
-    documents = engine_with_timestamps.search_backend.get_documents([1, 2, 3, 4, 5, 6, 7, 8])
+    documents = engine_with_timestamps.search_backend.get_documents(
+        [1, 2, 3, 4, 5, 6, 7, 8]
+    )
     doc_times = {doc["id"]: datetime.fromisoformat(doc["sent"]) for doc in documents}
 
     for group in result:
@@ -129,9 +132,9 @@ def test_temporal_during_hours(engine_with_timestamps):
         early_msgs = {1, 2, 3, 4}
         late_msgs = {7, 8}
         group_set = set(group)
-        assert not (
-            group_set & early_msgs and group_set & late_msgs
-        ), f"Group {group} spans across time gap"
+        assert not (group_set & early_msgs and group_set & late_msgs), (
+            f"Group {group} spans across time gap"
+        )
 
 
 def test_temporal_vs_positional_window():
@@ -173,15 +176,21 @@ def test_temporal_vs_positional_window():
 
     # Should only find alice (3) and bob (2) which are 5 seconds apart
     # Should NOT find alice (1) and bob (2) which are 2 hours apart
-    assert len(temporal_result) > 0, f"Expected to find alice (3) and bob (2) within 1 hour"
+    assert len(temporal_result) > 0, (
+        "Expected to find alice (3) and bob (2) within 1 hour"
+    )
 
     # Verify the correct pair is found
     found_correct_pair = any((2 in group and 3 in group) for group in temporal_result)
-    assert found_correct_pair, f"Should find alice (3) and bob (2). Got: {temporal_result}"
+    assert found_correct_pair, (
+        f"Should find alice (3) and bob (2). Got: {temporal_result}"
+    )
 
     # Verify the incorrect pair is NOT found
     for group in temporal_result:
-        assert not (1 in group and 2 in group), "Alice (1) and Bob (2) should not be paired (2 hours apart)"
+        assert not (1 in group and 2 in group), (
+            "Alice (1) and Bob (2) should not be paired (2 hours apart)"
+        )
 
 
 def test_temporal_during_with_three_restrictions(engine_with_timestamps):
@@ -248,7 +257,9 @@ def test_temporal_during_with_complex_conditions():
     backend = MemoryBackend(documents)
     # Create dictionary for greetings
     dictionaries = {"greetings": ["hello", "hi", "hey"]}
-    engine = PrismQLEngine(backend, user_dictionaries=dictionaries, timestamp_field="sent")
+    engine = PrismQLEngine(
+        backend, user_dictionaries=dictionaries, timestamp_field="sent"
+    )
 
     query = "SELECT from(alice) AND contains(greetings), from(bob) DURING 10 seconds"
     result = engine.execute(query)
@@ -259,7 +270,9 @@ def test_temporal_during_with_complex_conditions():
     assert len(result) >= 1
 
     # Verify the pair includes alice's "Hello" message
-    assert any(1 in group for group in result), "Should include Alice's 'Hello' message (id=1)"
+    assert any(1 in group for group in result), (
+        "Should include Alice's 'Hello' message (id=1)"
+    )
 
 
 def test_temporal_during_empty_result():

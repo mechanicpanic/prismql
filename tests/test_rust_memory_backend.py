@@ -1,6 +1,7 @@
 """Tests for Rust-based in-memory backend."""
 
 import pytest
+
 from prismql.backends.memory import MemoryBackend
 
 try:
