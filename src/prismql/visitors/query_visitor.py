@@ -172,19 +172,22 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Step 2.4: Apply temporal window filtering if DURING was used
         if temporal_window is not None:
-            # Retrieve documents for temporal analysis
-            # Collect all message IDs from results
-            all_msg_ids = set()
-            for group in results:
-                all_msg_ids.update(group)
-
-            # Get documents with timestamps
-            documents = self.search_backend.get_documents(list(all_msg_ids))
-
-            # Apply temporal window filter
-            results = TemporalProcessor.filter_by_time_window(
-                results, documents, self.timestamp_field, temporal_window
-            )
+            # Use backend's cached timestamps when available (Rust path);
+            # otherwise fetch documents and parse per-query (Python path).
+            if hasattr(
+                self.search_backend, "has_timestamp_field"
+            ) and self.search_backend.has_timestamp_field(self.timestamp_field):
+                results = self.search_backend.filter_by_time_window(  # type: ignore[attr-defined]
+                    results, self.timestamp_field, temporal_window
+                )
+            else:
+                all_msg_ids = set()
+                for group in results:
+                    all_msg_ids.update(group)
+                documents = self.search_backend.get_documents(list(all_msg_ids))
+                results = TemporalProcessor.filter_by_time_window(
+                    results, documents, self.timestamp_field, temporal_window
+                )
 
         # Step 2.5: Apply temporal filtering if specified (BEFORE, AFTER, BETWEEN)
         if ctx.temporal_filter():
@@ -1859,19 +1862,34 @@ class PrismQLVisitor(BasePrismQLVisitor):
         for group in results:
             all_ids.update(group)
 
-        # Get documents with timestamps
-        try:
-            documents = self.search_backend.get_documents(list(all_ids))
-        except NotImplementedError as e:
-            # Backend doesn't support document retrieval - cannot filter
-            raise PrismQLRuntimeError(
-                "Temporal filtering requires backend support for get_documents()"
-            ) from e
-
-        # Filter message IDs by time range
-        filtered_ids = TemporalProcessor.filter_by_time_range(
-            all_ids, documents, self.timestamp_field, start_time, end_time, inclusive
-        )
+        # Use backend's cached timestamps when available (Rust path);
+        # otherwise fetch documents and parse per-query (Python path).
+        if hasattr(
+            self.search_backend, "has_timestamp_field"
+        ) and self.search_backend.has_timestamp_field(self.timestamp_field):
+            filtered_ids = self.search_backend.filter_by_time_range(  # type: ignore[attr-defined]
+                list(all_ids),
+                self.timestamp_field,
+                start_time,
+                end_time,
+                inclusive,
+            )
+        else:
+            try:
+                documents = self.search_backend.get_documents(list(all_ids))
+            except NotImplementedError as e:
+                # Backend doesn't support document retrieval - cannot filter
+                raise PrismQLRuntimeError(
+                    "Temporal filtering requires backend support for get_documents()"
+                ) from e
+            filtered_ids = TemporalProcessor.filter_by_time_range(
+                all_ids,
+                documents,
+                self.timestamp_field,
+                start_time,
+                end_time,
+                inclusive,
+            )
 
         # Filter result groups to only include filtered messages
         filtered_results: QueryResult = []

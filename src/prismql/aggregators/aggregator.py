@@ -64,22 +64,29 @@ class Aggregator:
                 }
                 unit = unit_map[unit_str]
 
-                # Get all message IDs and documents
+                # Get all message IDs
                 all_ids: set[MessageId] = set()
                 for group in results:
                     all_ids.update(group)
 
-                try:
-                    documents = self.search_backend.get_documents(list(all_ids))
-                except NotImplementedError:
-                    return GroupedResult(
-                        groups={"__all__": results}, group_by_fields=fields
+                # Use backend's cached timestamps when available (Rust path);
+                # otherwise fetch documents and parse per-query (Python path).
+                if hasattr(
+                    self.search_backend, "has_timestamp_field"
+                ) and self.search_backend.has_timestamp_field(field_name):
+                    temporal_groups = self.search_backend.group_by_temporal_unit(  # type: ignore[attr-defined]
+                        list(all_ids), field_name, unit.value
                     )
-
-                # Use TemporalProcessor to group by temporal unit
-                temporal_groups = TemporalProcessor.group_by_temporal_unit(
-                    all_ids, documents, field_name, unit
-                )
+                else:
+                    try:
+                        documents = self.search_backend.get_documents(list(all_ids))
+                    except NotImplementedError:
+                        return GroupedResult(
+                            groups={"__all__": results}, group_by_fields=fields
+                        )
+                    temporal_groups = TemporalProcessor.group_by_temporal_unit(
+                        all_ids, documents, field_name, unit
+                    )
 
                 # Convert message ID groups to message groups
                 # (keeping original structure)

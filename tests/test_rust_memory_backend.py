@@ -258,6 +258,88 @@ class TestRustMemoryBackendIntegration:
 
 
 @pytest.mark.skipif(SKIP_RUST_TESTS, reason=SKIP_REASON)
+class TestRustMemoryBackendTemporal:
+    """Test Rust backend's cached-timestamp temporal queries."""
+
+    @pytest.fixture
+    def timestamped_documents(self):
+        from datetime import datetime, timedelta, timezone
+
+        base = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        docs = []
+        # 50 docs at 1-hour spacing — spans Jan 1 (24h) plus 2h of Jan 3
+        for i in range(50):
+            docs.append(
+                {
+                    "id": i,
+                    "user": f"user{i % 3}",
+                    "text": f"message {i}",
+                    "timestamp": (base + timedelta(hours=i)).isoformat(),
+                }
+            )
+        docs.append({"id": 100, "text": "no time", "timestamp": None})
+        docs.append({"id": 101, "text": "bad time", "timestamp": "not a date"})
+        return docs
+
+    @pytest.fixture
+    def temporal_backend(self, timestamped_documents):
+        return RustMemoryBackend(timestamped_documents, timestamp_fields=["timestamp"])
+
+    def test_has_timestamp_field(self, temporal_backend):
+        assert temporal_backend.has_timestamp_field("timestamp")
+        assert not temporal_backend.has_timestamp_field("missing_field")
+
+    def test_unindexed_field_raises(self, temporal_backend):
+        with pytest.raises(ValueError, match="not indexed"):
+            temporal_backend.filter_by_time_range([0, 1, 2], "missing_field")
+
+    def test_filter_by_time_range_between(self, temporal_backend):
+        from datetime import datetime, timedelta, timezone
+
+        base = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        result = temporal_backend.filter_by_time_range(
+            list(range(50)),
+            "timestamp",
+            start=base + timedelta(hours=2),
+            end=base + timedelta(hours=5),
+            inclusive=True,
+        )
+        # Docs at hour 2, 3, 4, 5 (i=2..5)
+        assert result == {2, 3, 4, 5}
+
+    def test_filter_by_time_range_excludes_invalid_ts(self, temporal_backend):
+        """IDs 100 (None) and 101 (unparseable) are excluded silently."""
+        result = temporal_backend.filter_by_time_range([0, 100, 101], "timestamp")
+        assert result == {0}
+
+    def test_filter_by_time_window(self, temporal_backend):
+        from datetime import timedelta
+
+        # Docs are 1 hour apart; a [0,1,2] group spans 2h.
+        results = [[0, 1, 2], [0, 1, 5], [0, 100, 1]]
+        out = temporal_backend.filter_by_time_window(
+            results, "timestamp", timedelta(hours=2)
+        )
+        # First group fits (2h span); second is 5h (drops); third has a
+        # missing-timestamp message (drops).
+        assert out == [[0, 1, 2]]
+
+    def test_group_by_temporal_unit_day(self, temporal_backend):
+        groups = temporal_backend.group_by_temporal_unit(
+            list(range(50)) + [100, 101], "timestamp", "day"
+        )
+        # 50 docs × 15min = 12.5h; spans Jan 1 and Jan 2 (UTC)
+        assert "2024-01-01" in groups
+        assert "2024-01-02" in groups
+        assert groups["__no_timestamp__"] == {100}
+        assert groups["__invalid_timestamp__"] == {101}
+
+    def test_group_by_unsupported_unit_raises(self, temporal_backend):
+        with pytest.raises(ValueError, match="Unsupported temporal unit"):
+            temporal_backend.group_by_temporal_unit([0], "timestamp", "decade")
+
+
+@pytest.mark.skipif(SKIP_RUST_TESTS, reason=SKIP_REASON)
 def test_rust_backend_import_error():
     """Test that appropriate error is raised when Rust module not available."""
     # This test only makes sense if the Rust backend IS available

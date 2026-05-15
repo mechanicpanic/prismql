@@ -1,9 +1,10 @@
 """Rust-based in-memory backend with 10-100x performance improvements."""
 
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 from typing import Optional
 
-from ..types import Document, MessageId
+from ..types import Document, MessageGroup, MessageId, QueryResult
 from .base import SearchBackend
 
 try:
@@ -33,13 +34,22 @@ class RustMemoryBackend(SearchBackend):
     Falls back to Python MemoryBackend if Rust module is not installed.
     """
 
-    def __init__(self, documents: Sequence[Document], id_field: str = "id") -> None:
+    def __init__(
+        self,
+        documents: Sequence[Document],
+        id_field: str = "id",
+        timestamp_fields: Optional[Sequence[str]] = None,
+    ) -> None:
         """
         Initialize the Rust memory backend with documents.
 
         Args:
             documents: List of documents to index
             id_field: Field name containing the document ID
+            timestamp_fields: Optional list of fields to parse + cache as
+                timestamps at index time, enabling the temporal query
+                methods (filter_by_time_range / filter_by_time_window /
+                group_by_temporal_unit) without re-parsing per query.
 
         Raises:
             ImportError: If prismql_rust module is not installed
@@ -55,9 +65,14 @@ class RustMemoryBackend(SearchBackend):
         # Convert documents to list if needed
         self.documents = list(documents)
         self.id_field = id_field
+        self.timestamp_fields = list(timestamp_fields) if timestamp_fields else []
 
         # Create the Rust backend
-        self._backend = _RustMemoryBackend(self.documents, id_field)
+        self._backend = _RustMemoryBackend(
+            self.documents,
+            id_field,
+            timestamp_fields=self.timestamp_fields or None,
+        )
 
     def search_text(
         self, terms: Sequence[str], field: str = "text", operator: str = "OR"
@@ -131,3 +146,58 @@ class RustMemoryBackend(SearchBackend):
         """
         result_list = self._backend.get_questions()
         return set(result_list)
+
+    # ---- Temporal queries -------------------------------------------------
+    #
+    # These are only usable for fields that were passed to `timestamp_fields`
+    # at construction time. Bounds and durations accept native Python
+    # datetime/timedelta objects (aware or naive — naive is treated as UTC).
+    #
+    # Note: Rust treats numeric epoch values as UTC seconds, while Python's
+    # TemporalProcessor uses datetime.fromtimestamp() which is *local* time.
+    # If you mix the two backends with epoch-valued timestamps, results may
+    # differ by your local UTC offset. Use timezone-aware datetimes or ISO
+    # 8601 strings with explicit offset for portable behavior.
+
+    def has_timestamp_field(self, field: str) -> bool:
+        """True if `field` was indexed as a timestamp at construction."""
+        return self._backend.has_timestamp_field(field)  # type: ignore[no-any-return]
+
+    def filter_by_time_range(
+        self,
+        message_ids: Sequence[MessageId],
+        field: str,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+        inclusive: bool = False,
+    ) -> set[MessageId]:
+        """Filter `message_ids` to those whose `field` timestamp lies in the
+        [start, end] range. Use `inclusive=True` for closed bounds."""
+        ids = self._backend.filter_by_time_range(
+            list(message_ids), field, start, end, inclusive
+        )
+        return set(ids)
+
+    def filter_by_time_window(
+        self,
+        results: Sequence[MessageGroup],
+        field: str,
+        window: timedelta,
+    ) -> QueryResult:
+        """Keep only result groups whose messages all have a `field`
+        timestamp and span at most `window`."""
+        return self._backend.filter_by_time_window(  # type: ignore[no-any-return]
+            [list(g) for g in results], field, window
+        )
+
+    def group_by_temporal_unit(
+        self,
+        message_ids: Sequence[MessageId],
+        field: str,
+        unit: str,
+    ) -> dict[str, set[MessageId]]:
+        """Bucket `message_ids` by `field` formatted at `unit` granularity
+        (hour/day/week/month/year). Messages with missing or unparseable
+        timestamps go to `__no_timestamp__` / `__invalid_timestamp__`."""
+        groups = self._backend.group_by_temporal_unit(list(message_ids), field, unit)
+        return {k: set(v) for k, v in groups.items()}
