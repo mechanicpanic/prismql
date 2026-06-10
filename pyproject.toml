@@ -38,12 +38,20 @@ highlighting = [
 repl = [
     "prompt_toolkit>=3.0.0",
 ]
+server = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "tomli>=2.0; python_version<'3.11'",
+]
+mcp = [
+    "mcp>=1.0; python_version>='3.10'",
+]
 demo = [
     "streamlit>=1.28.0",
     "pandas>=1.5.0",
     "pygments>=2.0.0",
 ]
-all = ["prismql[opensearch,elasticsearch,nlp,repl,highlighting,demo]"]
+all = ["prismql[opensearch,elasticsearch,nlp,repl,highlighting,demo,server,mcp]"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -62,6 +70,8 @@ Issues = "https://github.com/mechanicpanic/prismql/issues"
 
 [project.scripts]
 prismql = "prismql.repl:main"
+prismql-server = "prismql.server.app:main"
+prismql-mcp = "prismql.server.mcp:main"
 
 [project.entry-points."pygments.lexers"]
 prismql = "prismql.highlighting:PrismQLLexer"
@@ -129,6 +139,7 @@ ignore = [
 "src/prismql/highlighting/pygments_lexer.py" = ["E501"]  # Long regex strings
 "tests/test_quantifier_fix.py" = ["E501"]  # Long query strings
 "tests/test_sequential_chaining.py" = ["E501"]  # Long query strings
+"src/prismql/server/mcp.py" = ["S310"]  # urllib to a user-configured local server
 "src/prismql/processors/temporal.py" = ["C901", "ARG004"]  # Complexity & unused args
 "src/prismql/processors/variables.py" = ["E501", "ARG002"]  # Line length & unused args
 "src/prismql/aggregators/aggregator.py" = ["C901"]  # Complexity - future refactor
@@ -237,4 +248,5 @@ dev = [
     "twine>=6.1.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "httpx>=0.27",
 ]
