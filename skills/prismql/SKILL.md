@@ -1,0 +1,134 @@
+---
+name: prismql
+description: Run PrismQL pattern-matching queries over sequential data (conversations, logs, events, transactions) directly via Python — no server needed. Use when the user wants to find sequential/co-occurrence/temporal patterns in ordered records ("X followed by Y", "A and B within N messages", repeated behavior by the same entity), or asks to "seed"/set up PrismQL for a specific dataset.
+---
+
+# PrismQL — executable pattern queries over sequential data
+
+PrismQL is "regex for event sequences": a query language over ordered records.
+It is a plain Python package — you execute queries by writing a short script,
+not by calling a server. **Read `LANGUAGE_REFERENCE.md` in this skill directory
+before writing your first query**, then check the Pitfalls section below for
+the errors agents most commonly make.
+
+## Setup
+
+Not yet on PyPI — install from the local repo (or a git URL):
+
+```bash
+uv add --editable ~/Projects/vibes/prismql     # adjust path to your checkout
+# or: uv pip install ~/Projects/vibes/prismql/dist/prismql-0.1.0-py3-none-any.whl
+```
+
+If `import prismql` already works in the project (check first!), skip setup.
+Optional extras: `prismql[nlp]` (spaCy), `prismql[all]`.
+
+## Execution recipe
+
+Run queries inline via Bash. This snippet is verified working (2026-06-10):
+
+```bash
+uv run python - <<'EOF'
+from prismql import PrismQLEngine
+from prismql.backends.memory import MemoryBackend
+
+docs = [  # any ordered records; load yours from JSON/CSV/parquet here
+    {"id": 1, "text": "can you help me with an error?", "user": "alice", "timestamp": 1000},
+    {"id": 2, "text": "try clearing the cache, that fixes it", "user": "bob", "timestamp": 1001},
+]
+
+engine = PrismQLEngine(
+    search_backend=MemoryBackend(docs, id_field="id"),
+    user_dictionaries={
+        "problems":  ["error", "broken", "bug", "issue"],
+        "solutions": ["fix", "fixes", "solve", "works"],
+    },
+)
+
+for group in engine.execute("SELECT contains(problems) FOLLOWED_BY contains(solutions) INWINDOW 5"):
+    print(group)   # e.g. [1, 2]  — list of matching record ids, in pattern order
+EOF
+```
+
+### Backend selection (by dataset size)
+
+| Backend | Import | When |
+|---|---|---|
+| `MemoryBackend(docs, id_field="id")` | `prismql.backends.memory` | < ~10K records, quick analysis |
+| `RustMemoryBackend(docs, id_field="id")` | `prismql.backends.rust_memory` | 10K–1M records (10–100x faster; needs `prismql_rust`) |
+| `DuckDBBackend(database, table_name, field_mappings)` | `prismql.backends.duckdb` | Parquet/CSV/larger-than-RAM analytics |
+| `PostgresBackend` | `prismql.backends.postgres` | Data already in Postgres |
+
+Document format: dicts with `id` (required), `text` (required for text ops),
+`user` (for `from()`), `timestamp` (for `DURING`). Other fields allowed.
+Records are matched by **positional distance = abs(id1 − id2)** for `INWINDOW`,
+so ids should be sequential integers in stream order.
+
+## Result shapes (verified)
+
+- `engine.execute(q)` → `list[list[id]]` — each inner list is one match group.
+  Sequential queries return ordered tuples: `[[problem_id, solution_id], ...]`.
+- `AGGREGATE count()` → `AggregateResult`; call `.to_dict()` →
+  `{'function': 'count', 'field': None, 'value': N}`.
+- `AS "name"` groups → `NamedQueryResult`; `.get_named_group(i)` → `{name: id}`.
+- Full records for a group: `backend.get_documents(group)`.
+
+## Pitfalls (verified against implementation)
+
+1. **Chained `FOLLOWED_BY` needs a window per link.** A single trailing window
+   raises `PrismQLRuntimeError: 'PartialSequence' object is not iterable`.
+   - ❌ `SELECT a FOLLOWED_BY b FOLLOWED_BY c INWINDOW 2`
+   - ✅ `SELECT a FOLLOWED_BY b INWINDOW 2 FOLLOWED_BY c INWINDOW 2`
+2. **Parenthesize AND/OR compounds next to sequential operators.** The bare
+   form raises "AND operator cannot be used with sequential operators".
+   - ❌ `SELECT from(alice) AND is_question() FOLLOWED_BY from(bob) INWINDOW 5`
+   - ✅ `SELECT (from(alice) AND is_question()) FOLLOWED_BY from(bob) INWINDOW 5`
+3. **Every sequential link requires a window** (`INWINDOW N` or `DURING <time>`).
+   Without one you get the PartialSequence error — or worse, the subquery form
+   `a FOLLOWED_BY (SELECT b)` returns wrong results *silently*. Always include
+   the window.
+4. **`contains(x)` takes a dictionary NAME**, never a literal word. For a
+   literal use `contains_phrase("exact phrase")`, or define a dictionary.
+5. **`INWINDOW` is unordered; `FOLLOWED_BY` is ordered.** "A then B" →
+   `FOLLOWED_BY`; "A and B near each other" → comma + `INWINDOW`.
+6. **Don't flatten multi-stage patterns.** `(SELECT a, b INWINDOW 3) ;
+   (SELECT c) INWINDOW 8` keeps a+b grouped; `SELECT a, b, c INWINDOW 8`
+   does not mean the same thing.
+7. **Same-entity repetition** uses pattern variables:
+   `from($u) AND is_question(), from($u) INWINDOW 5` — not two literals.
+
+## Validate before executing
+
+Always validate generated queries; feed errors back and retry (≤3 attempts):
+
+```python
+from prismql import QueryValidator
+v = QueryValidator(user_dictionaries=dicts)   # same dicts as the engine
+r = v.validate(query)
+if not r.valid:
+    feedback = [(i.message, i.suggestion) for i in r.errors]  # → fix and retry
+```
+
+## Seeding an application-specific spec
+
+When asked to "set up / seed PrismQL for <dataset>", generate a project skill
+so future sessions can query that dataset without rediscovery:
+
+1. **Explore the data**: find the files/table, sample ~20 records, identify the
+   ordering, and map columns → `id` / `text` / `user` / `timestamp`. If ids are
+   not sequential ints, assign `enumerate()` positions at load time.
+2. **Pick the backend** from the table above (size + format).
+3. **Draft dictionaries**: 5–15 domain term-lists from the sampled vocabulary
+   (e.g. for trading news: `earnings_beat`, `sanctions_new`, `oil_positive`).
+   Dictionaries are the semantic layer — invest here.
+4. **Write the loader** as a small, importable snippet (file path → docs list →
+   backend → engine).
+5. **Smoke-test 3 queries**: one filter, one `INWINDOW` co-occurrence, one
+   `FOLLOWED_BY` sequence. Paste real output into the seeded skill.
+6. **Write the skill** to `.claude/skills/prismql-<dataset>/SKILL.md` in the
+   target project using `SEED_TEMPLATE.md` (in this directory) as the skeleton,
+   and copy this skill's `LANGUAGE_REFERENCE.md` alongside it.
+
+The seeded skill must stand alone: loader code, field mapping, full dictionary
+definitions, verified example queries with their actual output, and any
+dataset-specific quirks discovered during smoke-testing.
