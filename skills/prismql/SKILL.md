@@ -1,17 +1,37 @@
 ---
 name: prismql
-description: Run PrismQL pattern-matching queries over sequential data (conversations, logs, events, transactions) directly via Python — no server needed. Use when the user wants to find sequential/co-occurrence/temporal patterns in ordered records ("X followed by Y", "A and B within N messages", repeated behavior by the same entity), or asks to "seed"/set up PrismQL for a specific dataset.
+description: Run PrismQL pattern-matching queries over sequential data (conversations, logs, events, transactions) — via a local prismql-server if one is running, else directly via Python. Use when the user wants to find sequential/co-occurrence/temporal patterns in ordered records ("X followed by Y", "A and B within N messages", repeated behavior by the same entity), or asks to "seed"/set up PrismQL for a specific dataset.
 ---
 
 # PrismQL — executable pattern queries over sequential data
 
 PrismQL is "regex for event sequences": a query language over ordered records.
-It is a plain Python package — you execute queries by writing a short script,
-not by calling a server. **Read `LANGUAGE_REFERENCE.md` in this skill directory
-before writing your first query**, then check the Pitfalls section below for
-the errors agents most commonly make.
+Two ways to run queries: a local **prismql-server** (preferred when running —
+warm engine, plain HTTP) or **inline Python** (no server needed).
+**Read `LANGUAGE_REFERENCE.md` in this skill directory before writing your
+first query**, then check the Pitfalls section below for the errors agents
+most commonly make.
 
-## Setup
+## Server mode (check this first)
+
+```bash
+curl -s localhost:8901/health    # anything but connection-refused → server is up
+```
+
+If up, query over HTTP — no Python, no data loading:
+
+```bash
+curl -s -X POST localhost:8901/evaluate -H 'Content-Type: application/json' \
+  -d '{"query": "SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 5", "max_results": 20}'
+```
+
+Responses carry hydrated event groups (`results[].events`); query errors are
+structured 422s whose `error.message` tells you how to fix the query.
+`GET /reference` serves the full language doc; `POST /reload` re-reads the
+data file. To start a server: `prismql-server --config prismql.toml` (config
+holds backend, data path, dictionaries — see the repo README).
+
+## Inline Python (no server)
 
 Not yet on PyPI — install from the local repo (or a git URL):
 
@@ -21,10 +41,8 @@ uv add --editable ~/Projects/vibes/prismql     # adjust path to your checkout
 ```
 
 If `import prismql` already works in the project (check first!), skip setup.
-If a PrismQL server is running (check `curl -s localhost:8901/health`),
-prefer POSTing to `/evaluate` over inline Python — same JSON results, warm
-engine, and `GET /reference` serves the language doc.
-Optional extras: `prismql[nlp]` (spaCy), `prismql[all]`.
+Optional extras: `prismql[nlp]` (spaCy), `prismql[server,mcp]` (the server
+and MCP shim), `prismql[all]`.
 
 ## Execution recipe
 

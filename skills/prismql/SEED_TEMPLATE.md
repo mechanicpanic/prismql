@@ -37,6 +37,11 @@ including the full user_dictionaries dict inline. Must run as-is with
 `uv run python`. Backend choice: {{backend}} because {{reason}}.}}
 ```
 
+<!-- Alternative to the inline loader: if this project runs prismql-server,
+replace the loader with a prismql.toml (backend, data path, dictionaries)
+and query via `curl -X POST localhost:{{port}}/evaluate`. Same dictionaries,
+warm engine, no per-query load cost. -->
+
 ## Dictionaries
 
 <!-- The semantic layer. Keep definitions IN the loader above; list meanings here. -->
