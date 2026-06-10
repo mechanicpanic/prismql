@@ -95,6 +95,8 @@ class BackendFactory:
 
         if backend_type == "memory":
             return cls._create_memory_backend(config)
+        if backend_type == "rust_memory":
+            return cls._create_rust_memory_backend(config)
         if backend_type in ["opensearch", "elasticsearch"]:
             return cls._create_opensearch_backend(config)
         if backend_type in ["postgres", "postgresql"]:
@@ -118,6 +120,27 @@ class BackendFactory:
             raise ValueError("Memory backend requires 'documents' in configuration")
 
         return MemoryBackend(documents, id_field)
+
+    @classmethod
+    def _create_rust_memory_backend(cls, config: dict[str, Any]) -> SearchBackend:
+        """Create Rust-accelerated memory backend.
+
+        ImportErrors propagate verbatim: RustMemoryBackend's capability
+        handshake produces a precise message about missing/stale
+        prismql_rust builds that we must not paper over.
+        """
+        from .rust_memory import RustMemoryBackend
+
+        documents = config.get("documents", [])
+        if not documents:
+            raise ValueError(
+                "rust_memory backend requires 'documents' in configuration"
+            )
+        return RustMemoryBackend(
+            documents,
+            id_field=config.get("id_field", "id"),
+            timestamp_fields=config.get("timestamp_fields"),
+        )
 
     @classmethod
     def _create_opensearch_backend(cls, config: dict[str, Any]) -> SearchBackend:

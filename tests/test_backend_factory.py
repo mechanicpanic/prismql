@@ -400,3 +400,22 @@ class TestBackendFactory:
         """Test validation with non-dict config."""
         with pytest.raises(ValueError, match="Configuration must be a dictionary"):
             BackendFactory.validate_config("not_a_dict")
+
+
+def test_create_rust_memory_backend():
+    pytest.importorskip("prismql_rust")
+    from prismql.backends.rust_memory import RustMemoryBackend
+
+    config = {
+        "search_backend": {
+            "type": "rust_memory",
+            "documents": [
+                {"id": 0, "user": "a", "text": "hi", "timestamp": 1000},
+                {"id": 1, "user": "b", "text": "yo", "timestamp": 1005},
+            ],
+            "timestamp_fields": ["timestamp"],
+        }
+    }
+    backend, _, _, _ = BackendFactory.create_backends(config)
+    assert isinstance(backend, RustMemoryBackend)
+    assert backend.has_timestamp_field("timestamp")
