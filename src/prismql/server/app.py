@@ -22,6 +22,10 @@ class EvaluateRequest(BaseModel):
     query: str
     max_results: int | None = Field(default=None, ge=1)
     hydrate: bool | None = None
+    # Request-scoped dictionary overlay: merged over the config dictionaries
+    # for this request only (request wins on name collision). Dictionaries
+    # are resolved at query time, so no index rebuild is involved.
+    dictionaries: dict[str, list[str]] | None = None
 
 
 class ServerState:
@@ -95,8 +99,19 @@ def create_app(config: ServerConfig) -> FastAPI:
         )
         start = perf_counter()
         with state.lock:
+            engine = state.engine
+            if req.dictionaries:
+                # Cheap: shares the loaded backend; only the dict mapping and
+                # visitor are new. The base engine is untouched.
+                from ..engine import PrismQLEngine
+
+                engine = PrismQLEngine(
+                    state.engine.search_backend,
+                    user_dictionaries={**config.dictionaries, **req.dictionaries},
+                    timestamp_field=config.timestamp_field,
+                )
             try:
-                result = state.engine.execute(req.query)
+                result = engine.execute(req.query)
             except PrismQLSyntaxError as e:
                 return JSONResponse(
                     status_code=422,

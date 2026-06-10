@@ -27,6 +27,9 @@ curl -s -X POST localhost:8901/evaluate -H 'Content-Type: application/json' \
 
 Responses carry hydrated event groups (`results[].events`); query errors are
 structured 422s whose `error.message` tells you how to fix the query.
+Iterate on dictionaries in-band — add `"dictionaries": {"name": ["term", …]}`
+to the request to define/override term lists for that query only; persist
+stable ones into the server's `prismql.toml` when done.
 `GET /reference` serves the full language doc; `POST /reload` re-reads the
 data file. To start a server: `prismql-server --config prismql.toml` (config
 holds backend, data path, dictionaries — see the repo README).

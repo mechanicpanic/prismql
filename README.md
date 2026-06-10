@@ -62,7 +62,10 @@ spikes = ["spike", "surge"]
 ```
 
 `POST /evaluate` returns hydrated event groups; query errors come back as
-structured 422s with messages designed for agent self-correction.
+structured 422s with messages designed for agent self-correction. Requests
+may carry a `dictionaries` overlay — term lists merged over the config
+dictionaries for that query only — so agents can iterate on the semantic
+layer without touching server state.
 
 ## Quick Start
 

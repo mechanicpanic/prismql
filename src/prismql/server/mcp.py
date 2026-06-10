@@ -20,6 +20,10 @@ PrismQL is a pattern language over ordered records. Quick primer:
   SELECT a FOLLOWED_BY b FOLLOWED_BY c DURING 30 seconds   -- temporal chain
   SELECT from(x), from(y) INWINDOW 10                      -- unordered co-occurrence
 Precedence: NOT > AND > OR > FOLLOWED_BY/PRECEDED_BY.
+contains(name) matches terms from a named dictionary. Pass dictionaries
+to define or override term lists for THIS query only — iterate on them
+freely, then ask the user to persist stable ones into the server config:
+  dictionaries={"spikes": ["spike", "surge", "gap up"]}
 Read the prismql://reference resource for the full language before
 writing complex queries. Returns JSON with matched event groups,
 hydrated with full event content.
@@ -27,13 +31,19 @@ hydrated with full event content.
 
 
 def evaluate_via_http(
-    query: str, max_results: int = 20, base_url: str | None = None
+    query: str,
+    max_results: int = 20,
+    dictionaries: dict[str, list[str]] | None = None,
+    base_url: str | None = None,
 ) -> dict[str, Any]:
     """POST the query to the PrismQL server; structured errors, never raises."""
     if base_url is None:
         base_url = os.environ.get("PRISMQL_SERVER_URL", DEFAULT_URL)
     base = base_url.rstrip("/")
-    body = json.dumps({"query": query, "max_results": max_results}).encode()
+    payload: dict[str, Any] = {"query": query, "max_results": max_results}
+    if dictionaries:
+        payload["dictionaries"] = dictionaries
+    body = json.dumps(payload).encode()
     request = urllib.request.Request(
         f"{base}/evaluate",
         data=body,
@@ -72,8 +82,12 @@ def main() -> None:
     server = FastMCP("prismql")
 
     @server.tool(description=_TOOL_DESCRIPTION)
-    def evaluate(query: str, max_results: int = 20) -> str:
-        return json.dumps(evaluate_via_http(query, max_results))
+    def evaluate(
+        query: str,
+        max_results: int = 20,
+        dictionaries: dict[str, list[str]] | None = None,
+    ) -> str:
+        return json.dumps(evaluate_via_http(query, max_results, dictionaries))
 
     @server.resource("prismql://reference")
     def reference() -> str:

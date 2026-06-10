@@ -155,3 +155,41 @@ def test_reference(client):
     assert r.status_code == 200
     assert "text/markdown" in r.headers["content-type"]
     assert "FOLLOWED_BY" in r.text
+
+
+def test_evaluate_request_dictionaries_overlay(client):
+    # "reversals" is not in the server config — defined per-request
+    r = client.post(
+        "/evaluate",
+        json={
+            "query": "SELECT contains(reversals)",
+            "dictionaries": {"reversals": ["reversal"]},
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["results"][0]["ids"] == [2]
+
+
+def test_evaluate_request_dictionaries_override_config(client):
+    # config defines spikes=["spike"]; request overrides it to match nothing real
+    r = client.post(
+        "/evaluate",
+        json={
+            "query": "SELECT contains(spikes)",
+            "dictionaries": {"spikes": ["unobtainium"]},
+        },
+    )
+    assert r.json()["count"] == 0
+
+
+def test_evaluate_request_dictionaries_do_not_persist(client):
+    client.post(
+        "/evaluate",
+        json={
+            "query": "SELECT contains(spikes)",
+            "dictionaries": {"spikes": ["unobtainium"]},
+        },
+    )
+    # next request without overlay sees the config dictionary again
+    r = client.post("/evaluate", json={"query": "SELECT contains(spikes)"})
+    assert r.json()["results"][0]["ids"] == [1]

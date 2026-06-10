@@ -43,6 +43,15 @@ def test_round_trip_against_app(tmp_path):
     assert server.started
 
     result = evaluate_via_http("SELECT from(a)", base_url="http://127.0.0.1:8929")
-    server.should_exit = True
     assert result["ok"] is True
     assert result["results"][0]["ids"] == [1]
+
+    # request-scoped dictionary overlay travels through the shim
+    overlay = evaluate_via_http(
+        "SELECT contains(greets)",
+        dictionaries={"greets": ["hi"]},
+        base_url="http://127.0.0.1:8929",
+    )
+    server.should_exit = True
+    assert overlay["ok"] is True
+    assert overlay["results"][0]["ids"] == [1]
