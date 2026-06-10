@@ -21,6 +21,9 @@ uv add --editable ~/Projects/vibes/prismql     # adjust path to your checkout
 ```
 
 If `import prismql` already works in the project (check first!), skip setup.
+If a PrismQL server is running (check `curl -s localhost:8901/health`),
+prefer POSTing to `/evaluate` over inline Python — same JSON results, warm
+engine, and `GET /reference` serves the language doc.
 Optional extras: `prismql[nlp]` (spaCy), `prismql[all]`.
 
 ## Execution recipe

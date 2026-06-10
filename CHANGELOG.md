@@ -69,6 +69,11 @@ Initial public release.
 
 ### Tooling & Examples
 
+- HTTP server (`prismql[server]` extra): config-driven `prismql-server`
+  with `/evaluate` (hydrated results, structured errors), `/health`,
+  `/reload`, and `/reference`.
+- MCP shim (`prismql[mcp]` extra): `prismql-mcp` exposes a single
+  `evaluate()` tool plus the language reference as a resource.
 - Interactive REPL (`prismql` entry point, optional `repl` extra).
 - Pygments lexer for syntax highlighting (optional `highlighting` extra),
   registered as a Pygments plugin.

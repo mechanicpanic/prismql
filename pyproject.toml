@@ -209,10 +209,15 @@ module = [
     "fastapi.*",
     "pydantic",
     "uvicorn",
-    "mcp",
-    "mcp.*",
 ]
 ignore_missing_imports = true
+
+# The mcp SDK requires Python >= 3.10 (match statements); our mypy runs at
+# python_version 3.9, so don't follow imports into it at all.
+[[tool.mypy.overrides]]
+module = ["mcp", "mcp.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 # Pre-existing type debt in performance-critical processors.
 # These modules type-annotate the public interface but use Union[int, str]

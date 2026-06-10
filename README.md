@@ -29,6 +29,41 @@ pip install prismql[nlp]
 pip install prismql[all]
 ```
 
+## Server & agent integration
+
+Run PrismQL as a local HTTP server (agents and tools query it instead of
+embedding Python):
+
+```bash
+pip install prismql[server]
+prismql-server --config prismql.toml    # POST /evaluate, GET /reference
+```
+
+MCP-native agents get a single `evaluate()` tool via the stdio shim:
+
+```bash
+pip install prismql[server,mcp]
+prismql-mcp    # finds the server via PRISMQL_SERVER_URL (default :8901)
+```
+
+`prismql.toml` holds all state — backend type, data file, dictionaries,
+timestamp field:
+
+```toml
+[server]
+port = 8901
+
+[backend]
+type = "rust_memory"        # or: memory
+data = "events.jsonl"       # .json / .jsonl / .csv / .parquet
+
+[dictionaries]
+spikes = ["spike", "surge"]
+```
+
+`POST /evaluate` returns hydrated event groups; query errors come back as
+structured 422s with messages designed for agent self-correction.
+
 ## Quick Start
 
 ```python
