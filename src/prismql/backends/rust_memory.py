@@ -235,6 +235,24 @@ class RustMemoryBackend(SearchBackend):
             valid_groups, field, window
         )
 
+    def merge_within_time_window(
+        self,
+        groups: Sequence[MessageGroup],
+        field: str,
+        window: timedelta,
+    ) -> QueryResult:
+        """Every combination of one message per group (no ordering
+        constraint between groups) whose `field` timestamp span fits within
+        `window`. Pruned enumeration — infeasible combinations are never
+        materialized, unlike the cartesian-product fallback path.
+
+        Raises ValueError if intermediate results exceed the OOM safety cap.
+        """
+        valid_groups = [[i for i in g if self._valid_id(i)] for g in groups]
+        return self._backend.merge_within_time_window(  # type: ignore[no-any-return]
+            valid_groups, field, window
+        )
+
     def group_by_temporal_unit(
         self,
         message_ids: Sequence[MessageId],

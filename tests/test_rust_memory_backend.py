@@ -338,6 +338,93 @@ class TestRustMemoryBackendTemporal:
         with pytest.raises(ValueError, match="Unsupported temporal unit"):
             temporal_backend.group_by_temporal_unit([0], "timestamp", "decade")
 
+    @staticmethod
+    def _reference_merge(groups, docs, window) -> set[tuple[int, ...]]:
+        """Cartesian product + span filter — the semantics the fused Rust
+        merge must replicate (no ordering constraint between groups)."""
+        import itertools
+        from datetime import datetime
+
+        ts = {
+            d["id"]: datetime.fromisoformat(d["timestamp"])
+            for d in docs
+            if isinstance(d.get("timestamp"), str) and "T" in str(d["timestamp"])
+        }
+        out = set()
+        for combo in itertools.product(*groups):
+            times = [ts.get(m) for m in combo]
+            if None in times:
+                continue
+            if max(times) - min(times) <= window:
+                out.add(tuple(combo))
+        return out
+
+    def test_merge_within_time_window_parity(
+        self, timestamped_documents, temporal_backend
+    ):
+        from datetime import timedelta
+
+        # Unsorted groups, overlap between groups, junk members
+        groups = [
+            [5, 1, 30, 100],  # 100 has no timestamp
+            [2, 6, 31, 1],  # overlaps group 0 (id 1)
+            [3, 32, 7, 101],  # 101 has invalid timestamp
+        ]
+        for window in [timedelta(hours=2), timedelta(hours=5), timedelta(0)]:
+            expected = self._reference_merge(groups, timestamped_documents, window)
+            got = temporal_backend.merge_within_time_window(groups, "timestamp", window)
+            assert {tuple(r) for r in got} == expected, f"window={window}"
+
+    def test_merge_within_time_window_keeps_unordered_combos(self, temporal_backend):
+        from datetime import timedelta
+
+        # Group 0's pick (id 5) is LATER than group 1's pick (id 3):
+        # DURING semantics impose no chronological order between
+        # restrictions, unlike INWINDOW.
+        got = temporal_backend.merge_within_time_window(
+            [[5], [3]], "timestamp", timedelta(hours=3)
+        )
+        assert got == [[5, 3]]
+
+    def test_merge_within_time_window_empty_factor(self, temporal_backend):
+        from datetime import timedelta
+
+        # A group with no usable timestamps empties the whole product.
+        got = temporal_backend.merge_within_time_window(
+            [[1, 2], [100]], "timestamp", timedelta(hours=1)
+        )
+        assert got == []
+
+    def test_during_query_end_to_end_matches_python_backend(self):
+        from datetime import datetime, timedelta, timezone
+
+        from prismql import PrismQLEngine
+
+        base = datetime(2024, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+        docs = []
+        users = ["alice", "bob", "alice", "bob", "alice", "bob"]
+        offsets = [0, 10, 25, 200, 215, 230]  # seconds
+        for i, (u, off) in enumerate(zip(users, offsets)):
+            docs.append(
+                {
+                    "id": i,
+                    "user": u,
+                    "text": f"msg {i}",
+                    "timestamp": (base + timedelta(seconds=off)).isoformat(),
+                }
+            )
+
+        py_engine = PrismQLEngine(MemoryBackend(docs))
+        rust_engine = PrismQLEngine(
+            RustMemoryBackend(docs, timestamp_fields=["timestamp"])
+        )
+
+        query = "SELECT from(alice), from(bob) DURING 20 seconds"
+        py_result = {tuple(g) for g in py_engine.execute(query)}
+        rust_result = {tuple(g) for g in rust_engine.execute(query)}
+        assert rust_result == py_result
+        assert rust_result  # sanity: window admits at least one pair
+
 
 @pytest.mark.skipif(SKIP_RUST_TESTS, reason=SKIP_REASON)
 def test_rust_backend_import_error():

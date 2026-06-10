@@ -142,9 +142,28 @@ class PrismQLVisitor(BasePrismQLVisitor):
             if is_sequential and len(ctx.restrictions().named_restriction()) == 1:
                 results = restriction_results
             elif temporal_window is not None:
-                # For temporal windows, generate ALL possible combinations
-                # (not just non-overlapping pairs from greedy algorithm)
-                results = self._generate_all_combinations(restriction_results)
+                # For temporal windows we need ALL combinations (not just
+                # non-overlapping pairs from the greedy algorithm). The Rust
+                # backend fuses generation + span filtering with pruning, so
+                # infeasible combinations are never materialized; the Python
+                # fallback builds the full cartesian product and filters it
+                # in Step 2.4.
+                can_fuse = hasattr(
+                    self.search_backend, "merge_within_time_window"
+                ) and self.search_backend.has_timestamp_field(  # type: ignore[attr-defined]
+                    self.timestamp_field
+                )
+                if can_fuse:
+                    results = self.search_backend.merge_within_time_window(  # type: ignore[attr-defined]
+                        restriction_results, self.timestamp_field, temporal_window
+                    )
+                    # Span filter already applied; skip Step 2.4. (Variable
+                    # validation in Step 2.3 commutes with the span filter —
+                    # both are per-group predicates — and runs faster on the
+                    # already-filtered set.)
+                    temporal_window = None
+                else:
+                    results = self._generate_all_combinations(restriction_results)
             else:
                 results = self._merge_restrictions(restriction_results, window_size)
         elif ctx.query_seq():
