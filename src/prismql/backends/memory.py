@@ -265,7 +265,19 @@ class MemoryBackend(SearchBackend):
 
         # Look up the n-gram in the index
         ngram = " ".join(phrase_tokens)
-        return self._ngram_indexes[n].get(ngram, set()).copy()
+        ids = self._ngram_indexes[n].get(ngram)
+        if ids is not None:
+            return ids.copy()
+
+        # An empty lookup is authoritative only when the index is unfiltered.
+        # min-frequency / max-count pruning can drop legitimate n-grams, so
+        # fall back to substring matching to avoid false negatives.
+        index_is_complete = (
+            self.config.ngram_min_frequency <= 1 and self.config.ngram_max_count is None
+        )
+        if index_is_complete:
+            return set()
+        return self._search_phrase_substring(phrase, field)
 
     def _search_phrase_substring(self, phrase: str, field: str) -> set[MessageId]:
         """Fallback phrase search using substring matching."""

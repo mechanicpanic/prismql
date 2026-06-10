@@ -39,21 +39,33 @@ class RustMemoryBackend(SearchBackend):
         documents: Sequence[Document],
         id_field: str = "id",
         timestamp_fields: Optional[Sequence[str]] = None,
+        enable_ngrams: bool = False,
+        ngram_sizes: Optional[Sequence[int]] = None,
+        ngram_min_frequency: int = 2,
+        ngram_max_count: Optional[int] = None,
     ) -> None:
         """
         Initialize the Rust memory backend with documents.
 
         Args:
-            documents: List of documents to index
+            documents: List of documents to index. Document IDs must be
+                non-negative integers (use MemoryBackend for string IDs).
             id_field: Field name containing the document ID
             timestamp_fields: Optional list of fields to parse + cache as
                 timestamps at index time, enabling the temporal query
                 methods (filter_by_time_range / filter_by_time_window /
                 group_by_temporal_unit) without re-parsing per query.
+                Note: timestamps are cached at construction — mutating a
+                document's timestamp field afterwards does not update them.
+            enable_ngrams: Build n-gram indexes for fast phrase search
+            ngram_sizes: N-gram sizes to index (default: [2, 3])
+            ngram_min_frequency: Drop n-grams appearing in fewer docs
+            ngram_max_count: Keep only the most frequent N n-grams
 
         Raises:
             ImportError: If prismql_rust module is not installed
             ValueError: If documents are missing the id_field
+            TypeError: If document IDs are not non-negative integers
         """
         if not RUST_BACKEND_AVAILABLE or _RustMemoryBackend is None:
             raise ImportError(
@@ -68,11 +80,27 @@ class RustMemoryBackend(SearchBackend):
         self.timestamp_fields = list(timestamp_fields) if timestamp_fields else []
 
         # Create the Rust backend
-        self._backend = _RustMemoryBackend(
-            self.documents,
-            id_field,
-            timestamp_fields=self.timestamp_fields or None,
-        )
+        try:
+            self._backend = _RustMemoryBackend(
+                self.documents,
+                id_field,
+                enable_ngrams=enable_ngrams,
+                ngram_sizes=list(ngram_sizes) if ngram_sizes is not None else None,
+                ngram_min_frequency=ngram_min_frequency,
+                ngram_max_count=ngram_max_count,
+                timestamp_fields=self.timestamp_fields or None,
+            )
+        except TypeError as e:
+            raise TypeError(
+                "RustMemoryBackend requires non-negative integer document IDs; "
+                "use MemoryBackend for string or negative IDs"
+            ) from e
+
+    @staticmethod
+    def _valid_id(msg_id: object) -> bool:
+        """Rust ids are usize; anything else is a guaranteed non-match,
+        mirroring how the Python backend treats unknown ids."""
+        return isinstance(msg_id, int) and 0 <= msg_id < 2**64
 
     def search_text(
         self, terms: Sequence[str], field: str = "text", operator: str = "OR"
@@ -135,7 +163,9 @@ class RustMemoryBackend(SearchBackend):
         Returns:
             List of documents as dicts
         """
-        return self._backend.get_documents(list(ids))  # type: ignore[no-any-return]
+        return self._backend.get_documents(  # type: ignore[no-any-return]
+            [i for i in ids if self._valid_id(i)]
+        )
 
     def get_questions(self) -> set[MessageId]:
         """
@@ -147,17 +177,24 @@ class RustMemoryBackend(SearchBackend):
         result_list = self._backend.get_questions()
         return set(result_list)
 
+    def search_phrase(self, phrase: str, field: str = "text") -> set[MessageId]:
+        """
+        Search for documents containing a phrase.
+
+        Uses n-gram indexes when enabled; falls back to substring matching
+        over the requested field (also when the n-gram index may have
+        pruned the phrase via min-frequency/max-count filtering).
+        """
+        return set(self._backend.search_phrase(phrase, field))
+
     # ---- Temporal queries -------------------------------------------------
     #
     # These are only usable for fields that were passed to `timestamp_fields`
     # at construction time. Bounds and durations accept native Python
     # datetime/timedelta objects (aware or naive — naive is treated as UTC).
     #
-    # Note: Rust treats numeric epoch values as UTC seconds, while Python's
-    # TemporalProcessor uses datetime.fromtimestamp() which is *local* time.
-    # If you mix the two backends with epoch-valued timestamps, results may
-    # differ by your local UTC offset. Use timezone-aware datetimes or ISO
-    # 8601 strings with explicit offset for portable behavior.
+    # Numeric epoch values are interpreted as UTC seconds, consistent with
+    # Python's TemporalProcessor (which also normalizes epochs to UTC).
 
     def has_timestamp_field(self, field: str) -> bool:
         """True if `field` was indexed as a timestamp at construction."""
@@ -174,7 +211,11 @@ class RustMemoryBackend(SearchBackend):
         """Filter `message_ids` to those whose `field` timestamp lies in the
         [start, end] range. Use `inclusive=True` for closed bounds."""
         ids = self._backend.filter_by_time_range(
-            list(message_ids), field, start, end, inclusive
+            [i for i in message_ids if self._valid_id(i)],
+            field,
+            start,
+            end,
+            inclusive,
         )
         return set(ids)
 
@@ -186,8 +227,12 @@ class RustMemoryBackend(SearchBackend):
     ) -> QueryResult:
         """Keep only result groups whose messages all have a `field`
         timestamp and span at most `window`."""
+        # Groups containing a non-usize id can't have a timestamp for every
+        # member, so they'd be dropped anyway — drop them up front rather
+        # than overflow at the FFI boundary.
+        valid_groups = [list(g) for g in results if all(self._valid_id(i) for i in g)]
         return self._backend.filter_by_time_window(  # type: ignore[no-any-return]
-            [list(g) for g in results], field, window
+            valid_groups, field, window
         )
 
     def group_by_temporal_unit(
@@ -199,5 +244,7 @@ class RustMemoryBackend(SearchBackend):
         """Bucket `message_ids` by `field` formatted at `unit` granularity
         (hour/day/week/month/year). Messages with missing or unparseable
         timestamps go to `__no_timestamp__` / `__invalid_timestamp__`."""
-        groups = self._backend.group_by_temporal_unit(list(message_ids), field, unit)
+        groups = self._backend.group_by_temporal_unit(
+            [i for i in message_ids if self._valid_id(i)], field, unit
+        )
         return {k: set(v) for k, v in groups.items()}

@@ -85,7 +85,11 @@ class Aggregator:
                             groups={"__all__": results}, group_by_fields=fields
                         )
                     temporal_groups = TemporalProcessor.group_by_temporal_unit(
-                        all_ids, documents, field_name, unit
+                        all_ids,
+                        documents,
+                        field_name,
+                        unit,
+                        id_field=getattr(self.search_backend, "id_field", "id"),
                     )
 
                 # Convert message ID groups to message groups

@@ -64,13 +64,35 @@ class TemporalProcessor:
         except ValueError:
             pass
 
-        # Try Unix timestamp
+        # Try Unix timestamp (interpreted as UTC for portable results;
+        # naive local time would make query results depend on the machine's
+        # timezone and diverge from the Rust backend)
         try:
-            return datetime.fromtimestamp(float(timestamp_str))
-        except (ValueError, OSError):
+            return TemporalProcessor._fromtimestamp_utc(float(timestamp_str))
+        except (ValueError, OSError, OverflowError):
             pass
 
         raise ValueError(f"Cannot parse timestamp: {timestamp_str}")
+
+    @staticmethod
+    def _fromtimestamp_utc(value: float) -> datetime:
+        """Epoch seconds -> naive UTC datetime (portable across machines)."""
+        from datetime import timezone
+
+        return datetime.fromtimestamp(value, tz=timezone.utc).replace(tzinfo=None)
+
+    @staticmethod
+    def _coerce_timestamp(value: Any) -> Optional[datetime]:
+        """Convert a document timestamp value to a datetime, or None if it
+        cannot be interpreted. Numeric epochs are interpreted as UTC."""
+        try:
+            if isinstance(value, datetime):
+                return value
+            if isinstance(value, (int, float)):
+                return TemporalProcessor._fromtimestamp_utc(value)
+            return TemporalProcessor.parse_timestamp(str(value))
+        except (ValueError, OSError, OverflowError):
+            return None
 
     @staticmethod
     def parse_relative_time(
@@ -120,6 +142,7 @@ class TemporalProcessor:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         inclusive: bool = False,
+        id_field: str = "id",
     ) -> set[MessageId]:
         """
         Filter messages by timestamp range.
@@ -131,6 +154,7 @@ class TemporalProcessor:
             start_time: Start of time range, None for no lower bound
             end_time: End of time range, None for no upper bound
             inclusive: If True, bounds are inclusive; if False, exclusive
+            id_field: Name of the document ID field
 
         Returns:
             Set of message IDs within the time range
@@ -138,7 +162,7 @@ class TemporalProcessor:
         filtered_ids: set[MessageId] = set()
 
         for doc in documents:
-            msg_id = doc.get("id")
+            msg_id = doc.get(id_field)
             if msg_id not in message_ids:
                 continue
 
@@ -146,15 +170,8 @@ class TemporalProcessor:
             if timestamp_value is None:
                 continue
 
-            # Parse timestamp
-            try:
-                if isinstance(timestamp_value, datetime):
-                    msg_time = timestamp_value
-                elif isinstance(timestamp_value, (int, float)):
-                    msg_time = datetime.fromtimestamp(timestamp_value)
-                else:
-                    msg_time = TemporalProcessor.parse_timestamp(str(timestamp_value))
-            except (ValueError, OSError):
+            msg_time = TemporalProcessor._coerce_timestamp(timestamp_value)
+            if msg_time is None:
                 # Skip messages with invalid timestamps
                 continue
 
@@ -203,6 +220,7 @@ class TemporalProcessor:
         documents: list[dict[str, Any]],
         timestamp_field: str,
         unit: TemporalUnit,
+        id_field: str = "id",
     ) -> dict[str, set[MessageId]]:
         """
         Group messages by temporal unit (hour/day/week/month/year).
@@ -212,6 +230,7 @@ class TemporalProcessor:
             documents: List of document dictionaries with timestamps
             timestamp_field: Name of the timestamp field
             unit: Temporal unit to group by
+            id_field: Name of the document ID field
 
         Returns:
             Dictionary mapping group key to set of message IDs
@@ -219,7 +238,7 @@ class TemporalProcessor:
         groups: dict[str, set[MessageId]] = {}
 
         for doc in documents:
-            msg_id = doc.get("id")
+            msg_id = doc.get(id_field)
             if msg_id not in message_ids:
                 continue
 
@@ -229,15 +248,8 @@ class TemporalProcessor:
                 groups.setdefault("__no_timestamp__", set()).add(msg_id)
                 continue
 
-            # Parse timestamp
-            try:
-                if isinstance(timestamp_value, datetime):
-                    msg_time = timestamp_value
-                elif isinstance(timestamp_value, (int, float)):
-                    msg_time = datetime.fromtimestamp(timestamp_value)
-                else:
-                    msg_time = TemporalProcessor.parse_timestamp(str(timestamp_value))
-            except (ValueError, OSError):
+            msg_time = TemporalProcessor._coerce_timestamp(timestamp_value)
+            if msg_time is None:
                 groups.setdefault("__invalid_timestamp__", set()).add(msg_id)
                 continue
 
@@ -267,6 +279,7 @@ class TemporalProcessor:
         documents: list[dict[str, Any]],
         timestamp_field: str,
         window_duration: timedelta,
+        id_field: str = "id",
     ) -> QueryResult:
         """
         Filter query results using time-based window (true WITHIN implementation).
@@ -279,6 +292,7 @@ class TemporalProcessor:
             documents: List of document dictionaries with timestamps
             timestamp_field: Name of the timestamp field
             window_duration: Maximum time span for messages in a group
+            id_field: Name of the document ID field
 
         Returns:
             Filtered query results
@@ -286,23 +300,15 @@ class TemporalProcessor:
         # Build timestamp lookup
         timestamps: dict[MessageId, datetime] = {}
         for doc in documents:
-            msg_id = doc.get("id")
+            msg_id = doc.get(id_field)
             timestamp_value = doc.get(timestamp_field)
 
             if msg_id is None or timestamp_value is None:
                 continue
 
-            try:
-                if isinstance(timestamp_value, datetime):
-                    timestamps[msg_id] = timestamp_value
-                elif isinstance(timestamp_value, (int, float)):
-                    timestamps[msg_id] = datetime.fromtimestamp(timestamp_value)
-                else:
-                    timestamps[msg_id] = TemporalProcessor.parse_timestamp(
-                        str(timestamp_value)
-                    )
-            except (ValueError, OSError):
-                continue
+            msg_time = TemporalProcessor._coerce_timestamp(timestamp_value)
+            if msg_time is not None:
+                timestamps[msg_id] = msg_time
 
         # Filter groups
         filtered_results: QueryResult = []

@@ -186,7 +186,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     all_msg_ids.update(group)
                 documents = self.search_backend.get_documents(list(all_msg_ids))
                 results = TemporalProcessor.filter_by_time_window(
-                    results, documents, self.timestamp_field, temporal_window
+                    results,
+                    documents,
+                    self.timestamp_field,
+                    temporal_window,
+                    id_field=getattr(self.search_backend, "id_field", "id"),
                 )
 
         # Step 2.5: Apply temporal filtering if specified (BEFORE, AFTER, BETWEEN)
@@ -1889,6 +1893,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 start_time,
                 end_time,
                 inclusive,
+                id_field=getattr(self.search_backend, "id_field", "id"),
             )
 
         # Filter result groups to only include filtered messages
