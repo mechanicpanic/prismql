@@ -1,4 +1,4 @@
-# Generated from /home/aleph/projects/prismql/src/prismql/grammar/PrismQL.g4 by ANTLR 4.13.1
+# Generated from /Users/aleph/Projects/vibes/prismql/src/prismql/grammar/PrismQL.g4 by ANTLR 4.13.1
 from antlr4 import *
 from io import StringIO
 import sys

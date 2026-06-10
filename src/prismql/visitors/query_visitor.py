@@ -392,6 +392,15 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # Process the underlying restriction
             result = self.visitRestriction(named_restriction_ctx.restriction())
 
+            # A PartialSequence escaping here means a chain's final link had
+            # no window — raise a teachable error instead of crashing later.
+            if isinstance(result, PartialSequence):
+                raise PrismQLRuntimeError(
+                    "Sequential chain is missing a window constraint on its final "
+                    "link. Add INWINDOW <n> or DURING <time> at the end of the "
+                    "chain — a trailing window applies to every windowless link."
+                )
+
             # Check if any new constraints were added (indicating a variable was used)
             new_constraints = self.variable_constraints[num_constraints_before:]
 
@@ -421,7 +430,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             else:
                 # Result is a set of message IDs (normal restriction)
                 # Convert set to sorted list
-                sorted_result = sorted(result)  # type: ignore[arg-type]
+                sorted_result = sorted(result)
 
                 # Apply quantifier by expanding the restriction
                 # For now, we use min_count (exact or minimum)
@@ -465,17 +474,150 @@ class PrismQLVisitor(BasePrismQLVisitor):
         self, ctx: PrismQLParser.RestrictionContext
     ) -> Union[set[MessageId], list[MessageGroup], PartialSequence]:
         """
-        Process a single restriction with boolean operators.
+        Process the sequential layer of a restriction.
+
+        The grammar guarantees chains nest LEFT: ``A FOLLOWED_BY B FOLLOWED_BY
+        C INWINDOW 10`` arrives as ``((A FOLLOWED_BY B) FOLLOWED_BY C INWINDOW
+        10)``, so a trailing window reaches the outermost link and distributes
+        to windowless inner links via PartialSequence deferred evaluation.
 
         Returns:
-            - set[MessageId] for normal restrictions
+            - set[MessageId] for plain boolean restrictions (fallthrough)
             - list[MessageGroup] for evaluated sequential operators
-            - PartialSequence for sequential operators without window constraint
+            - PartialSequence for a windowless link, to be evaluated with an
+              enclosing link's window
         """
+        # Fallthrough: no sequential operator at this level
+        if (
+            not ctx.FollowedBy()
+            and not ctx.PrecededBy()
+            and not ctx.NotFollowedBy()
+            and not ctx.NotPrecededBy()
+        ):
+            return self.visitBool_restriction(ctx.bool_restriction())
+
+        lhs = self.visitRestriction(ctx.restriction())
+        rhs = self.visitBool_restriction(ctx.bool_restriction())
+        window = self._extract_window_constraint(ctx)
+
+        # The right operand comes from the boolean layer; a list or
+        # PartialSequence can only appear via parenthesized sequential
+        # expressions, which are not supported as right operands.
+        if isinstance(rhs, (list, PartialSequence)):
+            raise PrismQLRuntimeError(
+                "Sequential operators require simple conditions on the "
+                "right-hand side, not nested sequences"
+            )
+
+        if ctx.FollowedBy():
+            return self._apply_sequential_link(lhs, rhs, window, "FOLLOWED_BY")
+        if ctx.PrecededBy():
+            return self._apply_sequential_link(lhs, rhs, window, "PRECEDED_BY")
+        if ctx.NotFollowedBy():
+            return self._apply_negative_link(lhs, rhs, window, "NOT_FOLLOWED_BY")
+        return self._apply_negative_link(lhs, rhs, window, "NOT_PRECEDED_BY")
+
+    def _apply_sequential_link(
+        self,
+        lhs: Union[set[MessageId], list[MessageGroup], PartialSequence],
+        rhs: set[MessageId],
+        window: Optional[WindowConstraint],
+        operator: str,
+    ) -> Union[list[MessageGroup], PartialSequence]:
+        """Evaluate one FOLLOWED_BY/PRECEDED_BY link, chaining through lhs."""
+        forward = operator == "FOLLOWED_BY"
+
+        # No window: defer — an enclosing link's trailing window evaluates us.
+        if window is None:
+            return PartialSequence(lhs, rhs, operator)
+
+        # Temporal window (DURING)
+        if isinstance(window, tuple):
+            duration = self._duration_tuple_to_timedelta(window)
+            lhs = self._evaluate_partial_sequence(lhs, window)
+            if isinstance(lhs, list):
+                if forward:
+                    return self._extend_sequences_followed_by_temporal(
+                        lhs, rhs, duration
+                    )
+                return self._extend_sequences_preceded_by_temporal(lhs, rhs, duration)
+            return self._create_sequential_pairs_temporal(
+                lhs, rhs, duration, forward=forward
+            )
+
+        # Positional window (INWINDOW)
+        window_size: int = window
+        lhs = self._evaluate_partial_sequence(lhs, window)
+        if isinstance(lhs, list):
+            if forward:
+                return self._extend_sequences_followed_by(lhs, rhs, window_size)
+            return self._extend_sequences_preceded_by(lhs, rhs, window_size)
+        if forward:
+            matching_lhs = self._apply_followed_by(lhs, rhs, window_size)
+        else:
+            matching_lhs = self._apply_preceded_by(lhs, rhs, window_size)
+        return self._create_sequential_pairs(
+            matching_lhs, rhs, window_size, forward=forward
+        )
+
+    def _apply_negative_link(
+        self,
+        lhs: Union[set[MessageId], list[MessageGroup], PartialSequence],
+        rhs: set[MessageId],
+        window: Optional[WindowConstraint],
+        operator: str,
+    ) -> Union[set[MessageId], list[MessageGroup]]:
+        """Evaluate one NOT_FOLLOWED_BY/NOT_PRECEDED_BY link."""
+        forward = operator == "NOT_FOLLOWED_BY"
+
+        # Negative lookarounds must carry their own window and cannot chain.
+        if window is None:
+            raise PrismQLRuntimeError(
+                f"{operator} requires a window constraint (INWINDOW or DURING)"
+            )
+        lhs = self._evaluate_partial_sequence(lhs, window)
+        if isinstance(lhs, list):
+            raise PrismQLRuntimeError(
+                f"{operator} cannot be chained with other sequential operators"
+            )
+
+        if isinstance(window, tuple):
+            duration = self._duration_tuple_to_timedelta(window)
+            if forward:
+                return self._apply_not_followed_by_temporal(lhs, rhs, duration)
+            return self._apply_not_preceded_by_temporal(lhs, rhs, duration)
+        if forward:
+            return self._apply_not_followed_by(lhs, rhs, window)
+        return self._apply_not_preceded_by(lhs, rhs, window)
+
+    def visitBool_restriction(
+        self, ctx: PrismQLParser.Bool_restrictionContext
+    ) -> Union[set[MessageId], list[MessageGroup], PartialSequence]:
+        """
+        Process the boolean layer: NOT > AND > OR, parentheses, conditions.
+
+        Lists/PartialSequences can only enter this layer through parenthesized
+        sequential expressions; the boolean operators reject them explicitly.
+        """
+        # Handle NOT operator (binds tightest)
+        if ctx.Not():
+            excluded = self.visitBool_restriction(ctx.bool_restriction(0))
+            if isinstance(excluded, (list, PartialSequence)):
+                raise PrismQLRuntimeError(
+                    "NOT operator cannot be used with sequential operators (FOLLOWED_BY, PRECEDED_BY). "
+                    "Sequential operators return message sequences, not individual messages."
+                )
+            # Get all message IDs up to a reasonable limit
+            total_docs = min(
+                self.MAX_MESSAGES_NOT, self.search_backend.get_total_documents()
+            )
+            all_messages = self.search_backend.get_all_document_ids(limit=total_docs)
+            return all_messages - excluded  # Set difference
+
         # Handle AND operator
         if ctx.And():
-            lhs = self.visitRestriction(ctx.restriction(0))
-            rhs = self.visitRestriction(ctx.restriction(1))
+            lhs = self.visitBool_restriction(ctx.bool_restriction(0))
+            rhs = self.visitBool_restriction(ctx.bool_restriction(1))
             # AND requires both operands to be sets, not sequences or partial sequences
             if isinstance(lhs, (list, PartialSequence)) or isinstance(
                 rhs, (list, PartialSequence)
@@ -488,8 +630,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Handle OR operator
         if ctx.Or():
-            lhs = self.visitRestriction(ctx.restriction(0))
-            rhs = self.visitRestriction(ctx.restriction(1))
+            lhs = self.visitBool_restriction(ctx.bool_restriction(0))
+            rhs = self.visitBool_restriction(ctx.bool_restriction(1))
             # OR requires both operands to be sets, not sequences or partial sequences
             if isinstance(lhs, (list, PartialSequence)) or isinstance(
                 rhs, (list, PartialSequence)
@@ -500,193 +642,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 )
             return lhs | rhs  # Set union
 
-        # Handle FOLLOWED_BY operator (lookahead)
-        if ctx.FollowedBy():
-            lhs = self.visitRestriction(ctx.restriction(0))
-            rhs = self.visitRestriction(ctx.restriction(1))
-            window = self._extract_window_constraint(ctx)
-
-            # If no window, return PartialSequence for deferred evaluation
-            if window is None:
-                return PartialSequence(lhs, rhs, "FOLLOWED_BY")
-
-            # DURING (temporal) takes a different code path — see below.
-            if isinstance(window, tuple):
-                duration = self._duration_tuple_to_timedelta(window)
-                lhs = self._evaluate_partial_sequence(lhs, window)
-                rhs = self._evaluate_partial_sequence(rhs, window)
-                if isinstance(lhs, list) or isinstance(rhs, list):
-                    raise PrismQLRuntimeError(
-                        "Chained sequential operators with DURING are not yet supported"
-                    )
-                return self._create_sequential_pairs_temporal(
-                    lhs, rhs, duration, forward=True
-                )
-            window_size: int = window
-
-            # Evaluate any partial sequences
-            lhs = self._evaluate_partial_sequence(lhs, window)
-            rhs = self._evaluate_partial_sequence(rhs, window)
-
-            # Check if lhs is a sequence (from chained FOLLOWED_BY)
-            if isinstance(lhs, list):
-                # Extend existing sequences with rhs messages
-                # rhs must be a set for now (no double nesting)
-                if isinstance(rhs, list):
-                    raise PrismQLRuntimeError(
-                        "Complex nested sequential operators are not yet supported"
-                    )
-                return self._extend_sequences_followed_by(lhs, rhs, window_size)
-
-            # Simple case: both lhs and rhs are sets
-            # rhs could be a list if it's nested on the right side
-            if isinstance(rhs, list):
-                raise PrismQLRuntimeError(
-                    "FOLLOWED_BY requires simple conditions, not nested sequences"
-                )
-            # Create pairs using the existing logic
-            matching_lhs = self._apply_followed_by(lhs, rhs, window_size)
-            return self._create_sequential_pairs(
-                matching_lhs, rhs, window_size, forward=True
-            )
-
-        # Handle PRECEDED_BY operator (lookbehind)
-        if ctx.PrecededBy():
-            lhs = self.visitRestriction(ctx.restriction(0))
-            rhs = self.visitRestriction(ctx.restriction(1))
-            window = self._extract_window_constraint(ctx)
-
-            # If no window, return PartialSequence for deferred evaluation
-            if window is None:
-                return PartialSequence(lhs, rhs, "PRECEDED_BY")
-
-            # DURING (temporal) takes a different code path.
-            if isinstance(window, tuple):
-                duration = self._duration_tuple_to_timedelta(window)
-                lhs = self._evaluate_partial_sequence(lhs, window)
-                rhs = self._evaluate_partial_sequence(rhs, window)
-                if isinstance(lhs, list) or isinstance(rhs, list):
-                    raise PrismQLRuntimeError(
-                        "Chained sequential operators with DURING are not yet supported"
-                    )
-                return self._create_sequential_pairs_temporal(
-                    lhs, rhs, duration, forward=False
-                )
-            window_size: int = window  # type: ignore[no-redef]
-
-            # Evaluate any partial sequences
-            lhs = self._evaluate_partial_sequence(lhs, window)
-            rhs = self._evaluate_partial_sequence(rhs, window)
-
-            # Check if lhs is a sequence (from chained PRECEDED_BY)
-            if isinstance(lhs, list):
-                # Extend existing sequences with rhs messages
-                if isinstance(rhs, list):
-                    raise PrismQLRuntimeError(
-                        "Complex nested sequential operators are not yet supported"
-                    )
-                return self._extend_sequences_preceded_by(lhs, rhs, window_size)
-
-            # Simple case: both lhs and rhs are sets
-            if isinstance(rhs, list):
-                raise PrismQLRuntimeError(
-                    "PRECEDED_BY requires simple conditions, not nested sequences"
-                )
-            # Create pairs using the existing logic
-            matching_lhs = self._apply_preceded_by(lhs, rhs, window_size)
-            return self._create_sequential_pairs(
-                matching_lhs, rhs, window_size, forward=False
-            )
-
-        # Handle NOT_FOLLOWED_BY operator (negative lookahead)
-        if ctx.NotFollowedBy():
-            lhs = self.visitRestriction(ctx.restriction(0))
-            rhs = self.visitRestriction(ctx.restriction(1))
-            window = self._extract_window_constraint(ctx)
-
-            # NOT_FOLLOWED_BY must have a window (cannot be chained)
-            if window is None:
-                raise PrismQLRuntimeError(
-                    "NOT_FOLLOWED_BY requires a window constraint (INWINDOW or DURING)"
-                )
-
-            # DURING (temporal): invert the temporal FOLLOWED_BY pairing.
-            if isinstance(window, tuple):
-                duration = self._duration_tuple_to_timedelta(window)
-                lhs = self._evaluate_partial_sequence(lhs, window)
-                rhs = self._evaluate_partial_sequence(rhs, window)
-                if isinstance(lhs, list) or isinstance(rhs, list):
-                    raise PrismQLRuntimeError(
-                        "NOT_FOLLOWED_BY cannot be chained with other sequential operators"
-                    )
-                return self._apply_not_followed_by_temporal(lhs, rhs, duration)
-            window_size: int = window  # type: ignore[no-redef]
-
-            # Evaluate any partial sequences
-            lhs = self._evaluate_partial_sequence(lhs, window)
-            rhs = self._evaluate_partial_sequence(rhs, window)
-
-            # NOT_FOLLOWED_BY returns only the LHS messages, not pairs
-            if isinstance(lhs, list) or isinstance(rhs, list):
-                raise PrismQLRuntimeError(
-                    "NOT_FOLLOWED_BY cannot be chained with other sequential operators"
-                )
-            return self._apply_not_followed_by(lhs, rhs, window_size)
-
-        # Handle NOT_PRECEDED_BY operator (negative lookbehind)
-        if ctx.NotPrecededBy():
-            lhs = self.visitRestriction(ctx.restriction(0))
-            rhs = self.visitRestriction(ctx.restriction(1))
-            window = self._extract_window_constraint(ctx)
-
-            # NOT_PRECEDED_BY must have a window (cannot be chained)
-            if window is None:
-                raise PrismQLRuntimeError(
-                    "NOT_PRECEDED_BY requires a window constraint (INWINDOW or DURING)"
-                )
-
-            # DURING (temporal): invert the temporal PRECEDED_BY pairing.
-            if isinstance(window, tuple):
-                duration = self._duration_tuple_to_timedelta(window)
-                lhs = self._evaluate_partial_sequence(lhs, window)
-                rhs = self._evaluate_partial_sequence(rhs, window)
-                if isinstance(lhs, list) or isinstance(rhs, list):
-                    raise PrismQLRuntimeError(
-                        "NOT_PRECEDED_BY cannot be chained with other sequential operators"
-                    )
-                return self._apply_not_preceded_by_temporal(lhs, rhs, duration)
-            window_size: int = window  # type: ignore[no-redef]
-
-            # Evaluate any partial sequences
-            lhs = self._evaluate_partial_sequence(lhs, window)
-            rhs = self._evaluate_partial_sequence(rhs, window)
-
-            # NOT_PRECEDED_BY returns only the LHS messages, not pairs
-            if isinstance(lhs, list) or isinstance(rhs, list):
-                raise PrismQLRuntimeError(
-                    "NOT_PRECEDED_BY cannot be chained with other sequential operators"
-                )
-            return self._apply_not_preceded_by(lhs, rhs, window_size)
-
-        # Handle NOT operator
-        if ctx.Not():
-            excluded = self.visitRestriction(ctx.restriction(0))
-            # NOT requires a set, not sequences
-            if isinstance(excluded, list):
-                raise PrismQLRuntimeError(
-                    "NOT operator cannot be used with sequential operators (FOLLOWED_BY, PRECEDED_BY). "
-                    "Sequential operators return message sequences, not individual messages."
-                )
-            # Get all message IDs up to a reasonable limit
-            total_docs = min(
-                self.MAX_MESSAGES_NOT, self.search_backend.get_total_documents()
-            )
-            all_messages = self.search_backend.get_all_document_ids(limit=total_docs)
-            return all_messages - excluded  # type: ignore[operator]
-
-        # Handle parentheses - just visit the inner restriction
-        if ctx.getChildCount() == 3 and ctx.getChild(0).getText() == "(":
-            return self.visitRestriction(ctx.restriction(0))
+        # Handle parentheses - the inner expression is a full restriction,
+        # so parenthesized sequential expressions are visible to callers
+        if ctx.restriction():
+            return self.visitRestriction(ctx.restriction())
 
         # Handle condition
         if ctx.condition():
@@ -1176,72 +1135,26 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if not isinstance(value, PartialSequence):
             return value
 
-        # Recursive case: evaluate partial sequence
+        # Recursive case: the link's rhs always comes from the boolean layer
+        # (a set); evaluate defensively, then delegate to the link helpers,
+        # which evaluate the lhs chain themselves with this same window.
         partial = value
-
-        # DURING is supported on single sequential operators, but not yet on
-        # chained ones (which is what reaches this method via PartialSequence).
-        if isinstance(window, tuple):
-            raise PrismQLRuntimeError(
-                "Chained sequential operators with DURING are not yet supported. "
-                "Use INWINDOW for chained sequences, or apply DURING to a single "
-                "FOLLOWED_BY/PRECEDED_BY."
-            )
-        window_size: int = window
-
-        # Recursively evaluate LHS and RHS
-        lhs = self._evaluate_partial_sequence(partial.lhs, window)
         rhs = self._evaluate_partial_sequence(partial.rhs, window)
-
-        # Apply the operator with the window
-        if partial.operator == "FOLLOWED_BY":
-            # Check if lhs is a sequence (from nested evaluation)
-            if isinstance(lhs, list):
-                if isinstance(rhs, list):
-                    raise PrismQLRuntimeError(
-                        "Complex nested sequential operators are not yet supported"
-                    )
-                return self._extend_sequences_followed_by(lhs, rhs, window_size)
-
-            if isinstance(rhs, list):
-                raise PrismQLRuntimeError(
-                    "FOLLOWED_BY requires simple conditions, not nested sequences"
-                )
-            matching_lhs = self._apply_followed_by(lhs, rhs, window_size)
-            return self._create_sequential_pairs(
-                matching_lhs, rhs, window_size, forward=True
+        if isinstance(rhs, list):
+            raise PrismQLRuntimeError(
+                "Sequential operators require simple conditions on the "
+                "right-hand side, not nested sequences"
             )
 
-        if partial.operator == "PRECEDED_BY":
-            if isinstance(lhs, list):
-                if isinstance(rhs, list):
-                    raise PrismQLRuntimeError(
-                        "Complex nested sequential operators are not yet supported"
-                    )
-                return self._extend_sequences_preceded_by(lhs, rhs, window_size)
-
-            if isinstance(rhs, list):
-                raise PrismQLRuntimeError(
-                    "PRECEDED_BY requires simple conditions, not nested sequences"
-                )
-            matching_lhs = self._apply_preceded_by(lhs, rhs, window_size)
-            return self._create_sequential_pairs(
-                matching_lhs, rhs, window_size, forward=False
+        if partial.operator in ("FOLLOWED_BY", "PRECEDED_BY"):
+            result = self._apply_sequential_link(
+                partial.lhs, rhs, window, partial.operator
             )
-
-        if partial.operator == "NOT_FOLLOWED_BY":
-            if isinstance(lhs, list) or isinstance(rhs, list):
-                raise PrismQLRuntimeError(
-                    "NOT_FOLLOWED_BY cannot be chained with other sequential operators"
-                )
-            return self._apply_not_followed_by(lhs, rhs, window_size)
-
-        if partial.operator == "NOT_PRECEDED_BY":
-            if isinstance(lhs, list) or isinstance(rhs, list):
-                raise PrismQLRuntimeError(
-                    "NOT_PRECEDED_BY cannot be chained with other sequential operators"
-                )
-            return self._apply_not_preceded_by(lhs, rhs, window_size)
+            # window is non-None here, so the link is always fully evaluated
+            assert not isinstance(result, PartialSequence)
+            return result
+        if partial.operator in ("NOT_FOLLOWED_BY", "NOT_PRECEDED_BY"):
+            return self._apply_negative_link(partial.lhs, rhs, window, partial.operator)
 
         raise ValueError(f"Unknown sequential operator: {partial.operator}")
 
@@ -1561,6 +1474,82 @@ class PrismQLVisitor(BasePrismQLVisitor):
                         break
                     result.append([rhs_msg, lhs_msg])
                     break
+        return result
+
+    def _extend_sequences_followed_by_temporal(
+        self,
+        lhs_sequences: list[MessageGroup],
+        rhs_messages: set[MessageId],
+        duration: timedelta,
+    ) -> list[MessageGroup]:
+        """
+        Temporal counterpart of _extend_sequences_followed_by.
+
+        Extends each sequence with the earliest rhs message whose timestamp
+        lies in (t_last, t_last + duration], where t_last is the timestamp of
+        the sequence's final message. Sequences whose anchor has no parseable
+        timestamp or no qualifying match are dropped.
+        """
+        if not lhs_sequences or not rhs_messages:
+            return []
+
+        anchor_ids = {seq[-1] for seq in lhs_sequences}
+        timestamps = self._get_timestamps_for_messages(anchor_ids | rhs_messages)
+        rhs_with_ts = sorted(
+            ((mid, timestamps[mid]) for mid in rhs_messages if mid in timestamps),
+            key=lambda x: x[1],
+        )
+
+        result: list[MessageGroup] = []
+        for sequence in lhs_sequences:
+            t_last = timestamps.get(sequence[-1])
+            if t_last is None:
+                continue
+            for rhs_msg, t_rhs in rhs_with_ts:
+                if t_rhs <= t_last:
+                    continue
+                if t_rhs - t_last > duration:
+                    break  # rhs sorted ascending; nothing further qualifies
+                result.append(sequence + [rhs_msg])
+                break
+        return result
+
+    def _extend_sequences_preceded_by_temporal(
+        self,
+        lhs_sequences: list[MessageGroup],
+        rhs_messages: set[MessageId],
+        duration: timedelta,
+    ) -> list[MessageGroup]:
+        """
+        Temporal counterpart of _extend_sequences_preceded_by.
+
+        Prepends to each sequence the latest rhs message whose timestamp lies
+        in [t_first - duration, t_first), where t_first is the timestamp of
+        the sequence's first message.
+        """
+        if not lhs_sequences or not rhs_messages:
+            return []
+
+        anchor_ids = {seq[0] for seq in lhs_sequences}
+        timestamps = self._get_timestamps_for_messages(anchor_ids | rhs_messages)
+        rhs_with_ts = sorted(
+            ((mid, timestamps[mid]) for mid in rhs_messages if mid in timestamps),
+            key=lambda x: x[1],
+        )
+
+        result: list[MessageGroup] = []
+        for sequence in lhs_sequences:
+            t_first = timestamps.get(sequence[0])
+            if t_first is None:
+                continue
+            # Walk rhs descending to find the closest earlier match.
+            for rhs_msg, t_rhs in reversed(rhs_with_ts):
+                if t_rhs >= t_first:
+                    continue
+                if t_first - t_rhs > duration:
+                    break
+                result.append([rhs_msg, *sequence])
+                break
         return result
 
     def _apply_not_followed_by_temporal(

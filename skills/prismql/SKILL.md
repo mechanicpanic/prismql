@@ -75,18 +75,19 @@ so ids should be sequential integers in stream order.
 
 ## Pitfalls (verified against implementation)
 
-1. **Chained `FOLLOWED_BY` needs a window per link.** A single trailing window
-   raises `PrismQLRuntimeError: 'PartialSequence' object is not iterable`.
-   - ❌ `SELECT a FOLLOWED_BY b FOLLOWED_BY c INWINDOW 2`
-   - ✅ `SELECT a FOLLOWED_BY b INWINDOW 2 FOLLOWED_BY c INWINDOW 2`
-2. **Parenthesize AND/OR compounds next to sequential operators.** The bare
-   form raises "AND operator cannot be used with sequential operators".
-   - ❌ `SELECT from(alice) AND is_question() FOLLOWED_BY from(bob) INWINDOW 5`
-   - ✅ `SELECT (from(alice) AND is_question()) FOLLOWED_BY from(bob) INWINDOW 5`
-3. **Every sequential link requires a window** (`INWINDOW N` or `DURING <time>`).
-   Without one you get the PartialSequence error — or worse, the subquery form
-   `a FOLLOWED_BY (SELECT b)` returns wrong results *silently*. Always include
-   the window.
+1. **A chain's final link must carry a window.** One trailing window covers
+   every windowless link (per link, not whole-chain span); links may also mix
+   `INWINDOW` and `DURING` individually.
+   - ✅ `SELECT a FOLLOWED_BY b FOLLOWED_BY c INWINDOW 2`
+   - ✅ `SELECT a FOLLOWED_BY b INWINDOW 2 FOLLOWED_BY c DURING 1 minute`
+   - ❌ `SELECT a FOLLOWED_BY b INWINDOW 2 FOLLOWED_BY c` (no window on final link)
+2. **Precedence: `NOT` > `AND` > `OR` > sequential operators.** Compound
+   conditions next to `FOLLOWED_BY` need no parentheses:
+   `SELECT from(alice) AND is_question() FOLLOWED_BY from(bob) INWINDOW 5`
+   means `(alice ∧ question) FOLLOWED_BY bob`. Use parens only to override.
+3. **Avoid the subquery form for simple sequences.** `a FOLLOWED_BY (SELECT b)`
+   goes through a different code path and can return wrong results *silently*.
+   Plain `a FOLLOWED_BY b INWINDOW n` is correct and simpler.
 4. **`contains(x)` takes a dictionary NAME**, never a literal word. For a
    literal use `contains_phrase("exact phrase")`, or define a dictionary.
 5. **`INWINDOW` is unordered; `FOLLOWED_BY` is ordered.** "A then B" →

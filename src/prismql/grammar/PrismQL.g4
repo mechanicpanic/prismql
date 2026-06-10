@@ -45,26 +45,32 @@ quantifier
     | '{' number ',' number '}'     # RangeQuantifier
     ;
 
+// Sequential layer. Left-recursive only on the LEFT operand; the right
+// operand is a bool_restriction, so boolean operators can never absorb a
+// sequential expression and chains always nest LEFT:
+//   A FOLLOWED_BY B FOLLOWED_BY C INWINDOW 10
+//   => ((A FOLLOWED_BY B) FOLLOWED_BY C INWINDOW 10)
+// A trailing window distributes to every windowless link (PartialSequence
+// deferred evaluation in the visitor). WITHIN N is the deprecated positional
+// form of the per-link window.
 restriction
     :
-    // Sequential operators (lowest precedence - bind loosely)
-    // Window is optional to allow chaining: A FOLLOWED_BY B FOLLOWED_BY C INWINDOW 10
-    // Semantic validation ensures the outermost operator has a window
-    restriction FollowedBy restriction (InWindow number | During time_value)?
-    | restriction PrecededBy restriction (InWindow number | During time_value)?
-    | restriction NotFollowedBy restriction (InWindow number | During time_value)?
-    | restriction NotPrecededBy restriction (InWindow number | During time_value)?
-    // Deprecated WITHIN syntax (backward compatibility)
-    | restriction FollowedBy restriction Within number
-    | restriction PrecededBy restriction Within number
-    | restriction NotFollowedBy restriction Within number
-    | restriction NotPrecededBy restriction Within number
-    // Boolean operators (higher precedence than sequential)
-    | restriction And restriction
-    | restriction Or restriction
-    // Grouping and negation (highest precedence - bind tightly)
+    restriction FollowedBy bool_restriction (InWindow number | During time_value | Within number)?
+    | restriction PrecededBy bool_restriction (InWindow number | During time_value | Within number)?
+    | restriction NotFollowedBy bool_restriction (InWindow number | During time_value | Within number)?
+    | restriction NotPrecededBy bool_restriction (InWindow number | During time_value | Within number)?
+    | bool_restriction
+    ;
+
+// Boolean layer. ANTLR gives the FIRST alternative the highest precedence,
+// so the order below yields NOT > AND > OR, all tighter than the sequential
+// operators in `restriction` above.
+bool_restriction
+    :
+    Not bool_restriction
+    | bool_restriction And bool_restriction
+    | bool_restriction Or bool_restriction
     | '(' restriction ')'
-    | Not restriction
     | condition
     ;
 

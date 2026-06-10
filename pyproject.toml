@@ -128,6 +128,7 @@ ignore = [
 "src/prismql/processors/histogram_window.py" = ["C901", "ANN001", "ANN202", "ANN204", "B007", "E501"]  # Performance-critical helpers
 "src/prismql/highlighting/pygments_lexer.py" = ["E501"]  # Long regex strings
 "tests/test_quantifier_fix.py" = ["E501"]  # Long query strings
+"tests/test_sequential_chaining.py" = ["E501"]  # Long query strings
 "src/prismql/processors/temporal.py" = ["C901", "ARG004"]  # Complexity & unused args
 "src/prismql/processors/variables.py" = ["E501", "ARG002"]  # Line length & unused args
 "src/prismql/aggregators/aggregator.py" = ["C901"]  # Complexity - future refactor

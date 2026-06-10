@@ -417,13 +417,17 @@ Pattern variables with quantifiers now correctly enforce same-value constraints:
 
 ### Operator Compatibility
 
-**Sequential operators (FOLLOWED_BY, PRECEDED_BY) cannot be combined with AND/OR**:
+**Boolean operators bind tighter than sequential operators** (NOT > AND > OR > FOLLOWED_BY):
 ```python
-# ❌ ERROR: AND operator cannot be used with sequential operators
-SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3 AND contains(greetings)
+# ✅ Compound conditions compose naturally — no parentheses needed
+SELECT from(alice) AND contains(greetings) FOLLOWED_BY from(bob) INWINDOW 3
+# Parsed as: (from(alice) AND contains(greetings)) FOLLOWED_BY from(bob)
 
-# ✅ CORRECT: Put conditions inside the sequence
-SELECT (from(alice) AND contains(greetings)) FOLLOWED_BY from(bob) WITHIN 3
+# ✅ Chaining: one trailing window applies to every windowless link
+SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(charlie) INWINDOW 10
+
+# ❌ Still an error: applying AND to a *completed* sequence result
+SELECT (from(alice) FOLLOWED_BY from(bob) INWINDOW 3) AND contains(greetings)
 ```
 
 **Reason**: Sequential operators return `list[MessageGroup]` while AND/OR require `set[MessageId]`

@@ -15,8 +15,8 @@ description: Query the {{dataset_name}} dataset with PrismQL pattern matching. U
 what ordering means (chronological? per-conversation? per-ticker?).}}
 
 Read `LANGUAGE_REFERENCE.md` in this directory before writing queries.
-Known implementation quirk: chained `FOLLOWED_BY` needs `INWINDOW`/`DURING`
-after EACH link, not one trailing window.
+Chains take one trailing window (`a FOLLOWED_BY b FOLLOWED_BY c INWINDOW 5`)
+or per-link windows; the final link must always have one.
 
 ## Data location & field mapping
 

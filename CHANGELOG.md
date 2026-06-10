@@ -24,6 +24,12 @@ Initial public release.
   individual sequential operators.
 - **Sequential operators**: `FOLLOWED_BY`, `PRECEDED_BY`, `NOT_FOLLOWED_BY`,
   `NOT_PRECEDED_BY` — combinable with either `INWINDOW` or `DURING`.
+- **Sequential chaining**: `A FOLLOWED_BY B FOLLOWED_BY C INWINDOW 10` — a
+  single trailing window applies per link to every windowless link, or each
+  link carries its own window; positional and temporal windows mix freely
+  within one chain.
+- **Operator precedence**: `NOT` > `AND` > `OR` > sequential operators, so
+  compound conditions compose with `FOLLOWED_BY` without parentheses.
 - **Pattern variables**: `$user`-style backreferences enforcing same-value
   constraints across positions.
 - **Quantifiers**: regex-style `{n}`, `{n,}`, `{n,m}` on conditions.

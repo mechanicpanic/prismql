@@ -1,4 +1,4 @@
-# Generated from /home/aleph/projects/prismql/src/prismql/grammar/PrismQL.g4 by ANTLR 4.13.1
+# Generated from /Users/aleph/Projects/vibes/prismql/src/prismql/grammar/PrismQL.g4 by ANTLR 4.13.1
 from antlr4 import *
 if "." in __name__:
     from .PrismQLParser import PrismQLParser
@@ -71,6 +71,11 @@ class PrismQLVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by PrismQLParser#restriction.
     def visitRestriction(self, ctx:PrismQLParser.RestrictionContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by PrismQLParser#bool_restriction.
+    def visitBool_restriction(self, ctx:PrismQLParser.Bool_restrictionContext):
         return self.visitChildren(ctx)
 
 
