@@ -78,22 +78,23 @@ SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 5
 -- Negative lookbehind: B NOT preceded by A
 SELECT from(bob) NOT_PRECEDED_BY from(charlie) INWINDOW 3
 
--- Complex conditions work naturally with operator precedence
-SELECT from(alice) AND is_question() FOLLOWED_BY from(bob) AND contains(answers) INWINDOW 5
+-- Compound conditions: parenthesize AND/OR next to sequential operators
+SELECT (from(alice) AND is_question()) FOLLOWED_BY (from(bob) AND contains(answers)) INWINDOW 5
 
--- Chaining: single window at the end applies to entire chain
-SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(charlie) INWINDOW 10
+-- Chaining: each link carries its own window
+SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 10 FOLLOWED_BY from(charlie) INWINDOW 10
 ```
 
 **Key characteristics**:
 - ORDERED - first pattern must appear before/after second
-- **NEW**: No SELECT wrapper needed! Operator precedence handles it naturally
-- **NEW**: Supports DURING for temporal windows (e.g., `DURING 30 seconds`)
-- **NEW**: Chaining allowed - place window constraint at the end
+- No SELECT wrapper needed for simple restrictions
+- Compound AND/OR conditions MUST be parenthesized when adjacent to a sequential operator
+- Supports DURING for temporal windows (e.g., `DURING 30 seconds`)
+- Chaining allowed - each link carries its own window
 
 **Window constraint rules**:
-- **Required**: At least one window constraint (INWINDOW or DURING) must appear
-- **Chaining**: `A FOLLOWED_BY B FOLLOWED_BY C INWINDOW 10` - window at end applies to entire chain
+- **Required**: every sequential link needs its own window (INWINDOW or DURING); omitting it is a runtime error
+- **Chaining**: `A FOLLOWED_BY B INWINDOW 10 FOLLOWED_BY C INWINDOW 10` - one window per link (a single trailing window over a multi-link chain is NOT supported)
 - **Positional**: `INWINDOW N` - messages within N positions
 - **Temporal**: `DURING <time>` - messages within time duration
 
@@ -235,7 +236,7 @@ SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3
 SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 5
 SELECT is_question() FOLLOWED_BY contains(answers) INWINDOW 3
 SELECT from(alice) FOLLOWED_BY from(bob) DURING 30 seconds
-SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(charlie) INWINDOW 10
+SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 10 FOLLOWED_BY from(charlie) INWINDOW 10
 ```
 
 ### Temporal Patterns
@@ -267,37 +268,38 @@ SELECT (from(alice) OR from(bob)) AND is_question(),
        from(support) AND contains(answers)
        INWINDOW 5
 
-SELECT from(customer) AND contains(problems)
-       FOLLOWED_BY from(support) AND contains(solutions)
+SELECT (from(customer) AND contains(problems))
+       FOLLOWED_BY (from(support) AND contains(solutions))
        INWINDOW 10
 
-SELECT from($user) AND is_question()
-       FOLLOWED_BY from($user) AND contains(thanks)
+SELECT (from($user) AND is_question())
+       FOLLOWED_BY (from($user) AND contains(thanks))
        INWINDOW 5
 ```
 
 ## Operator Compatibility
 
-**Sequential operators now work naturally with AND/OR** (thanks to proper precedence):
+**Sequential operators require parenthesized compounds**:
 
 ```prismql
--- ✅ CORRECT: AND has higher precedence than FOLLOWED_BY
+-- ❌ WRONG: bare AND adjacent to a sequential operator is a runtime error
 SELECT from(alice) AND is_question() FOLLOWED_BY from(bob) AND contains(answers) INWINDOW 5
--- Parsed as: (from(alice) AND is_question()) FOLLOWED_BY (from(bob) AND contains(answers))
 
--- ✅ Also correct: Use parentheses for clarity
+-- ✅ CORRECT: parenthesize each compound condition
 SELECT (from(alice) AND is_question()) FOLLOWED_BY (from(bob) AND contains(answers)) INWINDOW 5
 
--- ✅ CORRECT: Chaining works with complex conditions
-SELECT from(alice) AND contains(problems) FOLLOWED_BY from(bob) FOLLOWED_BY from(charlie) AND contains(solutions) INWINDOW 10
+-- ✅ CORRECT: chaining with compounds — parens plus one window per link
+SELECT (from(alice) AND contains(problems)) FOLLOWED_BY from(bob) INWINDOW 10 FOLLOWED_BY (from(charlie) AND contains(solutions)) INWINDOW 10
 ```
 
-**Precedence (highest to lowest)**:
+**Precedence (highest to lowest)** within boolean expressions:
 1. `()` - Parentheses
 2. `NOT` - Negation
 3. `AND` - Conjunction
 4. `OR` - Disjunction
-5. `FOLLOWED_BY`, `PRECEDED_BY`, etc. - Sequential operators (lowest)
+
+Sequential operators (`FOLLOWED_BY`, `PRECEDED_BY`, etc.) do not participate in
+boolean precedence: any operand containing AND/OR must be wrapped in parentheses.
 
 ## Common Patterns
 
@@ -308,7 +310,7 @@ SELECT from(alice) AND contains(problems) FOLLOWED_BY from(bob) FOLLOWED_BY from
 SELECT contains(problems), contains(solutions) INWINDOW 10
 
 -- Unanswered questions
-SELECT from(customer) AND is_question()
+SELECT (from(customer) AND is_question())
        NOT_FOLLOWED_BY from(support)
        INWINDOW 5
 
@@ -327,8 +329,8 @@ SELECT from($user) AND is_question(),
        from($user) AND contains(answers)
        INWINDOW 5
 
--- Rapid back-and-forth (chaining with single window)
-SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(alice) FOLLOWED_BY from(bob) INWINDOW 1
+-- Rapid back-and-forth (one window per link)
+SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 1 FOLLOWED_BY from(alice) INWINDOW 1 FOLLOWED_BY from(bob) INWINDOW 1
 
 -- Monologue detection
 SELECT from(alice){5,}
@@ -394,9 +396,11 @@ Response: SELECT (from(alice) OR from(bob)) AND is_question() INWINDOW 5
 
 ---
 
-**Version**: 0.2.0 (2025-11-14) - BREAKING CHANGES
-**Major changes**:
-- Sequential operators no longer require SELECT wrappers
-- DURING support added for temporal sequential patterns
-- Chaining allowed with single window at end
-- Fixed operator precedence (sequential operators have lowest precedence)
+**Last verified against the implementation**: 2026-06-10
+
+Corrections from that verification pass:
+- Chained sequential operators require one window PER LINK (a single trailing window raises `PrismQLRuntimeError: 'PartialSequence' object is not iterable`)
+- AND/OR compounds adjacent to sequential operators must be parenthesized (bare form raises "AND operator cannot be used with sequential operators")
+- Omitting the window on a sequential link is a runtime error, not a no-op
+
+Earlier breaking change (2025-11-14): sequential operators no longer require SELECT wrappers; DURING added for temporal sequential patterns.
