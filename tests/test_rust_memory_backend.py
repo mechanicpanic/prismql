@@ -289,6 +289,16 @@ class TestRustMemoryBackendTemporal:
         assert temporal_backend.has_timestamp_field("timestamp")
         assert not temporal_backend.has_timestamp_field("missing_field")
 
+    def test_timestamp_fields_defaults_to_timestamp(self, timestamped_documents):
+        """No kwarg needed for the common case — fast paths work out of
+        the box when the engine uses its default timestamp_field."""
+        backend = RustMemoryBackend(timestamped_documents)
+        assert backend.has_timestamp_field("timestamp")
+
+    def test_timestamp_fields_empty_disables_caching(self, timestamped_documents):
+        backend = RustMemoryBackend(timestamped_documents, timestamp_fields=[])
+        assert not backend.has_timestamp_field("timestamp")
+
     def test_unindexed_field_raises(self, temporal_backend):
         with pytest.raises(ValueError, match="not indexed"):
             temporal_backend.filter_by_time_range([0, 1, 2], "missing_field")

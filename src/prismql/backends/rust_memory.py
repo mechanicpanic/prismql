@@ -51,10 +51,12 @@ class RustMemoryBackend(SearchBackend):
             documents: List of documents to index. Document IDs must be
                 non-negative integers (use MemoryBackend for string IDs).
             id_field: Field name containing the document ID
-            timestamp_fields: Optional list of fields to parse + cache as
-                timestamps at index time, enabling the temporal query
-                methods (filter_by_time_range / filter_by_time_window /
-                group_by_temporal_unit) without re-parsing per query.
+            timestamp_fields: Fields to parse + cache as timestamps at index
+                time, enabling the temporal fast paths (filter_by_time_range
+                / filter_by_time_window / group_by_temporal_unit /
+                merge_within_time_window) without re-parsing per query.
+                Defaults to ["timestamp"], matching PrismQLEngine's default
+                timestamp_field; pass [] to disable timestamp caching.
                 Note: timestamps are cached at construction — mutating a
                 document's timestamp field afterwards does not update them.
             enable_ngrams: Build n-gram indexes for fast phrase search
@@ -63,7 +65,8 @@ class RustMemoryBackend(SearchBackend):
             ngram_max_count: Keep only the most frequent N n-grams
 
         Raises:
-            ImportError: If prismql_rust module is not installed
+            ImportError: If prismql_rust is not installed, or the installed
+                build is too old for this version of prismql
             ValueError: If documents are missing the id_field
             TypeError: If document IDs are not non-negative integers
         """
@@ -74,10 +77,23 @@ class RustMemoryBackend(SearchBackend):
                 "--manifest-path ../prismql-rust/Cargo.toml"
             )
 
+        # Capability handshake: an older prismql_rust build would otherwise
+        # fail with misleading kwarg TypeErrors here, or silently fall back
+        # to the slow Python paths at query time.
+        if not hasattr(_RustMemoryBackend, "merge_within_time_window"):
+            raise ImportError(
+                "The installed prismql_rust build is too old for this version "
+                "of prismql (missing merge_within_time_window). Rebuild it "
+                "from prismql-rust master: maturin develop --release "
+                "--manifest-path ../prismql-rust/Cargo.toml"
+            )
+
         # Convert documents to list if needed
         self.documents = list(documents)
         self.id_field = id_field
-        self.timestamp_fields = list(timestamp_fields) if timestamp_fields else []
+        if timestamp_fields is None:
+            timestamp_fields = ["timestamp"]
+        self.timestamp_fields = list(timestamp_fields)
 
         # Create the Rust backend
         try:
