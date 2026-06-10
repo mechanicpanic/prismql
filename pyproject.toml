@@ -196,9 +196,20 @@ ignore_errors = true
 module = "prismql.highlighting.*"
 ignore_missing_imports = true
 
-# Optional / conditional imports of the server extra
+# Optional / conditional imports of the server extra. fastapi/pydantic/
+# uvicorn are fully type-checked when installed (local dev); the
+# pre-commit mypy env doesn't install them, so missing imports are
+# tolerated there.
 [[tool.mypy.overrides]]
-module = ["tomli", "pyarrow", "pyarrow.*"]
+module = [
+    "tomli",
+    "pyarrow",
+    "pyarrow.*",
+    "fastapi",
+    "fastapi.*",
+    "pydantic",
+    "uvicorn",
+]
 ignore_missing_imports = true
 
 # Pre-existing type debt in performance-critical processors.
