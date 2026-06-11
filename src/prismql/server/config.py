@@ -31,6 +31,7 @@ class ServerConfig:
     id_field: str = "id"
     timestamp_fields: list[str] = field(default_factory=lambda: ["timestamp"])
     timestamp_field: str = "timestamp"
+    text_match: str = "substring"
     dictionaries: dict[str, list[str]] = field(default_factory=dict)
 
 
@@ -76,6 +77,7 @@ def load_config(path: str | Path) -> ServerConfig:
         id_field=backend.get("id_field", "id"),
         timestamp_fields=list(backend.get("timestamp_fields", ["timestamp"])),
         timestamp_field=engine.get("timestamp_field", "timestamp"),
+        text_match=engine.get("text_match", "substring"),
         dictionaries=dictionaries,
     )
 
@@ -157,4 +159,5 @@ def build_engine(config: ServerConfig) -> PrismQLEngine:
         backend,
         user_dictionaries=config.dictionaries or None,
         timestamp_field=config.timestamp_field,
+        text_match=config.text_match,
     )

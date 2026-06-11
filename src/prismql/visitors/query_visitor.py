@@ -53,10 +53,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
         user_dictionaries: Optional[Mapping[str, Sequence[str]]] = None,
         precomputed_indexes: Optional[PrecomputedIndexes] = None,
         timestamp_field: str = "timestamp",
+        text_match: str = "substring",
     ) -> None:
         self.search_backend = search_backend
         self.nlp_backend = nlp_backend
         self.user_dictionaries = user_dictionaries or {}
+        self.text_match = text_match
         self.precomputed_indexes = precomputed_indexes or PrecomputedIndexes()
         self.aggregator = Aggregator(search_backend)
         self.timestamp_field = timestamp_field
@@ -678,6 +680,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
             if dict_name not in self.user_dictionaries:
                 raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
             words = self.user_dictionaries[dict_name]
+            if self.text_match == "token":
+                return self.search_backend.search_tokens(
+                    words, field="text", operator="OR"
+                )
             return self.search_backend.search_text(words, field="text", operator="OR")
 
         # contains_tokens(dict_name) - Unicode-aware token matching
@@ -794,6 +800,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
             if dict_name not in self.user_dictionaries:
                 raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
             words = self.user_dictionaries[dict_name]
+            if self.text_match == "token":
+                return self.search_backend.search_tokens(
+                    words, field="text", operator="OR"
+                )
             return self.search_backend.search_text(words, field="text", operator="OR")
 
         if ctx.ByUser():

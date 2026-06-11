@@ -33,6 +33,15 @@ mentions_org()                    -- Messages mentioning organizations
 contains_link()                   -- Messages containing URLs
 ```
 
+**Text-matching semantics**: `contains()` matches dictionary terms as
+**substrings** by default ("work" matches "working" — useful as poor-man's
+stemming for morphology-rich languages, but "hi" also matches "this").
+Engines can be configured with `text_match="token"` (whole-token matching;
+in server configs: `[engine] text_match = "token"`), which makes
+`contains()` behave like `contains_tokens()`. `contains_tokens()` always
+matches whole tokens (Unicode-aware: preserves C++, emails, contractions);
+`contains_phrase()` matches exact multi-word phrases.
+
 ### 2. Boolean Operators
 
 ```prismql

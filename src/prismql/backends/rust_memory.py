@@ -135,6 +135,29 @@ class RustMemoryBackend(SearchBackend):
         result_list = self._backend.search_text(list(terms), field, operator)
         return set(result_list)
 
+    def search_tokens(
+        self, terms: Sequence[str], field: str = "text", operator: str = "OR"
+    ) -> set[MessageId]:
+        """
+        Search for documents containing whole tokens (exact token matching).
+
+        Overrides the base-class fallback (which degrades to substring
+        search_text). Implemented via the Rust backend's single-token
+        search_phrase path, which is an exact token-index lookup.
+        """
+        result_sets = [set(self._backend.search_phrase(term, field)) for term in terms]
+        if not result_sets:
+            return set()
+        if operator.upper() == "AND":
+            combined = result_sets[0]
+            for ids in result_sets[1:]:
+                combined &= ids
+            return combined
+        combined = set()
+        for ids in result_sets:
+            combined |= ids
+        return combined
+
     def search_by_field(
         self, field: str, value: str, exact: bool = True
     ) -> set[MessageId]:

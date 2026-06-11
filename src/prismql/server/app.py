@@ -109,6 +109,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                     state.engine.search_backend,
                     user_dictionaries={**config.dictionaries, **req.dictionaries},
                     timestamp_field=config.timestamp_field,
+                    text_match=config.text_match,
                 )
             try:
                 result = engine.execute(req.query)

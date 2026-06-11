@@ -133,7 +133,10 @@ class MemoryBackend(SearchBackend):
         return result
 
     def search_tokens(
-        self, terms: Sequence[str], field: str = "text", operator: str = "OR"
+        self,
+        terms: Sequence[str],
+        field: str = "text",  # noqa: ARG002 - interface compat; token index covers text
+        operator: str = "OR",
     ) -> set[MessageId]:
         """
         Search for documents containing the specified tokens.
@@ -159,15 +162,11 @@ class MemoryBackend(SearchBackend):
             term_lower = term.lower()
             matching_ids: set[MessageId] = set()
 
-            # Check exact token matches
+            # Exact token matches only. The tokenizer already preserves
+            # meaningful punctuation (C++, emails, contractions), so no
+            # substring fallback — that's what search_text is for.
             if term_lower in self._text_index:
                 matching_ids.update(self._text_index[term_lower])
-
-            # Also check if term appears as substring in field values
-            if field in self._field_indexes:
-                for value, doc_ids in self._field_indexes[field].items():
-                    if term_lower in value:
-                        matching_ids.update(doc_ids)
 
             result_sets.append(matching_ids)
 

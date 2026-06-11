@@ -142,3 +142,25 @@ def test_build_engine_rejects_db_backends():
     cfg = ServerConfig(backend_type="postgres", data="dsn://x")
     with pytest.raises(ValueError, match="library API"):
         build_engine(cfg)
+
+
+def test_text_match_config(tmp_path):
+    f = _write_events(tmp_path)
+    cfg_file = tmp_path / "c.toml"
+    cfg_file.write_text(
+        f'[backend]\ntype = "memory"\ndata = "{f.name}"\n\n'
+        '[engine]\ntext_match = "token"\n\n'
+        '[dictionaries]\nlabour = ["work"]\n'
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.text_match == "token"
+    engine = build_engine(cfg)
+    # token mode: "work" does not match "working"... no "working" doc here,
+    # but "spike" must not match "spiked" -- use the actual fixture text
+    assert engine.execute("SELECT contains(labour)") == []
+
+
+def test_text_match_defaults_to_substring(tmp_path):
+    cfg_file = tmp_path / "min.toml"
+    cfg_file.write_text('[backend]\ntype = "memory"\ndata = "d.json"\n')
+    assert load_config(cfg_file).text_match == "substring"

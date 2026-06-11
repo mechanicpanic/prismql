@@ -69,6 +69,12 @@ Initial public release.
 
 ### Tooling & Examples
 
+- Engine-level `text_match` mode (`"substring"` default, `"token"`):
+  controls whether `contains()` matches dictionary terms as substrings or
+  whole tokens; exposed in server configs via `[engine] text_match`.
+  `search_tokens()` is now pure token matching on both backends (the
+  Python implementation previously mixed in substring matches; the Rust
+  backend previously fell back to substring entirely).
 - HTTP server (`prismql[server]` extra): config-driven `prismql-server`
   with `/evaluate` (hydrated results, structured errors, request-scoped
   dictionary overlays), `/health`, `/reload`, and `/reference`.

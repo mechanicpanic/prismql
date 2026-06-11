@@ -66,6 +66,7 @@ class PrismQLEngine:
         user_dictionaries: Optional[Mapping[str, Sequence[str]]] = None,
         precomputed_indexes: Optional[PrecomputedIndexes] = None,
         timestamp_field: str = "timestamp",
+        text_match: str = "substring",
     ) -> None:
         """
         Initialize the PrismQL engine.
@@ -80,6 +81,12 @@ class PrismQLEngine:
                                custom features). This is the recommended way to add
                                NLP features to PrismQL.
             timestamp_field: Name of the timestamp field for temporal operations
+            text_match: How contains() matches dictionary terms against text.
+                "substring" (default): term anywhere in the text ("hi" matches
+                "this") — historical reference behavior, doubles as poor-man's
+                stemming for morphology-rich languages. "token": whole-token
+                matching via the tokenizer index (Lucene-era semantics).
+                contains_tokens() and contains_phrase() are unaffected.
 
         Note:
             The nlp_backend parameter is deprecated and will be removed in a future
@@ -121,6 +128,12 @@ class PrismQLEngine:
         self.precomputed_indexes = precomputed_indexes or PrecomputedIndexes()
         self.timestamp_field = timestamp_field
 
+        if text_match not in ("substring", "token"):
+            raise ValueError(
+                f"text_match must be 'substring' or 'token', got {text_match!r}"
+            )
+        self.text_match = text_match
+
         # Create visitor
         self.visitor = PrismQLVisitor(
             search_backend=search_backend,
@@ -128,6 +141,7 @@ class PrismQLEngine:
             user_dictionaries=self.user_dictionaries,
             precomputed_indexes=self.precomputed_indexes,
             timestamp_field=timestamp_field,
+            text_match=text_match,
         )
 
     def execute(
