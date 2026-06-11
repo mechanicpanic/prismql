@@ -9,13 +9,26 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # pragma: no cover - exercised only on Python < 3.11
-    import tomli as tomllib
-
 if TYPE_CHECKING:
     from ..engine import PrismQLEngine
+
+
+def _load_tomllib() -> Any:
+    """Import the toml parser lazily so this module stays importable on
+    Python < 3.11 without the server extra (the REPL imports us too)."""
+    if sys.version_info >= (3, 11):
+        import tomllib
+
+        return tomllib
+    try:  # pragma: no cover - exercised only on Python < 3.11
+        import tomli
+
+        return tomli
+    except ImportError as e:  # pragma: no cover
+        raise ImportError(
+            "Parsing prismql.toml on Python < 3.11 requires tomli: "
+            "uv pip install 'prismql[server]' (or just tomli)"
+        ) from e
 
 
 @dataclass
@@ -45,7 +58,7 @@ def load_config(path: str | Path) -> ServerConfig:
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"Config file not found: {p}")
-    raw = tomllib.loads(p.read_text(encoding="utf-8"))
+    raw = _load_tomllib().loads(p.read_text(encoding="utf-8"))
     base = p.parent
 
     server = raw.get("server", {})
@@ -168,3 +181,57 @@ def build_engine(config: ServerConfig) -> PrismQLEngine:
         timestamp_field=config.timestamp_field,
         text_match=config.text_match,
     )
+
+
+SCHEMA_SAMPLE_CAP = 1000
+EXAMPLES_MAX_CARDINALITY = 20
+
+
+def compute_schema(engine: PrismQLEngine, config: ServerConfig) -> dict[str, Any]:
+    """Introspect the loaded corpus: fields, coverage, types, examples.
+
+    PrismQL is schema-on-read — documents are free-form dicts and nothing is
+    coerced beyond ids/timestamps — so the schema is inferred from a sample
+    of the loaded documents rather than declared anywhere. Shared by the
+    server's GET /schema and the REPL's \\schema command.
+    """
+    backend = engine.search_backend
+    total = backend.get_total_documents()
+    sample_ids = list(backend.get_all_document_ids(limit=SCHEMA_SAMPLE_CAP))
+    docs = backend.get_documents(sample_ids) if sample_ids else []
+    n = len(docs)
+
+    field_values: dict[str, list[Any]] = {}
+    for doc in docs:
+        for key, value in doc.items():
+            field_values.setdefault(key, []).append(value)
+
+    fields: dict[str, Any] = {}
+    for key, values in sorted(field_values.items()):
+        type_names = {type(v).__name__ for v in values if v is not None}
+        info: dict[str, Any] = {
+            "coverage": round(len(values) / n, 3) if n else 0.0,
+            "type": type_names.pop() if len(type_names) == 1 else "mixed",
+        }
+        # Examples only for categorical-ish fields. A field where every
+        # sampled document has a unique value (distinct == values == n) is
+        # an id or free text — skip those.
+        distinct = {str(v) for v in values if v is not None}
+        if 0 < len(distinct) <= EXAMPLES_MAX_CARDINALITY and not (
+            len(distinct) == len(values) == n
+        ):
+            info["examples"] = sorted(distinct)[:10]
+        fields[key] = info
+
+    return {
+        "backend": type(backend).__name__,
+        "documents": total,
+        "sampled": n,
+        "id_field": config.id_field,
+        "timestamp_field": config.timestamp_field,
+        "text_match": config.text_match,
+        "fields": fields,
+        "dictionaries": {
+            name: len(terms) for name, terms in config.dictionaries.items()
+        },
+    }

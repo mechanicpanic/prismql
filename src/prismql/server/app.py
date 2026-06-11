@@ -19,7 +19,7 @@ from ..aggregators.types import AggregateResult, GroupedResult
 from ..exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from ..reference import load_reference
 from ..types import NamedQueryResult
-from .config import ServerConfig, build_engine, load_config
+from .config import ServerConfig, build_engine, compute_schema, load_config
 
 
 class EvaluateRequest(BaseModel):
@@ -136,59 +136,6 @@ def _write_results_file(
     return summary
 
 
-_SCHEMA_SAMPLE_CAP = 1000
-_EXAMPLES_MAX_CARDINALITY = 20
-
-
-def _compute_schema(state: ServerState, config: ServerConfig) -> dict[str, Any]:
-    """Introspect the loaded corpus: fields, coverage, types, examples.
-
-    PrismQL is schema-on-read — documents are free-form dicts and nothing is
-    coerced beyond ids/timestamps — so the schema is inferred from a sample
-    of the loaded documents rather than declared anywhere.
-    """
-    backend = state.engine.search_backend
-    total = backend.get_total_documents()
-    sample_ids = list(backend.get_all_document_ids(limit=_SCHEMA_SAMPLE_CAP))
-    docs = backend.get_documents(sample_ids) if sample_ids else []
-    n = len(docs)
-
-    field_values: dict[str, list[Any]] = {}
-    for doc in docs:
-        for key, value in doc.items():
-            field_values.setdefault(key, []).append(value)
-
-    fields: dict[str, Any] = {}
-    for key, values in sorted(field_values.items()):
-        type_names = {type(v).__name__ for v in values if v is not None}
-        info: dict[str, Any] = {
-            "coverage": round(len(values) / n, 3) if n else 0.0,
-            "type": type_names.pop() if len(type_names) == 1 else "mixed",
-        }
-        # Examples only for categorical-ish fields. A field where every
-        # sampled document has a unique value (distinct == values == n) is
-        # an id or free text — skip those.
-        distinct = {str(v) for v in values if v is not None}
-        if 0 < len(distinct) <= _EXAMPLES_MAX_CARDINALITY and not (
-            len(distinct) == len(values) == n
-        ):
-            info["examples"] = sorted(distinct)[:10]
-        fields[key] = info
-
-    return {
-        "backend": type(backend).__name__,
-        "documents": total,
-        "sampled": n,
-        "id_field": config.id_field,
-        "timestamp_field": config.timestamp_field,
-        "text_match": config.text_match,
-        "fields": fields,
-        "dictionaries": {
-            name: len(terms) for name, terms in config.dictionaries.items()
-        },
-    }
-
-
 def create_app(config: ServerConfig) -> FastAPI:
     state = ServerState(config)
     state.reload()
@@ -278,7 +225,7 @@ def create_app(config: ServerConfig) -> FastAPI:
     @app.get("/schema")
     def schema() -> dict[str, Any]:
         with state.lock:
-            return _compute_schema(state, config)
+            return compute_schema(state.engine, config)
 
     @app.get("/reference")
     def reference() -> PlainTextResponse:

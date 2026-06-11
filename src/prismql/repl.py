@@ -9,6 +9,7 @@ from .aggregators.types import AggregateResult, GroupedResult
 from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
 from .engine import PrismQLEngine
 from .exceptions import PrismQLRuntimeError, PrismQLSyntaxError
+from .server.config import ServerConfig, compute_schema
 from .types import NamedQueryResult
 
 # Try to import prompt_toolkit for rich REPL experience
@@ -36,26 +37,49 @@ class PrismQLRepl:
 
     def __init__(
         self,
-        search_backend: SearchBackend,
+        search_backend: Optional[SearchBackend] = None,
         nlp_backend: Optional[NLPBackend] = None,
         precomputed_indexes: Optional[PrecomputedIndexes] = None,
         user_dictionaries: Optional[dict[str, list[str]]] = None,
+        *,
+        engine: Optional[PrismQLEngine] = None,
+        server_config: Optional[ServerConfig] = None,
     ) -> None:
         """
         Initialize the REPL.
 
         Args:
-            search_backend: Search backend to use
+            search_backend: Search backend to use (ignored if engine is given)
             nlp_backend: Optional NLP backend
             precomputed_indexes: Optional precomputed indexes
             user_dictionaries: Optional user dictionaries
+            engine: Pre-built engine (e.g. from a prismql.toml via build_engine)
+            server_config: The ServerConfig the engine was built from; used by
+                \\schema and the startup banner. Synthesized from the engine's
+                own settings when absent.
         """
-        self.engine = PrismQLEngine(
-            search_backend=search_backend,
-            nlp_backend=nlp_backend,
-            precomputed_indexes=precomputed_indexes,
-            user_dictionaries=user_dictionaries or {},
-        )
+        if engine is not None:
+            self.engine = engine
+        elif search_backend is not None:
+            self.engine = PrismQLEngine(
+                search_backend=search_backend,
+                nlp_backend=nlp_backend,
+                precomputed_indexes=precomputed_indexes,
+                user_dictionaries=user_dictionaries or {},
+            )
+        else:
+            raise ValueError("Provide either search_backend or engine")
+
+        # The same config object the server uses — so \schema reports
+        # exactly what GET /schema would for the same corpus.
+        if server_config is None:
+            server_config = ServerConfig(
+                id_field=getattr(self.engine.search_backend, "id_field", "id"),
+                timestamp_field=self.engine.timestamp_field,
+                text_match=self.engine.text_match,
+                dictionaries=dict(self.engine.user_dictionaries),
+            )
+        self.server_config = server_config
         self.query_count = 0
         self.history_file = Path.home() / ".prismql_history"
 
@@ -173,6 +197,10 @@ class PrismQLRepl:
             self.show_stats()
             return True
 
+        if command == "\\schema":
+            self.show_schema()
+            return True
+
         if command == "\\clear":
             # Clear screen
             print("\033[2J\033[H", end="")
@@ -190,22 +218,25 @@ PrismQL REPL - Interactive Query Interface
 Commands:
   \\help, \\h, \\?     Show this help message
   \\quit, \\q, \\exit  Exit the REPL
+  \\schema            Show loaded corpus: fields, types, dictionaries
   \\stats             Show query statistics
   \\clear             Clear screen
 
 Query Syntax:
   SELECT <conditions>                    Basic query
-  SELECT <cond1>, <cond2> INWIN N        Window query (unordered)
+  SELECT <cond1>, <cond2> INWINDOW N     Window query (unordered, positional)
   SELECT <cond1> FOLLOWED_BY <cond2>     Sequential query (ordered)
+  SELECT ... DURING 1 hour               Temporal window (time-based)
   SELECT ... AGGREGATE count()           Aggregation
   SELECT ... GROUP BY field              Grouping
 
 Examples:
   SELECT from(alice)
   SELECT from(alice) AND is_question()
-  SELECT from(alice), from(bob) INWIN 5
-  SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
-  SELECT from($user){3} INWIN 10
+  SELECT from(alice), from(bob) INWINDOW 5
+  SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3
+  SELECT from(alice) FOLLOWED_BY from(bob) DURING 2 hours
+  SELECT from($user){3} INWINDOW 10
 
 Press Ctrl+C to cancel current query.
 Press Ctrl+D or type \\quit to exit.
@@ -217,10 +248,56 @@ Press Ctrl+D or type \\quit to exit.
         print("\nQuery Statistics:")
         print(f"  Total queries executed: {self.query_count}")
         print(f"  Backend type: {type(self.engine.search_backend).__name__}")
+        print(f"  Documents loaded: {self.engine.search_backend.get_total_documents()}")
         if self.engine.nlp_backend:
             print(f"  NLP backend: {type(self.engine.nlp_backend).__name__}")
         print(f"  User dictionaries: {len(self.engine.user_dictionaries)}")
         print()
+
+    def show_schema(self) -> None:
+        """Show the loaded corpus schema (same data as the server's GET /schema)."""
+        schema = compute_schema(self.engine, self.server_config)
+        print(
+            f"\nCorpus: {schema['documents']} documents "
+            f"(sampled {schema['sampled']}) · backend {schema['backend']}"
+        )
+        if self.server_config.data:
+            print(f"  data: {self.server_config.data}")
+        print(
+            f"  id_field: {schema['id_field']} · "
+            f"timestamp_field: {schema['timestamp_field']} · "
+            f"text_match: {schema['text_match']}"
+        )
+        if schema["fields"]:
+            print("\nFields:")
+            width = max(len(name) for name in schema["fields"])
+            for name, info in schema["fields"].items():
+                line = (
+                    f"  {name:<{width}}  {info['type']:<8}"
+                    f"{info['coverage'] * 100:5.1f}%"
+                )
+                if "examples" in info:
+                    line += "  e.g. " + ", ".join(info["examples"][:6])
+                print(line)
+        if schema["dictionaries"]:
+            print("\nDictionaries:")
+            for name, count in schema["dictionaries"].items():
+                print(f"  {name} ({count} term{'s' if count != 1 else ''})")
+        print()
+
+    def corpus_banner(self) -> str:
+        """One-line summary of what is loaded, shown at startup."""
+        backend = self.engine.search_backend
+        banner = (
+            f"Loaded: {backend.get_total_documents()} documents "
+            f"via {type(backend).__name__}"
+        )
+        if self.server_config.data:
+            banner += f" from {self.server_config.data}"
+        if self.engine.user_dictionaries:
+            n = len(self.engine.user_dictionaries)
+            banner += f" · {n} dictionar{'ies' if n != 1 else 'y'}"
+        return banner
 
     def get_prompt(self) -> str:
         """Get the prompt string."""
@@ -254,7 +331,8 @@ Press Ctrl+D or type \\quit to exit.
     def run(self) -> None:
         """Run the REPL loop."""
         print("PrismQL Interactive REPL")
-        print("Type \\help for help, \\quit to exit")
+        print("Type \\help for help, \\schema to inspect the corpus, \\quit to exit")
+        print(self.corpus_banner())
 
         # Show enabled features
         features = []
@@ -332,7 +410,10 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=str,
-        help="Path to configuration file (JSON)",
+        help=(
+            "Path to configuration file: prismql.toml (same file the server "
+            "takes) or a legacy backend JSON config"
+        ),
     )
     parser.add_argument(
         "--backend",
@@ -350,7 +431,15 @@ def main() -> None:
     args = parser.parse_args()
 
     # Load configuration
-    if args.config:
+    if args.config and args.config.endswith(".toml"):
+        # The server's prismql.toml: one config, two frontends.
+        from .server.config import build_engine, load_config
+
+        server_config = load_config(args.config)
+        repl = PrismQLRepl(
+            engine=build_engine(server_config), server_config=server_config
+        )
+    elif args.config:
         import json
 
         with open(args.config) as f:
@@ -361,6 +450,12 @@ def main() -> None:
             precomputed,
             user_dicts,
         ) = BackendFactory.create_backends(config)
+        repl = PrismQLRepl(
+            search_backend=search_backend,
+            nlp_backend=nlp_backend,
+            precomputed_indexes=precomputed,
+            user_dictionaries=user_dicts,
+        )
     else:
         # Create default memory backend
         if args.sample_data:
@@ -386,18 +481,7 @@ def main() -> None:
 
         from .backends.memory import MemoryBackend
 
-        search_backend = MemoryBackend(documents=documents)
-        nlp_backend = None
-        precomputed = None
-        user_dicts = {}
-
-    # Create and run REPL
-    repl = PrismQLRepl(
-        search_backend=search_backend,
-        nlp_backend=nlp_backend,
-        precomputed_indexes=precomputed,
-        user_dictionaries=user_dicts,
-    )
+        repl = PrismQLRepl(search_backend=MemoryBackend(documents=documents))
 
     try:
         repl.run()
