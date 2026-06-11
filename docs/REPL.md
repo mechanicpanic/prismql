@@ -2,6 +2,10 @@
 
 The PrismQL REPL (Read-Eval-Print Loop) provides an interactive environment for writing and testing PrismQL queries in real-time.
 
+<p align="center">
+  <img src="assets/repl.svg" alt="PrismQL REPL session with syntax highlighting" width="780">
+</p>
+
 ## Installation
 
 ### Basic Installation

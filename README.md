@@ -2,6 +2,10 @@
 
 PrismQL is a domain-specific language for pattern matching and retrieval in conversational data. It's designed to work with any search backend, making it perfect for analyzing chat logs, support conversations, or any sequential message data.
 
+<p align="center">
+  <img src="docs/assets/repl.svg" alt="PrismQL REPL running a cross-corpus lead-lag query: news mentioning sanctions FOLLOWED_BY panic on a retail feed DURING 4 hours" width="780">
+</p>
+
 ## Features
 
 - **Search Backend Agnostic**: Works with OpenSearch, Elasticsearch, or any custom search engine
@@ -66,6 +70,10 @@ structured 422s with messages designed for agent self-correction. Requests
 may carry a `dictionaries` overlay — term lists merged over the config
 dictionaries for that query only — so agents can iterate on the semantic
 layer without touching server state.
+
+<p align="center">
+  <img src="docs/assets/server.svg" alt="prismql-server answering POST /evaluate with hydrated event groups" width="780">
+</p>
 
 ## Quick Start
 

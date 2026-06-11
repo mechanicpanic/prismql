@@ -1,0 +1,10 @@
+[server]
+port = 8931
+
+[backend]
+type = "memory"
+data = "corpus.jsonl"
+
+[dictionaries]
+sanctions = ["sanctions"]
+panic = ["panic", "selling"]
