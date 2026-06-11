@@ -170,7 +170,16 @@ class PrismQLLexer(RegexLexer):
                 words(
                     (
                         "contains",
+                        "contains_tokens",
+                        "containstokens",
+                        "contains_phrase",
+                        "containsphrase",
                         "from",
+                        "field",
+                        "has_feature",
+                        "hasfeature",
+                        "labeled_as",
+                        "labeledas",
                         "mentions_user",
                         "mentionsuser",
                         "is_question",
