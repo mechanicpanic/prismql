@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -26,6 +30,20 @@ class EvaluateRequest(BaseModel):
     # for this request only (request wins on name collision). Dictionaries
     # are resolved at query time, so no index rebuild is involved.
     dictionaries: dict[str, list[str]] | None = None
+    # "inline": results in the response, capped at max_results.
+    # "file": ALL groups written as JSONL to results_dir; the response
+    # carries only a summary (count, path, preview) — for batch pattern
+    # work where the inline cap is meaningless.
+    output: Literal["inline", "file"] = "inline"
+    label: str | None = None  # optional human slug for the results file
+
+
+def _result_slug(query: str, label: str | None) -> str:
+    """Stable, filesystem-safe name: <label-or-query-words>-<hash6>."""
+    digest = hashlib.md5(query.encode("utf-8")).hexdigest()[:6]  # noqa: S324
+    base = label or query.replace("SELECT", "").strip()
+    base = re.sub(r"[^A-Za-z0-9_]+", "_", base).strip("_").lower()[:48] or "query"
+    return f"{base}-{digest}"
 
 
 class ServerState:
@@ -82,6 +100,42 @@ def result_to_payload(
     return payload
 
 
+def _write_results_file(
+    full_payload: dict[str, Any], req: EvaluateRequest, config: ServerConfig
+) -> dict[str, Any]:
+    """Persist all result groups as JSONL; return the summary payload."""
+    results_dir = Path(config.results_dir or "prismql-results")
+    results_dir.mkdir(parents=True, exist_ok=True)
+    path = results_dir / f"{_result_slug(req.query, req.label)}.jsonl"
+
+    groups = full_payload["results"]
+    tmp = path.with_suffix(".jsonl.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        for group in groups:
+            f.write(json.dumps(group, ensure_ascii=False, default=str) + "\n")
+    tmp.replace(path)
+
+    preview = []
+    for group in groups[:5]:
+        entry: dict[str, Any] = {"ids": group["ids"]}
+        events = group.get("events")
+        if events:
+            text = str(events[0].get("text", ""))
+            entry["snippet"] = " ".join(text.split())[:80]
+        preview.append(entry)
+
+    summary: dict[str, Any] = {
+        "kind": full_payload["kind"],
+        "count": len(groups),
+        "truncated": False,
+        "path": str(path),
+        "preview": preview,
+    }
+    if "labels" in full_payload:
+        summary["labels"] = full_payload["labels"]
+    return summary
+
+
 def create_app(config: ServerConfig) -> FastAPI:
     state = ServerState(config)
     state.reload()
@@ -134,7 +188,16 @@ def create_app(config: ServerConfig) -> FastAPI:
                         "error": {"type": "runtime", "message": str(e)},
                     },
                 )
-            payload = result_to_payload(result, state, hydrate, max_results)
+            if req.output == "file" and not isinstance(
+                result, (AggregateResult, GroupedResult)
+            ):
+                # Unbounded: write every group to disk, return a summary.
+                full = result_to_payload(result, state, hydrate, max_results=2**31)
+                payload = _write_results_file(full, req, config)
+            else:
+                # Aggregates/grouped results are small by construction —
+                # file mode falls through to the normal inline response.
+                payload = result_to_payload(result, state, hydrate, max_results)
         payload["ok"] = True
         payload["query"] = req.query
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)

@@ -32,6 +32,7 @@ class ServerConfig:
     timestamp_fields: list[str] = field(default_factory=lambda: ["timestamp"])
     timestamp_field: str = "timestamp"
     text_match: str = "substring"
+    results_dir: str | None = None
     dictionaries: dict[str, list[str]] = field(default_factory=dict)
 
 
@@ -57,6 +58,11 @@ def load_config(path: str | Path) -> ServerConfig:
         data_path = Path(data)
         data = str(data_path if data_path.is_absolute() else base / data_path)
 
+    results_dir = server.get("results_dir")
+    if results_dir is not None:
+        rd_path = Path(results_dir)
+        results_dir = str(rd_path if rd_path.is_absolute() else base / rd_path)
+
     if "file" in dicts_section:
         dict_path = Path(dicts_section["file"])
         if not dict_path.is_absolute():
@@ -78,6 +84,7 @@ def load_config(path: str | Path) -> ServerConfig:
         timestamp_fields=list(backend.get("timestamp_fields", ["timestamp"])),
         timestamp_field=engine.get("timestamp_field", "timestamp"),
         text_match=engine.get("text_match", "substring"),
+        results_dir=results_dir,
         dictionaries=dictionaries,
     )
 

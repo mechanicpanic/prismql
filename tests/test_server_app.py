@@ -193,3 +193,64 @@ def test_evaluate_request_dictionaries_do_not_persist(client):
     # next request without overlay sees the config dictionary again
     r = client.post("/evaluate", json={"query": "SELECT contains(spikes)"})
     assert r.json()["results"][0]["ids"] == [1]
+
+
+def test_evaluate_output_file_bypasses_cap(tmp_path):
+    data = tmp_path / "events.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    cfg = ServerConfig(
+        backend_type="memory",
+        data=str(data),
+        max_results=2,  # tight inline cap
+        results_dir=str(tmp_path / "out"),
+    )
+    c = TestClient(create_app(cfg))
+    r = c.post(
+        "/evaluate",
+        json={"query": "SELECT from(tick_a)", "output": "file"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["count"] == 3  # all groups, beyond the inline cap
+    assert body["truncated"] is False
+    assert len(body["preview"]) == 3
+    assert "snippet" in body["preview"][0]
+    # full results are NOT inline
+    assert "results" not in body
+
+    # the file holds every group as JSONL, hydrated
+    from pathlib import Path
+
+    path = Path(body["path"])
+    assert path.exists()
+    lines = [json.loads(line) for line in path.read_text().splitlines()]
+    assert len(lines) == 3
+    assert lines[0]["ids"] == [1]
+    assert lines[0]["events"][0]["text"] == "price spike"
+
+
+def test_evaluate_output_file_label_slug(tmp_path):
+    data = tmp_path / "events.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    cfg = ServerConfig(
+        backend_type="memory", data=str(data), results_dir=str(tmp_path / "out")
+    )
+    c = TestClient(create_app(cfg))
+    r = c.post(
+        "/evaluate",
+        json={
+            "query": "SELECT from(tick_a)",
+            "output": "file",
+            "label": "Oil Spike!!",
+        },
+    )
+    assert "oil_spike-" in r.json()["path"]
+    assert r.json()["path"].endswith(".jsonl")
+
+
+def test_evaluate_output_inline_unchanged(client):
+    r = client.post("/evaluate", json={"query": "SELECT from(tick_a)"})
+    body = r.json()
+    assert "results" in body
+    assert "path" not in body

@@ -30,6 +30,9 @@ structured 422s whose `error.message` tells you how to fix the query.
 Iterate on dictionaries in-band — add `"dictionaries": {"name": ["term", …]}`
 to the request to define/override term lists for that query only; persist
 stable ones into the server's `prismql.toml` when done.
+For large result sets add `"output": "file"` (+ optional `"label"`): every
+group is written server-side as JSONL and the response carries only
+`{count, path, preview}` — read the file selectively, never inline it all.
 `GET /reference` serves the full language doc; `POST /reload` re-reads the
 data file. To start a server: `prismql-server --config prismql.toml` (config
 holds backend, data path, dictionaries — see the repo README).

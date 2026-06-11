@@ -83,6 +83,10 @@ Initial public release.
 - HTTP server (`prismql[server]` extra): config-driven `prismql-server`
   with `/evaluate` (hydrated results, structured errors, request-scoped
   dictionary overlays), `/health`, `/reload`, and `/reference`.
+- File output mode: `/evaluate` with `"output": "file"` writes ALL result
+  groups (bypassing the inline `max_results` cap) as JSONL under
+  `[server] results_dir`, returning only `{count, path, preview}` — batch
+  pattern mining without blowing up agent context or HTTP bodies.
 - MCP shim (`prismql[mcp]` extra): `prismql-mcp` exposes a single
   `evaluate()` tool plus the language reference as a resource.
 - Interactive REPL (`prismql` entry point, optional `repl` extra).
