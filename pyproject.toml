@@ -142,6 +142,7 @@ ignore = [
 "src/prismql/server/mcp.py" = ["S310"]  # urllib to a user-configured local server
 "tests/test_server_config.py" = ["S104"]  # "0.0.0.0" literal in a config-parsing test
 "tests/test_server_app.py" = ["E501"]  # Long query strings
+"tests/test_field_condition.py" = ["E501"]  # Long fixture lines
 "src/prismql/processors/temporal.py" = ["C901", "ARG004"]  # Complexity & unused args
 "src/prismql/processors/variables.py" = ["E501", "ARG002"]  # Line length & unused args
 "src/prismql/aggregators/aggregator.py" = ["C901"]  # Complexity - future refactor

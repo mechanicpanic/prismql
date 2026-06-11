@@ -90,6 +90,7 @@ condition
     | ContainsLink '(' ')'
     | HasFeature '(' feature_name ')'
     | LabeledAs '(' feature_name ')'
+    | Field '(' field_name ',' field_value (',' match_mode)? ')'
 
     // Legacy operators (backward compatibility)
     | HasWordOfDict '(' hdict ')'
@@ -177,6 +178,8 @@ hdict : STRING | VARIABLE | WILDCARD;
 huser : STRING | VARIABLE | WILDCARD;
 feature_name : STRING;
 field_name : STRING;
+field_value : STRING | QUOTED_STRING | VARIABLE | WILDCARD;
+match_mode : STRING;
 
 // Keywords (case-insensitive)
 Select   : 'SELECT'   | 'select'  ;
@@ -242,6 +245,7 @@ MentionsOrg      : 'MENTIONS_ORG'     | 'mentions_org'    | 'MENTIONSORG'  | 'me
 ContainsLink     : 'CONTAINS_LINK'    | 'contains_link'   | 'CONTAINSLINK' | 'containslink' ;
 HasFeature       : 'HAS_FEATURE'      | 'has_feature'     | 'HASFEATURE'   | 'hasfeature'   ;
 LabeledAs        : 'LABELED_AS'       | 'labeled_as'      | 'LABELEDAS'    | 'labeledas'    ;
+Field            : 'FIELD'            | 'field'           ;
 
 // Legacy condition keywords (backward compatibility)
 HasWordOfDict    : 'HASWORDOFDICT'    | 'haswordofdict'   ;

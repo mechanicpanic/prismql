@@ -204,5 +204,15 @@ class PrismQLVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by PrismQLParser#field_value.
+    def visitField_value(self, ctx:PrismQLParser.Field_valueContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by PrismQLParser#match_mode.
+    def visitMatch_mode(self, ctx:PrismQLParser.Match_modeContext):
+        return self.visitChildren(ctx)
+
+
 
 del PrismQLParser

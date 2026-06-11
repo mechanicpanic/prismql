@@ -782,6 +782,46 @@ class PrismQLVisitor(BasePrismQLVisitor):
             feature_name = ctx.feature_name().getText()
             return self._get_custom_feature(feature_name)
 
+        # field(name, value[, matcher]) - generic field predicate.
+        # from(x) is the canonical alias for field(user, x).
+        if ctx.Field():
+            fname = ctx.field_name().getText()
+            raw_value = ctx.field_value().getText()
+
+            exact = True
+            if ctx.match_mode() is not None:
+                mode = ctx.match_mode().getText().lower()
+                if mode == "partial":
+                    exact = False
+                elif mode != "exact":
+                    raise PrismQLRuntimeError(
+                        f"Unknown field() matcher {mode!r}: use 'exact' "
+                        "(default) or 'partial' (substring over field values)"
+                    )
+
+            # Wildcard - match all messages
+            if raw_value == "*":
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
+
+            # Variable - same-value constraint on this field
+            if raw_value.startswith("$"):
+                self.variable_constraints.append(
+                    VariableConstraint(
+                        variable_name=raw_value[1:],
+                        field_name=fname,
+                        position=self.current_restriction_position,
+                    )
+                )
+                total_docs = self.search_backend.get_total_documents()
+                return self.search_backend.get_all_document_ids(limit=total_docs)
+
+            # Strip quotes from QUOTED_STRING values
+            if raw_value[0] in "\"'" and raw_value[-1] == raw_value[0]:
+                raw_value = raw_value[1:-1]
+
+            return self.search_backend.search_by_field(fname, raw_value, exact=exact)
+
         # Legacy operators (backward compatibility - DEPRECATED)
         if ctx.HasWordOfDict():
             warnings.warn(

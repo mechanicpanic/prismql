@@ -69,6 +69,11 @@ Initial public release.
 
 ### Tooling & Examples
 
+- Generic `field(name, value[, partial])` condition: match events where any
+  field equals (default) or contains a value — `from(x)` is now documented
+  as the alias for `field(user, x)`. Enables cross-corpus legs over merged
+  streams, e.g. `field(source, news) AND contains(sanctions) FOLLOWED_BY
+  field(source, pulse) AND contains(panic) DURING 4 hours`.
 - Engine-level `text_match` mode (`"substring"` default, `"token"`):
   controls whether `contains()` matches dictionary terms as substrings or
   whole tokens; exposed in server configs via `[engine] text_match`.

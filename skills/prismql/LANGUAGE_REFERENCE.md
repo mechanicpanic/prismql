@@ -19,7 +19,9 @@ Restrictions are conditions that messages must satisfy. Multiple restrictions ar
 ### 1. Basic Filtering
 
 ```prismql
-from(username)                    -- Messages from specific user
+from(username)                    -- Events from a specific source (alias for field(user, ...))
+field(name, value)                -- Events where a field equals a value (exact, case-insensitive)
+field(name, value, partial)       -- ... or contains it as a substring
 contains(dictionary_name)         -- Messages containing dictionary words
 contains_tokens(dictionary_name)  -- Token-based matching (preserves C++, emails)
 contains_phrase("phrase")         -- Exact phrase matching
