@@ -140,6 +140,7 @@ ignore = [
 "tests/test_quantifier_fix.py" = ["E501"]  # Long query strings
 "tests/test_sequential_chaining.py" = ["E501"]  # Long query strings
 "src/prismql/server/mcp.py" = ["S310"]  # urllib to a user-configured local server
+"src/prismql/server/app.py" = ["C901"]  # app factory holds the route closures
 "tests/test_server_config.py" = ["S104"]  # "0.0.0.0" literal in a config-parsing test
 "tests/test_server_app.py" = ["E501"]  # Long query strings
 "tests/test_field_condition.py" = ["E501"]  # Long fixture lines

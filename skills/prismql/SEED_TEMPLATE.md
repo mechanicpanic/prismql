@@ -42,7 +42,13 @@ replace the loader with a prismql.toml (backend, data path, dictionaries)
 and query via `curl -X POST localhost:{{port}}/evaluate`. Same dictionaries,
 warm engine, no per-query load cost. Iterate on dictionaries via the
 request-scoped overlay — `"dictionaries": {"name": ["term", …]}` in the
-request body (that query only; persist stable ones into prismql.toml). -->
+request body (that query only; persist stable ones into prismql.toml).
+For batch/mining queries add `"output": "file"` — all groups go to a JSONL
+file server-side, the response is just {count, path, preview}.
+NOTE: `GET /schema` self-describes the corpus (fields, coverage, example
+values, dictionaries) — the field-mapping table below can be generated
+from it rather than hand-written, and agents should prefer /schema as the
+live source of truth. -->
 
 ## Dictionaries
 

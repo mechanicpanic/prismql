@@ -33,6 +33,10 @@ stable ones into the server's `prismql.toml` when done.
 For large result sets add `"output": "file"` (+ optional `"label"`): every
 group is written server-side as JSONL and the response carries only
 `{count, path, preview}` — read the file selectively, never inline it all.
+`GET /schema` describes the loaded corpus — fields with coverage/types,
+example values for categorical fields (your `from()`/`field()` targets),
+configured dictionaries, and the text_match mode. Check it before writing
+queries against an unfamiliar corpus instead of guessing field names.
 `GET /reference` serves the full language doc; `POST /reload` re-reads the
 data file. To start a server: `prismql-server --config prismql.toml` (config
 holds backend, data path, dictionaries — see the repo README).

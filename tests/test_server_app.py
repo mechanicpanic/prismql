@@ -254,3 +254,40 @@ def test_evaluate_output_inline_unchanged(client):
     body = r.json()
     assert "results" in body
     assert "path" not in body
+
+
+def test_schema_endpoint(client):
+    r = client.get("/schema")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["documents"] == 4
+    assert body["id_field"] == "id"
+    assert body["timestamp_field"] == "timestamp"
+    assert body["text_match"] == "substring"
+    # field inventory with coverage, inferred type, low-cardinality examples
+    fields = body["fields"]
+    assert fields["user"]["coverage"] == 1.0
+    assert fields["user"]["type"] == "str"
+    assert set(fields["user"]["examples"]) == {"tick_a", "tick_b"}
+    assert fields["timestamp"]["type"] == "int"
+    # free-text fields don't get example dumps
+    assert "examples" not in fields["text"]
+    # dictionaries with term counts
+    assert body["dictionaries"] == {"spikes": 1}
+
+
+def test_schema_refreshes_on_reload(tmp_path):
+    data = tmp_path / "events.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    cfg = ServerConfig(backend_type="memory", data=str(data))
+    c = TestClient(create_app(cfg))
+    assert "venue" not in c.get("/schema").json()["fields"]
+
+    extra = DOCS + [
+        {"id": 5, "user": "tick_c", "text": "x", "timestamp": 1, "venue": "MOEX"}
+    ]
+    data.write_text("\n".join(json.dumps(d) for d in extra))
+    c.post("/reload")
+    body = c.get("/schema").json()
+    assert body["fields"]["venue"]["examples"] == ["MOEX"]
+    assert body["fields"]["venue"]["coverage"] == 0.2

@@ -83,6 +83,10 @@ Initial public release.
 - HTTP server (`prismql[server]` extra): config-driven `prismql-server`
   with `/evaluate` (hydrated results, structured errors, request-scoped
   dictionary overlays), `/health`, `/reload`, and `/reference`.
+- `GET /schema`: corpus self-description — field inventory with coverage
+  and inferred types, example values for categorical fields, configured
+  dictionaries, id/timestamp fields, text_match mode. PrismQL is
+  schema-on-read; this is the live source of truth for query targets.
 - File output mode: `/evaluate` with `"output": "file"` writes ALL result
   groups (bypassing the inline `max_results` cap) as JSONL under
   `[server] results_dir`, returning only `{count, path, preview}` — batch
