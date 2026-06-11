@@ -31,12 +31,18 @@ Initial public release.
 - **Operator precedence**: `NOT` > `AND` > `OR` > sequential operators, so
   compound conditions compose with `FOLLOWED_BY` without parentheses.
 - **Pattern variables**: `$user`-style backreferences enforcing same-value
-  constraints across positions.
+  constraints across positions, including across `FOLLOWED_BY`/`PRECEDED_BY`
+  legs; ill-defined combinations (chain variables with comma restrictions,
+  quantifiers, UNR, or on a negative lookaround's right-hand side) fail
+  loudly instead of silently mismatching.
 - **Quantifiers**: regex-style `{n}`, `{n,}`, `{n,m}` on conditions.
 - **Named pattern groups**: `AS` keyword for labeling matched positions.
 - **Negative patterns**: `NOT` operator inside sequences.
 - **Subqueries**: semicolon-separated unordered subqueries and positional
-  subquery chains.
+  subquery chains. Positional operators between subqueries act on whole
+  groups (all of A before all of B, gap measured between group boundaries,
+  greedy closest match), so multi-message stages stay intact; a single
+  parenthesized subquery is the identity.
 
 ### Aggregations & Temporal Filters
 
@@ -59,6 +65,11 @@ Initial public release.
   precomputed approach below).
 - `PrecomputedIndexes` + `IndexBuilder` for storing NLP features (entities,
   questions, custom labels) computed during ingestion from any source.
+- Unbacked vocabulary operators (`mentions_org()`, `is_question()`,
+  `has_feature(...)`, ...) raise teachable errors naming the missing index
+  and listing what is available — never a silent empty result. An
+  explicitly computed empty questions index is authoritative (no fallback
+  to backend heuristics).
 
 ### Performance
 
@@ -93,7 +104,10 @@ Initial public release.
   pattern mining without blowing up agent context or HTTP bodies.
 - MCP shim (`prismql[mcp]` extra): `prismql-mcp` exposes a single
   `evaluate()` tool plus the language reference as a resource.
-- Interactive REPL (`prismql` entry point, optional `repl` extra).
+- Interactive REPL (`prismql` entry point, optional `repl` extra): accepts
+  the same `prismql.toml` as the server, shows what corpus is loaded at
+  startup, and exposes it via `\schema` (same introspection as
+  `GET /schema`).
 - Pygments lexer for syntax highlighting (optional `highlighting` extra),
   registered as a Pygments plugin.
 - Streamlit demo (optional `demo` extra) including an "Understanding
@@ -102,7 +116,7 @@ Initial public release.
 
 ### Tests
 
-- 431 tests covering parsing, execution, all operator combinations,
+- 583 tests covering parsing, execution, all operator combinations,
   aggregations, temporal filters, pattern variables, quantifiers, named
   groups, negative patterns, lookahead/lookbehind, custom features, and Rust
   backend parity.
