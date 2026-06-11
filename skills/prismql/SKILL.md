@@ -116,9 +116,13 @@ so ids should be sequential integers in stream order.
    conditions next to `FOLLOWED_BY` need no parentheses:
    `SELECT from(alice) AND is_question() FOLLOWED_BY from(bob) INWINDOW 5`
    means `(alice ∧ question) FOLLOWED_BY bob`. Use parens only to override.
-3. **Avoid the subquery form for simple sequences.** `a FOLLOWED_BY (SELECT b)`
-   goes through a different code path and can return wrong results *silently*.
-   Plain `a FOLLOWED_BY b INWINDOW n` is correct and simpler.
+3. **Use the subquery form only to sequence multi-message stages.** For
+   simple sequences plain `a FOLLOWED_BY b INWINDOW n` is equivalent and
+   simpler. `(SELECT a, b INWINDOW 3) FOLLOWED_BY (SELECT c) INWINDOW 8`
+   matches whole groups (all of stage 1 before stage 2, gap from the
+   stage's last message to the next stage's first within the window) and
+   concatenates them. Each link needs its own `INWINDOW`; an extra trailing
+   positional window is rejected — use `DURING` for an overall time bound.
 4. **`contains(x)` takes a dictionary NAME**, never a literal word. For a
    literal use `contains_phrase("exact phrase")`, or define a dictionary.
 5. **`INWINDOW` is unordered; `FOLLOWED_BY` is ordered.** "A then B" →

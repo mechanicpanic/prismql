@@ -215,7 +215,23 @@ SELECT
 
    **Note**: For simple sequential patterns, SELECT wrappers are no longer required. Only use subquery syntax when you need independent query contexts with their own windows.
 
-2. **Do NOT flatten subqueries** - Grouping semantics matter!
+2. **Positional operators between subqueries act on whole groups.**
+   `(SELECT A) FOLLOWED_BY (SELECT B) INWINDOW n` matches a group from A
+   with a group from B when *every* message of the A-group precedes *every*
+   message of the B-group and the positional gap from A's last message to
+   B's first is within `n` (greedy closest match, like the restriction
+   level). Matched groups are concatenated chronologically, so multi-message
+   stages stay intact: `(SELECT a, b INWINDOW 3) FOLLOWED_BY (SELECT c)
+   INWINDOW 8` yields groups `[a, b, c]`. `NOT_FOLLOWED_BY` /
+   `NOT_PRECEDED_BY` keep the left groups that have no such counterpart.
+
+   - Each positional link carries its own `INWINDOW n` — a chain cannot
+     take an *extra* trailing positional window (runtime error). To bound
+     the overall time span of the matched groups, add `DURING <time>`.
+   - A single parenthesized subquery is the identity: `SELECT (SELECT X)`
+     returns exactly what `SELECT X` returns.
+
+3. **Do NOT flatten subqueries** - Grouping semantics matter!
 
 ```prismql
 -- ✅ CORRECT: Preserves grouping (alice+bob together, charlie separate)

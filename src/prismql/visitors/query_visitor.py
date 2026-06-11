@@ -170,7 +170,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 results = self._merge_restrictions(restriction_results, window_size)
         elif ctx.query_seq():
             # Multiple subqueries in sequence
-            subquery_results = self.visitQuery_seq(ctx.query_seq())
+            subquery_results, is_positional = self.visitQuery_seq(ctx.query_seq())
             # Unwrap NamedQueryResult to plain QueryResult for merging
             unwrapped_results: list[
                 Union[QueryResult, AggregateResult, GroupedResult]
@@ -180,7 +180,32 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     unwrapped_results.append(result.to_list())
                 else:
                     unwrapped_results.append(result)
-            results = self._merge_queries(unwrapped_results, window_size)
+            has_explicit_window = ctx.InWindow() is not None or ctx.InWin() is not None
+            if is_positional:
+                # The chain is already merged group-wise; each link carried
+                # its own window, so a trailing positional window has nothing
+                # left to constrain — re-merging here would smash the groups.
+                if has_explicit_window:
+                    raise PrismQLRuntimeError(
+                        "A positional subquery chain cannot take a trailing "
+                        "INWINDOW — each FOLLOWED_BY/PRECEDED_BY link between "
+                        "subqueries carries its own window. Use DURING <time> "
+                        "to constrain the overall time span instead."
+                    )
+                merged = unwrapped_results[0]
+                assert isinstance(merged, list)  # positional chains never aggregate
+                results = merged
+            elif (
+                len(unwrapped_results) == 1
+                and not has_explicit_window
+                and isinstance(unwrapped_results[0], list)
+            ):
+                # A single parenthesized subquery without a window is the
+                # identity — merging would silently fuse its groups with the
+                # default window.
+                results = unwrapped_results[0]
+            else:
+                results = self._merge_queries(unwrapped_results, window_size)
         else:
             results = []
 
@@ -268,13 +293,20 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def visitQuery_seq(
         self, ctx: PrismQLParser.Query_seqContext
-    ) -> list[Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]]:
+    ) -> tuple[
+        list[Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]],
+        bool,
+    ]:
         """
         Process a sequence of subqueries.
 
         Handles both:
         - Unordered subqueries (semicolon-separated): collected for later INWIN merging
         - Positional subqueries (FOLLOWED_BY/PRECEDED_BY): merged sequentially
+
+        Returns a tuple of (results, is_positional). When is_positional is
+        True the list holds a single, already-merged sequential result that
+        must not be window-merged again.
         """
         # Get first query context (grammar: '(' query ')' query_seq_continuation*)
         first_query = ctx.query()
@@ -292,7 +324,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # If no continuations, just return the single query result as a list
         if not continuations:
             result = self.visitQuery(query_contexts[0])
-            return [result]
+            return [result], False
 
         # Check if we have any positional operators
         has_positional = any(
@@ -308,7 +340,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             for query_ctx in query_contexts:
                 result = self.visitQuery(query_ctx)
                 results.append(result)
-            return results
+            return results, False
 
         # Otherwise, process sequentially with positional operators
         # Start with the first query
@@ -358,7 +390,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 )
 
         # Return as a list with single merged result
-        return [current_result]
+        return [current_result], True
 
     def visitRestrictions(
         self, ctx: PrismQLParser.RestrictionsContext
@@ -1104,6 +1136,17 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         return WindowProcessor.merge_queries(all_groups, window_size)
 
+    @staticmethod
+    def _groups_by_boundary(
+        groups: list[MessageGroup], end: bool
+    ) -> dict[MessageId, list[MessageGroup]]:
+        """Index groups by their boundary message: last (max) or first (min)."""
+        bounds: dict[MessageId, list[MessageGroup]] = {}
+        for group in groups:
+            boundary = max(group) if end else min(group)
+            bounds.setdefault(boundary, []).append(group)
+        return bounds
+
     def _merge_subqueries_positional(
         self,
         lhs_result: QueryResult,
@@ -1114,6 +1157,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
         """
         Merge two subquery results using a positional operator.
 
+        Operates on whole groups: group A is FOLLOWED_BY group B when every
+        message of A precedes every message of B and the positional distance
+        from A's last message to B's first is within the window. Greedy
+        closest-match per LHS group, mirroring the restriction-level
+        sequential semantics. Matched groups are concatenated chronologically.
+
         Args:
             lhs_result: Result from the left subquery
             rhs_result: Result from the right subquery
@@ -1123,48 +1172,63 @@ class PrismQLVisitor(BasePrismQLVisitor):
         Returns:
             Merged query result with groups that satisfy the positional constraint
         """
-        # Flatten subquery results into sets of message IDs
-        lhs_messages = set()
-        for group in lhs_result:
-            lhs_messages.update(group)
+        lhs_groups = [group for group in lhs_result if group]
+        rhs_groups = [group for group in rhs_result if group]
+        op = operator_ctx.getText().upper().replace("_", "")
 
-        rhs_messages = set()
-        for group in rhs_result:
-            rhs_messages.update(group)
+        if op in ("FOLLOWEDBY", "NOTFOLLOWEDBY"):
+            # Constraint runs forward from each LHS group's end to an RHS
+            # group's start.
+            lhs_bounds = self._groups_by_boundary(lhs_groups, end=True)
+            rhs_bounds = self._groups_by_boundary(rhs_groups, end=False)
+        elif op in ("PRECEDEDBY", "NOTPRECEDEDBY"):
+            # Constraint runs backward from each LHS group's start to an RHS
+            # group's end.
+            lhs_bounds = self._groups_by_boundary(lhs_groups, end=False)
+            rhs_bounds = self._groups_by_boundary(rhs_groups, end=True)
+        else:
+            raise ValueError(f"Unknown positional operator: {operator_ctx.getText()}")
 
-        # Determine the operator type and apply it
-        operator_text = operator_ctx.getText().upper()
+        lhs_ids = set(lhs_bounds)
+        rhs_ids = set(rhs_bounds)
 
-        if "FOLLOWEDBY" in operator_text or "FOLLOWED_BY" in operator_text:
-            # LHS messages that are followed by RHS messages
-            matching_lhs = self._apply_followed_by(lhs_messages, rhs_messages, window)
-            # Find matching pairs
-            return self._create_sequential_pairs(
-                matching_lhs, rhs_messages, window, forward=True
+        if op == "FOLLOWEDBY":
+            matching_lhs = self._apply_followed_by(lhs_ids, rhs_ids, window)
+            pairs = self._create_sequential_pairs(
+                matching_lhs, rhs_ids, window, forward=True
             )
-        if "PRECEDEDBY" in operator_text or "PRECEDED_BY" in operator_text:
-            # LHS messages that are preceded by RHS messages
-            matching_lhs = self._apply_preceded_by(lhs_messages, rhs_messages, window)
-            # Find matching pairs
-            return self._create_sequential_pairs(
-                matching_lhs, rhs_messages, window, forward=False
+            return [
+                sorted(a_group) + sorted(b_group)
+                for a_end, b_start in pairs
+                for a_group in lhs_bounds[a_end]
+                for b_group in rhs_bounds[b_start]
+            ]
+        if op == "PRECEDEDBY":
+            matching_lhs = self._apply_preceded_by(lhs_ids, rhs_ids, window)
+            # Pairs come back chronological: [rhs_end, lhs_start]
+            pairs = self._create_sequential_pairs(
+                matching_lhs, rhs_ids, window, forward=False
             )
-        if "NOTFOLLOWEDBY" in operator_text or "NOT_FOLLOWED_BY" in operator_text:
-            # LHS messages that are NOT followed by RHS messages
-            matching_lhs = self._apply_not_followed_by(
-                lhs_messages, rhs_messages, window
-            )
-            # Return just the matching LHS messages as single-element groups
-            return [[msg] for msg in sorted(matching_lhs)]
-        if "NOTPRECEDEDBY" in operator_text or "NOT_PRECEDED_BY" in operator_text:
-            # LHS messages that are NOT preceded by RHS messages
-            matching_lhs = self._apply_not_preceded_by(
-                lhs_messages, rhs_messages, window
-            )
-            # Return just the matching LHS messages as single-element groups
-            return [[msg] for msg in sorted(matching_lhs)]
-
-        raise ValueError(f"Unknown positional operator: {operator_text}")
+            return [
+                sorted(b_group) + sorted(a_group)
+                for b_end, a_start in pairs
+                for b_group in rhs_bounds[b_end]
+                for a_group in lhs_bounds[a_start]
+            ]
+        if op == "NOTFOLLOWEDBY":
+            surviving = self._apply_not_followed_by(lhs_ids, rhs_ids, window)
+            return [
+                sorted(group)
+                for boundary in sorted(surviving)
+                for group in lhs_bounds[boundary]
+            ]
+        # NOTPRECEDEDBY
+        surviving = self._apply_not_preceded_by(lhs_ids, rhs_ids, window)
+        return [
+            sorted(group)
+            for boundary in sorted(surviving)
+            for group in lhs_bounds[boundary]
+        ]
 
     def _evaluate_partial_sequence(
         self,
