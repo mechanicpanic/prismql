@@ -66,6 +66,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # Variable tracking for pattern matching
         self.variable_constraints: list[VariableConstraint] = []
         self.current_restriction_position = 0
+        # Per-leg constraint buckets for the sequential layer, in
+        # chronological group order (FOLLOWED_BY appends, PRECEDED_BY
+        # prepends). Rewritten into positions by visitRestrictions.
+        self._seq_leg_constraints: list[list[VariableConstraint]] = []
 
         # Pattern naming for result labeling
         self.pattern_names: list[Optional[str]] = []
@@ -112,6 +116,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         self.variable_constraints = []
         self.current_restriction_position = 0
         self.pattern_names = []
+        self._seq_leg_constraints = []
 
         # Step 1: Extract window size if specified (position-based or time-based)
         window_size = self.DEFAULT_WINDOW_SIZE
@@ -171,6 +176,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
         elif ctx.query_seq():
             # Multiple subqueries in sequence
             subquery_results, is_positional = self.visitQuery_seq(ctx.query_seq())
+            # Each subquery validated its own variables inside its visitBody;
+            # whatever the last one left behind must not be re-applied to the
+            # merged groups (positions would point at the wrong messages).
+            self.variable_constraints = []
             # Unwrap NamedQueryResult to plain QueryResult for merging
             unwrapped_results: list[
                 Union[QueryResult, AggregateResult, GroupedResult]
@@ -422,6 +431,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
             # Track how many constraints exist before visiting this restriction
             num_constraints_before = len(self.variable_constraints)
+            self._seq_leg_constraints = []
 
             # Process the underlying restriction
             result = self.visitRestriction(named_restriction_ctx.restriction())
@@ -442,6 +452,25 @@ class PrismQLVisitor(BasePrismQLVisitor):
             if isinstance(result, list):
                 # Result is already a list of message groups (sequences)
                 has_sequential_operator = True
+                if new_constraints:
+                    # Constraints inside a chain were all recorded at the
+                    # same position; map each leg's bucket to the leg's
+                    # chronological index in the group instead. This is only
+                    # well-defined when the chain IS the whole result —
+                    # window-merging or permuting it would scramble the
+                    # positions the validator relies on.
+                    if len(ctx.named_restriction()) > 1 or min_count > 1 or ctx.Unr():
+                        raise PrismQLRuntimeError(
+                            "Pattern variables inside a FOLLOWED_BY/"
+                            "PRECEDED_BY chain require the chain to be the "
+                            "entire SELECT body — they cannot be combined "
+                            "with other comma-separated restrictions, "
+                            "quantifiers, or UNR. Run the chain as its own "
+                            "query."
+                        )
+                    for leg_index, leg in enumerate(self._seq_leg_constraints):
+                        for constraint in leg:
+                            constraint.position = leg_index
                 # For quantifiers on sequences, we need enough groups
                 if min_count > 1:
                     # We need at least min_count groups
@@ -530,8 +559,15 @@ class PrismQLVisitor(BasePrismQLVisitor):
         ):
             return self.visitBool_restriction(ctx.bool_restriction())
 
+        n_before_lhs = len(self.variable_constraints)
         lhs = self.visitRestriction(ctx.restriction())
+        if not self._seq_leg_constraints:
+            # Innermost leg of the chain: the lhs visit above fell through to
+            # the boolean layer, so everything it recorded is one leg bucket.
+            self._seq_leg_constraints = [list(self.variable_constraints[n_before_lhs:])]
+        n_before_rhs = len(self.variable_constraints)
         rhs = self.visitBool_restriction(ctx.bool_restriction())
+        rhs_leg = list(self.variable_constraints[n_before_rhs:])
         window = self._extract_window_constraint(ctx)
 
         # The right operand comes from the boolean layer; a list or
@@ -543,10 +579,24 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 "right-hand side, not nested sequences"
             )
 
+        # Track each leg's variable constraints in chronological group order:
+        # FOLLOWED_BY appends its rhs message to the group, PRECEDED_BY
+        # prepends it. visitRestrictions rewrites constraint positions from
+        # these buckets once the chain is complete.
         if ctx.FollowedBy():
+            self._seq_leg_constraints.append(rhs_leg)
             return self._apply_sequential_link(lhs, rhs, window, "FOLLOWED_BY")
         if ctx.PrecededBy():
+            self._seq_leg_constraints.insert(0, rhs_leg)
             return self._apply_sequential_link(lhs, rhs, window, "PRECEDED_BY")
+        if rhs_leg:
+            # The excluded message never appears in the result group, so a
+            # variable on it has nothing to bind to.
+            raise PrismQLRuntimeError(
+                "Pattern variables are not supported on the right-hand side "
+                "of NOT_FOLLOWED_BY/NOT_PRECEDED_BY — the excluded message "
+                "is not part of the result group. Use a concrete condition."
+            )
         if ctx.NotFollowedBy():
             return self._apply_negative_link(lhs, rhs, window, "NOT_FOLLOWED_BY")
         return self._apply_negative_link(lhs, rhs, window, "NOT_PRECEDED_BY")

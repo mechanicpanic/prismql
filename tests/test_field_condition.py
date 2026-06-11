@@ -90,12 +90,14 @@ def test_field_in_sequential_leg(engine):
 
 
 def test_field_with_variable_matches_from(engine):
-    # Variables in sequential legs are NOT validated yet (pre-existing
-    # engine limitation, same for from()); pin that field() behaves
-    # identically to from() so they stay aliases.
+    # Variables in sequential legs are validated (same-value enforced);
+    # pin that field() behaves identically to from() so they stay aliases.
     field_q = "SELECT field(user, $u) FOLLOWED_BY field(user, $u) INWINDOW 3"
     from_q = "SELECT from($u) FOLLOWED_BY from($u) INWINDOW 3"
     assert engine.execute(field_q) == engine.execute(from_q)
+    for group in engine.execute(field_q):
+        users = {DOCS[mid - 1]["user"] for mid in group}
+        assert len(users) == 1, f"mixed users in {group}"
 
 
 def test_field_with_variable_comma_form(engine):

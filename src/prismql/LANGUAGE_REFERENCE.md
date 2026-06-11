@@ -148,6 +148,16 @@ SELECT from($speaker) FOLLOWED_BY from($speaker) INWINDOW 2  -- User followed by
 
 **Variable names**: `$user`, `$speaker`, `$person`, `$author` (any identifier starting with `$`)
 
+**Variables in sequential chains**: same-value constraints are enforced
+across FOLLOWED_BY/PRECEDED_BY legs (each leg binds the variable for its
+message in the matched group). Two restrictions apply:
+- The chain must be the entire SELECT body — chain variables cannot be
+  combined with other comma-separated restrictions, quantifiers, or UNR
+  (runtime error).
+- Variables on the right-hand side of `NOT_FOLLOWED_BY` / `NOT_PRECEDED_BY`
+  are rejected: the excluded message is not part of the result group, so
+  there is nothing to bind them to.
+
 ### 6. Named Groups
 
 ```prismql
