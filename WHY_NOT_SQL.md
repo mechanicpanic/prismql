@@ -16,7 +16,7 @@ PrismQL is to SQL what **regex is to string.find()**. Technically equivalent, bu
 
 ### PrismQL:
 ```prismql
-SELECT from(alice), from(bob), from(alice) INWIN 5
+SELECT from(alice), from(bob), from(alice) INWINDOW 5
 ```
 *"Find alice → bob → alice patterns where all 3 messages are within 5 messages of each other"*
 
@@ -65,11 +65,13 @@ PrismQL's results **preserve the sequential relationship** between messages - cr
 
 ### PrismQL:
 ```prismql
-SELECT IS_QUESTION(), MENTIONS_PLACE(Paris) INWIN 3
+SELECT is_question(), mentions_place() INWINDOW 3
 ```
-*"Find questions followed by mentions of Paris within 3 messages"*
+*"Find questions near location mentions within 3 messages"*
 
-NLP processing happens **during query execution** with spaCy integration. No precomputation needed.
+NLP features are computed once at ingestion (spaCy, an LLM, human labels —
+any annotator) and stored as indexes; queries treat them as first-class
+vocabulary (`is_question()`, `mentions_place()`, `has_feature(...)`).
 
 ### SQL:
 ```sql
@@ -97,7 +99,9 @@ WHERE q.is_question = true
 
 ### PrismQL:
 ```prismql
-SELECT (from(alice)); (from(bob) INWIN 3); (IS_QUESTION() INWIN 2)
+SELECT (SELECT from(alice))
+    FOLLOWED_BY (SELECT from(bob)) INWINDOW 3
+    FOLLOWED_BY (SELECT is_question()) INWINDOW 2
 ```
 *"Find alice, then bob within 3 messages of alice, then questions within 2 of bob"*
 
@@ -133,14 +137,17 @@ SELECT * FROM stage3;
 
 ### PrismQL:
 ```prismql
-SELECT from(alice), from(bob) WITHIN 5 minutes
+SELECT from(alice), from(bob) DURING 5 minutes
 ```
-*"Find alice/bob exchanges within 5 minutes of conversation time"*
+*"Find alice/bob exchanges within 5 minutes of each other"*
 
-This understands **conversation flow** - not just timestamp differences. The WITHIN operator can be configured to understand:
-- **Message density** (5 minutes of active chat ≠ 5 clock minutes)
-- **Session boundaries** (don't cross conversation breaks)
-- **Thread structures** (stay within same thread)
+Two window vocabularies, one query language:
+- **INWINDOW n** — conversation distance (message positions), independent
+  of how fast people type
+- **DURING n unit** — wall-clock time between timestamps
+
+Both compose with the same operators, so switching between "within 5
+messages" and "within 5 minutes" is a one-word change.
 
 ### SQL:
 ```sql
@@ -152,10 +159,10 @@ JOIN messages b ON b.user = 'bob'
 WHERE a.user = 'alice'
 ```
 
-**The problem:** SQL treats time as pure chronology. It doesn't understand:
-- When a conversation "pauses" (e.g., overnight break)
-- Thread boundaries in multi-channel systems
-- Conversation density vs. clock time
+**The problem:** SQL only has chronology. Expressing "near in the
+conversation" (positional distance) requires a different join than "near
+in time" — and combining both, or switching between them, means rewriting
+the query. In PrismQL it's the same pattern with a different window word.
 
 ---
 
@@ -166,14 +173,13 @@ PrismQL provides abstractions specifically for conversation mining research:
 ### Finding turn-taking patterns:
 ```prismql
 -- Find rapid back-and-forth exchanges
-SELECT from(alice), from(bob), from(alice), from(bob) INWIN 4
-WITHIN 2 minutes
+SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(alice) FOLLOWED_BY from(bob) DURING 2 minutes
 ```
 
 ### Discourse analysis:
 ```prismql
 -- Questions that lead to location mentions
-SELECT IS_QUESTION(), MENTIONS_PLACE() INWIN 5
+SELECT IS_QUESTION(), MENTIONS_PLACE() INWINDOW 5
 GROUP BY DAY(timestamp)
 AGGREGATE count()
 ```
@@ -181,7 +187,7 @@ AGGREGATE count()
 ### Temporal conversation trends:
 ```prismql
 -- Daily patterns of problem-solution exchanges
-SELECT CONTAINS(problem), CONTAINS(solution) INWIN 10
+SELECT CONTAINS(problem), CONTAINS(solution) INWINDOW 10
 BEFORE("2024-06-01")
 GROUP BY WEEK(timestamp)
 AGGREGATE count()
@@ -213,13 +219,12 @@ SQL JOINs don't think this way - they think in rows and columns, not conversatio
 ### PrismQL:
 ```prismql
 SELECT
-  CONTAINS(bug),
-  MENTIONS_PLACE(),
-  CONTAINS(investigate),
-  CONTAINS(fixed)
-INWIN 10
-WITHIN 2 hours
-GROUP BY DAY(timestamp)
+  contains(bug),
+  mentions_place(),
+  contains(investigate),
+  contains(fixed)
+DURING 2 hours
+GROUP BY day(timestamp)
 AGGREGATE count()
 ```
 

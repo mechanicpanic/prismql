@@ -45,27 +45,27 @@ SELECT (from(alice) OR from(bob)) AND is_question()  -- Grouping
 
 **Precedence**: Parentheses > NOT > AND > OR
 
-### Window Constraints (INWIN) - UNORDERED Co-occurrence
+### Window Constraints (INWINDOW) - UNORDERED Co-occurrence
 
 Find co-occurring patterns within a message window.
 
-**Key characteristic: INWIN is UNORDERED** - the restrictions can match in any order within the window.
+**Key characteristic: INWINDOW is UNORDERED** - the restrictions can match in any order within the window.
 
 ```prismql
 -- Find questions and answers within 5 messages (any order)
-SELECT is_question(), contains(answers) INWIN 5
+SELECT is_question(), contains(answers) INWINDOW 5
 
 -- Multiple restrictions within window (any order)
-SELECT from(customer), from(support), contains(solution) INWIN 10
+SELECT from(customer), from(support), contains(solution) INWINDOW 10
 
 -- Same query - order doesn't matter:
-SELECT from(support), from(customer), contains(solution) INWIN 10
+SELECT from(support), from(customer), contains(solution) INWINDOW 10
 ```
 
 **How it works:**
 - Finds all combinations where the restrictions appear within the specified window
 - Order of restrictions in the query does NOT affect results
-- `SELECT A, B INWIN 5` is identical to `SELECT B, A INWIN 5`
+- `SELECT A, B INWINDOW 5` is identical to `SELECT B, A INWINDOW 5`
 
 ### Positional Operators - ORDERED Sequences
 
@@ -73,22 +73,22 @@ Sequential pattern matching with strict ordering.
 
 ```prismql
 -- Positive lookahead: alice followed by bob
-SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
+SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3
 
 -- Positive lookbehind: bob preceded by alice
-SELECT from(bob) PRECEDED_BY from(alice) WITHIN 2
+SELECT from(bob) PRECEDED_BY from(alice) INWINDOW 2
 
 -- Negative lookahead: alice NOT followed by bob
-SELECT from(alice) NOT_FOLLOWED_BY from(bob) WITHIN 5
+SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 5
 
 -- Negative lookbehind: bob NOT preceded by charlie
-SELECT from(bob) NOT_PRECEDED_BY from(charlie) WITHIN 3
+SELECT from(bob) NOT_PRECEDED_BY from(charlie) INWINDOW 3
 ```
 
 **Key characteristic: ORDERED** - the first pattern must appear before/after the second.
 
-**Difference from INWIN:**
-- `INWIN`: Co-occurrence (unordered) - messages can appear in any order
+**Difference from INWINDOW:**
+- `INWINDOW`: Co-occurrence (unordered) - messages can appear in any order
 - `FOLLOWED_BY/PRECEDED_BY`: Sequential (ordered) - strict temporal ordering required
 
 ### Quantifiers
@@ -116,10 +116,10 @@ Match messages with the same field value:
 
 ```prismql
 -- Find same user asking and answering
-SELECT from($user), from($user) INWIN 5
+SELECT from($user), from($user) INWINDOW 5
 
 -- Any user followed by themselves
-SELECT from($speaker) FOLLOWED_BY from($speaker) WITHIN 2
+SELECT from($speaker) FOLLOWED_BY from($speaker) INWINDOW 2
 ```
 
 ### Token vs Word vs Phrase Matching
@@ -132,13 +132,13 @@ SELECT contains(tech_terms)
 -- "C++" → matches "c" only (loses punctuation)
 -- Fast, good for general text
 
--- Token matching: Preserves punctuation (NEW!)
+-- Token matching: Preserves punctuation
 SELECT contains_tokens(tech_terms)
 -- "C++" → matches "c++" exactly
 -- "user@example.com" → kept as single token
 -- Good for: technical discussions, emails, URLs, programming terms
 
--- Phrase matching: Multi-word expressions (NEW!)
+-- Phrase matching: Multi-word expressions
 SELECT contains_phrase("thank you")
 SELECT contains_phrase("out of memory")
 -- O(1) lookup via n-gram index (super fast!)
@@ -175,14 +175,30 @@ engine = PrismQLEngine(backend)
 result = engine.execute('SELECT contains_phrase("thank you")')
 ```
 
-### Temporal Operators
+### Temporal Windows (DURING) - Time-Based Co-occurrence
 
-Filter by time:
+`INWINDOW` counts message positions; `DURING` measures actual time between
+timestamps. Use `DURING` when "within an hour" matters more than "within 5
+messages":
 
 ```prismql
-SELECT from(alice) AFTER "2024-01-01"
-SELECT from(alice) BEFORE "2024-12-31"
-SELECT from(alice) BETWEEN "2024-01-01" AND "2024-06-30"
+SELECT from(alice), from(bob) DURING 1 hour
+SELECT from(alice) FOLLOWED_BY from(bob) DURING 30 minutes
+SELECT contains(problems) FOLLOWED_BY contains(solutions) DURING 2 days
+```
+
+Units: `seconds`, `minutes`, `hours`, `days`, `weeks`. Requires documents
+to have a timestamp field (default `timestamp`, configurable).
+
+### Temporal Filters (BEFORE / AFTER / BETWEEN)
+
+Filter by absolute or relative time — note the parentheses:
+
+```prismql
+SELECT from(alice) AFTER("2024-01-01")
+SELECT from(alice) BEFORE("2024-12-31")
+SELECT from(alice) BETWEEN("2024-01-01", "2024-06-30")
+SELECT from(alice) AFTER(2 hours AGO)
 ```
 
 ### Aggregations
@@ -194,14 +210,15 @@ Analyze query results:
 SELECT from(alice) AGGREGATE count()
 
 -- Count pattern occurrences
-SELECT from($user), from($user) INWIN 3 AGGREGATE count()
+SELECT from($user), from($user) INWINDOW 3 AGGREGATE count()
 
--- IMPORTANT: Use count() with parentheses, not SQL-style GROUP BY
+-- Group, then aggregate
+SELECT contains(problems) GROUP BY user AGGREGATE count()
 ```
 
-**Note:** PrismQL aggregation syntax is different from SQL:
-- ✅ Correct: `AGGREGATE count()`
-- ❌ Wrong: `GROUP BY user AGGREGATE count` (SQL syntax)
+**Note:** aggregation functions always take parentheses:
+- ✅ Correct: `AGGREGATE count()` / `GROUP BY user AGGREGATE count()`
+- ❌ Wrong: `GROUP BY user AGGREGATE count` (missing parentheses)
 
 ### Subqueries (Nested Patterns)
 
@@ -210,14 +227,14 @@ Execute independent queries and merge their results within a window.
 **Syntax:**
 ```prismql
 SELECT
-    (SELECT restriction1, restriction2 INWIN N1) ;
-    (SELECT restriction3, restriction4 INWIN N2)
-    INWIN N3
+    (SELECT restriction1, restriction2 INWINDOW N1) ;
+    (SELECT restriction3, restriction4 INWINDOW N2)
+    INWINDOW N3
 ```
 
 **How it works:**
 - Each `(SELECT ...)` executes independently
-- Results are merged based on the outer `INWIN` or `FOLLOWED_BY` window
+- Results are merged based on the outer `INWINDOW` or `FOLLOWED_BY` window
 - Semicolons separate subqueries
 - **Preserves grouping semantics** - results from same subquery stay together
 
@@ -227,30 +244,30 @@ SELECT
 -- Find escalated support threads
 -- (customer reports problem, then support provides solution)
 SELECT
-    (SELECT from(customer), contains(problems) INWIN 3) ;
-    (SELECT from(support), contains(solutions) INWIN 3)
-    INWIN 15
+    (SELECT from(customer), contains(problems) INWINDOW 3) ;
+    (SELECT from(support), contains(solutions) INWINDOW 3)
+    INWINDOW 15
 
 -- Find question→answer→acknowledgment sequences
 SELECT
-    (SELECT is_question(), from(user1) INWIN 2) ;
-    (SELECT from(user2), contains(answers) INWIN 2) ;
-    (SELECT from(user1), contains(thanks) INWIN 2)
-    INWIN 10
+    (SELECT is_question(), from(user1) INWINDOW 2) ;
+    (SELECT from(user2), contains(answers) INWINDOW 2) ;
+    (SELECT from(user1), contains(thanks) INWINDOW 2)
+    INWINDOW 10
 
 -- Complex pattern: problem escalation with manager involvement
 SELECT
-    (SELECT contains(problems), from(customer) INWIN 3) ;
-    (SELECT contains(escalation), from(customer) INWIN 2) ;
-    (SELECT from(manager) INWIN 2)
-    INWIN 20
+    (SELECT contains(problems), from(customer) INWINDOW 3) ;
+    (SELECT contains(escalation), from(customer) INWINDOW 2) ;
+    (SELECT from(manager) INWINDOW 2)
+    INWINDOW 20
 
 -- Sequential subqueries: problem THEN solution (ordered)
 SELECT
-    (SELECT from(customer), contains(problems) INWIN 3)
+    (SELECT from(customer), contains(problems) INWINDOW 3)
     FOLLOWED_BY
-    (SELECT from(support), contains(solutions) INWIN 3)
-    WITHIN 10
+    (SELECT from(support), contains(solutions) INWINDOW 3)
+    INWINDOW 10
 ```
 
 **When to use subqueries:**
@@ -261,18 +278,18 @@ SELECT
 - ✓ When grouping semantics matter (alice+bob as one group, charlie separate)
 
 **When NOT to use subqueries:**
-- ✗ Simple co-occurrence patterns (use `SELECT A, B INWIN N` instead)
+- ✗ Simple co-occurrence patterns (use `SELECT A, B INWINDOW N` instead)
 - ✗ Single-stage patterns (simpler syntax available)
 
 **⚠️ CRITICAL: Do NOT flatten subquery structure**
 
 ```prismql
 -- ✅ CORRECT: Preserves grouping (alice+bob together, charlie separate)
-SELECT (SELECT from(alice), from(bob) INWIN 3) ;
-       (SELECT from(charlie) INWIN 2) INWIN 8
+SELECT (SELECT from(alice), from(bob) INWINDOW 3) ;
+       (SELECT from(charlie) INWINDOW 2) INWINDOW 8
 
 -- ❌ WRONG: Loses grouping semantics (all three mixed)
-SELECT from(alice), from(bob), from(charlie) INWIN 8
+SELECT from(alice), from(bob), from(charlie) INWINDOW 8
 ```
 
 **Why this matters:**
@@ -312,13 +329,13 @@ engine = PrismQLEngine(
 
 # Find problem→solution patterns
 result = engine.execute("""
-    SELECT contains(problems), contains(solutions) INWIN 10
+    SELECT contains(problems), contains(solutions) INWINDOW 10
 """)
 
 # Find unanswered escalations
 result = engine.execute("""
     SELECT from(customer) AND contains(escalation)
-           NOT_FOLLOWED_BY from(support) WITHIN 5
+           NOT_FOLLOWED_BY from(support) INWINDOW 5
 """)
 ```
 
@@ -343,14 +360,14 @@ engine = PrismQLEngine(
 result = engine.execute("""
     SELECT from(user) AND contains(reasoning),
            from(assistant) AND contains(reasoning)
-    INWIN 3
+    INWINDOW 3
 """)
 
 # Find self-corrections
 result = engine.execute("""
     SELECT from(assistant) FOLLOWED_BY
            from(assistant) AND contains(corrections)
-    WITHIN 2
+    INWINDOW 2
 """)
 ```
 
@@ -373,8 +390,8 @@ indexes = IndexBuilder.from_message_annotations(
 
 engine = PrismQLEngine(backend, precomputed_indexes=indexes)
 
-# Query by annotation
-result = engine.execute("SELECT intent_question()")
+# Query by annotation (custom features use has_feature, not new keywords)
+result = engine.execute("SELECT has_feature(intent_question)")
 ```
 
 ### Example 4: Complex Pattern - Support Quality
@@ -386,7 +403,7 @@ SELECT
     from(customer) AND contains(problems) AS "initial_problem",
     from(support) AND contains(solutions) AS "support_response",
     from(customer) AND contains(satisfaction) AS "customer_feedback"
-INWIN 20
+INWINDOW 20
 """
 
 result = engine.execute(query)
@@ -400,18 +417,22 @@ for group in result:
 ### Example 5: Turn-Taking Analysis
 
 ```python
-# Find conversations dominated by one speaker
+# Find runs dominated by one speaker (5 alice messages within 10 positions)
 query = """
-SELECT from(alice){5,}
-       NOT_PRECEDED_BY from(bob) WITHIN 10
-       NOT_FOLLOWED_BY from(bob) WITHIN 10
+SELECT from(alice){5} INWINDOW 10
+"""
+
+# Find alice messages that bob never answers
+# (negative lookarounds carry their own window and cannot be chained)
+query = """
+SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 10
 """
 
 # Find rapid back-and-forth exchanges
 query = """
-SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 1
-       FOLLOWED_BY from(alice) WITHIN 1
-       FOLLOWED_BY from(bob) WITHIN 1
+SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 1
+       FOLLOWED_BY from(alice) INWINDOW 1
+       FOLLOWED_BY from(bob) INWINDOW 1
 """
 ```
 
@@ -452,7 +473,7 @@ engine = PrismQLEngine(backend)
 
 ```python
 # Use PrismQL for patterns, SQL for aggregations
-pattern_result = engine.execute("SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3")
+pattern_result = engine.execute("SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3")
 ids = [msg_id for group in pattern_result for msg_id in group]
 
 # Then use SQL for detailed analysis
@@ -470,10 +491,10 @@ stats = backend.execute_query(f"""
 
 ```prismql
 -- ❌ WRONG: SQL-style GROUP BY
-SELECT from($user), from($user) INWIN 3 GROUP BY user AGGREGATE count
+SELECT from($user), from($user) INWINDOW 3 GROUP BY user AGGREGATE count
 
 -- ✅ CORRECT: PrismQL uses count() with parentheses
-SELECT from($user), from($user) INWIN 3 AGGREGATE count()
+SELECT from($user), from($user) INWINDOW 3 AGGREGATE count()
 ```
 
 ### ❌ Mistake 2: Flattening subquery structure
@@ -481,14 +502,14 @@ SELECT from($user), from($user) INWIN 3 AGGREGATE count()
 ```prismql
 -- ❌ WRONG: Loses subquery grouping
 SELECT from(customer) AND contains(problems),
-       from(support) AND contains(solutions) INWIN 10
+       from(support) AND contains(solutions) INWINDOW 10
 
 -- ✅ CORRECT: Preserves subquery structure
-SELECT (SELECT from(customer), contains(problems) INWIN 3) ;
-       (SELECT from(support), contains(solutions) INWIN 3) INWIN 10
+SELECT (SELECT from(customer), contains(problems) INWINDOW 3) ;
+       (SELECT from(support), contains(solutions) INWINDOW 3) INWINDOW 10
 ```
 
-**When subqueries are needed:** Multiple groups with internal co-occurrence (INWIN) that need to be related to each other.
+**When subqueries are needed:** Multiple groups with internal co-occurrence (INWINDOW) that need to be related to each other.
 
 ### ❌ Mistake 3: Pattern variables vs literals
 
@@ -511,7 +532,6 @@ SELECT from(alice) AND is_question()
 ## Limitations
 
 - **Not for general SQL**: PrismQL is specialized for conversation patterns
-- **Window semantics**: Position-based, not time-based (though AFTER/BEFORE exist)
 - **No joins**: Designed for single conversation sequences
 - **Text search**: Requires dictionary definitions (no arbitrary regex yet)
 
@@ -581,10 +601,10 @@ for attempt in range(max_attempts):
 
 ## Next Steps
 
-1. **Quick Start**: See `examples/quickstart.py`
-2. **Real Data**: Run `examples/download_real_data.py` for 47K messages
-3. **Advanced Patterns**: See `examples/fluent_syntax.py`
-4. **Production**: See `examples/postgres_annotation_platform.py`
+1. **Quick Start**: See `examples/basic/quickstart.py`
+2. **Operators**: See `examples/operators/` (fluent syntax, aggregation, temporal)
+3. **Advanced Patterns**: See `examples/patterns/` (variables, quantifiers, negative patterns)
+4. **Backends**: See `examples/backends/` and `examples/basic/configuration_examples.py`
 
 ## Syntax Cheat Sheet
 
@@ -602,13 +622,13 @@ SELECT from(alice) OR from(bob)
 SELECT NOT from(alice)
 
 -- Window co-occurrence
-SELECT from(alice), from(bob) INWIN 5
+SELECT from(alice), from(bob) INWINDOW 5
 
 -- Sequential patterns
-SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
+SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3
 
 -- Negation
-SELECT from(alice) NOT_FOLLOWED_BY from(bob) WITHIN 5
+SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 5
 
 -- Quantifiers
 SELECT from(alice){2,5}
@@ -617,20 +637,23 @@ SELECT from(alice){2,5}
 SELECT from(alice) AS "alice_messages"
 
 -- Variables
-SELECT from($user), from($user) INWIN 5
+SELECT from($user), from($user) INWINDOW 5
 
--- Temporal
-SELECT from(alice) AFTER "2024-01-01"
+-- Temporal window (time-based co-occurrence)
+SELECT from(alice), from(bob) DURING 1 hour
+
+-- Temporal filter
+SELECT from(alice) AFTER("2024-01-01")
 
 -- Aggregation (use parentheses!)
-SELECT from($user), from($user) INWIN 3 AGGREGATE count()
+SELECT from($user), from($user) INWINDOW 3 AGGREGATE count()
 
 -- Phrase patterns
 SELECT contains_phrase("out of memory") AND from(user)
-SELECT contains_phrase("thank you") FOLLOWED_BY from(support) WITHIN 3
+SELECT contains_phrase("thank you") FOLLOWED_BY from(support) INWINDOW 3
 
 -- Subqueries (preserve grouping!)
-SELECT (SELECT from(alice), from(bob) INWIN 3) ; (SELECT from(charlie)) INWIN 8
+SELECT (SELECT from(alice), from(bob) INWINDOW 3) ; (SELECT from(charlie)) INWINDOW 8
 ```
 
 ---

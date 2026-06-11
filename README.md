@@ -97,7 +97,7 @@ results = engine.execute("SELECT from(customer1) AND is_question()")
 print(results)  # [[5]]
 
 # Find question-answer pairs within 2 messages of each other
-results = engine.execute("SELECT is_question(), from(support) INWIN 2")
+results = engine.execute("SELECT is_question(), from(support) INWINDOW 2")
 print(results)  # [[2, 4]]
 ```
 
@@ -105,7 +105,7 @@ print(results)  # [[2, 4]]
 
 ### Basic Structure
 ```
-SELECT <conditions> [INWIN <window_size>]
+SELECT <conditions> [INWINDOW <window_size>]
 ```
 
 ### Conditions
@@ -125,7 +125,7 @@ SELECT <conditions> [INWIN <window_size>]
 
 ### Boolean Operators
 
-```sql
+```prismql
 -- AND operator (fluent syntax)
 SELECT from(alice) AND is_question()
 
@@ -141,35 +141,35 @@ SELECT (from(alice) OR from(bob)) AND is_question()
 
 ### Window Constraints
 
-The `INWIN` clause groups messages that appear within N positions of each other:
+The `INWINDOW` clause groups messages that appear within N positions of each other:
 
-```sql
+```prismql
 -- Find questions followed by answers within 5 messages (fluent syntax)
-SELECT is_question(), contains(answers) INWIN 5
+SELECT is_question(), contains(answers) INWINDOW 5
 ```
 
 ### Multiple Restrictions
 
 Comma-separated restrictions find combinations:
 
-```sql
+```prismql
 -- Find customer question + support response + resolution (fluent syntax)
 SELECT from(customer) AND is_question(),
        from(support),
        contains(resolved)
-       INWIN 10
+       INWINDOW 10
 ```
 
 ### Subqueries
 
 Parentheses create subqueries that are evaluated independently:
 
-```sql
+```prismql
 -- Complex multi-stage pattern (fluent syntax)
 SELECT
-  (SELECT from(customer), contains(problem) INWIN 3);
-  (SELECT from(support), contains(solution) INWIN 5)
-  INWIN 20
+  (SELECT from(customer), contains(problem) INWINDOW 3);
+  (SELECT from(support), contains(solution) INWINDOW 5)
+  INWINDOW 20
 ```
 
 ## Using Custom Backends
@@ -194,7 +194,7 @@ backend = OpenSearchBackend(client, index_name="chat-logs")
 engine = PrismQLEngine(search_backend=backend)
 
 # Execute queries
-results = engine.execute("SELECT contains(errors) INWIN 50")
+results = engine.execute("SELECT contains(errors) INWINDOW 50")
 ```
 
 ### Creating Custom Backends
@@ -234,7 +234,7 @@ engine.add_dictionary("problems", ["error", "broken", "failed", "issue"])
 
 # Use in queries
 results = engine.execute("""
-    SELECT contains(problems), contains(tech_terms) INWIN 10
+    SELECT contains(problems), contains(tech_terms) INWINDOW 10
 """)
 
 # List all dictionaries
@@ -259,7 +259,7 @@ engine = PrismQLEngine(
 
 # Now you can use NER-based conditions
 results = engine.execute("""
-    SELECT hasdate(), hasorganization() INWIN 5
+    SELECT hasdate(), hasorganization() INWINDOW 5
 """)
 ```
 
@@ -293,10 +293,10 @@ engine = PrismQLEngine(
 # Find escalation patterns
 escalation_query = """
 SELECT
-  (SELECT from(customer) AND contains(complaint_words) INWIN 3);
+  (SELECT from(customer) AND contains(complaint_words) INWINDOW 3);
   (SELECT from(customer) AND contains(frustration_words));
   (SELECT from(support) AND contains(escalation_words))
-  INWIN 20
+  INWINDOW 20
 """
 
 # Find successful resolutions
@@ -305,7 +305,7 @@ SELECT
   contains(problem_words),
   from(support) AND contains(solution_words),
   from(customer) AND contains(satisfaction_words)
-  INWIN 30
+  INWINDOW 30
 """
 ```
 
@@ -316,7 +316,7 @@ security_query = """
 SELECT
   contains(security_terms) AND (contains_link() OR contains(credentials)),
   is_question()
-  INWIN 10
+  INWINDOW 10
 """
 ```
 

@@ -28,7 +28,7 @@ from pygments.formatters import TerminalFormatter, HtmlFormatter
 from prismql.highlighting import PrismQLLexer
 
 query = """
-SELECT from(alice), contains(problems) INWIN 10
+SELECT from(alice), contains(problems) INWINDOW 10
 """
 
 # Terminal output with colors
@@ -45,7 +45,7 @@ Once PrismQL is installed, Pygments will automatically recognize PrismQL code bl
 **Markdown:**
 ````markdown
 ```prismql
-SELECT from(alice), contains(problems) INWIN 10
+SELECT from(alice), contains(problems) INWINDOW 10
 ```
 ````
 
@@ -53,7 +53,7 @@ SELECT from(alice), contains(problems) INWIN 10
 ```rst
 .. code-block:: prismql
 
-   SELECT from(alice), contains(problems) INWIN 10
+   SELECT from(alice), contains(problems) INWINDOW 10
 ```
 
 ### In Sphinx Documentation
@@ -78,7 +78,7 @@ Then use in your `.rst` files:
    SELECT
        from(customer),
        contains(issues)
-   INWIN 5
+   INWINDOW 5
 ```
 
 ### In Jupyter Notebooks
@@ -94,7 +94,7 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from prismql.highlighting import PrismQLLexer
 
-query = "SELECT from(alice), is_question() INWIN 3"
+query = "SELECT from(alice), is_question() INWINDOW 3"
 html = highlight(query, PrismQLLexer(), HtmlFormatter())
 HTML(html)
 ```
@@ -115,7 +115,7 @@ Then in your Markdown:
 
 ````markdown
 ```prismql
-SELECT from($user), from($user) INWIN 3
+SELECT from($user), from($user) INWINDOW 3
 ```
 ````
 
@@ -170,35 +170,35 @@ The lexer highlights:
 ### Basic Pattern Matching
 ```prismql
 -- Find questions from alice
-SELECT from(alice), is_question() INWIN 3
+SELECT from(alice), is_question() INWINDOW 3
 ```
 
 ### Pattern Variables
 ```prismql
 -- Same user posting consecutively
-SELECT from($user), from($user) INWIN 3
+SELECT from($user), from($user) INWINDOW 3
 ```
 
 ### Quantifiers
 ```prismql
 -- Alice posting exactly 3 messages
-SELECT from(alice){3} INWIN 10
+SELECT from(alice){3} INWINDOW 10
 ```
 
 ### Subqueries
 ```prismql
 SELECT
-    (SELECT from(customer), contains(problems) INWIN 3) ;
-    (SELECT from(support), contains(solutions) INWIN 3)
-INWIN 15
+    (SELECT from(customer), contains(problems) INWINDOW 3) ;
+    (SELECT from(support), contains(solutions) INWINDOW 3)
+INWINDOW 15
 ```
 
 ### Aggregation
 ```prismql
-SELECT from($user)
-GROUP BY $user
+SELECT contains(problems)
+GROUP BY user
 AGGREGATE count()
-ORDER BY $user DESC
+ORDER BY user DESC
 LIMIT 10
 ```
 
@@ -220,7 +220,7 @@ from pygments.formatters import Terminal256Formatter
 from pygments.styles import get_style_by_name
 from prismql.highlighting import PrismQLLexer
 
-query = "SELECT from(alice), contains(problems) INWIN 10"
+query = "SELECT from(alice), contains(problems) INWINDOW 10"
 
 # Try different themes
 for theme in ['monokai', 'solarized-dark', 'github-dark']:

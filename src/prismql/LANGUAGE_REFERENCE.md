@@ -7,7 +7,13 @@
 ### Query Structure
 
 ```
-SELECT <restrictions> [INWINDOW N] [AGGREGATE count()]
+SELECT <restrictions>
+    [INWINDOW N | DURING N <unit>]
+    [BEFORE(ts) | AFTER(ts) | BETWEEN(ts, ts)]
+    [GROUP BY field [, ...]]
+    [AGGREGATE func() [, ...]]
+    [ORDER BY field [ASC|DESC]]
+    [LIMIT N [OFFSET M]]
 ```
 
 ### Restrictions
@@ -170,9 +176,17 @@ SELECT from(alice) AS "alice_messages",
 ```prismql
 SELECT from(alice) AGGREGATE count()
 SELECT from($user), from($user) INWINDOW 3 AGGREGATE count()
+SELECT contains(problems) GROUP BY user AGGREGATE count()
+SELECT from(alice) GROUP BY day(timestamp) AGGREGATE count()
 ```
 
-**Important**: Use `count()` with parentheses, not SQL-style `GROUP BY`.
+Functions: `count()`, `count(DISTINCT field)`, `distinct(field)`,
+`sum(field)`, `avg(field)`, `min(field)`, `max(field)`.
+
+**Important**: aggregation functions always take parentheses —
+`AGGREGATE count()`, never `AGGREGATE count`. `GROUP BY` is supported,
+over plain fields and temporal units (`hour(ts)`, `day(ts)`, `week(ts)`,
+`month(ts)`, `year(ts)`).
 
 ### 8. Subqueries
 
@@ -373,10 +387,12 @@ SELECT from($user) AND is_question(),
 -- Rapid back-and-forth (chaining with a single trailing window)
 SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(alice) FOLLOWED_BY from(bob) INWINDOW 1
 
--- Monologue detection
-SELECT from(alice){5,}
-       NOT_PRECEDED_BY from(bob) INWINDOW 10
-       NOT_FOLLOWED_BY from(bob) INWINDOW 10
+-- Monologue detection (a run of one speaker)
+SELECT from(alice){5} INWINDOW 10
+
+-- Unanswered messages (negative lookarounds carry their own window
+-- and cannot be chained with other sequential operators)
+SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 10
 ```
 
 ## Grammar Rules
@@ -397,8 +413,12 @@ SELECT from(alice){5,}
 
 ### Window Semantics
 
-- **INWINDOW**: Positional distance = `abs(id1 - id2)` for numeric IDs
-- **DURING**: Temporal distance = `abs(timestamp1 - timestamp2) <= TIME`
+- **INWINDOW**: positional distance. Numeric IDs: `abs(id1 - id2)`.
+  String IDs: difference of positions in the sorted ID list.
+- **DURING** on comma-separated restrictions: the whole matched group must
+  span at most TIME (`max(ts) - min(ts) <= TIME`).
+- **DURING** on a sequential link (`A FOLLOWED_BY B DURING TIME`):
+  directional — B must occur *after* A and within TIME of it.
 - **No window**: All results from restriction (no proximity constraint)
 
 ## Syntax Decision Tree

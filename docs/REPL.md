@@ -191,7 +191,7 @@ Use in queries:
 
 ```prismql
 SELECT contains(greetings)
-SELECT contains(problems) FOLLOWED_BY contains(thanks) WITHIN 5
+SELECT contains(problems) FOLLOWED_BY contains(thanks) INWINDOW 5
 ```
 
 ## Query Examples
@@ -226,43 +226,43 @@ SELECT NOT from(alice)
 
 ```prismql
 -- Alice and bob appearing within 5 messages (any order)
-SELECT from(alice), from(bob) INWIN 5
+SELECT from(alice), from(bob) INWINDOW 5
 
 -- Greetings and questions together within 3 messages
-SELECT contains(greetings), is_question() INWIN 3
+SELECT contains(greetings), is_question() INWINDOW 3
 ```
 
 ### Sequential Queries (Ordered)
 
 ```prismql
 -- Alice followed by bob within 3 messages
-SELECT from(alice) FOLLOWED_BY from(bob) WITHIN 3
+SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3
 
 -- Question followed by support response
-SELECT is_question() FOLLOWED_BY from(support) WITHIN 5
+SELECT is_question() FOLLOWED_BY from(support) INWINDOW 5
 
 -- Customer NOT followed by support (unanswered)
-SELECT from(customer) NOT_FOLLOWED_BY from(support) WITHIN 10
+SELECT from(customer) NOT_FOLLOWED_BY from(support) INWINDOW 10
 ```
 
 ### Pattern Variables
 
 ```prismql
 -- Same user posting twice
-SELECT from($user), from($user) INWIN 3
+SELECT from($user), from($user) INWINDOW 3
 
 -- User asking, then bob responding, then same user following up
-SELECT from($user) FOLLOWED_BY from(bob) WITHIN 5 FOLLOWED_BY from($user) WITHIN 5
+SELECT from($user) FOLLOWED_BY from(bob) INWINDOW 5 FOLLOWED_BY from($user) INWINDOW 5
 ```
 
 ### Quantifiers
 
 ```prismql
 -- Alice posting exactly 3 times within 10 messages
-SELECT from(alice){3} INWIN 10
+SELECT from(alice){3} INWINDOW 10
 
--- User posting 3+ times consecutively
-SELECT from($user){3} FOLLOWED_BY NOT from($user) WITHIN 1
+-- Same user posting 3 times close together
+SELECT from($user){3} INWINDOW 5
 ```
 
 ### Aggregation
@@ -279,10 +279,10 @@ SELECT from($user) GROUP BY user AGGREGATE count()
 
 ```prismql
 -- Sequential subqueries
-SELECT (SELECT from(customer), contains(problems) INWIN 3) FOLLOWED_BY (SELECT from(support), contains(solutions) INWIN 3) WITHIN 10
+SELECT (SELECT from(customer), contains(problems) INWINDOW 3) FOLLOWED_BY (SELECT from(support), contains(solutions) INWINDOW 3) INWINDOW 10
 
 -- Unordered subqueries
-SELECT (SELECT from(alice), from(bob) INWIN 3) ; (SELECT from(charlie)) INWIN 8
+SELECT (SELECT from(alice), from(bob) INWINDOW 3) ; (SELECT from(charlie)) INWINDOW 8
 ```
 
 ## Result Format
@@ -290,7 +290,7 @@ SELECT (SELECT from(alice), from(bob) INWIN 3) ; (SELECT from(charlie)) INWIN 8
 ### Query Results
 
 ```
-prismql[0]> SELECT from(alice), from(bob) INWIN 5
+prismql[0]> SELECT from(alice), from(bob) INWINDOW 5
 
 Found 2 result(s):
 
@@ -303,7 +303,7 @@ Found 2 result(s):
 ### Named Results
 
 ```
-prismql[1]> SELECT from(alice) AS asker, from(bob) AS responder INWIN 3
+prismql[1]> SELECT from(alice) AS asker, from(bob) AS responder INWINDOW 3
 
 Found 1 result(s):
 
