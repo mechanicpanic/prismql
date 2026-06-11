@@ -120,13 +120,16 @@ source .venv/bin/activate
 PrismQL includes an optional high-performance Rust backend that provides **50-100x speedup** for window merge operations and FOLLOWED_BY queries.
 
 **Building and Installing:**
-```bash
-# Install maturin (Python build tool for Rust extensions)
-uv pip install maturin
 
-# Build and install the Rust module (from prismql-rust directory)
-uv run python -m maturin develop --release --manifest-path ../prismql-rust/Cargo.toml
+`uv sync` builds and installs it automatically — `prismql-rust` is a path
+dependency on `../prismql-rust` in the default `rust` dependency group
+(release wheel via maturin). After changing Rust sources, force a rebuild:
+
+```bash
+uv sync --reinstall-package prismql-rust
 ```
+
+On machines without the sibling checkout (e.g. CI): `uv sync --no-group rust`.
 
 **What gets accelerated:**
 - Window merge operations (`INWIN` clause): Uses `merge_histogram_pruned()` algorithm
