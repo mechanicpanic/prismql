@@ -40,7 +40,9 @@ including the full user_dictionaries dict inline. Must run as-is with
 <!-- Alternative to the inline loader: if this project runs prismql-server,
 replace the loader with a prismql.toml (backend, data path, dictionaries)
 and query via `curl -X POST localhost:{{port}}/evaluate`. Same dictionaries,
-warm engine, no per-query load cost. -->
+warm engine, no per-query load cost. Iterate on dictionaries via the
+request-scoped overlay — `"dictionaries": {"name": ["term", …]}` in the
+request body (that query only; persist stable ones into prismql.toml). -->
 
 ## Dictionaries
 
