@@ -173,3 +173,12 @@ class TestUnorderedSubqueriesUnchanged:
             "SELECT (SELECT from(alice)) ; (SELECT from(bob)) INWINDOW 2"
         )
         assert result == [[1, 2, 3]]
+
+
+def test_unr_flag_is_gone(engine):
+    # Macther-era UNR was dropped for 0.1.0 (paper semantics never matched
+    # the implementation; the windowing default that motivated it is gone).
+    from prismql.exceptions import PrismQLSyntaxError
+
+    with pytest.raises(PrismQLSyntaxError):
+        engine.execute("SELECT from(alice), from(bob) UNR")

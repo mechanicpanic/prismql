@@ -154,14 +154,27 @@ class TestAfterFiltering:
         assert 5 in message_ids
 
     def test_after_with_window(self, engine):
-        """Test AFTER combined with INWIN."""
+        """Test AFTER combined with INWINDOW.
+
+        Grammar order is window THEN temporal filter. The reversed order
+        used to parse anyway because the entry rule wasn't EOF-anchored —
+        the trailing INWINDOW was silently dropped.
+        """
         cutoff = BASE_TIME + timedelta(hours=1)
         result = engine.execute(
-            f'SELECT from(alice), from(bob) AFTER("{cutoff.isoformat()}") INWINDOW 3'
+            f'SELECT from(alice), from(bob) INWINDOW 3 AFTER("{cutoff.isoformat()}")'
         )
 
         # Should find pairs after the cutoff time
         assert isinstance(result, list)
+
+        from prismql.exceptions import PrismQLSyntaxError
+
+        with pytest.raises(PrismQLSyntaxError):
+            engine.execute(
+                f"SELECT from(alice), from(bob) "
+                f'AFTER("{cutoff.isoformat()}") INWINDOW 3'
+            )
 
     def test_after_with_aggregation(self, engine):
         """Test AFTER with SUM aggregation."""

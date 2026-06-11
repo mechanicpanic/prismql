@@ -1,6 +1,13 @@
 grammar PrismQL;
 
-// Entry point
+// Entry point: anchoring on EOF makes trailing garbage a syntax error
+// instead of silently ignored input ("SELECT a FOLLOWED from(b)" must not
+// quietly evaluate as "SELECT a").
+parse
+    :
+    query EOF
+    ;
+
 query
     :
     Select body
@@ -30,7 +37,7 @@ positional_op
 
 restrictions
     :
-    named_restriction (',' named_restriction)* Unr?
+    named_restriction (',' named_restriction)*
     ;
 
 named_restriction
@@ -188,7 +195,6 @@ InWindow : 'INWINDOW' | 'inwindow' | 'IN_WINDOW' | 'in_window' ;  // Unified pos
 InWin    : 'INWIN'    | 'inwin'   ;  // Deprecated: use INWINDOW instead
 During   : 'DURING'   | 'during'  ;  // Temporal window operator (time-based filtering)
 Within   : 'WITHIN'   | 'within'  ;  // Deprecated: use DURING for temporal, INWINDOW for positional
-Unr      : 'UNR'      | 'unr'     ;
 Not      : 'NOT'      | 'not'     ;
 And      : 'AND'      | 'and'     ;
 Or       : 'OR'       | 'or'      ;

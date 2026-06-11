@@ -30,7 +30,7 @@ WHERE a1.user = 'alice'
   AND a2.id > a1.id
 ```
 
-**The problem:** This SQL gets exponentially worse with more complex patterns. Add 2 more participants? Add UNR (unordered) constraints? You'll need CTEs, window functions, and self-joins that become unreadable.
+**The problem:** This SQL gets exponentially worse with more complex patterns. Add 2 more participants? Add unordered co-occurrence constraints? You'll need CTEs, window functions, and self-joins that become unreadable.
 
 PrismQL's pattern matching is specifically designed for sequential message flows, which is the fundamental structure of conversation data.
 

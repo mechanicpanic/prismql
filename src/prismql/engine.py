@@ -177,8 +177,9 @@ class PrismQLEngine:
             parser.removeErrorListeners()
             parser.addErrorListener(PrismQLErrorListener())
 
-            # Parse the query
-            tree = parser.query()
+            # Parse the query (EOF-anchored entry rule: trailing garbage is
+            # a syntax error, not silently ignored input)
+            tree = parser.parse().query()
 
             # Execute using visitor
             result = self.visitor.visit(tree)
@@ -219,8 +220,8 @@ class PrismQLEngine:
             parser.removeErrorListeners()
             parser.addErrorListener(PrismQLErrorListener())
 
-            # Just parse, don't execute
-            parser.query()
+            # Just parse, don't execute (EOF-anchored)
+            parser.parse()
             return True
 
         except PrismQLSyntaxError:

@@ -33,11 +33,15 @@ Initial public release.
 - **Pattern variables**: `$user`-style backreferences enforcing same-value
   constraints across positions, including across `FOLLOWED_BY`/`PRECEDED_BY`
   legs; ill-defined combinations (chain variables with comma restrictions,
-  quantifiers, UNR, or on a negative lookaround's right-hand side) fail
+  quantifiers, or on a negative lookaround's right-hand side) fail
   loudly instead of silently mismatching.
 - **Quantifiers**: regex-style `{n}`, `{n,}`, `{n,m}` on conditions.
 - **Named pattern groups**: `AS` keyword for labeling matched positions.
 - **Negative patterns**: `NOT` operator inside sequences.
+- The Macther-era `UNR` flag is not part of PrismQL: it was defined in the
+  2022 paper as "remove the match-order constraint" but implemented as a
+  Cartesian product, and the windowing default that motivated it no longer
+  exists. Unordered co-occurrence is expressed with comma + `INWINDOW`.
 - **Subqueries**: semicolon-separated unordered subqueries and positional
   subquery chains. Positional operators between subqueries act on whole
   groups (all of A before all of B, gap measured between group boundaries,

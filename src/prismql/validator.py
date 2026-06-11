@@ -190,7 +190,8 @@ class QueryValidator:
         parser.removeErrorListeners()
         parser.addErrorListener(PrismQLErrorListener())
 
-        return parser.query()
+        # EOF-anchored: trailing garbage is a syntax error
+        return parser.parse().query()
 
     def _check_semantics(self, query: str, tree: Any) -> list[ValidationIssue]:
         """Check semantic validity of the query."""

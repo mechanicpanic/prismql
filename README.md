@@ -160,15 +160,6 @@ SELECT from(customer) AND is_question(),
        INWIN 10
 ```
 
-### Unrelated Restrictions (UNR)
-
-The `UNR` flag generates all permutations instead of sliding windows:
-
-```sql
--- Find any combination of these conditions (fluent syntax)
-SELECT is_question(), contains_link(), mentions_date() UNR
-```
-
 ### Subqueries
 
 Parentheses create subqueries that are evaluated independently:

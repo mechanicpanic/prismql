@@ -139,7 +139,7 @@ pygmentize -L formatters
 The lexer highlights:
 
 ### Keywords
-- **SELECT, INWIN, WITHIN, AS, UNR**
+- **SELECT, INWINDOW, DURING, AS** (and the deprecated INWIN, WITHIN)
 - **AND, OR, NOT** (boolean operators)
 - **AGGREGATE, GROUP BY, ORDER BY, LIMIT** (aggregation)
 - **BEFORE, AFTER, BETWEEN, AGO** (temporal)

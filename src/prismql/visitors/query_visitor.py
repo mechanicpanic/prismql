@@ -1,6 +1,5 @@
 """PrismQL query visitor implementation."""
 
-import itertools
 import warnings
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
@@ -410,7 +409,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
         Returns a tuple of (list of message groups, is_sequential_result).
         The is_sequential_result flag indicates if the result contains
         pre-computed sequences from FOLLOWED_BY/PRECEDED_BY operators.
-        If UNR flag is present, returns all permutations.
         Handles quantifiers by expanding restrictions.
         """
         restriction_results = []
@@ -459,14 +457,13 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     # well-defined when the chain IS the whole result —
                     # window-merging or permuting it would scramble the
                     # positions the validator relies on.
-                    if len(ctx.named_restriction()) > 1 or min_count > 1 or ctx.Unr():
+                    if len(ctx.named_restriction()) > 1 or min_count > 1:
                         raise PrismQLRuntimeError(
                             "Pattern variables inside a FOLLOWED_BY/"
                             "PRECEDED_BY chain require the chain to be the "
                             "entire SELECT body — they cannot be combined "
-                            "with other comma-separated restrictions, "
-                            "quantifiers, or UNR. Run the chain as its own "
-                            "query."
+                            "with other comma-separated restrictions or "
+                            "quantifiers. Run the chain as its own query."
                         )
                     for leg_index, leg in enumerate(self._seq_leg_constraints):
                         for constraint in leg:
@@ -523,13 +520,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     self.pattern_names.append(pattern_name)
                     self.current_restriction_position += 1
 
-        # Handle UNR (unrelated) flag - generate permutations
-        if ctx.Unr():
-            # Generate all permutations of taking one message from each group
-            permutations = []
-            for perm in itertools.product(*restriction_results):
-                permutations.append(list(perm))
-            return (permutations, False)  # UNR results are not sequential
         # Return as-is (will be merged by window processor or returned directly if sequential)
         return (restriction_results, has_sequential_operator)
 

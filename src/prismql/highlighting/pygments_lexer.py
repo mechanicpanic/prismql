@@ -57,7 +57,6 @@ class PrismQLLexer(RegexLexer):
                         "INWIN",  # Deprecated: use INWINDOW
                         "DURING",  # Temporal window operator
                         "WITHIN",  # Deprecated: use DURING for temporal, INWINDOW for positional
-                        "UNR",
                         "AS",
                     ),
                     prefix=r"(?i)\b",

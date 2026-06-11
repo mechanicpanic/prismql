@@ -9,6 +9,11 @@ else:
 
 class PrismQLVisitor(ParseTreeVisitor):
 
+    # Visit a parse tree produced by PrismQLParser#parse.
+    def visitParse(self, ctx:PrismQLParser.ParseContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by PrismQLParser#query.
     def visitQuery(self, ctx:PrismQLParser.QueryContext):
         return self.visitChildren(ctx)
