@@ -240,7 +240,11 @@ class PrecomputedIndexes:
                            (e.g., {'action_items': {2}, 'sentiment_positive': {1, 5}})
         """
         self.entities = entities or {}
-        self.questions = questions or set()
+        self.questions = questions if questions is not None else set()
+        # A computed-but-empty questions index is not the same as no index:
+        # the former answers is_question() with "none", the latter must not
+        # silently fall back to a backend heuristic that may contradict it.
+        self.has_questions_index = questions is not None
         self.user_mentions = user_mentions or {}
         self.custom_features = custom_features or {}
 

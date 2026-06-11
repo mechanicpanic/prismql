@@ -1031,8 +1031,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _get_questions(self) -> set[MessageId]:
         """Helper method to get questions (used by both new and legacy operators)."""
-        # First check precomputed index
-        if self.precomputed_indexes.questions:
+        # A computed questions index is authoritative — even when empty, it
+        # must not fall through to the backend heuristic.
+        if self.precomputed_indexes.has_questions_index:
             return self.precomputed_indexes.questions
 
         # Check if backend supports question detection
@@ -1040,31 +1041,29 @@ class PrismQLVisitor(BasePrismQLVisitor):
             result = self.search_backend.get_questions()
             return set(result) if result is not None else set()
 
-        # Otherwise would need NLP backend
-        if not self.nlp_backend:
-            raise PrismQLRuntimeError(
-                "Question detection requires NLP backend or precomputed indexes"
-            )
-        # This would require iterating through all messages - not efficient
         raise PrismQLRuntimeError(
-            "Question detection requires precomputed indexes for large datasets"
+            "is_question() has no backing here: this backend builds no "
+            "question index and none was precomputed. Provide "
+            "PrecomputedIndexes(questions={...}) at engine construction — "
+            "question detection is vocabulary, not grammar; any "
+            "ingestion-time annotator (heuristic, spaCy, LLM) can supply it."
         )
 
     def _get_ner_messages(self, ner_label: str) -> set[MessageId]:
         """Get messages containing specific NER type."""
-        # First check precomputed index
-        if ner_label in self.precomputed_indexes.entities:
-            return self.precomputed_indexes.entities[ner_label]
+        entities = self.precomputed_indexes.entities
+        if ner_label in entities:
+            return entities[ner_label]
 
-        # Otherwise would need NLP backend
-        if not self.nlp_backend:
-            raise PrismQLRuntimeError(
-                "NER condition requires NLP backend or precomputed indexes"
-            )
-
-        # This would require iterating through all messages - not efficient
+        available = sorted(entities)
+        hint = f"Available entity labels: {', '.join(available)}. " if available else ""
         raise PrismQLRuntimeError(
-            "NER conditions require precomputed indexes for large datasets"
+            f"No entity index for label '{ner_label}'. {hint}"
+            "Entity conditions (mentions_org(), mentions_date(), ...) are "
+            "vocabulary backed by precomputed indexes: provide "
+            f"PrecomputedIndexes(entities={{'{ner_label}': {{...}}}}) at "
+            "engine construction — annotate at ingestion with spaCy, an "
+            "LLM, or any extractor."
         )
 
     def _get_custom_feature(self, feature_name: str) -> set[MessageId]:
