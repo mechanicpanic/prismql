@@ -53,11 +53,14 @@ class PrismQLVisitor(BasePrismQLVisitor):
         precomputed_indexes: Optional[PrecomputedIndexes] = None,
         timestamp_field: str = "timestamp",
         text_match: str = "substring",
+        dictionary_modes: Optional[Mapping[str, str]] = None,
     ) -> None:
         self.search_backend = search_backend
         self.nlp_backend = nlp_backend
         self.user_dictionaries = user_dictionaries or {}
         self.text_match = text_match
+        # Per-dictionary single-word match mode (overrides text_match)
+        self.dictionary_modes: Mapping[str, str] = dictionary_modes or {}
         self.precomputed_indexes = precomputed_indexes or PrecomputedIndexes()
         self.aggregator = Aggregator(search_backend)
         self.timestamp_field = timestamp_field
@@ -842,12 +845,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
             if dict_name not in self.user_dictionaries:
                 raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
-            words = self.user_dictionaries[dict_name]
-            if self.text_match == "token":
-                return self.search_backend.search_tokens(
-                    words, field="text", operator="OR"
-                )
-            return self.search_backend.search_text(words, field="text", operator="OR")
+            return self._search_dictionary(dict_name)
 
         # contains_tokens(dict_name) - Unicode-aware token matching
         if ctx.ContainsTokens():
@@ -1002,12 +1000,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
             if dict_name not in self.user_dictionaries:
                 raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
-            words = self.user_dictionaries[dict_name]
-            if self.text_match == "token":
-                return self.search_backend.search_tokens(
-                    words, field="text", operator="OR"
-                )
-            return self.search_backend.search_text(words, field="text", operator="OR")
+            return self._search_dictionary(dict_name)
 
         if ctx.ByUser():
             warnings.warn(
@@ -1109,6 +1102,34 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return self._get_ner_messages("URL")
 
         raise PrismQLRuntimeError("Unknown condition type")
+
+    def _search_dictionary(self, dict_name: str) -> set[MessageId]:
+        """Resolve a dictionary condition with per-term routing.
+
+        Multi-word terms always go through the n-gram phrase engine —
+        token mode would otherwise silently match nothing for them, and a
+        term written with a space can only mean those words in that
+        order. Single-word terms use the dictionary's `match` mode when
+        declared, else the engine-wide text_match.
+        """
+        words = self.user_dictionaries[dict_name]
+        phrases = [t for t in words if " " in t.strip()]
+        singles = [t for t in words if " " not in t.strip()]
+        mode = self.dictionary_modes.get(dict_name, self.text_match)
+
+        results: set[MessageId] = set()
+        for phrase in phrases:
+            results |= self.search_backend.search_phrase(phrase, field="text")
+        if singles:
+            if mode == "token":
+                results |= self.search_backend.search_tokens(
+                    singles, field="text", operator="OR"
+                )
+            else:
+                results |= self.search_backend.search_text(
+                    singles, field="text", operator="OR"
+                )
+        return results
 
     def _get_questions(self) -> set[MessageId]:
         """Helper method to get questions (used by both new and legacy operators)."""

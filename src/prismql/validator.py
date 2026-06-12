@@ -109,7 +109,7 @@ class QueryValidator:
 
     def __init__(
         self,
-        user_dictionaries: Optional[dict[str, list[str]]] = None,
+        user_dictionaries: Optional[dict[str, Any]] = None,
         available_fields: Optional[list[str]] = None,
         custom_features: Optional[dict[str, Any]] = None,
         check_deprecated: bool = True,
@@ -125,7 +125,10 @@ class QueryValidator:
             check_deprecated: Whether to warn about deprecated syntax
             check_performance: Whether to suggest performance improvements
         """
-        self.user_dictionaries = user_dictionaries or {}
+        from .engine import normalize_dictionaries
+
+        # Accept both dictionary shapes (plain list or {terms, match})
+        self.user_dictionaries, _ = normalize_dictionaries(user_dictionaries)
         self.available_fields = set(available_fields or [])
         self.custom_features = set(custom_features or {})
         self.check_deprecated = check_deprecated

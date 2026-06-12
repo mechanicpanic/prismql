@@ -99,6 +99,12 @@ Initial public release.
   `search_tokens()` is now pure token matching on both backends (the
   Python implementation previously mixed in substring matches; the Rust
   backend previously fell back to substring entirely).
+- Per-term dictionary routing: multi-word dictionary entries always go
+  through the order-sensitive n-gram phrase engine (token mode previously
+  matched nothing for them, silently), and single-word matching mode can
+  be set per dictionary (`[dictionaries.crisis] match = "token"` /
+  `{"terms": [...], "match": "token"}` in the library API and request
+  overlays), overriding the engine-wide default.
 - HTTP server (`prismql[server]` extra): config-driven `prismql-server`
   with `/evaluate` (hydrated results, structured errors, request-scoped
   dictionary overlays), `/health`, `/reload`, and `/reference`.

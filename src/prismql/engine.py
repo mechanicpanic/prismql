@@ -16,6 +16,35 @@ from .types import NamedQueryResult, QueryResult
 from .visitors.query_visitor import PrismQLVisitor
 
 
+def normalize_dictionaries(
+    raw: Optional[Mapping[str, Any]],
+) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """Normalize the two accepted dictionary shapes.
+
+    A dictionary value is either a plain term list (matched with the
+    engine-wide ``text_match`` mode) or a mapping ``{"terms": [...],
+    "match": "substring"|"token"}``. Returns (terms_by_name,
+    explicit_mode_by_name). Multi-word terms are always phrase-matched
+    regardless of mode, so the mode only governs single-word terms.
+    """
+    terms_map: dict[str, list[str]] = {}
+    modes: dict[str, str] = {}
+    for name, value in (raw or {}).items():
+        if isinstance(value, Mapping):
+            terms_map[name] = [str(t) for t in value.get("terms", [])]
+            mode = value.get("match")
+            if mode is not None:
+                if mode not in ("substring", "token"):
+                    raise ValueError(
+                        f"Dictionary {name!r}: match must be 'substring' or "
+                        f"'token', got {mode!r}"
+                    )
+                modes[name] = mode
+        else:
+            terms_map[name] = [str(t) for t in value]
+    return terms_map, modes
+
+
 class PrismQLErrorListener(ErrorListener):
     """Custom error listener for syntax errors."""
 
@@ -63,7 +92,7 @@ class PrismQLEngine:
         self,
         search_backend: SearchBackend,
         nlp_backend: Optional[NLPBackend] = None,
-        user_dictionaries: Optional[Mapping[str, Sequence[str]]] = None,
+        user_dictionaries: Optional[Mapping[str, Any]] = None,
         precomputed_indexes: Optional[PrecomputedIndexes] = None,
         timestamp_field: str = "timestamp",
         text_match: str = "substring",
@@ -122,9 +151,9 @@ class PrismQLEngine:
             )
         self.nlp_backend = nlp_backend
 
-        self.user_dictionaries: dict[str, list[str]] = {
-            k: list(v) for k, v in (user_dictionaries or {}).items()
-        }
+        self.user_dictionaries, self.dictionary_modes = normalize_dictionaries(
+            user_dictionaries
+        )
         self.precomputed_indexes = precomputed_indexes or PrecomputedIndexes()
         self.timestamp_field = timestamp_field
 
@@ -142,6 +171,7 @@ class PrismQLEngine:
             precomputed_indexes=self.precomputed_indexes,
             timestamp_field=timestamp_field,
             text_match=text_match,
+            dictionary_modes=self.dictionary_modes,
         )
 
     def execute(
@@ -227,17 +257,30 @@ class PrismQLEngine:
         except PrismQLSyntaxError:
             raise
 
-    def add_dictionary(self, name: str, words: Sequence[str]) -> None:
+    def add_dictionary(
+        self, name: str, words: Sequence[str], match: Optional[str] = None
+    ) -> None:
         """
         Add or update a user dictionary.
 
         Args:
             name: Dictionary name
-            words: List of words in the dictionary
+            words: List of words in the dictionary. Multi-word entries are
+                always phrase-matched.
+            match: Optional matching mode for single-word entries
+                ("substring" or "token"); defaults to the engine's
+                text_match setting.
         """
+        if match is not None and match not in ("substring", "token"):
+            raise ValueError(f"match must be 'substring' or 'token', got {match!r}")
         self.user_dictionaries[name] = list(words)
+        if match is not None:
+            self.dictionary_modes[name] = match
+        else:
+            self.dictionary_modes.pop(name, None)
         # Update visitor's dictionaries too
         self.visitor.user_dictionaries = self.user_dictionaries
+        self.visitor.dictionary_modes = self.dictionary_modes
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> "PrismQLEngine":

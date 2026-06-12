@@ -46,7 +46,10 @@ class ServerConfig:
     timestamp_field: str = "timestamp"
     text_match: str = "substring"
     results_dir: str | None = None
-    dictionaries: dict[str, list[str]] = field(default_factory=dict)
+    # A value is either a plain term list or {"terms": [...],
+    # "match": "substring"|"token"} (single-word mode; multi-word terms
+    # always phrase-match). TOML long form: [dictionaries.<name>] tables.
+    dictionaries: dict[str, Any] = field(default_factory=dict)
 
 
 def load_config(path: str | Path) -> ServerConfig:
@@ -80,9 +83,7 @@ def load_config(path: str | Path) -> ServerConfig:
         dict_path = Path(dicts_section["file"])
         if not dict_path.is_absolute():
             dict_path = base / dict_path
-        dictionaries: dict[str, list[str]] = json.loads(
-            dict_path.read_text(encoding="utf-8")
-        )
+        dictionaries: dict[str, Any] = json.loads(dict_path.read_text(encoding="utf-8"))
     else:
         dictionaries = dict(dicts_section)
 
@@ -232,6 +233,7 @@ def compute_schema(engine: PrismQLEngine, config: ServerConfig) -> dict[str, Any
         "text_match": config.text_match,
         "fields": fields,
         "dictionaries": {
-            name: len(terms) for name, terms in config.dictionaries.items()
+            name: len(value["terms"] if isinstance(value, dict) else value)
+            for name, value in config.dictionaries.items()
         },
     }

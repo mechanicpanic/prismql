@@ -22,14 +22,21 @@ from ..types import NamedQueryResult
 from .config import ServerConfig, build_engine, compute_schema, load_config
 
 
+class DictSpec(BaseModel):
+    terms: list[str]
+    match: Literal["substring", "token"] | None = None
+
+
 class EvaluateRequest(BaseModel):
     query: str
     max_results: int | None = Field(default=None, ge=1)
     hydrate: bool | None = None
     # Request-scoped dictionary overlay: merged over the config dictionaries
     # for this request only (request wins on name collision). Dictionaries
-    # are resolved at query time, so no index rebuild is involved.
-    dictionaries: dict[str, list[str]] | None = None
+    # are resolved at query time, so no index rebuild is involved. A value
+    # is either a plain term list or {"terms": [...], "match": "token"}
+    # (single-word matching mode; multi-word terms always phrase-match).
+    dictionaries: dict[str, list[str] | DictSpec] | None = None
     # "inline": results in the response, capped at max_results.
     # "file": ALL groups written as JSONL to results_dir; the response
     # carries only a summary (count, path, preview) — for batch pattern
@@ -159,9 +166,17 @@ def create_app(config: ServerConfig) -> FastAPI:
                 # visitor are new. The base engine is untouched.
                 from ..engine import PrismQLEngine
 
+                overlay = {
+                    name: (
+                        value.model_dump(exclude_none=True)
+                        if isinstance(value, DictSpec)
+                        else value
+                    )
+                    for name, value in req.dictionaries.items()
+                }
                 engine = PrismQLEngine(
                     state.engine.search_backend,
-                    user_dictionaries={**config.dictionaries, **req.dictionaries},
+                    user_dictionaries={**config.dictionaries, **overlay},
                     timestamp_field=config.timestamp_field,
                     text_match=config.text_match,
                 )

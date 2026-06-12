@@ -41,14 +41,32 @@ mentions_org()                    -- Messages mentioning organizations
 contains_link()                   -- Messages containing URLs
 ```
 
-**Text-matching semantics**: `contains()` matches dictionary terms as
-**substrings** by default ("work" matches "working" — useful as poor-man's
-stemming for morphology-rich languages, but "hi" also matches "this").
-Engines can be configured with `text_match="token"` (whole-token matching;
-in server configs: `[engine] text_match = "token"`), which makes
-`contains()` behave like `contains_tokens()`. `contains_tokens()` always
-matches whole tokens (Unicode-aware: preserves C++, emails, contractions);
-`contains_phrase()` matches exact multi-word phrases.
+**Text-matching semantics**: `contains()` routes each dictionary term by
+its shape:
+
+- **Multi-word terms always phrase-match** (order-sensitive, n-gram
+  indexed): a dictionary entry `"margin call"` matches those words in
+  that order, never `"call margin"`. This holds in every mode.
+- **Single-word terms** match as **substrings** by default ("work"
+  matches "working" — poor-man's stemming for morphology-rich languages,
+  but "hi" also matches "this"). Token mode (whole-token matching) can be
+  set per engine (`text_match="token"`; in server configs:
+  `[engine] text_match = "token"`) or **per dictionary**:
+
+  ```toml
+  [dictionaries]
+  stems = ["tumble", "plunge"]          # substring (engine default)
+
+  [dictionaries.crisis]
+  match = "token"                       # "rout" won't match "routes"
+  terms = ["rout", "panic", "margin call"]
+  ```
+
+  The same long form (`{"terms": [...], "match": "token"}`) works in the
+  library API and in the server's request-scoped `dictionaries` overlay.
+
+`contains_tokens()` always matches whole tokens (Unicode-aware: preserves
+C++, emails, contractions); `contains_phrase()` matches one exact phrase.
 
 ### 2. Boolean Operators
 
