@@ -109,6 +109,16 @@ results = engine.execute("SELECT is_question(), from(support) INWINDOW 2")
 print(results)  # [[2, 4]]
 ```
 
+## How fast is it?
+
+The VLDB 2023 row-pattern-recognition flagship query (robbery → battery →
+vehicle theft, co-located, within 30 minutes) over the full City of
+Chicago crime corpus — 8.5M events, 25 years: **PrismQL answers in ~5
+seconds**, in exact match-count agreement with the optimized SQL
+formulation, while the naive SQL join does not finish in 90 minutes. The
+full comparison against DuckDB, SQLite, Flink MATCH_RECOGNIZE, and
+Elastic EQL is in [docs/CHICAGO_BENCHMARK.md](docs/CHICAGO_BENCHMARK.md).
+
 ## Query Language Syntax
 
 ### Basic Structure
