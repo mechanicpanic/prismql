@@ -1698,26 +1698,22 @@ class PrismQLVisitor(BasePrismQLVisitor):
             key=lambda x: x[1],
         )
 
+        import bisect
+
+        rhs_times = [t for _, t in rhs_with_ts]
         result: QueryResult = []
         for lhs_msg, t_lhs in lhs_with_ts:
             if forward:
-                for rhs_msg, t_rhs in rhs_with_ts:
-                    if t_rhs <= t_lhs:
-                        continue
-                    if t_rhs - t_lhs > duration:
-                        break  # rhs sorted ascending; nothing further qualifies
-                    result.append([lhs_msg, rhs_msg])
-                    break
+                # First rhs strictly after t_lhs (binary search — a linear
+                # scan here is O(lhs*rhs) and melts on dense partitions).
+                i = bisect.bisect_right(rhs_times, t_lhs)
+                if i < len(rhs_with_ts) and rhs_times[i] - t_lhs <= duration:
+                    result.append([lhs_msg, rhs_with_ts[i][0]])
             else:
-                # PRECEDED_BY: look backward in time, emit chronologically.
-                # Walk rhs descending to find the closest earlier match.
-                for rhs_msg, t_rhs in reversed(rhs_with_ts):
-                    if t_rhs >= t_lhs:
-                        continue
-                    if t_lhs - t_rhs > duration:
-                        break
-                    result.append([rhs_msg, lhs_msg])
-                    break
+                # PRECEDED_BY: last rhs strictly before t_lhs.
+                i = bisect.bisect_left(rhs_times, t_lhs) - 1
+                if i >= 0 and t_lhs - rhs_times[i] <= duration:
+                    result.append([rhs_with_ts[i][0], lhs_msg])
         return result
 
     def _extend_sequences_followed_by_temporal(
@@ -1744,18 +1740,18 @@ class PrismQLVisitor(BasePrismQLVisitor):
             key=lambda x: x[1],
         )
 
+        import bisect
+
+        rhs_times = [t for _, t in rhs_with_ts]
         result: list[MessageGroup] = []
         for sequence in lhs_sequences:
             t_last = timestamps.get(sequence[-1])
             if t_last is None:
                 continue
-            for rhs_msg, t_rhs in rhs_with_ts:
-                if t_rhs <= t_last:
-                    continue
-                if t_rhs - t_last > duration:
-                    break  # rhs sorted ascending; nothing further qualifies
-                result.append(sequence + [rhs_msg])
-                break
+            # First rhs strictly after t_last (binary search)
+            i = bisect.bisect_right(rhs_times, t_last)
+            if i < len(rhs_with_ts) and rhs_times[i] - t_last <= duration:
+                result.append(sequence + [rhs_with_ts[i][0]])
         return result
 
     def _extend_sequences_preceded_by_temporal(
@@ -1781,19 +1777,18 @@ class PrismQLVisitor(BasePrismQLVisitor):
             key=lambda x: x[1],
         )
 
+        import bisect
+
+        rhs_times = [t for _, t in rhs_with_ts]
         result: list[MessageGroup] = []
         for sequence in lhs_sequences:
             t_first = timestamps.get(sequence[0])
             if t_first is None:
                 continue
-            # Walk rhs descending to find the closest earlier match.
-            for rhs_msg, t_rhs in reversed(rhs_with_ts):
-                if t_rhs >= t_first:
-                    continue
-                if t_first - t_rhs > duration:
-                    break
-                result.append([rhs_msg, *sequence])
-                break
+            # Last rhs strictly before t_first (binary search)
+            i = bisect.bisect_left(rhs_times, t_first) - 1
+            if i >= 0 and t_first - rhs_times[i] <= duration:
+                result.append([rhs_with_ts[i][0], *sequence])
         return result
 
     def _apply_not_followed_by_temporal(
