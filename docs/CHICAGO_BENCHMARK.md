@@ -30,6 +30,7 @@ independently per cell — the EQL `sequence by` evaluation shape).
 
 | engine | query | matches |
 |---|---|---|
+| ClickHouse `windowFunnel` | 0.24s | counts only² |
 | **PrismQL** (Python backend) | **5.1s** | **372** |
 | Flink SQL MATCH_RECOGNIZE | 6.8s | 570¹ |
 | PrismQL (Rust backend) | 7.5s | 372 |
@@ -43,6 +44,12 @@ so "B after R" is ambiguous when timestamps tie. Engines comparing
 timestamps strictly (PrismQL, DuckDB, SQLite) agree exactly at 372;
 engines using stream order (Flink, EQL) accept tied progressions and
 disagree *with each other* on how.
+
+² The aggregate-function paradigm: `windowFunnel`/`sequenceCount` are the
+fastest thing in the matrix and structurally unable to return *which*
+events matched — for the instances you're back to the join that doesn't
+finish. Sequence-counting and sequence-*retrieval* are different
+problems; PrismQL, M_R, and EQL solve the second.
 
 Three observations the numbers make:
 
