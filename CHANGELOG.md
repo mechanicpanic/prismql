@@ -34,7 +34,11 @@ Initial public release.
   constraints across positions, including across `FOLLOWED_BY`/`PRECEDED_BY`
   legs; ill-defined combinations (chain variables with comma restrictions,
   quantifiers, or on a negative lookaround's right-hand side) fail
-  loudly instead of silently mismatching.
+  loudly instead of silently mismatching. Chains where every leg shares one
+  variable on the same field are matched per field-value partition (the
+  EQL `sequence by` evaluation shape): interleaved chains from different
+  values are all found, and cross-partition candidates never shadow the
+  in-partition match.
 - **Quantifiers**: regex-style `{n}`, `{n,}`, `{n,m}` on conditions.
 - **Named pattern groups**: `AS` keyword for labeling matched positions.
 - **Negative patterns**: `NOT` operator inside sequences.

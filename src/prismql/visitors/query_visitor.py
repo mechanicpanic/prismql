@@ -69,6 +69,13 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # chronological group order (FOLLOWED_BY appends, PRECEDED_BY
         # prepends). Rewritten into positions by visitRestrictions.
         self._seq_leg_constraints: list[list[VariableConstraint]] = []
+        # Correlation key (var, field) when EVERY leg of the chain carries
+        # exactly one constraint on the same variable+field (the EQL
+        # `sequence by` shape). Link merges then run greedily WITHIN each
+        # field-value partition instead of globally — greedy-global would
+        # pick the nearest candidate from any partition and lose chains the
+        # post-hoc validator can never recover.
+        self._seq_partition_key: Optional[tuple[str, str]] = None
 
         # Pattern naming for result labeling
         self.pattern_names: list[Optional[str]] = []
@@ -116,6 +123,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         self.current_restriction_position = 0
         self.pattern_names = []
         self._seq_leg_constraints = []
+        self._seq_partition_key = None
 
         # Step 1: Extract window size if specified (position-based or time-based)
         window_size = self.DEFAULT_WINDOW_SIZE
@@ -430,6 +438,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # Track how many constraints exist before visiting this restriction
             num_constraints_before = len(self.variable_constraints)
             self._seq_leg_constraints = []
+            self._seq_partition_key = None
 
             # Process the underlying restriction
             result = self.visitRestriction(named_restriction_ctx.restriction())
@@ -555,9 +564,16 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # Innermost leg of the chain: the lhs visit above fell through to
             # the boolean layer, so everything it recorded is one leg bucket.
             self._seq_leg_constraints = [list(self.variable_constraints[n_before_lhs:])]
+            self._seq_partition_key = self._leg_key(self._seq_leg_constraints[0])
         n_before_rhs = len(self.variable_constraints)
         rhs = self.visitBool_restriction(ctx.bool_restriction())
         rhs_leg = list(self.variable_constraints[n_before_rhs:])
+        # Correlation key survives only while every leg repeats it exactly.
+        if (ctx.FollowedBy() or ctx.PrecededBy()) and (
+            self._seq_partition_key is None
+            or self._leg_key(rhs_leg) != self._seq_partition_key
+        ):
+            self._seq_partition_key = None
         window = self._extract_window_constraint(ctx)
 
         # The right operand comes from the boolean layer; a list or
@@ -591,6 +607,15 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return self._apply_negative_link(lhs, rhs, window, "NOT_FOLLOWED_BY")
         return self._apply_negative_link(lhs, rhs, window, "NOT_PRECEDED_BY")
 
+    @staticmethod
+    def _leg_key(
+        bucket: list[VariableConstraint],
+    ) -> Optional[tuple[str, str]]:
+        """The (variable, field) a leg correlates on, if exactly one."""
+        if len(bucket) == 1:
+            return (bucket[0].variable_name, bucket[0].field_name)
+        return None
+
     def _apply_sequential_link(
         self,
         lhs: Union[set[MessageId], list[MessageGroup], PartialSequence],
@@ -599,16 +624,36 @@ class PrismQLVisitor(BasePrismQLVisitor):
         operator: str,
     ) -> Union[list[MessageGroup], PartialSequence]:
         """Evaluate one FOLLOWED_BY/PRECEDED_BY link, chaining through lhs."""
-        forward = operator == "FOLLOWED_BY"
-
         # No window: defer — an enclosing link's trailing window evaluates us.
         if window is None:
             return PartialSequence(lhs, rhs, operator)
 
+        evaluated = self._evaluate_partial_sequence(lhs, window)
+
+        # Correlation-key pushdown: when every leg shares one $var on the
+        # same field, greedy matching must run within each field-value
+        # partition. Greedy-global would pair each lhs with its nearest rhs
+        # from ANY partition; the validator then kills the mixed group and
+        # the in-partition match it shadowed is silently lost.
+        if self._seq_partition_key is not None:
+            return self._apply_link_partitioned(
+                evaluated, rhs, window, operator, self._seq_partition_key[1]
+            )
+        return self._apply_link_evaluated(evaluated, rhs, window, operator)
+
+    def _apply_link_evaluated(
+        self,
+        lhs: Union[set[MessageId], list[MessageGroup]],
+        rhs: set[MessageId],
+        window: WindowConstraint,
+        operator: str,
+    ) -> list[MessageGroup]:
+        """Dispatch one positive link on an already-evaluated lhs."""
+        forward = operator == "FOLLOWED_BY"
+
         # Temporal window (DURING)
         if isinstance(window, tuple):
             duration = self._duration_tuple_to_timedelta(window)
-            lhs = self._evaluate_partial_sequence(lhs, window)
             if isinstance(lhs, list):
                 if forward:
                     return self._extend_sequences_followed_by_temporal(
@@ -621,7 +666,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Positional window (INWINDOW)
         window_size: int = window
-        lhs = self._evaluate_partial_sequence(lhs, window)
         if isinstance(lhs, list):
             if forward:
                 return self._extend_sequences_followed_by(lhs, rhs, window_size)
@@ -633,6 +677,53 @@ class PrismQLVisitor(BasePrismQLVisitor):
         return self._create_sequential_pairs(
             matching_lhs, rhs, window_size, forward=forward
         )
+
+    def _apply_link_partitioned(
+        self,
+        lhs: Union[set[MessageId], list[MessageGroup]],
+        rhs: set[MessageId],
+        window: WindowConstraint,
+        operator: str,
+        field: str,
+    ) -> list[MessageGroup]:
+        """Run one positive link independently within each partition of the
+        correlation field (the EQL `sequence by` evaluation shape)."""
+        id_field = getattr(self.search_backend, "id_field", "id")
+
+        def value_map(ids: set[MessageId]) -> dict[MessageId, Any]:
+            docs = self.search_backend.get_documents(list(ids))
+            return {doc[id_field]: doc.get(field) for doc in docs if id_field in doc}
+
+        rhs_parts: dict[Any, set[MessageId]] = {}
+        for mid, value in value_map(rhs).items():
+            if value is not None:
+                rhs_parts.setdefault(value, set()).add(mid)
+
+        lhs_parts: dict[Any, Any] = {}
+        if isinstance(lhs, list):
+            # Sequences: every member shares the key by construction of the
+            # previous partitioned link, so key by the first message.
+            firsts = {group[0] for group in lhs if group}
+            first_values = value_map(firsts)
+            for group in lhs:
+                value = first_values.get(group[0]) if group else None
+                if value is not None:
+                    lhs_parts.setdefault(value, []).append(group)
+        else:
+            for mid, value in value_map(lhs).items():
+                if value is not None:
+                    lhs_parts.setdefault(value, set()).add(mid)
+
+        results: list[MessageGroup] = []
+        for value, lhs_part in lhs_parts.items():
+            rhs_part = rhs_parts.get(value)
+            if not rhs_part:
+                continue
+            results.extend(
+                self._apply_link_evaluated(lhs_part, rhs_part, window, operator)
+            )
+        results.sort(key=lambda group: group[0] if group else 0)
+        return results
 
     def _apply_negative_link(
         self,

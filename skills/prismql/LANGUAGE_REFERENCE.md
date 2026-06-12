@@ -156,7 +156,11 @@ SELECT from($speaker) FOLLOWED_BY from($speaker) INWINDOW 2  -- User followed by
 
 **Variables in sequential chains**: same-value constraints are enforced
 across FOLLOWED_BY/PRECEDED_BY legs (each leg binds the variable for its
-message in the matched group). Two restrictions apply:
+message in the matched group). When every leg carries exactly one
+constraint on the same variable and field, matching runs independently
+within each field-value partition — interleaved chains from different
+values are all found, and a nearer candidate with the wrong value never
+shadows the real match. Two restrictions apply:
 - The chain must be the entire SELECT body — chain variables cannot be
   combined with other comma-separated restrictions or quantifiers
   (runtime error).
