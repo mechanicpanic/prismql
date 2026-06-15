@@ -29,6 +29,7 @@ dependencies = [
 [project.optional-dependencies]
 opensearch = ["opensearch-py>=2.0.0"]
 elasticsearch = ["elasticsearch>=8.0.0"]
+tantivy = ["tantivy>=0.24"]
 nlp = [
     "spacy>=3.0.0",
 ]
@@ -211,6 +212,8 @@ module = [
     "fastapi.*",
     "pydantic",
     "uvicorn",
+    "tantivy",
+    "tantivy.*",
 ]
 ignore_missing_imports = true
 

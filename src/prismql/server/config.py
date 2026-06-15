@@ -41,6 +41,7 @@ class ServerConfig:
     hydrate: bool = True
     backend_type: str = "memory"
     data: str | None = None
+    index_path: str | None = None  # tantivy: persisted index dir (open if exists)
     id_field: str = "id"
     timestamp_fields: list[str] = field(default_factory=lambda: ["timestamp"])
     timestamp_field: str = "timestamp"
@@ -74,6 +75,11 @@ def load_config(path: str | Path) -> ServerConfig:
         data_path = Path(data)
         data = str(data_path if data_path.is_absolute() else base / data_path)
 
+    index_path = backend.get("index_path")
+    if index_path is not None:
+        ip = Path(index_path)
+        index_path = str(ip if ip.is_absolute() else base / ip)
+
     results_dir = server.get("results_dir")
     if results_dir is not None:
         rd_path = Path(results_dir)
@@ -94,6 +100,7 @@ def load_config(path: str | Path) -> ServerConfig:
         hydrate=server.get("hydrate", True),
         backend_type=backend.get("type", "memory").lower(),
         data=data,
+        index_path=index_path,
         id_field=backend.get("id_field", "id"),
         timestamp_fields=list(backend.get("timestamp_fields", ["timestamp"])),
         timestamp_field=engine.get("timestamp_field", "timestamp"),
@@ -152,26 +159,39 @@ def load_documents(path: str | Path) -> list[dict[str, Any]]:
 def build_engine(config: ServerConfig) -> PrismQLEngine:
     """Construct a PrismQLEngine from a ServerConfig.
 
-    v1 supports the in-process backends (memory, rust_memory). Database
-    backends need connection objects — construct those via the library API.
+    v1 supports the in-process backends (memory, rust_memory, tantivy).
+    Database backends need connection objects — construct those via the
+    library API. For tantivy, an existing ``[backend].index_path`` is opened
+    without reloading documents (no rebuild).
     """
     from ..backends.factory import BackendFactory
     from ..engine import PrismQLEngine
 
-    if config.backend_type not in ("memory", "rust_memory"):
+    if config.backend_type not in ("memory", "rust_memory", "tantivy"):
         raise ValueError(
-            f"Server config supports backend types 'memory' and 'rust_memory'; "
-            f"got {config.backend_type!r}. For database backends, construct "
-            "the engine via the library API."
+            f"Server config supports backend types 'memory', 'rust_memory', and "
+            f"'tantivy'; got {config.backend_type!r}. For database backends, "
+            "construct the engine via the library API."
         )
-    if not config.data:
-        raise ValueError("[backend].data is required for memory backends")
 
     backend_config: dict[str, Any] = {
         "type": config.backend_type,
-        "documents": load_documents(config.data),
         "id_field": config.id_field,
     }
+    opening_existing = bool(
+        config.backend_type == "tantivy"
+        and config.index_path
+        and Path(config.index_path).exists()
+    )
+    if config.data:
+        backend_config["documents"] = load_documents(config.data)
+    elif not opening_existing:
+        raise ValueError(
+            "[backend].data is required (or, for tantivy, an existing "
+            "[backend].index_path to open)"
+        )
+    if config.backend_type == "tantivy" and config.index_path:
+        backend_config["index_path"] = config.index_path
     if config.backend_type == "rust_memory":
         backend_config["timestamp_fields"] = config.timestamp_fields
 

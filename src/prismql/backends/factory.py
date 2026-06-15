@@ -97,6 +97,8 @@ class BackendFactory:
             return cls._create_memory_backend(config)
         if backend_type == "rust_memory":
             return cls._create_rust_memory_backend(config)
+        if backend_type == "tantivy":
+            return cls._create_tantivy_backend(config)
         if backend_type in ["opensearch", "elasticsearch"]:
             return cls._create_opensearch_backend(config)
         if backend_type in ["postgres", "postgresql"]:
@@ -140,6 +142,31 @@ class BackendFactory:
             documents,
             id_field=config.get("id_field", "id"),
             timestamp_fields=config.get("timestamp_fields"),
+        )
+
+    @classmethod
+    def _create_tantivy_backend(cls, config: dict[str, Any]) -> SearchBackend:
+        """Create a tantivy-backed search backend (stemmed inverted index)."""
+        try:
+            from .tantivy import TantivyBackend
+        except ImportError as e:
+            raise ImportError(
+                "Tantivy backend requires the 'tantivy' package. Install it with: "
+                "uv pip install 'prismql[tantivy]'"
+            ) from e
+
+        documents = config.get("documents")
+        index_path = config.get("index_path")
+        if not documents and not index_path:
+            raise ValueError(
+                "tantivy backend requires 'documents' (to build) or 'index_path' "
+                "(to open an existing index) in configuration"
+            )
+        return TantivyBackend(
+            documents,
+            id_field=config.get("id_field", "id"),
+            index_path=index_path,
+            text_fields=config.get("text_fields"),
         )
 
     @classmethod

@@ -69,6 +69,14 @@ Initial public release.
 - OpenSearch / Elasticsearch backend (optional `opensearch` / `elasticsearch`
   extras).
 - DuckDB and PostgreSQL backends for SQL-shaped corpora.
+- Tantivy backend (optional `tantivy` extra): a real inverted-index search
+  engine. Unlike the substring-default in-memory backend, it does **stemmed
+  token** matching (`contains("running")` also matches "run"/"runs"), native
+  phrase search, and supports a **persistent on-disk index** (`index_path`)
+  that later runs open without rebuilding. Numeric ids round-trip as ints so
+  the Rust window/sequence merge fast paths still apply. Usable via the
+  library, `BackendFactory` (`type: "tantivy"`), and `prismql.toml`
+  (`[backend] type = "tantivy"`, optional `index_path`).
 - spaCy NLP backend (optional `nlp` extra; deprecated in favor of the
   precomputed approach below).
 - `PrecomputedIndexes` + `IndexBuilder` for storing NLP features (entities,
