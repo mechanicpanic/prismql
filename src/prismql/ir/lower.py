@@ -54,6 +54,7 @@ from .nodes import (
     Variable,
     Wildcard,
     WindowSpec,
+    normalize_time_unit,
 )
 
 # ---------------------------------------------------------------------------
@@ -78,7 +79,7 @@ def _strip_quotes(text: str) -> str:
 def _time_value(ctx: Any) -> TimeValue:
     return TimeValue(
         value=int(ctx.number().getText()),
-        unit=ctx.time_unit().getText().lower(),
+        unit=normalize_time_unit(ctx.time_unit().getText()),
     )
 
 

@@ -9,6 +9,7 @@ from antlr4.error.ErrorListener import ErrorListener
 from .aggregators.types import AggregateResult, GroupedResult
 from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
 from .backends.factory import BackendFactory
+from .dialects.pipe import parse_pipe
 from .exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from .grammar.generated.PrismQLLexer import PrismQLLexer
 from .grammar.generated.PrismQLParser import PrismQLParser
@@ -185,14 +186,48 @@ class PrismQLEngine:
             dictionary_modes=self.dictionary_modes,
         )
 
+    @staticmethod
+    def _resolve_dialect(query: str, dialect: str) -> str:
+        """Resolve 'auto' to a concrete dialect.
+
+        A query starting with SELECT (any case) is the classic SQL-flavored
+        surface; anything else is the pipe dialect. No pipe condition is
+        named ``select``, so the prefix is unambiguous.
+        """
+        if dialect not in ("auto", "classic", "pipe"):
+            raise ValueError(
+                f"dialect must be 'auto', 'classic', or 'pipe', got {dialect!r}"
+            )
+        if dialect != "auto":
+            return dialect
+        return "classic" if query.lstrip()[:6].lower() == "select" else "pipe"
+
+    def _parse_classic(self, query: str) -> Any:
+        """Parse the SQL-flavored surface into an ANTLR query context."""
+        input_stream = InputStream(query)
+        lexer = PrismQLLexer(input_stream)
+        lexer.removeErrorListeners()
+        lexer.addErrorListener(PrismQLErrorListener())
+
+        token_stream = CommonTokenStream(lexer)
+        parser = PrismQLParser(token_stream)
+        parser.removeErrorListeners()
+        parser.addErrorListener(PrismQLErrorListener())
+
+        # EOF-anchored entry rule: trailing garbage is a syntax error, not
+        # silently ignored input.
+        return parser.parse().query()
+
     def execute(
-        self, query: str
+        self, query: str, dialect: str = "auto"
     ) -> Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]:
         """
         Parse and execute a PrismQL query.
 
         Args:
-            query: PrismQL query string
+            query: PrismQL query string, in either surface syntax
+            dialect: 'auto' (default — SELECT-prefixed queries are classic,
+                anything else is pipe), 'classic', or 'pipe'
 
         Returns:
             Query results (QueryResult, AggregateResult, or GroupedResult)
@@ -201,33 +236,19 @@ class PrismQLEngine:
             PrismQLSyntaxError: If the query has syntax errors
             PrismQLRuntimeError: If there's an error during execution
         """
+        resolved = self._resolve_dialect(query, dialect)
         try:
-            # Create lexer and parser
-            input_stream = InputStream(query)
-            lexer = PrismQLLexer(input_stream)
-
-            # Add custom error listener
-            lexer.removeErrorListeners()
-            lexer.addErrorListener(PrismQLErrorListener())
-
-            # Create token stream
-            token_stream = CommonTokenStream(lexer)
-
-            # Create parser
-            parser = PrismQLParser(token_stream)
-            parser.removeErrorListeners()
-            parser.addErrorListener(PrismQLErrorListener())
-
-            # Parse the query (EOF-anchored entry rule: trailing garbage is
-            # a syntax error, not silently ignored input)
-            tree = parser.parse().query()
-
-            # Execute: lower to IR and run the executor (default), or walk
-            # the parse tree directly with the legacy visitor path.
-            if self.use_ir:
-                result = self.visitor.execute(lower_query(tree))
+            if resolved == "pipe":
+                # The pipe dialect exists only as an IR frontend.
+                result = self.visitor.execute(parse_pipe(query))
             else:
-                result = self.visitor.visit(tree)
+                tree = self._parse_classic(query)
+                # Execute: lower to IR and run the executor (default), or
+                # walk the parse tree directly with the legacy visitor path.
+                if self.use_ir:
+                    result = self.visitor.execute(lower_query(tree))
+                else:
+                    result = self.visitor.visit(tree)
             # Return empty query result if None (shouldn't happen, but defensive)
             return result if result is not None else []
 
@@ -240,12 +261,13 @@ class PrismQLEngine:
                 f"Error executing query: {str(e)}", query=query, cause=e
             ) from e
 
-    def validate(self, query: str) -> bool:
+    def validate(self, query: str, dialect: str = "auto") -> bool:
         """
         Validate a PrismQL query without executing it.
 
         Args:
-            query: PrismQL query string
+            query: PrismQL query string, in either surface syntax
+            dialect: 'auto' (default), 'classic', or 'pipe'
 
         Returns:
             True if the query is syntactically valid
@@ -253,24 +275,12 @@ class PrismQLEngine:
         Raises:
             PrismQLSyntaxError: If the query has syntax errors
         """
-        try:
-            # Create lexer and parser
-            input_stream = InputStream(query)
-            lexer = PrismQLLexer(input_stream)
-            lexer.removeErrorListeners()
-            lexer.addErrorListener(PrismQLErrorListener())
-
-            token_stream = CommonTokenStream(lexer)
-            parser = PrismQLParser(token_stream)
-            parser.removeErrorListeners()
-            parser.addErrorListener(PrismQLErrorListener())
-
-            # Just parse, don't execute (EOF-anchored)
-            parser.parse()
+        resolved = self._resolve_dialect(query, dialect)
+        if resolved == "pipe":
+            parse_pipe(query)
             return True
-
-        except PrismQLSyntaxError:
-            raise
+        self._parse_classic(query)
+        return True
 
     def add_dictionary(
         self, name: str, words: Sequence[str], match: Optional[str] = None

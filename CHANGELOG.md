@@ -51,6 +51,18 @@ Initial public release.
   groups (all of A before all of B, gap measured between group boundaries,
   greedy closest match), so multi-message stages stay intact; a single
   parenthesized subquery is the identity.
+- **Typed IR + dual surface syntax.** Queries lower to a pure-data
+  intermediate representation executed by one engine; the parse-tree visitor
+  remains as a legacy path (`use_ir=False`). On top of the IR, a second
+  **pipe dialect** ships alongside the SQL-flavored surface:
+  `from(alice) + contains(solutions){2} |> within(10)`,
+  `from($u) ~> from($u) |> during(1h)`,
+  `[a] ~>(10) [b]` for subqueries,
+  `... |> group(day(ts)) |> count() |> sort(ts, desc) |> top(5)`.
+  `engine.execute` auto-detects the dialect (SELECT-prefixed = classic) or
+  takes `dialect="classic"|"pipe"`. Both surfaces lower to identical IR
+  trees (asserted node-for-node in tests), so semantics are shared by
+  construction; the pipe dialect carries no legacy operators.
 
 ### Aggregations & Temporal Filters
 

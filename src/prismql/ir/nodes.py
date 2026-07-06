@@ -32,6 +32,37 @@ from typing import Union
 
 from ..aggregators.types import AggregationFunction
 
+# Canonical time units: every frontend normalizes surface unit spellings
+# ('h', 'hour', 'HOURS', ...) through this table so IR trees from different
+# dialects compare equal. The executor's converters accept the canonical form.
+_CANONICAL_UNITS = {
+    "s": "seconds",
+    "second": "seconds",
+    "seconds": "seconds",
+    "m": "minutes",
+    "minute": "minutes",
+    "minutes": "minutes",
+    "h": "hours",
+    "hour": "hours",
+    "hours": "hours",
+    "d": "days",
+    "day": "days",
+    "days": "days",
+    "w": "weeks",
+    "week": "weeks",
+    "weeks": "weeks",
+    "month": "months",
+    "months": "months",
+    "year": "years",
+    "years": "years",
+}
+
+
+def normalize_time_unit(unit: str) -> str:
+    """Map any accepted surface spelling of a time unit to its canonical form."""
+    return _CANONICAL_UNITS.get(unit.lower(), unit.lower())
+
+
 # ---------------------------------------------------------------------------
 # Terms: arguments to conditions (hdict / huser / field_value)
 # ---------------------------------------------------------------------------
