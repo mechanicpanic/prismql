@@ -12,8 +12,9 @@ from .backends.factory import BackendFactory
 from .exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from .grammar.generated.PrismQLLexer import PrismQLLexer
 from .grammar.generated.PrismQLParser import PrismQLParser
+from .ir.executor import IRExecutor
+from .ir.lower import lower_query
 from .types import NamedQueryResult, QueryResult
-from .visitors.query_visitor import PrismQLVisitor
 
 
 def normalize_dictionaries(
@@ -96,6 +97,7 @@ class PrismQLEngine:
         precomputed_indexes: Optional[PrecomputedIndexes] = None,
         timestamp_field: str = "timestamp",
         text_match: str = "substring",
+        use_ir: bool = True,
     ) -> None:
         """
         Initialize the PrismQL engine.
@@ -110,6 +112,11 @@ class PrismQLEngine:
                                custom features). This is the recommended way to add
                                NLP features to PrismQL.
             timestamp_field: Name of the timestamp field for temporal operations
+            use_ir: Execute via the IR pipeline (parse -> lower -> execute;
+                default). Set False to run the legacy parse-tree visitor
+                path directly. Both paths share one executor instance and
+                produce identical results; the flag exists for A/B checks
+                and as an escape hatch while the IR path is young.
             text_match: How contains() matches dictionary terms against text.
                 "substring" (default): term anywhere in the text ("hi" matches
                 "this") — historical reference behavior, doubles as poor-man's
@@ -163,8 +170,12 @@ class PrismQLEngine:
             )
         self.text_match = text_match
 
-        # Create visitor
-        self.visitor = PrismQLVisitor(
+        # One instance serves both execution paths: IRExecutor subclasses
+        # PrismQLVisitor, so visitor.visit(tree) (legacy path) and
+        # visitor.execute(ir) (IR path) share state, helpers, and dictionary
+        # references.
+        self.use_ir = use_ir
+        self.visitor = IRExecutor(
             search_backend=search_backend,
             nlp_backend=nlp_backend,
             user_dictionaries=self.user_dictionaries,
@@ -211,8 +222,12 @@ class PrismQLEngine:
             # a syntax error, not silently ignored input)
             tree = parser.parse().query()
 
-            # Execute using visitor
-            result = self.visitor.visit(tree)
+            # Execute: lower to IR and run the executor (default), or walk
+            # the parse tree directly with the legacy visitor path.
+            if self.use_ir:
+                result = self.visitor.execute(lower_query(tree))
+            else:
+                result = self.visitor.visit(tree)
             # Return empty query result if None (shouldn't happen, but defensive)
             return result if result is not None else []
 
