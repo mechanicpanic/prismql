@@ -1671,6 +1671,16 @@ class PrismQLVisitor(BasePrismQLVisitor):
         """
         if not msg_ids:
             return {}
+        # Fast path: backends with a timestamp projection (Rust) return only
+        # epoch scalars — no per-document dict materialization, which is the
+        # dominant cost of temporal links on large corpora.
+        get_timestamps = getattr(self.search_backend, "get_timestamps", None)
+        if get_timestamps is not None and (
+            not hasattr(self.search_backend, "has_timestamp_field")
+            or self.search_backend.has_timestamp_field(self.timestamp_field)
+        ):
+            projected = get_timestamps(list(msg_ids), self.timestamp_field)
+            return dict(projected)
         documents = self.search_backend.get_documents(list(msg_ids))
         result: dict[MessageId, datetime] = {}
         for doc in documents:

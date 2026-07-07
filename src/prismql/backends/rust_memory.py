@@ -239,6 +239,24 @@ class RustMemoryBackend(SearchBackend):
         """True if `field` was indexed as a timestamp at construction."""
         return self._backend.has_timestamp_field(field)  # type: ignore[no-any-return]
 
+    def get_timestamps(
+        self, message_ids: Sequence[MessageId], field: str
+    ) -> dict[MessageId, datetime]:
+        """Project parsed timestamps for `message_ids` without materializing
+        documents across the FFI boundary (only epoch scalars cross).
+
+        IDs that are unknown or lack a parseable timestamp are omitted,
+        mirroring the Python document-fetch fallback. Timestamps come back
+        as naive local datetimes derived from UTC epochs; temporal merges
+        compare only differences, so the representation is equivalent.
+        """
+        epochs: dict[MessageId, int] = self._backend.get_timestamps(
+            [i for i in message_ids if self._valid_id(i)], field
+        )
+        return {
+            mid: datetime.fromtimestamp(us / 1_000_000) for mid, us in epochs.items()
+        }
+
     def filter_by_time_range(
         self,
         message_ids: Sequence[MessageId],

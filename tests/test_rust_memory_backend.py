@@ -451,3 +451,40 @@ def test_rust_backend_import_error():
     docs = [{"id": 1, "text": "test"}]
     backend = RustMemoryBackend(docs)
     assert backend.get_total_documents() == 1
+
+
+@pytest.mark.skipif(SKIP_RUST_TESTS, reason=SKIP_REASON)
+class TestTimestampProjection:
+    """get_timestamps: the FFI-cheap projection used by temporal merges."""
+
+    DOCS = [
+        {"id": 1, "user": "a", "text": "x", "timestamp": 1_000},
+        {"id": 2, "user": "b", "text": "y", "timestamp": 1_600},
+        {"id": 3, "user": "a", "text": "z", "timestamp": 5_000},
+        {"id": 4, "user": "b", "text": "w"},  # no timestamp -> omitted
+    ]
+
+    def make(self):
+        return RustMemoryBackend(self.DOCS, timestamp_fields=["timestamp"])
+
+    def test_projection_diffs_and_omissions(self):
+        backend = self.make()
+        ts = backend.get_timestamps([1, 2, 3, 4, 99], "timestamp")
+        assert set(ts) == {1, 2, 3}
+        assert (ts[2] - ts[1]).total_seconds() == 600
+        assert (ts[3] - ts[1]).total_seconds() == 4000
+
+    def test_unindexed_field_raises(self):
+        backend = self.make()
+        with pytest.raises(ValueError, match="was not indexed"):
+            backend.get_timestamps([1], "created_at")
+
+    def test_temporal_chain_parity_with_python_backend(self):
+        """The projection fast path must give the same DURING-chain results
+        as the Python document-fetch path."""
+        from prismql import PrismQLEngine
+
+        query = "SELECT from(a) FOLLOWED_BY from(b) DURING 15 minutes"
+        py = PrismQLEngine(MemoryBackend(self.DOCS)).execute(query)
+        rust = PrismQLEngine(self.make()).execute(query)
+        assert py == rust == [[1, 2]]
