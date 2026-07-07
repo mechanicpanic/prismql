@@ -31,9 +31,9 @@ independently per cell — the EQL `sequence by` evaluation shape).
 | engine | query | matches |
 |---|---|---|
 | ClickHouse `windowFunnel` | 0.24s | counts only² |
-| **PrismQL** (Python backend) | **5.1s** | **372** |
+| **PrismQL** (Rust backend) | **3.8s** | **372** |
+| PrismQL (Python backend) | 5.5s | 372 |
 | Flink SQL MATCH_RECOGNIZE | 6.8s | 570¹ |
-| PrismQL (Rust backend) | 7.5s | 372 |
 | DuckDB SQL, paper's bucketization rewrite | 10.1s | 372 |
 | Elastic EQL (reference engine) | 20.2s | 556¹ |
 | SQLite (row store) | 15.2 min | 372 |
