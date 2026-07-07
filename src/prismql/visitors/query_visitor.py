@@ -1662,6 +1662,23 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return timedelta(weeks=value)
         raise ValueError(f"Unsupported DURING time unit: {unit}")
 
+    def _temporal_link_kernel(self, name: str) -> Optional[Any]:
+        """Return the backend's temporal-link kernel method, when usable.
+
+        Backends offering `merge_temporal_link` / `extend_temporal_link`
+        (Rust) evaluate temporal sequential links without ids or timestamps
+        round-tripping per message. Note: the kernels break timestamp TIES
+        by ascending id (deterministic); the Python builders break ties by
+        set-iteration order.
+        """
+        kernel = getattr(self.search_backend, name, None)
+        if kernel is None:
+            return None
+        has_field = getattr(self.search_backend, "has_timestamp_field", None)
+        if has_field is not None and not has_field(self.timestamp_field):
+            return None
+        return kernel
+
     def _get_timestamps_for_messages(
         self, msg_ids: set[MessageId]
     ) -> dict[MessageId, datetime]:
@@ -1719,6 +1736,16 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if not lhs_messages or not rhs_messages:
             return []
 
+        kernel = self._temporal_link_kernel("merge_temporal_link")
+        if kernel is not None:
+            return kernel(  # type: ignore[no-any-return]
+                list(lhs_messages),
+                list(rhs_messages),
+                self.timestamp_field,
+                duration,
+                forward,
+            )
+
         timestamps = self._get_timestamps_for_messages(lhs_messages | rhs_messages)
         lhs_with_ts = sorted(
             ((mid, timestamps[mid]) for mid in lhs_messages if mid in timestamps),
@@ -1764,6 +1791,16 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if not lhs_sequences or not rhs_messages:
             return []
 
+        kernel = self._temporal_link_kernel("extend_temporal_link")
+        if kernel is not None:
+            return kernel(  # type: ignore[no-any-return]
+                lhs_sequences,
+                list(rhs_messages),
+                self.timestamp_field,
+                duration,
+                True,
+            )
+
         anchor_ids = {seq[-1] for seq in lhs_sequences}
         timestamps = self._get_timestamps_for_messages(anchor_ids | rhs_messages)
         rhs_with_ts = sorted(
@@ -1800,6 +1837,16 @@ class PrismQLVisitor(BasePrismQLVisitor):
         """
         if not lhs_sequences or not rhs_messages:
             return []
+
+        kernel = self._temporal_link_kernel("extend_temporal_link")
+        if kernel is not None:
+            return kernel(  # type: ignore[no-any-return]
+                lhs_sequences,
+                list(rhs_messages),
+                self.timestamp_field,
+                duration,
+                False,
+            )
 
         anchor_ids = {seq[0] for seq in lhs_sequences}
         timestamps = self._get_timestamps_for_messages(anchor_ids | rhs_messages)

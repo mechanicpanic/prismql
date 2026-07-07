@@ -292,6 +292,43 @@ class RustMemoryBackend(SearchBackend):
             valid_groups, field, window
         )
 
+    def merge_temporal_link(
+        self,
+        lhs: Sequence[MessageId],
+        rhs: Sequence[MessageId],
+        field: str,
+        duration: timedelta,
+        forward: bool,
+    ) -> QueryResult:
+        """Greedy temporal sequential pairing (DURING), fully in Rust: ids
+        cross the FFI boundary once each way, timestamps never leave Rust.
+        Ties are broken by ascending id (deterministic)."""
+        return self._backend.merge_temporal_link(  # type: ignore[no-any-return]
+            [i for i in lhs if self._valid_id(i)],
+            [i for i in rhs if self._valid_id(i)],
+            field,
+            duration,
+            forward,
+        )
+
+    def extend_temporal_link(
+        self,
+        sequences: Sequence[MessageGroup],
+        rhs: Sequence[MessageId],
+        field: str,
+        duration: timedelta,
+        forward: bool,
+    ) -> QueryResult:
+        """Extend sequences by one temporal link (chained DURING) in Rust."""
+        valid_seqs = [list(s) for s in sequences if all(self._valid_id(i) for i in s)]
+        return self._backend.extend_temporal_link(  # type: ignore[no-any-return]
+            valid_seqs,
+            [i for i in rhs if self._valid_id(i)],
+            field,
+            duration,
+            forward,
+        )
+
     def merge_within_time_window(
         self,
         groups: Sequence[MessageGroup],
