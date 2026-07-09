@@ -77,6 +77,16 @@ class AggregateResult:
             return f"AggregateResult(grouped_values={self.grouped_values})"
         return f"AggregateResult(value={self.value})"
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, AggregateResult):
+            return NotImplemented
+        return (
+            self.value == other.value
+            and dict(self.grouped_values) == dict(other.grouped_values)
+            and self.function == other.function
+            and self.field == other.field
+        )
+
 
 class GroupedResult:
     """
@@ -127,3 +137,10 @@ class GroupedResult:
         return (
             f"GroupedResult(groups={len(self.groups)}, group_by={self.group_by_fields})"
         )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, GroupedResult):
+            return NotImplemented
+        return dict(self.groups) == dict(other.groups) and list(
+            self.group_by_fields
+        ) == list(other.group_by_fields)

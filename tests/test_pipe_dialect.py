@@ -354,3 +354,38 @@ class TestValidatorPipeDialect:
         classic = v.validate("SELECT contains(nope)")
         pipe = v.validate("contains(nope)")
         assert not classic.valid and not pipe.valid
+
+
+class TestResultEquality:
+    """Aggregate/grouped results compare by value, so results from the two
+    dialect paths (or two runs) can be asserted equal."""
+
+    def test_aggregate_result_value_equality(self):
+        from prismql.aggregators.types import AggregateResult, AggregationFunction
+
+        a = AggregateResult(value=24, function=AggregationFunction.COUNT)
+        b = AggregateResult(value=24, function=AggregationFunction.COUNT)
+        c = AggregateResult(value=25, function=AggregationFunction.COUNT)
+        assert a == b
+        assert a != c
+        assert a != "not a result"
+
+    def test_grouped_result_value_equality(self):
+        from prismql.aggregators.types import GroupedResult
+
+        a = GroupedResult({"x": [[1, 2]]}, ["user"])
+        b = GroupedResult({"x": [[1, 2]]}, ["user"])
+        c = GroupedResult({"x": [[1, 3]]}, ["user"])
+        assert a == b
+        assert a != c
+
+    def test_dialects_agree_on_aggregation(self):
+        docs = [
+            {"id": 1, "user": "alice", "text": "one"},
+            {"id": 2, "user": "alice", "text": "two"},
+            {"id": 3, "user": "bob", "text": "three"},
+        ]
+        engine = PrismQLEngine(MemoryBackend(docs))
+        classic = engine.execute("SELECT from(alice) AGGREGATE count()")
+        pipe = engine.execute("from(alice) |> count()")
+        assert classic == pipe
