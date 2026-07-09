@@ -134,16 +134,24 @@ class QueryValidator:
         self.check_deprecated = check_deprecated
         self.check_performance = check_performance
 
-    def validate(self, query: str) -> ValidationResult:
+    def validate(self, query: str, dialect: str = "auto") -> ValidationResult:
         """
         Validate a PrismQL query.
 
         Args:
-            query: Query string to validate
+            query: Query string to validate, in either surface syntax
+            dialect: 'auto' (default — SELECT-prefixed queries are classic,
+                everything else is pipe), 'classic', or 'pipe'
 
         Returns:
             ValidationResult with detailed feedback
         """
+        from .engine import PrismQLEngine
+
+        resolved = PrismQLEngine._resolve_dialect(query, dialect)
+        if resolved == "pipe":
+            return self._validate_pipe(query)
+
         issues: list[ValidationIssue] = []
 
         # 1. Syntax validation
@@ -178,6 +186,131 @@ class QueryValidator:
         # Valid if no errors
         has_errors = any(i.level == ValidationLevel.ERROR for i in issues)
         return ValidationResult(valid=not has_errors, issues=issues, query=query)
+
+    def _validate_pipe(self, query: str) -> ValidationResult:
+        """Validate a pipe-dialect query.
+
+        The pipe parser produces IR directly, so semantic checks walk the IR
+        instead of regexing the query string. Only checks whose classic
+        counterparts can produce ERRORs are implemented (undefined
+        dictionaries, missing window constraints) plus the large-window
+        warning — so ``valid`` means the same thing on both surfaces.
+        Classic-only string heuristics (deprecated aliases, best-practice
+        suggestions) have no pipe equivalents and are skipped.
+        """
+        from .dialects.pipe import parse_pipe
+
+        issues: list[ValidationIssue] = []
+
+        try:
+            ir_query = parse_pipe(query)
+        except PrismQLSyntaxError as e:
+            issues.append(
+                ValidationIssue(
+                    level=ValidationLevel.ERROR,
+                    message=str(e),
+                    line=getattr(e, "line", None),
+                    column=getattr(e, "column", None),
+                    code="SYNTAX_ERROR",
+                )
+            )
+            return ValidationResult(valid=False, issues=issues, query=query)
+
+        issues.extend(self._check_ir_semantics(ir_query))
+
+        has_errors = any(i.level == ValidationLevel.ERROR for i in issues)
+        return ValidationResult(valid=not has_errors, issues=issues, query=query)
+
+    def _check_ir_semantics(self, ir_query: Any) -> list[ValidationIssue]:
+        """IR-walk counterparts of the classic string checks."""
+        issues: list[ValidationIssue] = []
+        self._check_ir_query(ir_query, issues)
+        return issues
+
+    def _check_ir_query(self, q: Any, issues: list[ValidationIssue]) -> None:
+        from .ir import nodes as ir
+
+        # A trailing body window covers a windowless final link.
+        has_body_window = (
+            q.positional_window is not None or q.temporal_window is not None
+        )
+        self._check_ir_window(q.positional_window, issues)
+        if isinstance(q.source, ir.RestrictionsRow):
+            for item in q.source.items:
+                self._check_ir_expr(item.expr, not has_body_window, issues)
+        elif isinstance(q.source, ir.SubqueryChain):
+            self._check_ir_query(q.source.head, issues)
+            for cont in q.source.continuations:
+                self._check_ir_window(cont.window, issues)
+                self._check_ir_query(cont.query, issues)
+
+    def _check_ir_expr(
+        self, expr: Any, is_final_position: bool, issues: list[ValidationIssue]
+    ) -> None:
+        from .ir import nodes as ir
+
+        if isinstance(expr, ir.Contains):
+            # Parity with the classic `contains(\w+)` regex: only
+            # contains() dictionary names are checked.
+            if (
+                isinstance(expr.dict_name, ir.Literal)
+                and expr.dict_name.text not in self.user_dictionaries
+            ):
+                available = (
+                    ", ".join(self.user_dictionaries.keys())
+                    if self.user_dictionaries
+                    else "none available"
+                )
+                issues.append(
+                    ValidationIssue(
+                        level=ValidationLevel.ERROR,
+                        message=f"Dictionary '{expr.dict_name.text}' is not defined",
+                        suggestion=f"Define the dictionary or use one of: {available}",
+                        code="UNDEFINED_DICTIONARY",
+                    )
+                )
+        elif isinstance(expr, ir.Not):
+            self._check_ir_expr(expr.operand, False, issues)
+        elif isinstance(expr, (ir.And, ir.Or)):
+            self._check_ir_expr(expr.left, False, issues)
+            self._check_ir_expr(expr.right, False, issues)
+        elif isinstance(expr, ir.SequenceLink):
+            self._check_ir_window(expr.window, issues)
+            # A chain nests left, so the outermost link is the final one;
+            # earlier windowless links defer to an enclosing window
+            # (PartialSequence semantics) and are fine.
+            if is_final_position and expr.window is None:
+                issues.append(
+                    ValidationIssue(
+                        level=ValidationLevel.ERROR,
+                        message=(
+                            f"Sequential operator {expr.op} must be followed by "
+                            "a window constraint"
+                        ),
+                        suggestion=(
+                            "Add a window to the arrow (e.g. ~>(3) or ~>(1h)) "
+                            "or a trailing stage: |> within(<n>) / |> during(<time>)"
+                        ),
+                        code="MISSING_WINDOW_CONSTRAINT",
+                    )
+                )
+            self._check_ir_expr(expr.lhs, False, issues)
+            self._check_ir_expr(expr.rhs, False, issues)
+
+    @staticmethod
+    def _check_ir_window(window: Any, issues: list[ValidationIssue]) -> None:
+        if isinstance(window, int) and window > 100:
+            issues.append(
+                ValidationIssue(
+                    level=ValidationLevel.WARNING,
+                    message=f"Large window size ({window}) may impact performance",
+                    suggestion=(
+                        "Consider using smaller windows or adding temporal "
+                        "filters (before/after stages)"
+                    ),
+                    code="LARGE_WINDOW",
+                )
+            )
 
     def _parse_query(self, query: str) -> Any:
         """Parse query and return parse tree."""

@@ -18,6 +18,7 @@ from prismql.exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from prismql.grammar.generated.PrismQLLexer import PrismQLLexer
 from prismql.grammar.generated.PrismQLParser import PrismQLParser
 from prismql.ir.lower import lower_query
+from prismql.validator import QueryValidator
 
 
 def lower_classic(query: str):
@@ -268,3 +269,88 @@ class TestWindowAttachment:
         assert ir.temporal_window is not None
         # units are canonicalized in the IR so dialects compare equal
         assert (ir.temporal_window.value, ir.temporal_window.unit) == (1, "hours")
+
+
+class TestValidatorPipeDialect:
+    """QueryValidator understands the pipe surface (dialect='auto')."""
+
+    def _validator(self) -> QueryValidator:
+        return QueryValidator(user_dictionaries={"greetings": ["hello", "hi"]})
+
+    def test_valid_pipe_query(self):
+        result = self._validator().validate("from(alice) ~> from(bob) |> within(3)")
+        assert result.valid
+        assert not result.errors
+
+    def test_auto_detect_routes_classic(self):
+        result = self._validator().validate("SELECT from(alice)")
+        assert result.valid
+
+    def test_explicit_dialect_pipe(self):
+        result = self._validator().validate("from(alice)", dialect="pipe")
+        assert result.valid
+
+    def test_pipe_syntax_error(self):
+        result = self._validator().validate("from(alice) ~>")
+        assert not result.valid
+        assert any(i.code == "SYNTAX_ERROR" for i in result.errors)
+
+    def test_undefined_dictionary(self):
+        result = self._validator().validate("contains(nope)")
+        assert not result.valid
+        assert any(i.code == "UNDEFINED_DICTIONARY" for i in result.errors)
+
+    def test_defined_dictionary_passes(self):
+        result = self._validator().validate("contains(greetings)")
+        assert result.valid
+
+    def test_wildcard_dictionary_not_flagged(self):
+        result = self._validator().validate("contains(*)")
+        assert result.valid
+
+    def test_undefined_dictionary_inside_subquery(self):
+        result = self._validator().validate("[contains(nope)] + [from(a)] |> within(5)")
+        assert not result.valid
+        assert any(i.code == "UNDEFINED_DICTIONARY" for i in result.errors)
+
+    def test_windowless_arrow_is_error(self):
+        result = self._validator().validate("from(a) ~> from(b)")
+        assert not result.valid
+        assert any(i.code == "MISSING_WINDOW_CONSTRAINT" for i in result.errors)
+
+    def test_inline_arrow_window_passes(self):
+        result = self._validator().validate("from(a) ~>(3) from(b)")
+        assert result.valid
+
+    def test_trailing_within_covers_chain(self):
+        result = self._validator().validate(
+            "from(a) ~> from(b) ~> from(c) |> within(10)"
+        )
+        assert result.valid
+
+    def test_trailing_during_covers_chain(self):
+        result = self._validator().validate("from($u) ~> from($u) |> during(1h)")
+        assert result.valid
+
+    def test_mid_chain_window_final_windowless_is_error(self):
+        result = self._validator().validate("from(a) ~>(3) from(b) ~> from(c)")
+        assert not result.valid
+        assert any(i.code == "MISSING_WINDOW_CONSTRAINT" for i in result.errors)
+
+    def test_large_window_warns_but_valid(self):
+        result = self._validator().validate("from(a) + from(b) |> within(200)")
+        assert result.valid
+        assert any(i.code == "LARGE_WINDOW" for i in result.warnings)
+
+    def test_classic_parity_windowless_sequence(self):
+        # The same mistake on both surfaces must fail the same way.
+        v = self._validator()
+        classic = v.validate("SELECT from(a) FOLLOWED_BY from(b)")
+        pipe = v.validate("from(a) ~> from(b)")
+        assert not classic.valid and not pipe.valid
+
+    def test_classic_parity_undefined_dictionary(self):
+        v = self._validator()
+        classic = v.validate("SELECT contains(nope)")
+        pipe = v.validate("contains(nope)")
+        assert not classic.valid and not pipe.valid
