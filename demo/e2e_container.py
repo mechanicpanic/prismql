@@ -103,19 +103,32 @@ def main() -> int:
             )
 
             def ids_of(payload: dict) -> list:
-                if payload.get("kind") in ("aggregate", "grouped"):
-                    return None  # non-empty checked separately below
                 return [r["ids"] for r in payload.get("results", [])]
 
             if r_classic.get("kind") in ("aggregate", "grouped"):
-                check(
-                    bool(
-                        r_classic.get("buckets")
-                        or r_classic.get("value") is not None
-                        or r_classic
-                    ),
-                    f"[{corpus}] classic non-empty (aggregate/grouped): {label}",
-                )
+                # Validate classic based on kind
+                if r_classic.get("kind") == "aggregate":
+                    check(
+                        r_classic.get("value") is not None
+                        or r_classic.get("grouped_values"),
+                        f"[{corpus}] classic non-empty (aggregate): {label}",
+                    )
+                else:  # grouped
+                    check(
+                        bool(r_classic.get("groups")),
+                        f"[{corpus}] classic non-empty (grouped): {label}",
+                    )
+                # Validate pipe based on kind
+                if r_pipe.get("kind") == "aggregate":
+                    check(
+                        r_pipe.get("value") is not None or r_pipe.get("grouped_values"),
+                        f"[{corpus}] pipe non-empty (aggregate): {label}",
+                    )
+                else:  # grouped (kind equality checked below)
+                    check(
+                        bool(r_pipe.get("groups")),
+                        f"[{corpus}] pipe non-empty (grouped): {label}",
+                    )
                 check(
                     r_classic.get("kind") == r_pipe.get("kind"),
                     f"[{corpus}] classic/pipe same result kind: {label}",
