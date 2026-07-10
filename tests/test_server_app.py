@@ -291,3 +291,49 @@ def test_schema_refreshes_on_reload(tmp_path):
     body = c.get("/schema").json()
     assert body["fields"]["venue"]["examples"] == ["MOEX"]
     assert body["fields"]["venue"]["coverage"] == 0.2
+
+
+class TestMultiCorpus:
+    @pytest.fixture
+    def client(self, tmp_path):
+        (tmp_path / "chat.json").write_text(
+            '[{"id": 1, "text": "hello", "user": "ann"},'
+            ' {"id": 2, "text": "hi back", "user": "ben"}]'
+        )
+        (tmp_path / "events.json").write_text(
+            '[{"id": 1, "type": "THEFT", "timestamp": 1000},'
+            ' {"id": 2, "type": "BATTERY", "timestamp": 1060}]'
+        )
+        (tmp_path / "prismql.toml").write_text(
+            '[corpora.chat]\ndata = "chat.json"\n'
+            '[corpora.events]\ndata = "events.json"\n'
+        )
+        from fastapi.testclient import TestClient
+
+        from prismql.server.app import create_app
+        from prismql.server.config import load_config
+
+        return TestClient(create_app(load_config(tmp_path / "prismql.toml")))
+
+    def test_corpora_endpoint(self, client):
+        body = client.get("/corpora").json()
+        assert body == {"corpora": ["chat", "events"], "default": "chat"}
+
+    def test_evaluate_picks_corpus(self, client):
+        r = client.post(
+            "/evaluate", json={"query": "field(type, THEFT)", "corpus": "events"}
+        ).json()
+        assert r["ok"] and r["results"][0]["ids"] == [1]
+
+    def test_evaluate_defaults_to_default_corpus(self, client):
+        r = client.post("/evaluate", json={"query": "from(ann)"}).json()
+        assert r["ok"] and r["results"][0]["ids"] == [1]
+
+    def test_unknown_corpus_is_422(self, client):
+        r = client.post("/evaluate", json={"query": "from(ann)", "corpus": "nope"})
+        assert r.status_code == 422
+        assert "Unknown corpus" in r.json()["error"]["message"]
+
+    def test_schema_takes_corpus(self, client):
+        fields = client.get("/schema", params={"corpus": "events"}).json()["fields"]
+        assert "type" in fields

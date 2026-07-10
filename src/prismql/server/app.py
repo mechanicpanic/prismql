@@ -19,7 +19,13 @@ from ..aggregators.types import AggregateResult, GroupedResult
 from ..exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from ..reference import load_reference
 from ..types import NamedQueryResult
-from .config import ServerConfig, build_engine, compute_schema, load_config
+from .config import (
+    CorpusConfig,
+    ServerConfig,
+    build_engine,
+    compute_schema,
+    load_config,
+)
 
 
 class DictSpec(BaseModel):
@@ -43,6 +49,7 @@ class EvaluateRequest(BaseModel):
     # work where the inline cap is meaningless.
     output: Literal["inline", "file"] = "inline"
     label: str | None = None  # optional human slug for the results file
+    corpus: str | None = None  # which named corpus to query; default_corpus if unset
 
 
 def _result_slug(query: str, label: str | None) -> str:
@@ -54,22 +61,34 @@ def _result_slug(query: str, label: str | None) -> str:
 
 
 class ServerState:
-    """Holds the warm engine; reload swaps it under a lock."""
+    """Holds the warm engines (one per named corpus); reload swaps them
+    under a lock."""
 
     def __init__(self, config: ServerConfig) -> None:
         self.config = config
         self.lock = threading.Lock()
-        self.engine: Any = None
+        self.engines: dict[str, Any] = {}
         self.loaded_at: str | None = None
 
     def reload(self) -> None:
         with self.lock:
-            self.engine = build_engine(self.config)
+            self.engines = {
+                name: build_engine(self.config.corpus(name))
+                for name in self.config.corpus_names()
+            }
             self.loaded_at = datetime.now(timezone.utc).isoformat()
+
+    def engine_for(self, name: str | None) -> tuple[Any, CorpusConfig]:
+        resolved = name or self.config.default_corpus
+        if resolved not in self.engines:
+            raise KeyError(
+                f"Unknown corpus {resolved!r}; available: {sorted(self.engines)}"
+            )
+        return self.engines[resolved], self.config.corpus(resolved)
 
 
 def result_to_payload(
-    result: Any, state: ServerState, hydrate: bool, max_results: int
+    result: Any, engine: Any, id_field: str, hydrate: bool, max_results: int
 ) -> dict[str, Any]:
     """Normalize the engine's four result shapes into the wire format."""
     if isinstance(result, AggregateResult):
@@ -98,9 +117,8 @@ def result_to_payload(
         payload["labels"] = labels
 
     if hydrate and groups:
-        id_field = state.config.id_field
         unique_ids = list(dict.fromkeys(mid for g in groups for mid in g))
-        fetched = state.engine.search_backend.get_documents(unique_ids)
+        fetched = engine.search_backend.get_documents(unique_ids)
         by_id = {doc.get(id_field): doc for doc in fetched}
         for entry in payload["results"]:
             entry["events"] = [by_id[mid] for mid in entry["ids"] if mid in by_id]
@@ -160,7 +178,16 @@ def create_app(config: ServerConfig) -> FastAPI:
         )
         start = perf_counter()
         with state.lock:
-            engine = state.engine
+            try:
+                engine, corpus_cfg = state.engine_for(req.corpus)
+            except KeyError as e:
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "ok": False,
+                        "error": {"type": "runtime", "message": str(e.args[0])},
+                    },
+                )
             if req.dictionaries:
                 # Cheap: shares the loaded backend; only the dict mapping and
                 # visitor are new. The base engine is untouched.
@@ -175,10 +202,10 @@ def create_app(config: ServerConfig) -> FastAPI:
                     for name, value in req.dictionaries.items()
                 }
                 engine = PrismQLEngine(
-                    state.engine.search_backend,
-                    user_dictionaries={**config.dictionaries, **overlay},
-                    timestamp_field=config.timestamp_field,
-                    text_match=config.text_match,
+                    engine.search_backend,
+                    user_dictionaries={**corpus_cfg.dictionaries, **overlay},
+                    timestamp_field=corpus_cfg.timestamp_field,
+                    text_match=corpus_cfg.text_match,
                 )
             try:
                 result = engine.execute(req.query)
@@ -207,12 +234,16 @@ def create_app(config: ServerConfig) -> FastAPI:
                 result, (AggregateResult, GroupedResult)
             ):
                 # Unbounded: write every group to disk, return a summary.
-                full = result_to_payload(result, state, hydrate, max_results=2**31)
+                full = result_to_payload(
+                    result, engine, corpus_cfg.id_field, hydrate, max_results=2**31
+                )
                 payload = _write_results_file(full, req, config)
             else:
                 # Aggregates/grouped results are small by construction —
                 # file mode falls through to the normal inline response.
-                payload = result_to_payload(result, state, hydrate, max_results)
+                payload = result_to_payload(
+                    result, engine, corpus_cfg.id_field, hydrate, max_results
+                )
         payload["ok"] = True
         payload["query"] = req.query
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
@@ -220,11 +251,19 @@ def create_app(config: ServerConfig) -> FastAPI:
 
     def _health_payload() -> dict[str, Any]:
         with state.lock:
-            backend = state.engine.search_backend
+            counts = {
+                name: eng.search_backend.get_total_documents()
+                for name, eng in state.engines.items()
+            }
+            default_engine = state.engines[config.default_corpus]
+            backend = default_engine.search_backend
+            # Legacy single-corpus configs (no [corpora.*] sections) keep the
+            # flat scalar shape; real multi-corpus configs get a breakdown.
+            documents: Any = counts if config.corpora else counts[config.default_corpus]
             return {
                 "status": "ok",
                 "backend": type(backend).__name__,
-                "documents": backend.get_total_documents(),
+                "documents": documents,
                 "loaded_at": state.loaded_at,
             }
 
@@ -238,9 +277,26 @@ def create_app(config: ServerConfig) -> FastAPI:
         return _health_payload()
 
     @app.get("/schema")
-    def schema() -> dict[str, Any]:
+    def schema(corpus: str | None = None) -> Any:
         with state.lock:
-            return compute_schema(state.engine, config)
+            try:
+                engine, corpus_cfg = state.engine_for(corpus)
+            except KeyError as e:
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "ok": False,
+                        "error": {"type": "runtime", "message": str(e.args[0])},
+                    },
+                )
+            return compute_schema(engine, corpus_cfg)
+
+    @app.get("/corpora")
+    def corpora() -> dict[str, Any]:
+        return {
+            "corpora": config.corpus_names(),
+            "default": config.default_corpus,
+        }
 
     @app.get("/reference")
     def reference() -> PlainTextResponse:
