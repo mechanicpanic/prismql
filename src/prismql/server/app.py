@@ -344,6 +344,15 @@ def create_app(config: ServerConfig) -> FastAPI:
     return app
 
 
+def _resolve_port(config: ServerConfig, args_port: int | None) -> int:
+    """The CLI --port flag wins over the config file's port when given.
+
+    Lets a deployment platform (e.g. Railway, via $PORT) override a
+    checked-in config without editing it.
+    """
+    return args_port if args_port is not None else config.port
+
+
 def main() -> None:
     """Console entry point: prismql-server --config prismql.toml"""
     import argparse
@@ -352,6 +361,8 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(prog="prismql-server")
     parser.add_argument("--config", required=True, help="Path to prismql.toml")
+    parser.add_argument("--port", type=int, default=None, help="Override config port")
     args = parser.parse_args()
     config = load_config(args.config)
-    uvicorn.run(create_app(config), host=config.host, port=config.port)
+    port = _resolve_port(config, args.port)
+    uvicorn.run(create_app(config), host=config.host, port=port)

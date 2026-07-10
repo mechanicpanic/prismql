@@ -8,7 +8,7 @@ fastapi = pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from prismql.server.app import create_app  # noqa: E402
+from prismql.server.app import _resolve_port, create_app  # noqa: E402
 from prismql.server.config import ServerConfig  # noqa: E402
 
 DOCS = [
@@ -291,6 +291,16 @@ def test_schema_refreshes_on_reload(tmp_path):
     body = c.get("/schema").json()
     assert body["fields"]["venue"]["examples"] == ["MOEX"]
     assert body["fields"]["venue"]["coverage"] == 0.2
+
+
+def test_resolve_port_prefers_cli_flag_over_config():
+    cfg = ServerConfig(port=8901)
+    assert _resolve_port(cfg, 8080) == 8080
+
+
+def test_resolve_port_falls_back_to_config_when_unset():
+    cfg = ServerConfig(port=8901)
+    assert _resolve_port(cfg, None) == 8901
 
 
 class TestMultiCorpus:
