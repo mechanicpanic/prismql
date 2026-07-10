@@ -1,0 +1,24 @@
+[server]
+host = "0.0.0.0"
+port = 8901
+max_results = 25
+hydrate = true
+rate_limit_per_minute = 60
+static_dir = "web"
+default_corpus = "fcc"
+
+[corpora.fcc]
+data = "data/fcc.json"
+
+[corpora.fcc.dictionaries]
+# seeded from benchmarks/fcc-situations/dicts_handseed.json at authoring
+# time — copied verbatim as inline term lists.
+CodeHelp = ["code", "function", "variable", "array", "loop", "syntax", "debug", "console", "css", "html", "javascript", "div", "tag", "element"]
+FCCBug = ["freecodecamp", "fcc", "challenge", "lesson", "exercise", "curriculum", "zipline", "waypoint", "bonfire", "campsite", "map", "broken"]
+JobSearch = ["job", "hiring", "interview", "resume", "career", "salary", "freelance", "employer", "portfolio", "recruiter", "applying"]
+Meeting = ["meet", "meetup", "hangout", "schedule", "join us", "call", "session", "attend"]
+OSSelection = ["linux", "windows", "ubuntu", "mac", "osx", "distro", "operating system", "dual boot", "partition", "debian", "fedora"]
+SoftwareSupport = ["install", "version", "update", "download", "configure", "setup", "package", "npm", "git", "terminal", "command", "sudo"]
+
+[corpora.chicago]
+data = "data/chicago.json"
