@@ -164,3 +164,57 @@ def test_text_match_defaults_to_substring(tmp_path):
     cfg_file = tmp_path / "min.toml"
     cfg_file.write_text('[backend]\ntype = "memory"\ndata = "d.json"\n')
     assert load_config(cfg_file).text_match == "substring"
+
+
+class TestNamedCorpora:
+    def test_legacy_config_has_default_corpus_only(self, tmp_path):
+        cfg_file = tmp_path / "prismql.toml"
+        data = tmp_path / "docs.json"
+        data.write_text('[{"id": 1, "text": "hi", "user": "a"}]')
+        cfg_file.write_text('[backend]\ndata = "docs.json"\n')
+        config = load_config(cfg_file)
+        assert config.corpora == {}
+        default = config.corpus("default")
+        assert default.data == str(data)
+        assert default.backend_type == "memory"
+
+    def test_named_corpora_parsed(self, tmp_path):
+        (tmp_path / "a.json").write_text('[{"id": 1, "text": "hi", "user": "x"}]')
+        (tmp_path / "b.json").write_text('[{"id": 1, "type": "THEFT"}]')
+        (tmp_path / "prismql.toml").write_text(
+            "[corpora.chat]\n"
+            'data = "a.json"\n'
+            "[corpora.chat.dictionaries]\n"
+            'greet = ["hi"]\n'
+            "[corpora.events]\n"
+            'data = "b.json"\n'
+            'timestamp_field = "ts"\n'
+        )
+        config = load_config(tmp_path / "prismql.toml")
+        assert set(config.corpora) == {"chat", "events"}
+        assert config.corpus("chat").dictionaries == {"greet": ["hi"]}
+        assert config.corpus("events").timestamp_field == "ts"
+        # relative data paths resolve against the config dir
+        assert config.corpus("chat").data == str(tmp_path / "a.json")
+
+    def test_default_corpus_name_configurable(self, tmp_path):
+        (tmp_path / "a.json").write_text('[{"id": 1, "text": "hi"}]')
+        (tmp_path / "prismql.toml").write_text(
+            '[server]\ndefault_corpus = "chat"\n[corpora.chat]\ndata = "a.json"\n'
+        )
+        config = load_config(tmp_path / "prismql.toml")
+        assert config.default_corpus == "chat"
+
+    def test_unknown_corpus_raises(self, tmp_path):
+        (tmp_path / "a.json").write_text('[{"id": 1}]')
+        (tmp_path / "prismql.toml").write_text('[backend]\ndata = "a.json"\n')
+        config = load_config(tmp_path / "prismql.toml")
+        with pytest.raises(KeyError):
+            config.corpus("nope")
+
+    def test_build_engine_accepts_corpus_config(self, tmp_path):
+        (tmp_path / "a.json").write_text('[{"id": 1, "text": "hello", "user": "x"}]')
+        (tmp_path / "prismql.toml").write_text('[corpora.chat]\ndata = "a.json"\n')
+        config = load_config(tmp_path / "prismql.toml")
+        engine = build_engine(config.corpus("chat"))
+        assert engine.execute("from(x)") == [[1]]

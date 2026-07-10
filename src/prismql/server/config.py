@@ -13,6 +13,14 @@ if TYPE_CHECKING:
     from ..engine import PrismQLEngine
 
 
+def _resolve(base: Path, value: str | None) -> str | None:
+    """Resolve a relative path against base, or return absolute path as-is."""
+    if value is None:
+        return None
+    path = Path(value)
+    return str(path if path.is_absolute() else base / path)
+
+
 def _load_tomllib() -> Any:
     """Import the toml parser lazily so this module stays importable on
     Python < 3.11 without the server extra (the REPL imports us too)."""
@@ -29,6 +37,24 @@ def _load_tomllib() -> Any:
             "Parsing prismql.toml on Python < 3.11 requires tomli: "
             "uv pip install 'prismql[server]' (or just tomli)"
         ) from e
+
+
+@dataclass
+class CorpusConfig:
+    """One named corpus: everything engine-specific.
+
+    Field names deliberately mirror the flat ServerConfig fields so
+    build_engine() and compute_schema() accept either object unchanged.
+    """
+
+    backend_type: str = "memory"
+    data: str | None = None
+    index_path: str | None = None
+    id_field: str = "id"
+    timestamp_fields: list[str] = field(default_factory=lambda: ["timestamp"])
+    timestamp_field: str = "timestamp"
+    text_match: str = "substring"
+    dictionaries: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -51,6 +77,31 @@ class ServerConfig:
     # "match": "substring"|"token"} (single-word mode; multi-word terms
     # always phrase-match). TOML long form: [dictionaries.<name>] tables.
     dictionaries: dict[str, Any] = field(default_factory=dict)
+    corpora: dict[str, CorpusConfig] = field(default_factory=dict)
+    default_corpus: str = "default"
+
+    def corpus(self, name: str) -> CorpusConfig:
+        """The named corpus; the flat legacy fields serve the default name."""
+        if name in self.corpora:
+            return self.corpora[name]
+        if name == self.default_corpus and not self.corpora:
+            return CorpusConfig(
+                backend_type=self.backend_type,
+                data=self.data,
+                index_path=self.index_path,
+                id_field=self.id_field,
+                timestamp_fields=self.timestamp_fields,
+                timestamp_field=self.timestamp_field,
+                text_match=self.text_match,
+                dictionaries=self.dictionaries,
+            )
+        raise KeyError(
+            f"Unknown corpus {name!r}; available: {sorted(self.corpus_names())}"
+        )
+
+    def corpus_names(self) -> list[str]:
+        """Return sorted list of available corpus names."""
+        return sorted(self.corpora) if self.corpora else [self.default_corpus]
 
 
 def load_config(path: str | Path) -> ServerConfig:
@@ -70,20 +121,9 @@ def load_config(path: str | Path) -> ServerConfig:
     engine = raw.get("engine", {})
     dicts_section = raw.get("dictionaries", {})
 
-    data = backend.get("data")
-    if data is not None:
-        data_path = Path(data)
-        data = str(data_path if data_path.is_absolute() else base / data_path)
-
-    index_path = backend.get("index_path")
-    if index_path is not None:
-        ip = Path(index_path)
-        index_path = str(ip if ip.is_absolute() else base / ip)
-
-    results_dir = server.get("results_dir")
-    if results_dir is not None:
-        rd_path = Path(results_dir)
-        results_dir = str(rd_path if rd_path.is_absolute() else base / rd_path)
+    data = _resolve(base, backend.get("data"))
+    index_path = _resolve(base, backend.get("index_path"))
+    results_dir = _resolve(base, server.get("results_dir"))
 
     if "file" in dicts_section:
         dict_path = Path(dicts_section["file"])
@@ -92,6 +132,24 @@ def load_config(path: str | Path) -> ServerConfig:
         dictionaries: dict[str, Any] = json.loads(dict_path.read_text(encoding="utf-8"))
     else:
         dictionaries = dict(dicts_section)
+
+    # Parse named corpora
+    corpora: dict[str, CorpusConfig] = {}
+    for name, section in raw.get("corpora", {}).items():
+        corpora[name] = CorpusConfig(
+            backend_type=section.get("type", "memory").lower(),
+            data=_resolve(base, section.get("data")),
+            index_path=_resolve(base, section.get("index_path")),
+            id_field=section.get("id_field", "id"),
+            timestamp_fields=list(section.get("timestamp_fields", ["timestamp"])),
+            timestamp_field=section.get("timestamp_field", "timestamp"),
+            text_match=section.get("text_match", "substring"),
+            dictionaries=dict(section.get("dictionaries", {})),
+        )
+
+    default_corpus = server.get(
+        "default_corpus", "default" if not corpora else sorted(corpora)[0]
+    )
 
     return ServerConfig(
         host=server.get("host", "127.0.0.1"),
@@ -107,6 +165,8 @@ def load_config(path: str | Path) -> ServerConfig:
         text_match=engine.get("text_match", "substring"),
         results_dir=results_dir,
         dictionaries=dictionaries,
+        corpora=corpora,
+        default_corpus=default_corpus,
     )
 
 
@@ -156,7 +216,7 @@ def load_documents(path: str | Path) -> list[dict[str, Any]]:
     )
 
 
-def build_engine(config: ServerConfig) -> PrismQLEngine:
+def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
     """Construct a PrismQLEngine from a ServerConfig.
 
     v1 supports the in-process backends (memory, rust_memory, tantivy).
@@ -208,7 +268,9 @@ SCHEMA_SAMPLE_CAP = 1000
 EXAMPLES_MAX_CARDINALITY = 20
 
 
-def compute_schema(engine: PrismQLEngine, config: ServerConfig) -> dict[str, Any]:
+def compute_schema(
+    engine: PrismQLEngine, config: ServerConfig | CorpusConfig
+) -> dict[str, Any]:
     """Introspect the loaded corpus: fields, coverage, types, examples.
 
     PrismQL is schema-on-read — documents are free-form dicts and nothing is
