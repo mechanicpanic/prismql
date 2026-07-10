@@ -1,270 +1,68 @@
-# PrismQL Interactive Demo
+# PrismQL Demo
 
-A web-based demonstration of PrismQL query language for conversational data analysis.
+The live demo is a FastAPI server (`prismql.server.app`) serving a static
+frontend (`demo/web/`) and the `/evaluate` API over two named corpora
+(`fcc`, `chicago`), in both the classic and pipe dialects.
 
-## Features
+## Regenerate the demo data
 
-- 🎯 **Interactive Query Interface** - Type and execute PrismQL queries in real-time
-- 📚 **Example Queries** - 30+ pre-built queries organized by category
-- 💬 **Synthetic Dataset** - Realistic customer support conversations
-- 🔍 **Result Visualization** - See matched messages with full context
-- 📖 **Inline Documentation** - Quick reference guide and syntax help
-
-## Quick Start
-
-### Run Locally
+`demo/data/*.json` are committed exports from the research repo's
+benchmarks. Regenerate only if the source data changes:
 
 ```bash
-# Install dependencies
-uv pip install '.[demo]'
-
-# Or install just what's needed
-uv pip install streamlit
-
-# Run the app
-streamlit run demo/app.py
+uv run python demo/prepare_demo_data.py   # requires ../prismql-research checked out
 ```
 
-The app will open in your browser at `http://localhost:8501`
-
-### Deploy to Streamlit Cloud (Free)
-
-**Note:** Streamlit Cloud works with both public and private repositories. For private repos, you'll need to authorize Streamlit to access your GitHub account.
-
-1. **Go to [share.streamlit.io](https://share.streamlit.io)**
-
-2. **Sign in with GitHub** and authorize Streamlit
-
-3. **Click "New app"**
-
-4. **Configure deployment:**
-   - Repository: `your-username/prismql` (your private or public repo will appear in the list)
-   - Branch: `main`
-   - Main file path: `demo/app.py`
-   - Python version: `3.9+`
-
-5. **Click "Deploy"**
-
-Your demo will be live at `https://your-app-name.streamlit.app` in ~2 minutes!
-
-**For private repositories:** The deployed app will be publicly accessible, but the source code remains private in your GitHub repo.
-
-## Demo Dataset
-
-The demo uses synthetic customer support conversations featuring:
-
-- **Users:**
-  - Customers: alice, bob, charlie, david, emma, frank
-  - Support agents: support_sarah, support_mike, support_lisa
-  - Managers: manager_john, manager_kate
-
-- **Patterns:**
-  - Greetings and introductions
-  - Problems and solutions
-  - Questions and answers
-  - Escalations to management
-  - Thank you messages
-
-- **Size:** ~100-150 messages with realistic conversation patterns
-
-## Example Queries
-
-### Basic Filtering
-```prismql
--- All messages from alice
-SELECT from(alice)
-
--- All support agent messages
-SELECT from(support_sarah)
-
--- Messages containing problems
-SELECT contains(problems)
-```
-
-### Boolean Operations
-```prismql
--- Messages from alice OR bob
-SELECT from(alice) OR from(bob)
-
--- Problems from any customer
-SELECT from(*) AND contains(problems)
-
--- Messages NOT from support
-SELECT NOT from(support_sarah)
-```
-
-### Sequential Patterns
-```prismql
--- Customer then support response
-SELECT from(alice) FOLLOWED_BY from(support_sarah) WITHIN 3
-
--- Problem then solution
-SELECT contains(problems) FOLLOWED_BY contains(solutions) WITHIN 5
-
--- Customer NOT followed by support (unanswered)
-SELECT from(alice) NOT_FOLLOWED_BY from(support_sarah) WITHIN 10
-```
-
-### Pattern Variables
-```prismql
--- Same user posting twice
-SELECT from($user), from($user) INWIN 3
-
--- User asks, support responds, user follows up
-SELECT from($customer) FOLLOWED_BY from(support_sarah) WITHIN 5 FOLLOWED_BY from($customer) WITHIN 5
-```
-
-### Advanced Patterns
-```prismql
--- Escalation pattern: problem → urgent → manager
-SELECT contains(problems) FOLLOWED_BY contains(urgent) WITHIN 3 FOLLOWED_BY from(manager_john) WITHIN 5
-
--- Question-answer-thanks sequence
-SELECT contains(questions) FOLLOWED_BY from(support_sarah) WITHIN 3 FOLLOWED_BY contains(thanks) WITHIN 3
-```
-
-## Available Dictionaries
-
-The demo includes these pre-defined word lists:
-
-- `greetings` - hello, hi, hey, good morning
-- `problems` - error, issue, problem, bug, broken, failed
-- `solutions` - fixed, resolved, solved, try, reset
-- `thanks` - thank, thanks, appreciate, perfect
-- `urgent` - urgent, emergency, asap, critical
-- `questions` - what, when, where, how, why, can you
-
-## Customization
-
-### Add Your Own Data
-
-Edit `demo/generate_demo_data.py`:
-
-```python
-def generate_demo_conversations():
-    conversations = []
-
-    # Add your messages
-    conversations.append({
-        "id": 1,
-        "user": "your_user",
-        "text": "Your message text"
-    })
-
-    return conversations
-```
-
-### Add New Dictionaries
-
-Edit `demo/generate_demo_data.py`:
-
-```python
-def get_demo_dictionaries():
-    return {
-        "your_dict": ["word1", "word2", "word3"],
-        # ... existing dictionaries
-    }
-```
-
-### Customize UI
-
-Edit `demo/app.py` to change:
-- Color scheme (`.streamlit/config.toml`)
-- Example queries
-- Page layout
-- Result formatting
-
-## Deployment Options
-
-### Streamlit Cloud (Recommended)
-- ✅ **Free tier available**
-- ✅ **Automatic updates from GitHub**
-- ✅ **HTTPS included**
-- ✅ **No configuration needed**
-
-### Railway
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
-
-# Deploy
-railway init
-railway up
-```
-
-### Render
-1. Connect your GitHub repo
-2. Select "Web Service"
-3. Build command: `pip install '.[demo]'`
-4. Start command: `streamlit run demo/app.py --server.port $PORT`
-
-### Docker
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-COPY . .
-
-RUN pip install '.[demo]'
-
-EXPOSE 8501
-
-CMD ["streamlit", "run", "demo/app.py"]
-```
+## Run locally
 
 ```bash
-docker build -t prismql-demo .
-docker run -p 8501:8501 prismql-demo
+uv sync --extra server
+uv run prismql-server --config demo/prismql.toml
+# -> http://localhost:8901
 ```
 
-### Quick Share (Temporary Demo)
+`demo/prismql.toml` defines both corpora, the dictionaries, rate limiting
+(`60`/min), and `static_dir = "web"` so the server also serves the frontend
+at `/`.
 
-For quick demos without deployment, use ngrok to share your local instance:
+## Docker
 
 ```bash
-# Run the app locally
-streamlit run demo/app.py
-
-# In another terminal, expose it with ngrok
-ngrok http 8501
+docker build -t prismql-demo -f Dockerfile .
+docker run --rm -p 8901:8901 prismql-demo
 ```
 
-This gives you a public URL (e.g., `https://abc123.ngrok.io`) that you can share. The tunnel stays active while ngrok is running.
+The `Dockerfile` honors `$PORT` (defaults to `8901`) for Railway compatibility.
 
-**Note:** Free ngrok URLs are temporary and change each time you restart ngrok.
+## E2E check (container-level)
 
-## Troubleshooting
+`demo/e2e_container.py` drives every example in `demo/web/examples.js`
+against a running container — both dialects, both corpora — plus the
+syntax-error path, unknown-corpus path, `GET /`, `GET /corpora`, and the
+rate limiter (fires last; it poisons the per-IP window for a minute):
 
-### Import Errors
 ```bash
-# Make sure you're in the project root
-cd /path/to/prismql
-
-# Install in development mode
-pip install -e '.[demo]'
+docker run --rm -d -p 8944:8901 --name prismql-demo-e2e prismql-demo
+uv run python demo/e2e_container.py http://localhost:8944
+docker stop prismql-demo-e2e
 ```
 
-### Port Already in Use
+## Deploy (Railway)
+
 ```bash
-# Use a different port
-streamlit run demo/app.py --server.port 8502
+railway login
+railway init            # new project, e.g. "prismql-demo"
+railway up               # builds the Dockerfile, deploys
+railway domain            # generates a *.up.railway.app URL
 ```
 
-### Streamlit Cloud Deployment Fails
-- Check that `demo/requirements.txt` exists
-- Verify Python version is 3.9+
-- Check logs in Streamlit Cloud dashboard
+For a custom domain: Railway dashboard → Settings → Domains → add the
+domain, then at the DNS host add a CNAME record:
+`<sub>.domain -> <target>.up.railway.app`.
 
-## Screenshots
+## Streamlit demo
 
-(Add screenshots of your deployed demo here)
-
-## Links
-
-- [PrismQL Documentation](https://prismql.readthedocs.io)
-- [PrismQL GitHub](https://github.com/prismql/prismql)
-- [Streamlit Documentation](https://docs.streamlit.io)
-
-## License
-
-MIT License - see LICENSE file for details
+`demo/app.py` (Streamlit) still works for local, offline exploration — see
+inline `streamlit run demo/app.py` usage. It predates the web demo above and
+uses an older example dataset/syntax; the FastAPI + static frontend demo is
+the one that gets deployed.
