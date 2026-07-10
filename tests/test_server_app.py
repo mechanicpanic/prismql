@@ -356,3 +356,22 @@ class TestStaticMount:
         client = TestClient(create_app(load_config(tmp_path / "prismql.toml")))
         assert "<h1>prism</h1>" in client.get("/").text
         assert client.get("/health").json()["status"] == "ok"  # API still wins
+
+
+class TestRateLimit:
+    def test_rate_limit_429(self, tmp_path):
+        (tmp_path / "docs.json").write_text('[{"id": 1, "text": "x", "user": "a"}]')
+        (tmp_path / "prismql.toml").write_text(
+            '[server]\nrate_limit_per_minute = 3\n[backend]\ndata = "docs.json"\n'
+        )
+        from fastapi.testclient import TestClient
+
+        from prismql.server.app import create_app
+        from prismql.server.config import load_config
+
+        client = TestClient(create_app(load_config(tmp_path / "prismql.toml")))
+        for _ in range(3):
+            assert (
+                client.post("/evaluate", json={"query": "from(a)"}).status_code == 200
+            )
+        assert client.post("/evaluate", json={"query": "from(a)"}).status_code == 429

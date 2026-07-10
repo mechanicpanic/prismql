@@ -74,6 +74,7 @@ class ServerConfig:
     text_match: str = "substring"
     results_dir: str | None = None
     static_dir: str | None = None
+    rate_limit_per_minute: int | None = None
     # A value is either a plain term list or {"terms": [...],
     # "match": "substring"|"token"} (single-word mode; multi-word terms
     # always phrase-match). TOML long form: [dictionaries.<name>] tables.
@@ -167,6 +168,7 @@ def load_config(path: str | Path) -> ServerConfig:
         text_match=engine.get("text_match", "substring"),
         results_dir=results_dir,
         static_dir=static_dir,
+        rate_limit_per_minute=server.get("rate_limit_per_minute"),
         dictionaries=dictionaries,
         corpora=corpora,
         default_corpus=default_corpus,

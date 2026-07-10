@@ -11,7 +11,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -168,8 +168,42 @@ def create_app(config: ServerConfig) -> FastAPI:
     app = FastAPI(title="PrismQL Server")
     app.state.prismql = state
 
+    from collections import defaultdict, deque
+
+    hits: dict[str, deque[float]] = defaultdict(deque)
+
+    def _rate_limited(client_ip: str) -> bool:
+        if not config.rate_limit_per_minute:
+            return False
+        now = perf_counter()
+        window = hits[client_ip]
+        while window and now - window[0] > 60.0:
+            window.popleft()
+        if len(window) >= config.rate_limit_per_minute:
+            return True
+        window.append(now)
+        return False
+
     @app.post("/evaluate")
-    def evaluate(req: EvaluateRequest) -> Any:
+    def evaluate(req: EvaluateRequest, request: Request) -> Any:
+        # Honor x-forwarded-for header (proxy) over request.client.host
+        ip = "unknown"
+        forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if forwarded_for:
+            ip = forwarded_for
+        elif request.client:
+            ip = request.client.host
+        if _rate_limited(ip):
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "ok": False,
+                    "error": {
+                        "type": "rate_limit",
+                        "message": "Too many queries — try again in a minute.",
+                    },
+                },
+            )
         hydrate = config.hydrate if req.hydrate is None else req.hydrate
         max_results = (
             min(req.max_results, config.max_results)
