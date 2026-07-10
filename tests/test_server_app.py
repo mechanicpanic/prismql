@@ -337,3 +337,22 @@ class TestMultiCorpus:
     def test_schema_takes_corpus(self, client):
         fields = client.get("/schema", params={"corpus": "events"}).json()["fields"]
         assert "type" in fields
+
+
+class TestStaticMount:
+    def test_static_dir_serves_index(self, tmp_path):
+        web = tmp_path / "web"
+        web.mkdir()
+        web.joinpath("index.html").write_text("<h1>prism</h1>")
+        (tmp_path / "docs.json").write_text('[{"id": 1, "text": "x"}]')
+        (tmp_path / "prismql.toml").write_text(
+            '[server]\nstatic_dir = "web"\n[backend]\ndata = "docs.json"\n'
+        )
+        from fastapi.testclient import TestClient
+
+        from prismql.server.app import create_app
+        from prismql.server.config import load_config
+
+        client = TestClient(create_app(load_config(tmp_path / "prismql.toml")))
+        assert "<h1>prism</h1>" in client.get("/").text
+        assert client.get("/health").json()["status"] == "ok"  # API still wins

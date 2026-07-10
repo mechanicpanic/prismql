@@ -73,6 +73,7 @@ class ServerConfig:
     timestamp_field: str = "timestamp"
     text_match: str = "substring"
     results_dir: str | None = None
+    static_dir: str | None = None
     # A value is either a plain term list or {"terms": [...],
     # "match": "substring"|"token"} (single-word mode; multi-word terms
     # always phrase-match). TOML long form: [dictionaries.<name>] tables.
@@ -124,6 +125,7 @@ def load_config(path: str | Path) -> ServerConfig:
     data = _resolve(base, backend.get("data"))
     index_path = _resolve(base, backend.get("index_path"))
     results_dir = _resolve(base, server.get("results_dir"))
+    static_dir = _resolve(base, server.get("static_dir"))
 
     if "file" in dicts_section:
         dict_path = Path(dicts_section["file"])
@@ -164,6 +166,7 @@ def load_config(path: str | Path) -> ServerConfig:
         timestamp_field=engine.get("timestamp_field", "timestamp"),
         text_match=engine.get("text_match", "substring"),
         results_dir=results_dir,
+        static_dir=static_dir,
         dictionaries=dictionaries,
         corpora=corpora,
         default_corpus=default_corpus,

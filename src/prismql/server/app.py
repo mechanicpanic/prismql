@@ -302,6 +302,11 @@ def create_app(config: ServerConfig) -> FastAPI:
     def reference() -> PlainTextResponse:
         return PlainTextResponse(load_reference(), media_type="text/markdown")
 
+    if config.static_dir:
+        from fastapi.staticfiles import StaticFiles
+
+        app.mount("/", StaticFiles(directory=config.static_dir, html=True))
+
     return app
 
 
