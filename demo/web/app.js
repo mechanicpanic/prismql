@@ -59,6 +59,7 @@
   const latencyEl = $("#latency");
   const tabsEl = $("#corpus-tabs");
   const examplesEl = $("#examples");
+  const blurbEl = $("#example-blurb");
   const resultsEl = $("#results");
   const toggleEl = $("#dialect-toggle");
 
@@ -323,26 +324,25 @@
       const cat = categorize(ex);
       (buckets[cat] = buckets[cat] || []).push(ex);
     }
+    // One flowing cloud of pills; the category is a quiet inline label.
     for (const cat of CATEGORY_ORDER) {
       const items = buckets[cat];
       if (!items || !items.length) continue;
-      const row = el("div", { class: "chip-row" });
-      for (const ex of items) {
-        const chip = el("button", {
-          class: "chip",
-          type: "button",
-          "data-classic": ex.classic,
-          onclick: () => loadExample(ex),
-        }, [
-          el("span", { class: "chip-label", text: ex.label }),
-          ex.blurb ? el("span", { class: "chip-blurb", text: ex.blurb }) : null,
-        ]);
-        row.appendChild(chip);
-      }
-      const group = el("div", { class: "example-group" }, [
-        el("div", { class: "example-caption", text: cat }),
-        row,
+      const group = el("span", { class: "example-group" }, [
+        el("span", { class: "example-caption", text: cat }),
       ]);
+      for (const ex of items) {
+        group.appendChild(
+          el("button", {
+            class: "chip",
+            type: "button",
+            title: ex.blurb || null,
+            "data-classic": ex.classic,
+            onclick: () => loadExample(ex),
+            text: ex.label,
+          })
+        );
+      }
       examplesEl.appendChild(group);
     }
   }
@@ -355,6 +355,7 @@
         !!active && chip.getAttribute("data-classic") === active.classic
       );
     });
+    blurbEl.textContent = active && active.blurb ? active.blurb : "";
   }
 
   function loadExample(ex) {
