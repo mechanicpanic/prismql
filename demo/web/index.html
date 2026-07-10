@@ -2,14 +2,119 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>PrismQL Demo Server</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PrismQL — pattern matching for conversational data</title>
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <h1>PrismQL Demo Server</h1>
-    <p>
-      This server is running. Try <code>GET /corpora</code>,
-      <code>GET /health</code>, <code>GET /schema</code>, or
-      <code>POST /evaluate</code>.
-    </p>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <header class="masthead">
+      <div class="masthead-inner">
+        <svg
+          class="prism"
+          viewBox="0 0 260 120"
+          role="img"
+          aria-label="A white beam of light entering a prism and dispersing into a violet-to-cyan spectrum"
+        >
+          <defs>
+            <linearGradient id="triFill" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.14" />
+              <stop offset="1" stop-color="#22d3ee" stop-opacity="0.06" />
+            </linearGradient>
+            <linearGradient id="triEdge" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#b39dff" />
+              <stop offset="1" stop-color="#67e8f9" />
+            </linearGradient>
+          </defs>
+
+          <!-- incoming white beam -->
+          <line
+            class="beam-in"
+            x1="6" y1="60" x2="102" y2="60"
+            stroke="#f4f4ff" stroke-width="1.6" stroke-linecap="round"
+          />
+
+          <!-- the prism -->
+          <polygon
+            class="tri"
+            points="120,28 156,92 84,92"
+            fill="url(#triFill)"
+            stroke="url(#triEdge)"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+
+          <!-- dispersed spectrum -->
+          <g class="fan" stroke-width="1.5" stroke-linecap="round" fill="none">
+            <line class="ray r1" x1="139" y1="63" x2="252" y2="40"  stroke="#a855f7" />
+            <line class="ray r2" x1="139" y1="63" x2="252" y2="52"  stroke="#7c6cf6" />
+            <line class="ray r3" x1="139" y1="63" x2="252" y2="64"  stroke="#4f8ff7" />
+            <line class="ray r4" x1="139" y1="63" x2="252" y2="76"  stroke="#2fb6ee" />
+            <line class="ray r5" x1="139" y1="63" x2="252" y2="88"  stroke="#22d3ee" />
+            <line class="ray r6" x1="139" y1="63" x2="252" y2="100" stroke="#5ff0e0" />
+          </g>
+        </svg>
+
+        <div class="wordmark">
+          <h1>Prism<span>QL</span></h1>
+          <p class="tagline">A query language for patterns in conversation.</p>
+        </div>
+      </div>
+
+      <nav class="corpus-tabs" id="corpus-tabs" aria-label="Corpus"></nav>
+    </header>
+
+    <main class="stage">
+      <section class="console" aria-label="Query console">
+        <div class="console-top">
+          <div
+            class="dialect-toggle"
+            id="dialect-toggle"
+            role="group"
+            aria-label="Query dialect"
+          >
+            <button type="button" data-dialect="classic" class="seg active">SQL</button>
+            <span class="seg-arrow" aria-hidden="true">⇄</span>
+            <button type="button" data-dialect="pipe" class="seg">pipe</button>
+          </div>
+          <div class="console-actions">
+            <span class="latency" id="latency" hidden></span>
+            <button type="button" class="run" id="run">
+              <span class="run-label">Run</span>
+              <kbd>⌘⏎</kbd>
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-wrap" id="editor-wrap">
+          <pre class="editor-highlight" id="highlight" aria-hidden="true"></pre>
+          <textarea
+            id="editor"
+            class="editor"
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            wrap="soft"
+            aria-label="PrismQL query"
+          ></textarea>
+        </div>
+
+        <div class="examples" id="examples" aria-label="Example queries"></div>
+      </section>
+
+      <section class="results" id="results" aria-live="polite" aria-label="Results"></section>
+    </main>
+
+    <footer class="footer">
+      <span>PrismQL</span>
+      <span class="dot">·</span>
+      <span>pattern matching for conversational data</span>
+      <span class="dot">·</span>
+      <a href="#" class="paper-link">paper (coming soon)</a>
+    </footer>
+
+    <script src="examples.js"></script>
+    <script src="app.js"></script>
   </body>
 </html>
