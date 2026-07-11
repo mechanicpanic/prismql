@@ -146,3 +146,4 @@ rust_results_*.json
 
 # Large ANTLR jar (downloaded by script when needed)
 antlr-*.jar
+.claude/settings.local.json
