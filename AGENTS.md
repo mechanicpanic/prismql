@@ -3,8 +3,8 @@ Backend-agnostic query language for temporal/sequential pattern retrieval in con
 
 ## What this project is
 - **Nature**: production (pre-release library, 0.1.0 unreleased; full discipline, no relaxations).
-- **NKS realm**: `prismql` — not yet created (NKS server unavailable at bootstrap, 2026-07-12); create + add focus holon on the first NKS-connected session, then update this line.
-- **Focus holon**: none yet (see above).
+- **NKS realm**: `prismql` (aleph/prismql, r72) — every session starts with `nks_orient` here.
+- **Focus holon**: `#1 «🔺 PrismQL engine contour»`.
 - **Stack**: Python 3.9–3.12 (uv), ANTLR4 parse + hand-written pipe-dialect parser over a shared frozen-dataclass IR; optional Rust kernels (PyO3/maturin, sibling repo); FastAPI server extra.
 - **Production statement**: private repo backing a submission-track paper (EDBT'27 EA&B, due 2026-10-07) and a public demo (Railway deploy pending owner go-ahead). Breakage cost = wrong query results silently corrupting benchmark/paper claims; correctness regressions matter more than downtime.
 

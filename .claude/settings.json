@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Orient before acting: read the memory index (MEMORY.md) and git status. NKS realm prismql once the server is connected (not yet created as of 2026-07-12).\"}}'"
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Orient before acting: read the memory index (MEMORY.md) and git status. Then nks_orient on realm prismql (r72), focus holon #1.\"}}'"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command // \"\"' | grep -q 'git push' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Post-push ritual: update project state (memory dir; NKS realm prismql when connected) and run the after-green-push self-review on the pushed diff.\"}}' || true"
+            "command": "jq -r '.tool_input.command // \"\"' | grep -q 'git push' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Post-push ritual: update project state (memory dir + NKS realm prismql) and run the after-green-push self-review on the pushed diff.\"}}' || true"
           }
         ]
       }
