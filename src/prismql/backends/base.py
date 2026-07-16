@@ -81,6 +81,31 @@ class SearchBackend(ABC):
         """
         raise NotImplementedError("Phrase search not supported by this backend")
 
+    def search_semantic(self, text: str, *, threshold: float) -> set[MessageId]:
+        """
+        Search for messages semantically similar to the given text.
+
+        Backends embed ``text``, score it against a per-message embedding
+        index (cosine similarity), and return the set of messages whose
+        score is >= ``threshold``. The score itself is discarded — the
+        result is a plain set so it composes through the boolean and
+        sequential algebra like any other predicate (threshold-to-set).
+
+        This is optional - backends can implement if they carry a semantic
+        index. By default, raises NotImplementedError.
+
+        Args:
+            text: Query text to embed and compare against messages
+            threshold: Minimum similarity score in [0.0, 1.0]
+
+        Returns:
+            Set of message IDs at or above the threshold
+
+        Raises:
+            NotImplementedError: If backend doesn't support semantic search
+        """
+        raise NotImplementedError("Semantic search not supported by this backend")
+
     @abstractmethod
     def search_by_field(
         self, field: str, value: str, exact: bool = True

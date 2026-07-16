@@ -45,6 +45,7 @@ from .nodes import (
     RelativeTs,
     RestrictionsRow,
     SequenceLink,
+    SimilarTo,
     SubqueryChain,
     SubqueryContinuation,
     TemporalFilter,
@@ -127,6 +128,11 @@ def lower_condition(  # noqa: C901 - one branch per condition alternative
         return HasFeature(ctx.feature_name().getText())
     if ctx.LabeledAs():
         return HasFeature(ctx.feature_name().getText())
+    if ctx.SimilarTo():
+        return SimilarTo(
+            text=ctx.QUOTED_STRING().getText()[1:-1],
+            threshold=float(ctx.float_number().getText()),
+        )
     if ctx.Field():
         fname = ctx.field_name().getText()
         raw_value = ctx.field_value().getText()

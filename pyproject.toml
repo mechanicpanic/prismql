@@ -33,6 +33,9 @@ tantivy = ["tantivy>=0.24"]
 nlp = [
     "spacy>=3.0.0",
 ]
+semantic = [
+    "sentence-transformers>=2.2",
+]
 highlighting = [
     "pygments>=2.0.0",
 ]
@@ -52,7 +55,7 @@ demo = [
     "pandas>=1.5.0",
     "pygments>=2.0.0",
 ]
-all = ["prismql[opensearch,elasticsearch,nlp,repl,highlighting,demo,server,mcp]"]
+all = ["prismql[opensearch,elasticsearch,nlp,semantic,repl,highlighting,demo,server,mcp]"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -214,13 +217,15 @@ module = [
     "uvicorn",
     "tantivy",
     "tantivy.*",
+    "sentence_transformers",
+    "sentence_transformers.*",
 ]
 ignore_missing_imports = true
 
-# The mcp SDK requires Python >= 3.10 (match statements); our mypy runs at
-# python_version 3.9, so don't follow imports into it at all.
+# The mcp SDK and click >= 8.4 require Python >= 3.10 (match statements);
+# our mypy runs at python_version 3.9, so don't follow imports into them.
 [[tool.mypy.overrides]]
-module = ["mcp", "mcp.*"]
+module = ["mcp", "mcp.*", "click", "click.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 

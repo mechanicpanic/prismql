@@ -98,6 +98,7 @@ condition
     | HasFeature '(' feature_name ')'
     | LabeledAs '(' feature_name ')'
     | Field '(' field_name ',' field_value (',' match_mode)? ')'
+    | SimilarTo '(' QUOTED_STRING ',' float_number ')'
 
     // Legacy operators (backward compatibility)
     | HasWordOfDict '(' hdict ')'
@@ -181,6 +182,7 @@ time_unit
 
 // Rule references
 number : INTEGER;
+float_number : FLOAT | INTEGER;
 hdict : STRING | VARIABLE | WILDCARD;
 huser : STRING | VARIABLE | WILDCARD;
 feature_name : STRING;
@@ -252,6 +254,7 @@ ContainsLink     : 'CONTAINS_LINK'    | 'contains_link'   | 'CONTAINSLINK' | 'co
 HasFeature       : 'HAS_FEATURE'      | 'has_feature'     | 'HASFEATURE'   | 'hasfeature'   ;
 LabeledAs        : 'LABELED_AS'       | 'labeled_as'      | 'LABELEDAS'    | 'labeledas'    ;
 Field            : 'FIELD'            | 'field'           ;
+SimilarTo        : 'SIMILAR_TO'       | 'similar_to'      | 'SIMILARTO'    | 'similarto'    ;
 
 // Legacy condition keywords (backward compatibility)
 HasWordOfDict    : 'HASWORDOFDICT'    | 'haswordofdict'   ;
@@ -265,6 +268,7 @@ HasUserMentioned : 'HASUSERMENTIONED' | 'hasusermentioned';
 ByUser           : 'BYUSER'           | 'byuser'          ;
 
 // Tokens
+FLOAT   : DIGIT+ '.' DIGIT+;
 INTEGER : DIGIT+;
 STRING  : (LETTER | DIGIT)+;
 QUOTED_STRING : '"' (~["])* '"' | '\'' (~['])* '\'';

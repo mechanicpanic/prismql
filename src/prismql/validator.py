@@ -221,6 +221,32 @@ class QueryValidator:
         has_errors = any(i.level == ValidationLevel.ERROR for i in issues)
         return ValidationResult(valid=not has_errors, issues=issues, query=query)
 
+    def _check_similar_thresholds(self, query: str) -> list[ValidationIssue]:
+        """Regex counterpart of the IR-walk similar_to() threshold check."""
+        import re
+
+        issues: list[ValidationIssue] = []
+        threshold_pattern = (
+            r"similar_to\(\s*['\"][^'\"]*['\"]\s*,\s*(\d+(?:\.\d+)?)\s*\)"
+        )
+        for match in re.finditer(threshold_pattern, query, re.IGNORECASE):
+            threshold = float(match.group(1))
+            if not 0.0 <= threshold <= 1.0:
+                issues.append(
+                    ValidationIssue(
+                        level=ValidationLevel.ERROR,
+                        message=(
+                            f"similar_to() threshold {threshold} is outside [0.0, 1.0]"
+                        ),
+                        suggestion=(
+                            "Cosine similarity lives in [0, 1] here; pick a "
+                            "threshold like 0.7"
+                        ),
+                        code="THRESHOLD_OUT_OF_RANGE",
+                    )
+                )
+        return issues
+
     def _check_ir_semantics(self, ir_query: Any) -> list[ValidationIssue]:
         """IR-walk counterparts of the classic string checks."""
         issues: list[ValidationIssue] = []
@@ -267,6 +293,22 @@ class QueryValidator:
                         message=f"Dictionary '{expr.dict_name.text}' is not defined",
                         suggestion=f"Define the dictionary or use one of: {available}",
                         code="UNDEFINED_DICTIONARY",
+                    )
+                )
+        elif isinstance(expr, ir.SimilarTo):
+            if not 0.0 <= expr.threshold <= 1.0:
+                issues.append(
+                    ValidationIssue(
+                        level=ValidationLevel.ERROR,
+                        message=(
+                            f"similar_to() threshold {expr.threshold} is outside "
+                            "[0.0, 1.0]"
+                        ),
+                        suggestion=(
+                            "Cosine similarity lives in [0, 1] here; pick a "
+                            "threshold like 0.7"
+                        ),
+                        code="THRESHOLD_OUT_OF_RANGE",
                     )
                 )
         elif isinstance(expr, ir.Not):
@@ -379,6 +421,9 @@ class QueryValidator:
                         code="UNDEFINED_DICTIONARY",
                     )
                 )
+
+        # Check similar_to() thresholds (parity with the IR-walk check)
+        issues.extend(self._check_similar_thresholds(query))
 
         # Check for undefined custom features
         feature_pattern = r"(\w+)\(\)"

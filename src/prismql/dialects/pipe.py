@@ -63,6 +63,7 @@ from ..ir.nodes import (
     RelativeTs,
     RestrictionsRow,
     SequenceLink,
+    SimilarTo,
     SubqueryChain,
     SubqueryContinuation,
     TemporalFilter,
@@ -95,6 +96,7 @@ _TOKEN_RE = re.compile(
   | (?P<RBRACE>\})
   | (?P<COMMA>,)
   | (?P<STRING>"[^"]*"|'[^']*')
+  | (?P<FLOAT>\d+\.\d+)
   | (?P<TIME>\d+\s*(?:seconds?|minutes?|hours?|days?|weeks?|[smhdw])\b)
   | (?P<INT>\d+)
   | (?P<VARIABLE>\$[A-Za-z_][A-Za-z0-9_]*)
@@ -443,6 +445,20 @@ class _PipeParser:
             tok = self.expect("NAME", f"a feature name in {name}()")
             self.expect("RPAREN", "')'")
             return HasFeature(tok.text)
+
+        if name == "similar_to":
+            tok = self.expect("STRING", 'a quoted text: similar_to("...", threshold)')
+            self.expect(
+                "COMMA",
+                "',' and an explicit threshold: "
+                'similar_to("...", 0.7) — there is no default',
+            )
+            thresh_tok = self.peek()
+            if thresh_tok.kind not in ("FLOAT", "INT"):
+                raise self.error('Expected a numeric threshold: similar_to("...", 0.7)')
+            self.next()
+            self.expect("RPAREN", "')'")
+            return SimilarTo(tok.text[1:-1], float(thresh_tok.text))
 
         if name == "field":
             fname = self.expect("NAME", "a field name in field()").text

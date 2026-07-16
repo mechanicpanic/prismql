@@ -943,6 +943,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
             feature_name = ctx.feature_name().getText()
             return self._get_custom_feature(feature_name)
 
+        # similar_to("text", threshold) - semantic similarity, threshold-to-set
+        if ctx.SimilarTo():
+            text = ctx.QUOTED_STRING().getText()[1:-1]
+            threshold = float(ctx.float_number().getText())
+            return self._get_semantically_similar(text, threshold)
+
         # field(name, value[, matcher]) - generic field predicate.
         # from(x) is the canonical alias for field(user, x).
         if ctx.Field():
@@ -1209,6 +1215,31 @@ class PrismQLVisitor(BasePrismQLVisitor):
             "precomputed. Use IndexBuilder to create feature indexes from your "
             "annotations (LLM-generated, human labels, etc.)."
         )
+
+    def _get_semantically_similar(self, text: str, threshold: float) -> set[MessageId]:
+        """Resolve similar_to("text", threshold) through the backend.
+
+        The backend owns the embedding model and the per-message vector
+        index; this layer only sees the thresholded set, so the result
+        composes like any other leaf predicate.
+        """
+        # An out-of-range threshold can never match: without this guard it
+        # would execute fine and silently return nothing.
+        if not 0.0 <= threshold <= 1.0:
+            raise PrismQLRuntimeError(
+                f"similar_to() threshold {threshold} is outside [0.0, 1.0]; "
+                "cosine similarity lives in [0, 1] here — pick e.g. 0.7"
+            )
+        try:
+            return self.search_backend.search_semantic(text, threshold=threshold)
+        except NotImplementedError:
+            raise PrismQLRuntimeError(
+                "similar_to() has no backing here: this backend has no "
+                "semantic index. Build a SemanticIndex over the corpus "
+                "(prismql.backends.semantic, requires the [semantic] extra "
+                "or any Embedder implementation) and pass it to the backend "
+                "at construction, e.g. MemoryBackend(..., semantic_index=index)."
+            ) from None
 
     def _generate_all_combinations(self, groups: list[MessageGroup]) -> QueryResult:
         """

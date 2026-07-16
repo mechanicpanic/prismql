@@ -92,6 +92,12 @@ class TestQuestionIndex:
             engine.execute("SELECT is_question()")
 
 
+def test_similar_to_unbacked_raises_teachable(bare_engine):
+    # No semantic index on the backend -> must fail loudly and name the fix.
+    with pytest.raises(PrismQLRuntimeError, match="SemanticIndex"):
+        bare_engine.execute('SELECT similar_to("gas prices", 0.7)')
+
+
 def test_has_feature_unbacked_stays_teachable(bare_engine):
     # Already-loud path: pin it so it stays loud.
     with pytest.raises(PrismQLRuntimeError, match="No custom features"):

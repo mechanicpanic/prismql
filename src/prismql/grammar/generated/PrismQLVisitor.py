@@ -189,6 +189,11 @@ class PrismQLVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by PrismQLParser#float_number.
+    def visitFloat_number(self, ctx:PrismQLParser.Float_numberContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by PrismQLParser#hdict.
     def visitHdict(self, ctx:PrismQLParser.HdictContext):
         return self.visitChildren(ctx)

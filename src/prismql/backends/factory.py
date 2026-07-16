@@ -121,7 +121,9 @@ class BackendFactory:
         if not documents:
             raise ValueError("Memory backend requires 'documents' in configuration")
 
-        return MemoryBackend(documents, id_field)
+        return MemoryBackend(
+            documents, id_field, semantic_index=config.get("semantic_index")
+        )
 
     @classmethod
     def _create_rust_memory_backend(cls, config: dict[str, Any]) -> SearchBackend:

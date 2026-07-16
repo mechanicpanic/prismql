@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 from .base import NLPBackend, PrecomputedIndexes, SearchBackend
 from .factory import BackendFactory
 from .memory import MemoryBackend
+from .semantic import Embedder, SemanticIndex, SentenceTransformerEmbedder
 
 # Optional backends (may not be available if dependencies aren't installed)
 if TYPE_CHECKING:
@@ -48,6 +49,10 @@ __all__ = [
     "BackendFactory",
     # Always available backends
     "MemoryBackend",
+    # Semantic index (backs similar_to())
+    "Embedder",
+    "SemanticIndex",
+    "SentenceTransformerEmbedder",
     # Optional backends
     "DuckDBBackend",
     "OpenSearchBackend",

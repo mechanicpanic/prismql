@@ -158,6 +158,19 @@ class HasFeature:
     feature: str
 
 
+@dataclass(frozen=True)
+class SimilarTo:
+    """``similar_to("text", threshold)`` — semantic similarity, threshold-to-set.
+
+    The backend computes a similarity score per message and returns the set of
+    messages at or above ``threshold``; the score itself is discarded, so the
+    result composes through the boolean/sequential algebra like any other leaf.
+    """
+
+    text: str
+    threshold: float
+
+
 ConditionNode = Union[
     Contains,
     ContainsTokens,
@@ -167,6 +180,7 @@ ConditionNode = Union[
     IsQuestion,
     MentionsEntity,
     HasFeature,
+    SimilarTo,
 ]
 
 

@@ -43,7 +43,16 @@ mentions_time()                   -- Messages mentioning times
 mentions_place()                  -- Messages mentioning locations
 mentions_org()                    -- Messages mentioning organizations
 contains_link()                   -- Messages containing URLs
+similar_to("text", threshold)     -- Semantically similar messages (embedding cosine >= threshold)
 ```
+
+**Semantic similarity**: `similar_to("oil sanctions", 0.7)` embeds the quoted
+text and matches messages whose embedding cosine similarity is at or above
+the threshold. The threshold is **required** (in `[0.0, 1.0]` — there is no
+default) and the score is computed then discarded: the result is a plain
+message set, so it composes with `and`/`or`/`not`, `+`, and arrows like any
+other predicate. Requires a backend with a semantic index; without one the
+query fails loudly rather than returning empty results.
 
 **Text-matching semantics**: `contains()` routes each dictionary term by its
 shape: multi-word terms always phrase-match (order-sensitive); single-word

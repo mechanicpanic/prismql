@@ -47,6 +47,7 @@ from .nodes import (
     Query,
     RestrictionsRow,
     SequenceLink,
+    SimilarTo,
     SubqueryChain,
     TemporalFilter,
     TimestampSpec,
@@ -575,6 +576,9 @@ class IRExecutor(PrismQLVisitor):
 
         if isinstance(cond, HasFeature):
             return self._get_custom_feature(cond.feature)
+
+        if isinstance(cond, SimilarTo):
+            return self._get_semantically_similar(cond.text, cond.threshold)
 
         raise PrismQLRuntimeError("Unknown condition type")
 

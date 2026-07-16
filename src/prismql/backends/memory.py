@@ -7,6 +7,7 @@ from ..config import DEFAULT_CONFIG, BackendConfig
 from ..tokenizers import generate_ngrams
 from ..types import Document, MessageId
 from .base import SearchBackend
+from .semantic import SemanticIndex
 
 
 class MemoryBackend(SearchBackend):
@@ -22,6 +23,7 @@ class MemoryBackend(SearchBackend):
         documents: Sequence[Document],
         id_field: str = "id",
         config: Optional[BackendConfig] = None,
+        semantic_index: Optional[SemanticIndex] = None,
     ) -> None:
         """
         Initialize the memory backend with documents.
@@ -30,10 +32,13 @@ class MemoryBackend(SearchBackend):
             documents: List of documents to index
             id_field: Field name containing the document ID
             config: Backend configuration (n-grams, tokenization, etc.)
+            semantic_index: Embedding index backing similar_to(); without
+                it, search_semantic() raises NotImplementedError
         """
         self.documents = list(documents)
         self.id_field = id_field
         self.config = config or DEFAULT_CONFIG
+        self.semantic_index = semantic_index
         self.config.validate()
 
         # Resolve tokenizer once
@@ -277,6 +282,24 @@ class MemoryBackend(SearchBackend):
         if index_is_complete:
             return set()
         return self._search_phrase_substring(phrase, field)
+
+    def search_semantic(self, text: str, *, threshold: float) -> set[MessageId]:
+        """
+        Search for documents semantically similar to the text.
+
+        Requires a SemanticIndex passed at construction; without one this
+        raises NotImplementedError like any backend lacking the capability.
+
+        Args:
+            text: Query text to embed and compare against documents
+            threshold: Minimum cosine similarity in [0.0, 1.0]
+
+        Returns:
+            Set of message IDs at or above the threshold
+        """
+        if self.semantic_index is None:
+            return super().search_semantic(text, threshold=threshold)
+        return self.semantic_index.search(text, threshold=threshold)
 
     def _search_phrase_substring(self, phrase: str, field: str) -> set[MessageId]:
         """Fallback phrase search using substring matching."""

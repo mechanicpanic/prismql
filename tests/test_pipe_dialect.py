@@ -56,6 +56,16 @@ EQUIVALENT = [
         "SELECT NOT from(alice) OR is_question()",
     ),
     (
+        'similar_to("oil sanctions", 0.7)',
+        'SELECT similar_to("oil sanctions", 0.7)',
+    ),
+    (
+        'similar_to("oil sanctions", 0.7) and from(reuters) '
+        '~> similar_to("retail panic", 0.6) |> during(1h)',
+        'SELECT similar_to("oil sanctions", 0.7) AND from(reuters) '
+        'FOLLOWED_BY similar_to("retail panic", 0.6) DURING 1 hour',
+    ),
+    (
         "from(a) ~> from(b) ~> from(c) |> within(10)",
         "SELECT from(a) FOLLOWED_BY from(b) FOLLOWED_BY from(c) INWINDOW 10",
     ),
