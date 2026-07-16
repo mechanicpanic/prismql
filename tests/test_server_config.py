@@ -80,6 +80,43 @@ def test_load_config_missing_file():
         load_config("/nonexistent/prismql.toml")
 
 
+def test_load_config_semantic_flat(tmp_path):
+    cfg_file = tmp_path / "c.toml"
+    cfg_file.write_text(
+        '[backend]\ntype = "memory"\ndata = "d.json"\n\n'
+        '[semantic]\nmodel = "all-MiniLM-L6-v2"\ntext_field = "body"\n'
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.semantic_model == "all-MiniLM-L6-v2"
+    assert cfg.semantic_text_field == "body"
+    # the flat fields serve the default corpus
+    assert cfg.corpus("default").semantic_model == "all-MiniLM-L6-v2"
+
+
+def test_load_config_semantic_per_corpus(tmp_path):
+    cfg_file = tmp_path / "c.toml"
+    cfg_file.write_text(
+        '[corpora.chat]\ndata = "chat.json"\n\n'
+        '[corpora.chat.semantic]\nmodel = "all-MiniLM-L6-v2"\n\n'
+        '[corpora.plain]\ndata = "plain.json"\n'
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.corpus("chat").semantic_model == "all-MiniLM-L6-v2"
+    assert cfg.corpus("chat").semantic_text_field == "text"
+    assert cfg.corpus("plain").semantic_model is None
+
+
+def test_build_engine_semantic_requires_memory_backend(tmp_path):
+    (tmp_path / "d.json").write_text(json.dumps([{"id": 1, "text": "hi"}]))
+    cfg = ServerConfig(
+        backend_type="rust_memory",
+        data=str(tmp_path / "d.json"),
+        semantic_model="all-MiniLM-L6-v2",
+    )
+    with pytest.raises(ValueError, match="memory"):
+        build_engine(cfg)
+
+
 def test_load_documents_json(tmp_path):
     f = tmp_path / "d.json"
     f.write_text(json.dumps([{"id": 1, "text": "a"}]))

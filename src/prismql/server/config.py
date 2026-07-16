@@ -55,6 +55,9 @@ class CorpusConfig:
     timestamp_field: str = "timestamp"
     text_match: str = "substring"
     dictionaries: dict[str, Any] = field(default_factory=dict)
+    # [corpora.<name>.semantic]: embedding model backing similar_to()
+    semantic_model: str | None = None
+    semantic_text_field: str = "text"
 
 
 @dataclass
@@ -81,6 +84,9 @@ class ServerConfig:
     dictionaries: dict[str, Any] = field(default_factory=dict)
     corpora: dict[str, CorpusConfig] = field(default_factory=dict)
     default_corpus: str = "default"
+    # [semantic]: embedding model backing similar_to() (flat/legacy form)
+    semantic_model: str | None = None
+    semantic_text_field: str = "text"
 
     def corpus(self, name: str) -> CorpusConfig:
         """The named corpus; the flat legacy fields serve the default name."""
@@ -96,6 +102,8 @@ class ServerConfig:
                 timestamp_field=self.timestamp_field,
                 text_match=self.text_match,
                 dictionaries=self.dictionaries,
+                semantic_model=self.semantic_model,
+                semantic_text_field=self.semantic_text_field,
             )
         raise KeyError(
             f"Unknown corpus {name!r}; available: {sorted(self.corpus_names())}"
@@ -139,6 +147,7 @@ def load_config(path: str | Path) -> ServerConfig:
     # Parse named corpora
     corpora: dict[str, CorpusConfig] = {}
     for name, section in raw.get("corpora", {}).items():
+        semantic_section = section.get("semantic", {})
         corpora[name] = CorpusConfig(
             backend_type=section.get("type", "memory").lower(),
             data=_resolve(base, section.get("data")),
@@ -148,11 +157,15 @@ def load_config(path: str | Path) -> ServerConfig:
             timestamp_field=section.get("timestamp_field", "timestamp"),
             text_match=section.get("text_match", "substring"),
             dictionaries=dict(section.get("dictionaries", {})),
+            semantic_model=semantic_section.get("model"),
+            semantic_text_field=semantic_section.get("text_field", "text"),
         )
 
     default_corpus = server.get(
         "default_corpus", "default" if not corpora else sorted(corpora)[0]
     )
+
+    semantic = raw.get("semantic", {})
 
     return ServerConfig(
         host=server.get("host", "127.0.0.1"),
@@ -172,6 +185,8 @@ def load_config(path: str | Path) -> ServerConfig:
         dictionaries=dictionaries,
         corpora=corpora,
         default_corpus=default_corpus,
+        semantic_model=semantic.get("model"),
+        semantic_text_field=semantic.get("text_field", "text"),
     )
 
 
@@ -259,6 +274,23 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         backend_config["index_path"] = config.index_path
     if config.backend_type == "rust_memory":
         backend_config["timestamp_fields"] = config.timestamp_fields
+
+    if config.semantic_model:
+        # Fail loudly: a configured model on a backend that can't carry the
+        # index would otherwise mean similar_to() silently has no backing.
+        if config.backend_type != "memory":
+            raise ValueError(
+                "[semantic] is only supported by the 'memory' backend for now; "
+                f"got backend type {config.backend_type!r}"
+            )
+        from ..backends.semantic import SemanticIndex, SentenceTransformerEmbedder
+
+        backend_config["semantic_index"] = SemanticIndex(
+            SentenceTransformerEmbedder(config.semantic_model),
+            backend_config["documents"],
+            id_field=config.id_field,
+            text_field=config.semantic_text_field,
+        )
 
     backend = BackendFactory._create_search_backend(backend_config)
     return PrismQLEngine(
