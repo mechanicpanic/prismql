@@ -24,9 +24,12 @@ contains(name) matches terms from a named dictionary. Pass dictionaries
 to define or override term lists for THIS query only — iterate on them
 freely, then ask the user to persist stable ones into the server config:
   dictionaries={"spikes": ["spike", "surge", "gap up"]}
+On multi-corpus servers pass corpus="name" to target a specific corpus
+(default corpus otherwise; unknown names return the available list).
 For large result sets pass output="file": ALL groups are written to a
 JSONL file server-side and you get back only {count, path, preview} —
 read the file selectively instead of pulling everything into context.
+(File output must be enabled server-side: [server] enable_file_output.)
 Read the prismql://reference resource for the full language before
 writing complex queries. Returns JSON with matched event groups,
 hydrated with full event content.
@@ -39,6 +42,7 @@ def evaluate_via_http(
     dictionaries: dict[str, list[str]] | None = None,
     output: str = "inline",
     label: str | None = None,
+    corpus: str | None = None,
     base_url: str | None = None,
 ) -> dict[str, Any]:
     """POST the query to the PrismQL server; structured errors, never raises."""
@@ -52,6 +56,8 @@ def evaluate_via_http(
         payload["output"] = output
     if label:
         payload["label"] = label
+    if corpus:
+        payload["corpus"] = corpus
     body = json.dumps(payload).encode()
     request = urllib.request.Request(
         f"{base}/evaluate",
@@ -97,9 +103,10 @@ def main() -> None:
         dictionaries: dict[str, list[str]] | None = None,
         output: str = "inline",
         label: str | None = None,
+        corpus: str | None = None,
     ) -> str:
         return json.dumps(
-            evaluate_via_http(query, max_results, dictionaries, output, label)
+            evaluate_via_http(query, max_results, dictionaries, output, label, corpus)
         )
 
     @server.resource("prismql://reference")

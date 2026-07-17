@@ -52,6 +52,14 @@ def test_round_trip_against_app(tmp_path):
         dictionaries={"greets": ["hi"]},
         base_url="http://127.0.0.1:8929",
     )
-    server.should_exit = True
     assert overlay["ok"] is True
     assert overlay["results"][0]["ids"] == [1]
+
+    # corpus targeting travels through the shim; unknown names are
+    # structured errors naming the available corpora, not exceptions
+    unknown = evaluate_via_http(
+        "SELECT from(a)", corpus="nope", base_url="http://127.0.0.1:8929"
+    )
+    server.should_exit = True
+    assert unknown["ok"] is False
+    assert "nope" in unknown["error"]["message"]
