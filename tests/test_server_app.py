@@ -420,6 +420,7 @@ def test_file_output_group_cap(tmp_path):
     assert r.status_code == 200
     body = r.json()
     assert body["count"] == 2  # capped below the 3 matching groups
+    assert body["truncated"] is True  # the file must not claim completeness
     from pathlib import Path
 
     lines = Path(body["path"]).read_text().splitlines()

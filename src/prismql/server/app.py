@@ -169,7 +169,9 @@ def _write_results_file(
     summary: dict[str, Any] = {
         "kind": full_payload["kind"],
         "count": len(groups),
-        "truncated": False,
+        # Honest flag: when the file_output_max_groups cap bit, the file
+        # does NOT hold every group and must not claim it does.
+        "truncated": full_payload["truncated"],
         "path": str(path),
         "preview": preview,
     }
