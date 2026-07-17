@@ -213,15 +213,18 @@
   // --------------------------------------------------------
   // dialect toggle
   // --------------------------------------------------------
-  const normWs = (s) => String(s).replace(/\s+/g, " ").trim();
+  // Exact match (ends trimmed only): collapsing inner whitespace would
+  // let an edit inside a quoted phrase still "match" the curated example,
+  // and the toggle would silently swap in a semantically different query.
+  const trimEnds = (s) => String(s).trim();
 
   function findActiveMatch() {
-    const cur = normWs(editor.value);
+    const cur = trimEnds(editor.value);
     if (!cur) return null;
     const list = EXAMPLES[state.corpus] || [];
     for (const ex of list) {
-      if (normWs(ex.classic) === cur) return { ex, dialect: "classic" };
-      if (normWs(ex.pipe) === cur) return { ex, dialect: "pipe" };
+      if (trimEnds(ex.classic) === cur) return { ex, dialect: "classic" };
+      if (trimEnds(ex.pipe) === cur) return { ex, dialect: "pipe" };
     }
     return null;
   }
@@ -355,7 +358,9 @@
         !!active && chip.getAttribute("data-classic") === active.classic
       );
     });
-    blurbEl.textContent = active && active.blurb ? active.blurb : "";
+    // Null-guarded: a stale-cached index.html without #example-blurb must
+    // degrade gracefully, not kill init for the whole app.
+    if (blurbEl) blurbEl.textContent = active && active.blurb ? active.blurb : "";
   }
 
   function loadExample(ex) {
@@ -374,27 +379,52 @@
     runBtn.querySelector(".run-label").textContent = b ? "Running" : "Run";
   }
 
+  // A new run supersedes (aborts) any in-flight one — never silently drop
+  // the new query. Each response renders only if it is still the latest,
+  // styled for the corpus it was ISSUED under, and a timeout guarantees
+  // the UI can never wedge in the running state.
+  const FETCH_TIMEOUT_MS = 30000;
+  let runSeq = 0;
+  let inflight = null;
+
   async function runQuery() {
     const query = editor.value.trim();
-    if (!query || state.running) return;
+    if (!query) return;
+    if (inflight) inflight.abort();
+    const controller = new AbortController();
+    inflight = controller;
+    const myRun = ++runSeq;
+    const corpus = state.corpus;
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     setRunning(true);
     latencyEl.hidden = true;
     try {
       const res = await fetch("/evaluate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query, corpus: state.corpus, max_results: 25 }),
+        body: JSON.stringify({ query, corpus, max_results: 25 }),
+        signal: controller.signal,
       });
       const body = await res.json();
+      if (myRun !== runSeq) return; // superseded by a newer run
       setRunning(false);
-      if (body && body.ok) renderResults(body);
+      if (body && body.ok) renderResults(body, corpus);
       else renderError((body && body.error) || { type: "runtime", message: "Unknown error." }, query);
     } catch (err) {
+      if (myRun !== runSeq) return; // aborted because a newer run started
       setRunning(false);
+      const timedOut = err && err.name === "AbortError";
       renderError(
-        { type: "runtime", message: "Could not reach the server. Is it running?\n\n" + (err && err.message ? err.message : String(err)) },
+        {
+          type: "runtime",
+          message: timedOut
+            ? "The query timed out after " + FETCH_TIMEOUT_MS / 1000 + "s."
+            : "Could not reach the server. Is it running?\n\n" + (err && err.message ? err.message : String(err)),
+        },
         query
       );
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -420,7 +450,7 @@
     ]);
   }
 
-  function renderResults(body) {
+  function renderResults(body, corpus) {
     showLatency(body.elapsed_ms);
     const frag = el("div", { class: "fade-in" });
 
@@ -430,14 +460,14 @@
       renderGrouped(frag, body);
     } else {
       // "groups" or "named"
-      renderMatches(frag, body);
+      renderMatches(frag, body, corpus);
     }
 
     resultsEl.innerHTML = "";
     resultsEl.appendChild(frag);
   }
 
-  function renderMatches(frag, body) {
+  function renderMatches(frag, body, corpus) {
     const results = body.results || [];
     const count = body.count != null ? body.count : results.length;
     const note = body.truncated ? "showing first " + results.length : null;
@@ -464,7 +494,10 @@
       return;
     }
 
-    const isChicago = state.corpus === "chicago";
+    // Styled for the corpus the query was issued under — reading
+    // state.corpus at render time mislabeled late responses after a tab
+    // switch.
+    const isChicago = corpus === "chicago";
     results.forEach((group, gi) => {
       frag.appendChild(
         isChicago ? chicagoCard(group, gi) : fccCard(group, gi)
@@ -603,7 +636,10 @@
     const max = rows.reduce((m, r) => Math.max(m, Number(r[1]) || 0), 0) || 1;
     const wrap = el("div", { class: "bars" });
     for (const [label, value] of rows) {
-      const pct = Math.max(2, (Number(value) / max) * 100);
+      // Non-numeric values (e.g. distinct() lists) get no bar, not a
+      // width:NaN% style; the label/value text still renders.
+      const num = Number(value);
+      const pct = isFinite(num) ? Math.max(2, (num / max) * 100) : 0;
       wrap.appendChild(
         el("div", { class: "bar" }, [
           el("span", { class: "bar-label", text: String(label), title: String(label) }),

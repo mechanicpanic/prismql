@@ -27,7 +27,17 @@ for corpus, entries in examples.items():
             failures.append((corpus, ex["label"], "IR mismatch"))
             continue
         result = engine.execute(ex["pipe"])
-        n = len(result) if hasattr(result, "__len__") else 1
+        # Aggregate/grouped results define no __len__, so the old len()
+        # check silently passed them as "1 results" even when empty —
+        # inspect their actual contents instead.
+        if hasattr(result, "__len__"):
+            n = len(result)
+        else:
+            d = result.to_dict()
+            if "grouped_values" in d or "group_counts" in d:
+                n = len(d.get("grouped_values") or d.get("group_counts") or {})
+            else:
+                n = 1 if d.get("value") else 0
         print(f"  [{corpus}] {ex['label']}: {n} results")
         if n == 0:
             failures.append((corpus, ex["label"], "empty result"))

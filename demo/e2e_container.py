@@ -108,9 +108,11 @@ def main() -> int:
             if r_classic.get("kind") in ("aggregate", "grouped"):
                 # Validate classic based on kind
                 if r_classic.get("kind") == "aggregate":
+                    # Truthiness, not `is not None`: a demo example whose
+                    # count comes back 0 is an empty showcase and must fail.
                     check(
-                        r_classic.get("value") is not None
-                        or r_classic.get("grouped_values"),
+                        bool(r_classic.get("value"))
+                        or bool(r_classic.get("grouped_values")),
                         f"[{corpus}] classic non-empty (aggregate): {label}",
                     )
                 else:  # grouped
@@ -121,7 +123,7 @@ def main() -> int:
                 # Validate pipe based on kind
                 if r_pipe.get("kind") == "aggregate":
                     check(
-                        r_pipe.get("value") is not None or r_pipe.get("grouped_values"),
+                        bool(r_pipe.get("value")) or bool(r_pipe.get("grouped_values")),
                         f"[{corpus}] pipe non-empty (aggregate): {label}",
                     )
                 else:  # grouped (kind equality checked below)

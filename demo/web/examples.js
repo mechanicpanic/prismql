@@ -75,8 +75,8 @@ window.EXAMPLES = {
       "pipe": "field(type, BURGLARY) |> count()"
     },
     {
-      "label": "Robbery near a motor vehicle theft (same key) within 3 positions",
-      "blurb": "Positional co-occurrence window over crime type",
+      "label": "Robbery near a motor vehicle theft within 3 positions",
+      "blurb": "Positional co-occurrence window over crime type (any key)",
       "classic": "SELECT field(type, ROBBERY), field(type, \"MOTOR VEHICLE THEFT\") INWINDOW 3",
       "pipe": "field(type, ROBBERY) + field(type, \"MOTOR VEHICLE THEFT\") |> within(3)"
     }
