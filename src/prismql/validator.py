@@ -256,14 +256,15 @@ class QueryValidator:
     def _check_ir_query(self, q: Any, issues: list[ValidationIssue]) -> None:
         from .ir import nodes as ir
 
-        # A trailing body window covers a windowless final link.
-        has_body_window = (
-            q.positional_window is not None or q.temporal_window is not None
-        )
+        # A body window never excuses a windowless final link: for a
+        # single-item row the pipe parser already inlined a trailing
+        # within/during into the link (_attach_window), and the executor
+        # rejects every remaining windowless-final-link shape — including
+        # multi-item rows with a body window (review 2026-07-12, #43).
         self._check_ir_window(q.positional_window, issues)
         if isinstance(q.source, ir.RestrictionsRow):
             for item in q.source.items:
-                self._check_ir_expr(item.expr, not has_body_window, issues)
+                self._check_ir_expr(item.expr, True, issues)
         elif isinstance(q.source, ir.SubqueryChain):
             self._check_ir_query(q.source.head, issues)
             for cont in q.source.continuations:
@@ -312,8 +313,12 @@ class QueryValidator:
                     )
                 )
         elif isinstance(expr, ir.Not):
+            self._check_sequence_under_boolean(expr.operand, "NOT", issues)
             self._check_ir_expr(expr.operand, False, issues)
         elif isinstance(expr, (ir.And, ir.Or)):
+            op_name = "AND" if isinstance(expr, ir.And) else "OR"
+            self._check_sequence_under_boolean(expr.left, op_name, issues)
+            self._check_sequence_under_boolean(expr.right, op_name, issues)
             self._check_ir_expr(expr.left, False, issues)
             self._check_ir_expr(expr.right, False, issues)
         elif isinstance(expr, ir.SequenceLink):
@@ -336,8 +341,49 @@ class QueryValidator:
                         code="MISSING_WINDOW_CONSTRAINT",
                     )
                 )
+            # The rhs of a link must be a boolean/leaf expression — the
+            # executor rejects a nested sequence there (chains nest LEFT).
+            if isinstance(expr.rhs, ir.SequenceLink):
+                issues.append(
+                    ValidationIssue(
+                        level=ValidationLevel.ERROR,
+                        message=(
+                            "Sequential operators require simple conditions on "
+                            "the right-hand side, not a nested sequence"
+                        ),
+                        suggestion=(
+                            "Write the chain left-to-right without grouping: "
+                            "a ~> b ~> c (chains associate left)"
+                        ),
+                        code="NESTED_SEQUENCE_RHS",
+                    )
+                )
             self._check_ir_expr(expr.lhs, False, issues)
             self._check_ir_expr(expr.rhs, False, issues)
+
+    def _check_sequence_under_boolean(
+        self, child: Any, op_name: str, issues: list[ValidationIssue]
+    ) -> None:
+        """Sequences cannot appear under NOT/AND/OR — the executor always
+        rejects that shape, so the validator must too (parity contract)."""
+        from .ir import nodes as ir
+
+        if isinstance(child, ir.SequenceLink):
+            issues.append(
+                ValidationIssue(
+                    level=ValidationLevel.ERROR,
+                    message=(
+                        f"{op_name} operator cannot be used with sequential "
+                        "operators (FOLLOWED_BY, PRECEDED_BY)"
+                    ),
+                    suggestion=(
+                        "Sequential results are complete sequences, not sets; "
+                        "restructure so boolean operators apply to conditions "
+                        "inside each restriction, not to a chain"
+                    ),
+                    code="SEQUENCE_UNDER_BOOLEAN",
+                )
+            )
 
     @staticmethod
     def _check_ir_window(window: Any, issues: list[ValidationIssue]) -> None:

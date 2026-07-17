@@ -366,6 +366,66 @@ class TestValidatorPipeDialect:
         assert not classic.valid and not pipe.valid
 
 
+class TestValidatorExecutorParity:
+    """Queries the executor always rejects must not validate as clean.
+
+    Review 2026-07-12 (#43): the pipe IR-walk green-lit two classes of
+    guaranteed runtime failures. Each case asserts BOTH sides: the
+    validator flags it AND the executor still rejects it (so the parity
+    contract is pinned from both directions).
+    """
+
+    DOCS = [
+        {"id": 1, "user": "alice", "timestamp": 100, "text": "a"},
+        {"id": 2, "user": "bob", "timestamp": 200, "text": "b"},
+        {"id": 3, "user": "carol", "timestamp": 300, "text": "c"},
+    ]
+
+    def _engine(self) -> PrismQLEngine:
+        return PrismQLEngine(MemoryBackend(documents=self.DOCS))
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "(from(alice) ~> from(bob)) and from(carol)",
+            "(from(alice) ~> from(bob)) or from(carol)",
+            "not (from(alice) ~> from(bob))",
+        ],
+    )
+    def test_sequence_under_boolean_is_flagged(self, query):
+        result = QueryValidator().validate(query, dialect="pipe")
+        assert not result.valid
+        assert any(i.code == "SEQUENCE_UNDER_BOOLEAN" for i in result.errors)
+        with pytest.raises(PrismQLRuntimeError):
+            self._engine().execute(query, dialect="pipe")
+
+    def test_nested_sequence_rhs_is_flagged(self):
+        query = "from(alice) ~>(5) (from(bob) ~> from(carol))"
+        result = QueryValidator().validate(query, dialect="pipe")
+        assert not result.valid
+        assert any(i.code == "NESTED_SEQUENCE_RHS" for i in result.errors)
+        with pytest.raises(PrismQLRuntimeError):
+            self._engine().execute(query, dialect="pipe")
+
+    def test_windowless_chain_in_multi_item_row_is_flagged(self):
+        # The trailing window becomes the BODY window in a multi-item row
+        # and is never distributed to the chain link; the executor rejects.
+        query = "from(alice) ~> from(bob) + from(carol) |> within(5)"
+        result = QueryValidator().validate(query, dialect="pipe")
+        assert not result.valid
+        assert any(i.code == "MISSING_WINDOW_CONSTRAINT" for i in result.errors)
+        with pytest.raises(PrismQLRuntimeError):
+            self._engine().execute(query, dialect="pipe")
+
+    def test_single_item_chain_with_trailing_window_stays_valid(self):
+        # _attach_window inlines the trailing window into the final link;
+        # this shape executes fine and must not regress to a false error.
+        query = "from(alice) ~> from(bob) |> within(5)"
+        result = QueryValidator().validate(query, dialect="pipe")
+        assert result.valid, [str(i) for i in result.issues]
+        assert self._engine().execute(query, dialect="pipe") == [[1, 2]]
+
+
 class TestResultEquality:
     """Aggregate/grouped results compare by value, so results from the two
     dialect paths (or two runs) can be asserted equal."""
