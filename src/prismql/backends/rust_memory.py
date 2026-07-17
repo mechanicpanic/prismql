@@ -1,7 +1,7 @@
 """Rust-based in-memory backend with 10-100x performance improvements."""
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from ..types import Document, MessageGroup, MessageId, QueryResult
@@ -78,12 +78,20 @@ class RustMemoryBackend(SearchBackend):
             )
 
         # Capability handshake: an older prismql_rust build would otherwise
-        # fail with misleading kwarg TypeErrors here, or silently fall back
-        # to the slow Python paths at query time.
-        if not hasattr(_RustMemoryBackend, "merge_within_time_window"):
+        # fail with misleading kwarg TypeErrors here, crash with
+        # AttributeError mid-query (the wrapper delegates unconditionally),
+        # or silently fall back to the slow Python paths at query time.
+        required_kernels = (
+            "merge_within_time_window",
+            "merge_temporal_link",
+            "extend_temporal_link",
+            "get_timestamps",
+        )
+        missing = [k for k in required_kernels if not hasattr(_RustMemoryBackend, k)]
+        if missing:
             raise ImportError(
                 "The installed prismql_rust build is too old for this version "
-                "of prismql (missing merge_within_time_window). Rebuild it "
+                f"of prismql (missing {', '.join(missing)}). Rebuild it "
                 "from prismql-rust master: maturin develop --release "
                 "--manifest-path ../prismql-rust/Cargo.toml"
             )
@@ -247,15 +255,26 @@ class RustMemoryBackend(SearchBackend):
 
         IDs that are unknown or lack a parseable timestamp are omitted,
         mirroring the Python document-fetch fallback. Timestamps come back
-        as naive local datetimes derived from UTC epochs; temporal merges
-        compare only differences, so the representation is equivalent.
+        as naive UTC datetimes (matching TemporalProcessor's convention):
+        naive LOCAL projection would distort differences across DST folds
+        vs the kernels' UTC arithmetic. Out-of-range epochs are skipped,
+        like the reference document-fetch path.
         """
         epochs: dict[MessageId, int] = self._backend.get_timestamps(
             [i for i in message_ids if self._valid_id(i)], field
         )
-        return {
-            mid: datetime.fromtimestamp(us / 1_000_000) for mid, us in epochs.items()
-        }
+        result: dict[MessageId, datetime] = {}
+        for mid, us in epochs.items():
+            seconds, micros = divmod(us, 1_000_000)
+            try:
+                # divmod (not float division) keeps microsecond exactness
+                # for epochs where a float second loses sub-us precision.
+                result[mid] = datetime.fromtimestamp(seconds, tz=timezone.utc).replace(
+                    tzinfo=None
+                ) + timedelta(microseconds=micros)
+            except (ValueError, OSError, OverflowError):
+                continue
+        return result
 
     def filter_by_time_range(
         self,

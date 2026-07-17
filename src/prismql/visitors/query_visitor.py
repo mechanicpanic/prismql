@@ -1736,15 +1736,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
             ts = doc.get(self.timestamp_field)
             if msg_id is None or ts is None:
                 continue
-            try:
-                if isinstance(ts, datetime):
-                    result[msg_id] = ts
-                elif isinstance(ts, (int, float)):
-                    result[msg_id] = datetime.fromtimestamp(ts)
-                else:
-                    result[msg_id] = TemporalProcessor.parse_timestamp(str(ts))
-            except (ValueError, OSError):
-                continue
+            # _coerce_timestamp interprets numeric epochs as UTC — local-tz
+            # parsing made DURING results depend on the host timezone and
+            # diverge from the Rust kernels across DST folds (review #44).
+            parsed = TemporalProcessor._coerce_timestamp(ts)
+            if parsed is not None:
+                result[msg_id] = parsed
         return result
 
     def _create_sequential_pairs_temporal(
