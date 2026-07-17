@@ -80,6 +80,16 @@ def test_load_config_missing_file():
         load_config("/nonexistent/prismql.toml")
 
 
+def test_load_config_rejects_unknown_default_corpus(tmp_path):
+    cfg_file = tmp_path / "c.toml"
+    cfg_file.write_text(
+        '[server]\ndefault_corpus = "chikago"\n\n'
+        '[corpora.chicago]\ndata = "chicago.json"\n'
+    )
+    with pytest.raises(ValueError, match="chikago"):
+        load_config(cfg_file)
+
+
 def test_load_config_semantic_flat(tmp_path):
     cfg_file = tmp_path / "c.toml"
     cfg_file.write_text(

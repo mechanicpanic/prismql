@@ -139,7 +139,7 @@ def test_health(client):
 def test_reload_picks_up_new_data(tmp_path):
     data = tmp_path / "events.jsonl"
     data.write_text("\n".join(json.dumps(d) for d in DOCS))
-    cfg = ServerConfig(backend_type="memory", data=str(data))
+    cfg = ServerConfig(backend_type="memory", data=str(data), enable_reload=True)
     c = TestClient(create_app(cfg))
     assert c.get("/health").json()["documents"] == 4
 
@@ -203,6 +203,7 @@ def test_evaluate_output_file_bypasses_cap(tmp_path):
         data=str(data),
         max_results=2,  # tight inline cap
         results_dir=str(tmp_path / "out"),
+        enable_file_output=True,
     )
     c = TestClient(create_app(cfg))
     r = c.post(
@@ -234,7 +235,10 @@ def test_evaluate_output_file_label_slug(tmp_path):
     data = tmp_path / "events.jsonl"
     data.write_text("\n".join(json.dumps(d) for d in DOCS))
     cfg = ServerConfig(
-        backend_type="memory", data=str(data), results_dir=str(tmp_path / "out")
+        backend_type="memory",
+        data=str(data),
+        results_dir=str(tmp_path / "out"),
+        enable_file_output=True,
     )
     c = TestClient(create_app(cfg))
     r = c.post(
@@ -279,7 +283,7 @@ def test_schema_endpoint(client):
 def test_schema_refreshes_on_reload(tmp_path):
     data = tmp_path / "events.jsonl"
     data.write_text("\n".join(json.dumps(d) for d in DOCS))
-    cfg = ServerConfig(backend_type="memory", data=str(data))
+    cfg = ServerConfig(backend_type="memory", data=str(data), enable_reload=True)
     c = TestClient(create_app(cfg))
     assert "venue" not in c.get("/schema").json()["fields"]
 
@@ -296,6 +300,130 @@ def test_schema_refreshes_on_reload(tmp_path):
 def test_resolve_port_prefers_cli_flag_over_config():
     cfg = ServerConfig(port=8901)
     assert _resolve_port(cfg, 8080) == 8080
+
+
+# --- public-surface gates (review 2026-07-12, #42) ---------------------------
+
+
+def _make_client(tmp_path, **cfg_kwargs: object) -> TestClient:
+    data = tmp_path / "events.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    cfg = ServerConfig(backend_type="memory", data=str(data), **cfg_kwargs)
+    return TestClient(create_app(cfg))
+
+
+def test_reload_disabled_by_default(tmp_path):
+    c = _make_client(tmp_path)
+    r = c.post("/reload")
+    assert r.status_code == 403
+    assert r.json()["error"]["type"] == "forbidden"
+
+
+def test_file_output_disabled_by_default(tmp_path):
+    c = _make_client(tmp_path)
+    r = c.post("/evaluate", json={"query": "SELECT from(tick_a)", "output": "file"})
+    assert r.status_code == 403
+    assert "enable_file_output" in r.json()["error"]["message"]
+
+
+def test_rate_limit_identity_ignores_x_forwarded_for(tmp_path):
+    # Rotating a client-supplied XFF must NOT mint fresh rate buckets.
+    c = _make_client(tmp_path, rate_limit_per_minute=2)
+    for i in range(2):
+        r = c.post(
+            "/evaluate",
+            json={"query": "SELECT from(tick_a)"},
+            headers={"X-Forwarded-For": f"10.0.0.{i}"},
+        )
+        assert r.status_code == 200
+    r = c.post(
+        "/evaluate",
+        json={"query": "SELECT from(tick_a)"},
+        headers={"X-Forwarded-For": "10.0.0.99"},
+    )
+    assert r.status_code == 429
+
+
+def test_rate_limit_identity_uses_x_real_ip(tmp_path):
+    # X-Real-IP is platform-controlled: distinct clients get distinct
+    # buckets, and one client's limit doesn't throttle another.
+    c = _make_client(tmp_path, rate_limit_per_minute=1)
+    assert (
+        c.post(
+            "/evaluate",
+            json={"query": "SELECT from(tick_a)"},
+            headers={"X-Real-IP": "203.0.113.7"},
+        ).status_code
+        == 200
+    )
+    assert (
+        c.post(
+            "/evaluate",
+            json={"query": "SELECT from(tick_a)"},
+            headers={"X-Real-IP": "203.0.113.8"},
+        ).status_code
+        == 200
+    )
+    assert (
+        c.post(
+            "/evaluate",
+            json={"query": "SELECT from(tick_a)"},
+            headers={"X-Real-IP": "203.0.113.7"},
+        ).status_code
+        == 429
+    )
+
+
+def test_reload_is_rate_limited_when_enabled(tmp_path):
+    c = _make_client(tmp_path, enable_reload=True, rate_limit_per_minute=1)
+    assert c.post("/reload").status_code == 200
+    assert c.post("/reload").status_code == 429
+
+
+def test_request_dictionaries_term_cap(tmp_path):
+    c = _make_client(tmp_path, max_request_dictionary_terms=3)
+    r = c.post(
+        "/evaluate",
+        json={
+            "query": "SELECT contains(big)",
+            "dictionaries": {"big": ["a", "b", "c", "d"]},
+        },
+    )
+    assert r.status_code == 422
+    assert "limit is 3" in r.json()["error"]["message"]
+
+
+def test_default_corpus_typo_fails_at_boot(tmp_path):
+    # Only reachable with named corpora: in the flat single-corpus shape
+    # default_corpus is just a label. A [corpora.*] config with a typo'd
+    # default must fail at boot, not 500 on /health.
+    from prismql.server.config import CorpusConfig
+
+    data = tmp_path / "events.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    cfg = ServerConfig(
+        corpora={"chicago": CorpusConfig(backend_type="memory", data=str(data))},
+        default_corpus="chikago",
+    )
+    with pytest.raises(ValueError, match="chikago"):
+        create_app(cfg)
+
+
+def test_file_output_group_cap(tmp_path):
+    c = _make_client(
+        tmp_path,
+        enable_file_output=True,
+        file_output_max_groups=2,
+        results_dir=str(tmp_path / "out"),
+    )
+    r = c.post("/evaluate", json={"query": "SELECT from(tick_a)", "output": "file"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] == 2  # capped below the 3 matching groups
+    from pathlib import Path
+
+    lines = Path(body["path"]).read_text().splitlines()
+    assert len(lines) == 2
 
 
 def test_resolve_port_falls_back_to_config_when_unset():

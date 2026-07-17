@@ -61,30 +61,47 @@ def _result_slug(query: str, label: str | None) -> str:
 
 
 class ServerState:
-    """Holds the warm engines (one per named corpus); reload swaps them
-    under a lock."""
+    """Holds the warm engines (one per named corpus).
+
+    ``lock`` only guards the engines-dict swap and snapshots — it is NOT
+    held across query execution. Execution is serialized per corpus via
+    ``exec_locks`` (engines carry per-query visitor state, so concurrent
+    execute() on one engine would race; queries on different corpora are
+    independent). This keeps one expensive query from stalling /health
+    and queries against other corpora (review 2026-07-12, #42).
+    """
 
     def __init__(self, config: ServerConfig) -> None:
         self.config = config
         self.lock = threading.Lock()
         self.engines: dict[str, Any] = {}
+        self.exec_locks: dict[str, threading.Lock] = {}
         self.loaded_at: str | None = None
 
     def reload(self) -> None:
+        # Build outside the lock (slow); swap under it (fast). In-flight
+        # queries keep the old engine objects alive and unshared.
+        engines = {
+            name: build_engine(self.config.corpus(name))
+            for name in self.config.corpus_names()
+        }
         with self.lock:
-            self.engines = {
-                name: build_engine(self.config.corpus(name))
-                for name in self.config.corpus_names()
-            }
+            self.engines = engines
+            self.exec_locks = {name: threading.Lock() for name in engines}
             self.loaded_at = datetime.now(timezone.utc).isoformat()
 
-    def engine_for(self, name: str | None) -> tuple[Any, CorpusConfig]:
+    def engine_for(self, name: str | None) -> tuple[Any, CorpusConfig, threading.Lock]:
         resolved = name or self.config.default_corpus
-        if resolved not in self.engines:
-            raise KeyError(
-                f"Unknown corpus {resolved!r}; available: {sorted(self.engines)}"
+        with self.lock:
+            if resolved not in self.engines:
+                raise KeyError(
+                    f"Unknown corpus {resolved!r}; available: {sorted(self.engines)}"
+                )
+            return (
+                self.engines[resolved],
+                self.config.corpus(resolved),
+                self.exec_locks[resolved],
             )
-        return self.engines[resolved], self.config.corpus(resolved)
 
 
 def result_to_payload(
@@ -162,6 +179,12 @@ def _write_results_file(
 
 
 def create_app(config: ServerConfig) -> FastAPI:
+    # Fail at boot, not as an opaque 500 on the health check the deploy
+    # platform polls: the default corpus must actually be configured.
+    try:
+        config.corpus(config.default_corpus)
+    except KeyError as e:
+        raise ValueError(str(e.args[0])) from None
     state = ServerState(config)
     state.reload()
 
@@ -171,6 +194,17 @@ def create_app(config: ServerConfig) -> FastAPI:
     from collections import defaultdict, deque
 
     hits: dict[str, deque[float]] = defaultdict(deque)
+    prune_threshold = 1024
+
+    def _client_ip(request: Request) -> str:
+        # X-Real-IP is the platform-controlled client address (Railway
+        # documents it; its edge also controls X-Forwarded-For, but
+        # X-Real-IP is the single documented source of truth). Never trust
+        # any client-suppliable XFF position for rate-limit identity.
+        real_ip = str(request.headers.get("x-real-ip", "")).strip()
+        if real_ip:
+            return real_ip
+        return str(request.client.host) if request.client else "unknown"
 
     def _rate_limited(client_ip: str) -> bool:
         if not config.rate_limit_per_minute:
@@ -182,28 +216,62 @@ def create_app(config: ServerConfig) -> FastAPI:
         if len(window) >= config.rate_limit_per_minute:
             return True
         window.append(now)
+        # Bound the bucket map: drop keys whose whole window has expired,
+        # so cardinality tracks concurrent clients, not lifetime clients.
+        if len(hits) > prune_threshold:
+            for key in [k for k, w in hits.items() if not w or now - w[-1] > 60.0]:
+                del hits[key]
         return False
+
+    def _rate_limit_response() -> JSONResponse:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "ok": False,
+                "error": {
+                    "type": "rate_limit",
+                    "message": "Too many queries — try again in a minute.",
+                },
+            },
+        )
 
     @app.post("/evaluate")
     def evaluate(req: EvaluateRequest, request: Request) -> Any:
-        # Honor x-forwarded-for header (proxy) over request.client.host
-        ip = "unknown"
-        forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        if forwarded_for:
-            ip = forwarded_for
-        elif request.client:
-            ip = request.client.host
-        if _rate_limited(ip):
+        if _rate_limited(_client_ip(request)):
+            return _rate_limit_response()
+        if req.output == "file" and not config.enable_file_output:
             return JSONResponse(
-                status_code=429,
+                status_code=403,
                 content={
                     "ok": False,
                     "error": {
-                        "type": "rate_limit",
-                        "message": "Too many queries — try again in a minute.",
+                        "type": "forbidden",
+                        "message": (
+                            "output='file' is disabled on this server; set "
+                            "[server] enable_file_output = true to allow it."
+                        ),
                     },
                 },
             )
+        if req.dictionaries:
+            total_terms = sum(
+                len(v.terms if isinstance(v, DictSpec) else v)
+                for v in req.dictionaries.values()
+            )
+            if total_terms > config.max_request_dictionary_terms:
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "ok": False,
+                        "error": {
+                            "type": "runtime",
+                            "message": (
+                                f"Request dictionaries carry {total_terms} terms; "
+                                f"the limit is {config.max_request_dictionary_terms}."
+                            ),
+                        },
+                    },
+                )
         hydrate = config.hydrate if req.hydrate is None else req.hydrate
         max_results = (
             min(req.max_results, config.max_results)
@@ -211,17 +279,17 @@ def create_app(config: ServerConfig) -> FastAPI:
             else config.max_results
         )
         start = perf_counter()
-        with state.lock:
-            try:
-                engine, corpus_cfg = state.engine_for(req.corpus)
-            except KeyError as e:
-                return JSONResponse(
-                    status_code=422,
-                    content={
-                        "ok": False,
-                        "error": {"type": "runtime", "message": str(e.args[0])},
-                    },
-                )
+        try:
+            engine, corpus_cfg, exec_lock = state.engine_for(req.corpus)
+        except KeyError as e:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "ok": False,
+                    "error": {"type": "runtime", "message": str(e.args[0])},
+                },
+            )
+        with exec_lock:
             if req.dictionaries:
                 # Cheap: shares the loaded backend; only the dict mapping and
                 # visitor are new. The base engine is untouched.
@@ -264,65 +332,95 @@ def create_app(config: ServerConfig) -> FastAPI:
                         "error": {"type": "runtime", "message": str(e)},
                     },
                 )
-            if req.output == "file" and not isinstance(
+            full: dict[str, Any] = {}
+            file_mode = req.output == "file" and not isinstance(
                 result, (AggregateResult, GroupedResult)
-            ):
-                # Unbounded: write every group to disk, return a summary.
+            )
+            if file_mode:
+                # Capped (was 2**31): a broad query against a large corpus
+                # must not fill the container disk in one request.
                 full = result_to_payload(
-                    result, engine, corpus_cfg.id_field, hydrate, max_results=2**31
+                    result,
+                    engine,
+                    corpus_cfg.id_field,
+                    hydrate,
+                    max_results=config.file_output_max_groups,
                 )
-                payload = _write_results_file(full, req, config)
             else:
                 # Aggregates/grouped results are small by construction —
                 # file mode falls through to the normal inline response.
                 payload = result_to_payload(
                     result, engine, corpus_cfg.id_field, hydrate, max_results
                 )
+        if file_mode:
+            # Disk I/O happens outside the execution lock.
+            payload = _write_results_file(full, req, config)
         payload["ok"] = True
         payload["query"] = req.query
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
         return payload
 
     def _health_payload() -> dict[str, Any]:
+        # Snapshot under the state lock; the count reads are backend
+        # queries and must not serialize behind running /evaluate work.
         with state.lock:
-            counts = {
-                name: eng.search_backend.get_total_documents()
-                for name, eng in state.engines.items()
-            }
-            default_engine = state.engines[config.default_corpus]
-            backend = default_engine.search_backend
-            # Legacy single-corpus configs (no [corpora.*] sections) keep the
-            # flat scalar shape; real multi-corpus configs get a breakdown.
-            documents: Any = counts if config.corpora else counts[config.default_corpus]
-            return {
-                "status": "ok",
-                "backend": type(backend).__name__,
-                "documents": documents,
-                "loaded_at": state.loaded_at,
-            }
+            engines = dict(state.engines)
+            loaded_at = state.loaded_at
+        counts = {
+            name: eng.search_backend.get_total_documents()
+            for name, eng in engines.items()
+        }
+        backend = engines[config.default_corpus].search_backend
+        # Legacy single-corpus configs (no [corpora.*] sections) keep the
+        # flat scalar shape; real multi-corpus configs get a breakdown.
+        documents: Any = counts if config.corpora else counts[config.default_corpus]
+        return {
+            "status": "ok",
+            "backend": type(backend).__name__,
+            "documents": documents,
+            "loaded_at": loaded_at,
+        }
 
     @app.get("/health")
     def health() -> dict[str, Any]:
         return _health_payload()
 
     @app.post("/reload")
-    def reload() -> dict[str, Any]:
+    def reload(request: Request) -> Any:
+        # Rebuilds every engine from disk: disabled unless explicitly
+        # enabled, and rate-limited like /evaluate when it is.
+        if not config.enable_reload:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "ok": False,
+                    "error": {
+                        "type": "forbidden",
+                        "message": (
+                            "/reload is disabled on this server; set "
+                            "[server] enable_reload = true to allow it."
+                        ),
+                    },
+                },
+            )
+        if _rate_limited(_client_ip(request)):
+            return _rate_limit_response()
         state.reload()
         return _health_payload()
 
     @app.get("/schema")
     def schema(corpus: str | None = None) -> Any:
-        with state.lock:
-            try:
-                engine, corpus_cfg = state.engine_for(corpus)
-            except KeyError as e:
-                return JSONResponse(
-                    status_code=422,
-                    content={
-                        "ok": False,
-                        "error": {"type": "runtime", "message": str(e.args[0])},
-                    },
-                )
+        try:
+            engine, corpus_cfg, exec_lock = state.engine_for(corpus)
+        except KeyError as e:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "ok": False,
+                    "error": {"type": "runtime", "message": str(e.args[0])},
+                },
+            )
+        with exec_lock:
             return compute_schema(engine, corpus_cfg)
 
     @app.get("/corpora")

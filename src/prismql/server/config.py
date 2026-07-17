@@ -78,6 +78,15 @@ class ServerConfig:
     results_dir: str | None = None
     static_dir: str | None = None
     rate_limit_per_minute: int | None = None
+    # Public-surface gates (review 2026-07-12, #42). Both default OFF:
+    # /reload rebuilds every engine from disk and output="file" writes
+    # unbounded result sets to container disk — neither belongs on an
+    # anonymous public deploy unless explicitly enabled.
+    enable_reload: bool = False
+    enable_file_output: bool = False
+    file_output_max_groups: int = 100_000
+    # Cap on total terms in a request-scoped dictionary overlay.
+    max_request_dictionary_terms: int = 2000
     # A value is either a plain term list or {"terms": [...],
     # "match": "substring"|"token"} (single-word mode; multi-word terms
     # always phrase-match). TOML long form: [dictionaries.<name>] tables.
@@ -164,6 +173,13 @@ def load_config(path: str | Path) -> ServerConfig:
     default_corpus = server.get(
         "default_corpus", "default" if not corpora else sorted(corpora)[0]
     )
+    # A default_corpus that names no configured corpus must fail at boot,
+    # not as a 500 on the health check the deploy platform polls.
+    if corpora and default_corpus not in corpora:
+        raise ValueError(
+            f"[server].default_corpus = {default_corpus!r} names no configured "
+            f"corpus; available: {sorted(corpora)}"
+        )
 
     semantic = raw.get("semantic", {})
 
@@ -182,6 +198,10 @@ def load_config(path: str | Path) -> ServerConfig:
         results_dir=results_dir,
         static_dir=static_dir,
         rate_limit_per_minute=server.get("rate_limit_per_minute"),
+        enable_reload=server.get("enable_reload", False),
+        enable_file_output=server.get("enable_file_output", False),
+        file_output_max_groups=server.get("file_output_max_groups", 100_000),
+        max_request_dictionary_terms=server.get("max_request_dictionary_terms", 2000),
         dictionaries=dictionaries,
         corpora=corpora,
         default_corpus=default_corpus,
