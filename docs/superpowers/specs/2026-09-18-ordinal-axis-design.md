@@ -16,12 +16,12 @@ liability, and that the two execution paths already disagree on it.
 
 **A1. "Position" has three different definitions in the codebase.**
 
-| Site | Definition of distance |
-|---|---|
-| Rust `merge_followed_by` / `merge_preceded_by` (`algorithms.rs:506,535`) — the path that runs for all-int ids | `rhs_id - lhs_id` (id arithmetic) |
-| Rust `merge_histogram_pruned` (INWINDOW co-occurrence) and `window.py` int branch (`:98`) | `abs(id1 - id2)` (id arithmetic) |
-| Python fallback for FB/PB and chain extension (`query_visitor.py:~1514,1567`) | index in `sorted(get_all_document_ids())` (ordinal over ALL docs) |
-| `window.py` string-id branch (`:99-102, :233`) | index in the sorted list of *matched* ids only (ordinal over the match set — a third semantics) |
+| Site                                                                                                          | Definition of distance                                                                          |
+| ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Rust `merge_followed_by` / `merge_preceded_by` (`algorithms.rs:506,535`) — the path that runs for all-int ids | `rhs_id - lhs_id` (id arithmetic)                                                               |
+| Rust `merge_histogram_pruned` (INWINDOW co-occurrence) and `window.py` int branch (`:98`)                     | `abs(id1 - id2)` (id arithmetic)                                                                |
+| Python fallback for FB/PB and chain extension (`query_visitor.py:~1514,1567`)                                 | index in `sorted(get_all_document_ids())` (ordinal over ALL docs)                               |
+| `window.py` string-id branch (`:99-102, :233`)                                                                | index in the sorted list of *matched* ids only (ordinal over the match set — a third semantics) |
 
 **A2. Dual-path divergence, reproduced.** Corpus with ids `{1, 10}` (adjacent
 in the stream, 9 apart in id space), query
@@ -136,6 +136,61 @@ paths would move the class, not remove it. Revision 2 removes it.
    by axis. This is where the DST/tie-break class of bugs also dies:
    the tie-break is `(axis value, position)` by construction.
 
+### Layer 1 — the corpus is an ordered Arrow table
+
+There is no ingest layer today: `load_documents` reads json/jsonl/csv/
+parquet and immediately turns everything into `list[dict]` (parquet is
+read through pyarrow and the table is thrown away with `to_pylist()`);
+every backend takes `list[dict]`, and `RustMemoryBackend` receives one
+Python dict per document across PyO3 — the single most expensive step
+of loading. Results are `list[list[MessageId]]` and JSONL on disk. The
+many backends are many *search* backends (layer 2); the interchange
+format between layers is one, and it is the wrong one.
+
+**Decision: the contract between layers is Arrow, not JSON.**
+
+- **A corpus is an ordered Arrow table** (in memory, or parquet on disk):
+  one row per document, field columns, and `position` = row index.
+  This *is* the ordinal axis as data — load order becomes explicit,
+  portable and checkable instead of a property of whoever iterated a
+  list. `id` is an ordinary column (`int64` or `utf8`, unique).
+- **Ingest = "anything → Arrow".** Joining the six AI Village tables,
+  bucketing numeric fields, incremental appends, timestamp-monotone
+  validation — all happen in whatever produces the table: DuckDB (the
+  zero-ops default and the recommended tool), Polars, Postgres, pandas.
+  None of them is a dependency of the engine. The engine never joins.
+- **Backends ingest Arrow.** `RustMemoryBackend` takes the table
+  directly (arrow-rs, zero-copy for numeric columns; strings without
+  per-document dict construction) and builds `id_to_index` and the
+  timestamp caches from columns. `MemoryBackend` may keep `to_pylist()`
+  internally — it is the reference, not the fast path. `load_documents`
+  returns an Arrow table; the `list[dict]` constructors survive as a
+  convenience wrapper for tests and tiny corpora.
+- **Results are a table too**: `(group, slot, position, id)`. Result-set
+  diffs (workbench), sweep curves and null twins (harness), `output=
+  "file"` (parquet instead of JSONL), and any external tool become
+  table operations rather than nested-list walks. `QueryResult` as
+  `list[list[MessageId]]` remains the *Python-facing view*, produced
+  from the table at the edge, so the public API does not break.
+- **Hydration is a column gather**, not `get_documents(ids)` returning
+  dicts: take rows at positions.
+
+**The data plane, stated as a principle.** Python stays the control
+plane (parser, IR, the single operator layer, server, MCP). The data
+plane — documents, id sets, positions, results — is contiguous memory:
+Arrow columns and position arrays, never `list[dict]`, `set[int]` or
+`list[list]` on the hot path. The heavy work runs where the memory is
+(Rust primitives over buffers); Python orchestrates over result-sized
+arrays. This is the numpy/polars lesson, and it is what makes "Python is
+slow" stop being true for this engine without rewriting it.
+
+**Follow-on for layer 2a (not this spec, recorded so it is not lost):**
+predicate postings as bitmaps over positions (roaring). Boolean AND/OR/
+NOT become SIMD bitmap operations in Rust instead of Python `set`
+algebra over boxed ints, and a predicate's result is already a sorted
+position array — the exact input the primitives want. At that point no
+Python container touches the hot path anywhere.
+
 ### Backend contract (layer 2b)
 
 Built once at load, immutable afterwards:
@@ -182,7 +237,7 @@ Chicago tuple-equality and time on both `nearest_*` implementations
   INWINDOW commutativity — plus the review's additions: chains, negative
   operators, reversed-load ids, string ids separated by unmatched docs,
   subquery boundaries, duplicate-id rejection, 1M boundary.
-- **P1 — the axis.** `OrderIndex` in Python for MemoryBackend;
+- **P1 — the axis and the table.** `load_documents` returns an ordered Arrow table (`position` = row index); `RustMemoryBackend` ingests Arrow (arrow-rs), no per-document dicts across FFI; `OrderIndex` in Python for MemoryBackend;
   `RustMemoryBackend` exposes the same contract; `PositionalUnsupported`
   on remote backends; duplicate-id rejection at load. Nothing else
   changes yet.
