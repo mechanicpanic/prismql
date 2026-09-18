@@ -43,7 +43,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
     """
 
     DEFAULT_WINDOW_SIZE = 70
-    MAX_MESSAGES_NOT = 1_000_000
 
     def __init__(
         self,
@@ -776,9 +775,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     "Sequential operators return message sequences, not individual messages."
                 )
             # Get all message IDs up to a reasonable limit
-            total_docs = min(
-                self.MAX_MESSAGES_NOT, self.search_backend.get_total_documents()
-            )
+            total_docs = self.search_backend.get_total_documents()
             all_messages = self.search_backend.get_all_document_ids(limit=total_docs)
             return all_messages - excluded  # Set difference
 
@@ -1108,6 +1105,25 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return self._get_ner_messages("URL")
 
         raise PrismQLRuntimeError("Unknown condition type")
+
+    def _positional_universe(self) -> tuple[list[MessageId], dict[MessageId, int]]:
+        """Every document id in ascending order, with id -> index.
+
+        Never capped: a 1,000,000-id cap here silently dropped every lhs
+        beyond the first million on the full Chicago tier (88% of pairs),
+        on the Rust path too. Cached per visitor — the corpus is immutable
+        for the engine's lifetime — so chains do not rebuild it per link.
+        This whole universe disappears with the ordinal axis (spec
+        2026-09-18, P3).
+        """
+        total = self.search_backend.get_total_documents()
+        cached = getattr(self, "_universe_cache", None)
+        if cached is not None and cached[0] == total:
+            return cached[1], cached[2]
+        all_ids = sorted(self.search_backend.get_all_document_ids(limit=total))
+        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+        self._universe_cache = (total, all_ids, id_to_pos)
+        return all_ids, id_to_pos
 
     def _search_dictionary(self, dict_name: str) -> set[MessageId]:
         """Resolve a dictionary condition with per-term routing.
@@ -1511,10 +1527,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Python fallback implementation
         # Get all document IDs to establish the full sequence
-        all_ids = sorted(
-            self.search_backend.get_all_document_ids(limit=self.MAX_MESSAGES_NOT)
-        )
-        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+        all_ids, id_to_pos = self._positional_universe()
 
         result = []
         for lhs_msg in sorted(lhs_messages):
@@ -1567,10 +1580,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return []
 
         # Get all document IDs to establish the full sequence
-        all_ids = sorted(
-            self.search_backend.get_all_document_ids(limit=self.MAX_MESSAGES_NOT)
-        )
-        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+        all_ids, id_to_pos = self._positional_universe()
 
         result = []
         for sequence in lhs_sequences:
@@ -1614,10 +1624,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return []
 
         # Get all document IDs to establish the full sequence
-        all_ids = sorted(
-            self.search_backend.get_all_document_ids(limit=self.MAX_MESSAGES_NOT)
-        )
-        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+        all_ids, id_to_pos = self._positional_universe()
 
         result = []
         for sequence in lhs_sequences:
@@ -2337,10 +2344,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Get all document IDs to establish the full sequence
         # Use a reasonable limit to avoid performance issues
-        all_ids = sorted(
-            self.search_backend.get_all_document_ids(limit=self.MAX_MESSAGES_NOT)
-        )
-        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+        all_ids, id_to_pos = self._positional_universe()
 
         result = set()
         for msg_id in lhs:
@@ -2381,10 +2385,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return set()
 
         # Get all document IDs to establish the full sequence
-        all_ids = sorted(
-            self.search_backend.get_all_document_ids(limit=self.MAX_MESSAGES_NOT)
-        )
-        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
+        all_ids, id_to_pos = self._positional_universe()
 
         result = set()
         for msg_id in lhs:

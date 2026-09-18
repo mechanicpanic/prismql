@@ -35,11 +35,20 @@ the message "after" `m1` and INWINDOW pairs across the wrong neighbours
 (reproduced). Any corpus with UUID/string ids gets silently wrong
 sequence results on every backend that accepts strings.
 
-**A4. Silent truncation above 1M documents.** The Python positional
+**A4. Silent truncation above 1M documents — FIXED 2026-09-18, and worse than stated.** The Python positional
 fallback materializes `get_all_document_ids(limit=MAX_MESSAGES_NOT)` with
 `MAX_MESSAGES_NOT = 1_000_000` per query; larger corpora (AI Village:
 1.14M turns) lose positions past the cap. Only the string-id / non-Rust
 path hits this, i.e. exactly the corpora that also hit A3.
+*Correction from the Polars spike on the full Chicago tier (8.47M):* the
+cap bit on the **Rust path too** — the sequence-link prefilter
+(`_apply_followed_by/_preceded_by`) intersected lhs with the capped
+universe *before* calling the kernel, so positional FOLLOWED_BY returned
+25,484 pairs where 206,939 exist (every lhs beyond id 1,000,000 dropped);
+boolean NOT computed its complement inside the same cap. The benchmark
+never saw it (DURING-only). Fixed the same day: cap removed, universe
+cached per visitor, `tests/test_no_universe_cap.py` (mechanism test +
+1,000,010-document slow test). The universe itself disappears in P3.
 
 **A5. Temporal tie-break differs by path** (known, documented): Rust sorts
 `(timestamp, id)`, Python sorts by timestamp with stable set-iteration

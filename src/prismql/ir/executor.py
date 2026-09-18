@@ -463,9 +463,7 @@ class IRExecutor(PrismQLVisitor):
                     "(FOLLOWED_BY, PRECEDED_BY). Sequential operators return "
                     "message sequences, not individual messages."
                 )
-            total_docs = min(
-                self.MAX_MESSAGES_NOT, self.search_backend.get_total_documents()
-            )
+            total_docs = self.search_backend.get_total_documents()
             all_messages = self.search_backend.get_all_document_ids(limit=total_docs)
             return all_messages - excluded
 
