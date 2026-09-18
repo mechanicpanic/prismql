@@ -50,6 +50,19 @@ never saw it (DURING-only). Fixed the same day: cap removed, universe
 cached per visitor, `tests/test_no_universe_cap.py` (mechanism test +
 1,000,010-document slow test). The universe itself disappears in P3.
 
+**A7. Distinctness is not enforced across axes (found by the P2 review,
+2026-09-19).** A chain mixing a positional and a temporal link can reuse
+a message: docs `a(id 0, t 10)`, `b(id 1, t 5)`; `a FOLLOWED_BY b
+INWINDOW 1 FOLLOWED_BY a DURING 10 seconds` returns `[[0, 0, 1]]` on
+both paths. Pinned xfail(strict) in `tests/test_engine_defects_pinned.py`.
+
+**A8. Quantifier ranges are executed as their minimum.** `{2,}` and
+`{2,3}` return exactly what `{2}` returns (only `min_count` is expanded;
+`query_visitor.py` carries the range TODO). The language reference
+promises ranges. Pinned xfail(strict) in the same file; P2/P3 must
+DEFINE range enumeration before implementing it — HEAD is not an oracle
+here.
+
 **A5. Temporal tie-break differs by path** (known, documented): Rust sorts
 `(timestamp, id)`, Python sorts by timestamp with stable set-iteration
 order. Rust caches parsed UTC micros at ingest; Python parses per query.
@@ -90,7 +103,7 @@ paths would move the class, not remove it. Revision 2 removes it.
    implemented exactly once, in `prismql/processors/`, on sorted
    position arrays and a parallel timestamp array. There is no "Rust
    path" and no "Python fallback" for an operator.
-3. **Rust accelerates primitives, not operators.** The Rust crate exposes
+3. **Rust accelerates primitives, not operators** *(superseded for the merge primitives by the Polars decision below — see P2; Rust remains only for text search).* The Rust crate exposes
    only leaf primitives whose contract is one sentence and testable by
    property tests against the Python reference:
    - `nearest_after(sorted: &[u64], xs: &[u64]) -> Vec<Option<usize>>`
@@ -105,6 +118,11 @@ paths would move the class, not remove it. Revision 2 removes it.
      the backend.
    Rust cannot disagree with Python about what FOLLOWED_BY means because
    it does not know FOLLOWED_BY exists.
+
+   *Historical note (revision 2a): the paragraph below argued for keeping
+   the kernel bodies as Rust primitives. The Polars spike made that moot
+   — the primitives are a relational plan and the kernels retire with
+   P3. Kept for the record of why.*
 
    **What "retiring the operator-shaped kernels" means — and does not.**
    The heavy loops do not leave Rust. `merge_followed_by` *is* sort +
