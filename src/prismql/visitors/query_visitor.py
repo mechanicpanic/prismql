@@ -1531,8 +1531,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
                         result.append([lhs_msg, all_ids[i]])
                         break
             else:
-                # Look backward (PRECEDED_BY)
-                for i in range(max(0, pos - window), pos):
+                # Look backward (PRECEDED_BY): NEAREST predecessor first, the
+                # mirror of FOLLOWED_BY's nearest successor and what the Rust
+                # kernel does — scanning from the window's far edge picked the
+                # earliest match and silently diverged from the Rust path.
+                for i in range(pos - 1, max(0, pos - window) - 1, -1):
                     if all_ids[i] in rhs_messages:
                         # Found a match - create a pair (RHS first, then LHS for chronological order)
                         result.append([all_ids[i], lhs_msg])
@@ -1624,8 +1627,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 continue
             pos = id_to_pos[first_msg]
 
-            # Look for a message from rhs that precedes within window
-            for i in range(max(0, pos - window), pos):
+            # Look for the NEAREST rhs message that precedes within window
+            # (same rule as the pair builder and the Rust kernel).
+            for i in range(pos - 1, max(0, pos - window) - 1, -1):
                 if all_ids[i] in rhs_messages:
                     # Found a match - prepend to the sequence
                     extended = [all_ids[i]] + sequence

@@ -144,3 +144,97 @@ here touches the grammar or IR.
 5. **Interaction with the planned ingest layer** (DuckDB → flat stream):
    the loader becomes the single place that defines stream order — is
    that the right home, or should the backend always re-sort by time?
+
+## Review amendments (GPT-6 Astra via Codex, 2026-09-18)
+
+The review confirmed A1–A5 with file:line evidence, refuted three
+overstatements, and found two defects that are independent of the
+ordinal axis. Amendments, in severity order:
+
+**Refuted / qualified.**
+- "Dual-path equality held only because test corpora are dense" — wrong
+  on both counts: existing tests do use gapped ids
+  (`tests/test_basic.py:98` asserts id-distance semantics: `[1,3]` and
+  `[10,11]` pair, "2 apart") and string ids; and dense ids do NOT
+  guarantee equality (see D1). The gapped-id test is itself a decision
+  input: it encodes "an id gap is real distance" (e.g. deleted messages
+  in a chat export keep their original positions).
+- "Any string-id corpus is silently wrong" → wrong only when lexical
+  order differs from stream order.
+- "Only the non-Rust path hits the 1M cap" → chain extensions and
+  subquery positional merges build the capped universe regardless of
+  Rust availability.
+- "Python parses timestamps per query" → only on the document-fetch
+  fallback; `get_timestamps` projections are used when available.
+
+**D1 — new defect (fixed same day).** `PRECEDED_BY` picked the NEAREST
+predecessor on the Rust kernel but the EARLIEST-in-window on the Python
+builders (pair and chain extension) — divergence on dense ids. Pinned in
+`tests/test_positional_path_parity.py`; Python builders now scan nearest
+first.
+
+**D2 — new defect, decision pending.** `INWINDOW` is documented UNORDERED
+(`A, B ≡ B, A`, LANGUAGE_REFERENCE §INWINDOW) but BOTH kernels enforce
+restriction order: Rust `extend_partial` requires strictly ascending
+positions across group slots (`algorithms.rs:371–381`), the Python
+backtracker only searches forward from the last pick (`window.py`).
+`SELECT from(b), from(a) INWINDOW 3` returns `[]` where the reverse
+returns `[[1,2]]`. Pinned as `xfail(strict)` in the same test file.
+Either the kernels change (anchor = minimum position of the combination,
+every other slot within `[anchor, anchor+window]`, distinct messages) or
+the documentation and the language story change. This is a release
+blocker independent of everything else in this spec.
+
+**Design corrections.**
+- Mapping ids → positions does not by itself unify operator semantics
+  (D1, D2): P2 must fix operator rules explicitly, not just coordinates.
+- P2 must migrate EVERY consumer of order, not only the merge helpers:
+  subquery boundary selection by label `max`/`min`
+  (`query_visitor.py:1322–1329`), subquery concatenation sorts
+  (`:1383,1395`), and both executors' final group normalization
+  (`query_visitor.py:493,499`, `ir/executor.py:381,386`). Unordered
+  predicate sets and ordered sequence tuples must be distinguished — a
+  sorted `positions()` API must never be applied to tuples.
+- `MAX_MESSAGES_NOT` also bounds boolean NOT in both executors; removing
+  positional enumeration and changing complement semantics are separate
+  changes.
+- "Optional capability, free for every backend" is not implementable:
+  OpenSearch receives a client, not an ordered list, and the base
+  enumeration API returns a set. Remote backends need a persisted order
+  source; positional queries must FAIL explicitly where absent.
+- The bijection needs a duplicate-id policy (both MemoryBackend and Rust
+  currently overwrite mappings silently), unknown-id and bounds rules,
+  and an immutability statement. Keep `MessageId = int | str`, not "any
+  hashable".
+- Backend temporal methods take ids and resolve through `id_to_index`;
+  passing positions there would resolve wrong documents silently. Keep
+  backend temporal APIs id-based; feed positions only to the stateless
+  positional kernels. Full Rust string-id support (P4) is a real project
+  — constructor, search egress, `get_documents`, `get_timestamps` all
+  translate — not a "surface" change.
+- Multiple configured timestamp fields exist; `ts_at` must be per field.
+- P3 must keep strict temporal inequality (no same-timestamp links);
+  `(ts, pos)` only orders candidates.
+
+**Benchmark gate corrections.** Chicago's query is DURING-only — it does
+not exercise positional merges and its runner compares counts, not
+tuples. Keep it as the temporal gate; add positional benchmark queries,
+compare full tuples with leg order, and run relabeled copies (gapped
+numeric, non-lexical strings) translating labels back.
+
+**The open decision (owner):** *ordinal = load order* (ids are labels;
+`test_basic.py:98` changes meaning) vs *ordinal = id* (gaps are real
+distance, as today's Rust path and that test assume). A per-corpus
+`order = "load" | "id"` setting with an explicit default is the honest
+option; the reviewer and the author both lean to load order as default.
+
+**Amended migration order.** P0 expanded (PB nearest, chains, negative
+operators, reversed-load numeric ids, string ids separated by unmatched
+docs, subquery boundaries, duplicate ids, 1M boundary) → P1 ordinal
+contract (uniqueness, snapshot, global vs partition positions, missing
+ids, unsupported-backend error; order-preserving lookup separate from
+sorted projection) → P2 all positional consumers together, D2 resolved,
+backend temporal APIs untouched → gate on three axes (classic/pipe IR,
+use_ir on/off, native/forced-Python) → Chicago tuple equality +
+positional scale tests → P3 temporal tie-break → P4 Rust string ids as
+its own project → docs shipped with each phase, not at the end.
