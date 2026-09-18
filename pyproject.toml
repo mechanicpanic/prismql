@@ -206,7 +206,6 @@ ignore_missing_imports = true
 # tolerated there.
 [[tool.mypy.overrides]]
 module = [
-    "tomli",
     "pyarrow",
     "pyarrow.*",
     "fastapi",
@@ -217,6 +216,8 @@ module = [
     "tantivy.*",
     "sentence_transformers",
     "sentence_transformers.*",
+    "polars",
+    "polars.*",
 ]
 ignore_missing_imports = true
 
