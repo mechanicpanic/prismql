@@ -90,11 +90,16 @@ def evaluate_via_http(
         }
 
 
-def main() -> None:
-    """Console entry point: prismql-mcp (stdio transport)."""
-    from mcp.server.fastmcp import FastMCP
+def build_server() -> Any:
+    """Construct the MCP server (mcp >= 2: MCPServer, formerly FastMCP).
 
-    server = FastMCP("prismql")
+    Separated from main() so tests can build it and list tools/resources
+    without a stdio transport — the 1.x -> 2.x rename broke the entry
+    point silently because nothing exercised the server object itself.
+    """
+    from mcp.server.mcpserver import MCPServer
+
+    server = MCPServer("prismql")
 
     @server.tool(description=_TOOL_DESCRIPTION)
     def evaluate(
@@ -113,4 +118,9 @@ def main() -> None:
     def reference() -> str:
         return load_reference()
 
-    server.run()
+    return server
+
+
+def main() -> None:
+    """Console entry point: prismql-mcp (stdio transport)."""
+    build_server().run()

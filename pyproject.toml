@@ -48,7 +48,7 @@ server = [
     "tomli>=2.0; python_version<'3.11'",
 ]
 mcp = [
-    "mcp>=1.0; python_version>='3.10'",
+    "mcp>=2.0; python_version>='3.10'",
 ]
 demo = [
     "streamlit>=1.28.0",
@@ -101,7 +101,8 @@ packages = ["src/prismql"]
 [tool.ruff]
 line-length = 88
 target-version = "py39"
-extend-exclude = ["src/prismql/grammar/generated"]
+# "*.md": ruff >= 0.16 formats code blocks inside markdown; docs stay as authored.
+extend-exclude = ["src/prismql/grammar/generated", "*.md"]
 
 [tool.ruff.lint]
 select = [
@@ -122,8 +123,6 @@ select = [
     "ARG", # flake8-unused-arguments
 ]
 ignore = [
-    "ANN101", # Missing type annotation for self
-    "ANN102", # Missing type annotation for cls
     "ANN401", # Dynamically typed expressions (Any) are disallowed
     "S101",   # Use of assert detected
 ]

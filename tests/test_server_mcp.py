@@ -63,3 +63,21 @@ def test_round_trip_against_app(tmp_path):
     server.should_exit = True
     assert unknown["ok"] is False
     assert "nope" in unknown["error"]["message"]
+
+
+def test_server_object_registers_tool_and_resource():
+    """Build the real MCP server object (no stdio) and enumerate it —
+    the mcp 1.x -> 2.x FastMCP/MCPServer rename broke prismql-mcp with
+    nothing in the suite noticing."""
+    import asyncio
+
+    pytest.importorskip("mcp")
+    from prismql.server.mcp import build_server
+
+    server = build_server()
+    tools = asyncio.run(server.list_tools())
+    assert [t.name for t in tools] == ["evaluate"]
+    params = set(tools[0].input_schema["properties"])
+    assert {"query", "corpus", "dictionaries", "output"} <= params
+    resources = asyncio.run(server.list_resources())
+    assert [str(r.uri) for r in resources] == ["prismql://reference"]
