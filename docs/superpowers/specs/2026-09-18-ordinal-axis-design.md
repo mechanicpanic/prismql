@@ -53,97 +53,135 @@ corpus with another id field.
 dense, and monotone in stream order. Nothing enforces or documents it;
 Chicago and FCC satisfy it by construction.
 
-## Design
+## Design (revision 2 — one owner of merge semantics)
 
-Introduce **layer 2b, the ordinal axis**, next to the inverted index
-(layer 2a). Built once at load, owned by the backend:
+Revision 1 proposed an explicit ordinal axis and migrating *both*
+execution paths onto it. Review and the owner's question ("isn't this a
+crutch?") exposed the structural cause behind every divergence found in
+the audit: **each merge has two implementations** — a Python fallback and
+a Rust kernel — and semantics live in both. Three definitions of
+"position", nearest-vs-earliest PRECEDED_BY, differing tie-breaks, and the
+ordered-INWINDOW defect are all the same bug: two owners. Migrating both
+paths would move the class, not remove it. Revision 2 removes it.
 
-- `order`: the stream order of documents. **Decision: ordinal = load
-  order.** No hidden sort — the loader (the future ingest layer) is
-  responsible for delivering documents in stream order, and the backend
-  validates (warning when the configured timestamp field is not
-  monotone in load order). This keeps the axis deterministic, makes the
-  two execution paths trivially consistent, and matches the documented
-  meaning of INWINDOW ("distance in the source stream").
-- `pos: id -> int` (dense, 0..n-1) and `id_at: int -> id`.
-- `ts_at: int -> epoch micros | None`, the existing timestamp cache
-  re-keyed by position.
+### Principles
 
-Backend API (optional capability, default implementation in a small
-`OrderIndex` helper so every backend gets it for free from its
-document list):
+1. **One ordinal axis.** `order` = load order, full stop. The loader (the
+   future ingest layer) delivers documents in stream order; the backend
+   validates against the configured timestamp field and *warns* when
+   positional and temporal order disagree. No `order="id"` switch: ids
+   are labels (`int | str`, unique — duplicates are a load error). A
+   corpus where id gaps mean deleted messages encodes that in the loader
+   (placeholder positions) or asks with DURING. `tests/test_basic.py:98`
+   changes meaning and is rewritten.
+2. **One owner of merge semantics: Python, over position arrays.** Every
+   sequence/window operator — FOLLOWED_BY, PRECEDED_BY (and their NOT
+   forms), chain extension, INWINDOW co-occurrence, DURING links, DURING
+   co-occurrence, subquery boundaries, final group normalization — is
+   implemented exactly once, in `prismql/processors/`, on sorted
+   position arrays and a parallel timestamp array. There is no "Rust
+   path" and no "Python fallback" for an operator.
+3. **Rust accelerates primitives, not operators.** The Rust crate exposes
+   only leaf primitives whose contract is one sentence and testable by
+   property tests against the Python reference:
+   - `nearest_after(sorted: &[u64], xs: &[u64]) -> Vec<Option<usize>>`
+     (first element strictly greater), `nearest_before` (last strictly
+     smaller) — the bisect that FOLLOWED_BY/PRECEDED_BY/temporal links
+     are made of;
+   - `window_product(groups: &[&[u64]], span: u64) -> Vec<Vec<u64>>` —
+     unordered co-occurrence: combinations of one element per group, all
+     within `span` of the minimum, distinct elements (the corrected
+     INWINDOW/DURING co-occurrence, written once for both axes);
+   - `positions(ids) / ids_at(positions) / timestamps_at(positions)` on
+     the backend.
+   Rust cannot disagree with Python about what FOLLOWED_BY means because
+   it does not know FOLLOWED_BY exists. The existing operator-shaped
+   kernels (`merge_followed_by`, `merge_preceded_by`,
+   `merge_histogram_pruned`, `merge_temporal_link`,
+   `extend_temporal_link`, `merge_within_time_window`) are retired.
+4. **Positional and temporal are the same algorithm on different axes.**
+   INWINDOW = `window_product` over positions; DURING co-occurrence =
+   `window_product` over timestamps. FOLLOWED_BY INWINDOW n =
+   `nearest_after` on positions with distance ≤ n; FOLLOWED_BY DURING t =
+   `nearest_after` on timestamps with distance ≤ t (strict inequality on
+   equal timestamps preserved). One implementation each, parameterized
+   by axis. This is where the DST/tie-break class of bugs also dies:
+   the tie-break is `(axis value, position)` by construction.
 
-```python
-positions(ids: Iterable[MessageId]) -> list[int]      # sorted ascending
-ids_at(positions: Iterable[int]) -> list[MessageId]
-timestamps_at(positions) -> list[int | None]
-```
+### Backend contract (layer 2b)
 
-`RustMemoryBackend` already holds `id_to_index` (id → load index) and a
-timestamp cache indexed the same way: it IS the ordinal axis, exposed
-under the wrong name. Only the surface changes.
+Built once at load, immutable afterwards:
+- `positions(ids: Iterable[MessageId]) -> list[int]` — order-preserving
+  (NOT sorted; sorting is the caller's business), unknown ids raise;
+- `sorted_positions(ids) -> list[int]` — the set projection used by
+  merges;
+- `ids_at(positions) -> list[MessageId]`;
+- `timestamps_at(positions, field) -> list[int | None]` (epoch micros,
+  UTC; per configured field);
+- `size() -> int`.
+`RustMemoryBackend` already holds `id_to_index` and per-field timestamp
+caches: it exposes them under this contract and its id ingress/egress
+translate `int | str` labels at the wrapper. Remote backends
+(OpenSearch, Postgres, DuckDB) implement the contract from a persisted
+`position` column or **raise `PositionalUnsupported`** — positional and
+temporal-sequence queries fail explicitly there; boolean/set queries
+keep working. No silent reconstruction of order from ids anywhere.
 
-Merges then operate on positions:
+### What this removes
 
-- Positional FB/PB/extend and INWINDOW: id sets → position arrays →
-  the **existing** kernels (they are id-agnostic `usize` nearest-next /
-  histogram algorithms) → map back to ids. `window.py`'s int/str
-  branches collapse into one; the per-query `all_ids`/`id_to_pos`
-  materialization and the 1M cap disappear.
-- Temporal links: unchanged algorithm; tie-break becomes `(ts, pos)`
-  on both paths (closes A5).
-- Ids become labels: any hashable, on every backend, including Rust
-  (the wrapper maps ids ↔ positions before the FFI boundary; Rust sees
-  positions only).
+- Both `_apply_followed_by/_preceded_by` builders and both chain
+  extenders in `query_visitor.py`; `window.py`'s backtracking and its
+  int/str branches; the `RUST_*_AVAILABLE` dispatch (14 sites); the
+  `MAX_MESSAGES_NOT` positional universe (boolean NOT keeps a separate,
+  explicitly documented cap);
+- the documented "Rust tie-break differs" divergence, the "Rust only for
+  numeric ids" limitation, and the dual-path test matrix for merges
+  (replaced by property tests of three primitives + one reference).
 
-Semantic change to call out: on corpora with gapped ids, INWINDOW
-distance becomes stream distance (today: id distance on the Rust path).
-That is the fix, not a regression, but it is a behaviour change and goes
-in the CHANGELOG and both references.
+### Performance
 
-## Migration (each phase leaves the suite green)
+The expensive parts of Chicago (nearest-next over millions of sorted
+positions/timestamps, the co-occurrence product with pruning) are
+exactly the primitives, so they stay in Rust; the Python operator layer
+does O(k) work over result-sized arrays. Must be measured, not assumed:
+Chicago tuple-equality and time on both `nearest_*` implementations
+(Rust vs `bisect`) is the gate.
 
-- **P0 (this commit):** `tests/test_ordinal_axis_contract.py` — the
-  target semantics as `xfail(strict=True)` tests: gapped ids agree on
-  both paths; string ids follow load order; no lexicographic ordering.
-  They flip to passing as phases land, and fail loudly if a phase
-  regresses them.
-- **P1: `OrderIndex`** (`src/prismql/backends/order.py`): built from the
-  document list in `MemoryBackend`; `RustMemoryBackend` exposes
-  `id_to_index` + timestamp cache through the same three methods.
-  Monotone-timestamp validation with a warning.
-- **P2: positional merges on positions.** FB/PB/extend in the visitor
-  (both paths share the helpers, so one change), `window.py` merge
-  through positions, remove `MAX_MESSAGES_NOT`. Dual-path equality
-  tests on gapped and string-id corpora. Chicago 372 must reproduce on
-  both paths (benchmark gate).
-- **P3: temporal tie-break `(ts, pos)`** on both paths; drop the
-  "documented divergence" note.
-- **P4: string ids on Rust.** Wrapper-side id ↔ position mapping;
-  remove the "Rust kernels only for numeric ids" limitation.
-- **P5: docs.** Both references, gotchas in AGENTS.md, CHANGELOG entry
-  for the gapped-id semantic change; delete the implicit id contract.
+## Migration (revision 2; each step leaves the suite green)
 
-Estimate: P1–P2 two to three days, P3–P4 one to two, P5 hours. Nothing
-here touches the grammar or IR.
+- **P0** (done + expanded): contract tests as xfail(strict) —
+  gapped-id adjacency, load-order string ids, PRECEDED_BY nearest,
+  INWINDOW commutativity — plus the review's additions: chains, negative
+  operators, reversed-load ids, string ids separated by unmatched docs,
+  subquery boundaries, duplicate-id rejection, 1M boundary.
+- **P1 — the axis.** `OrderIndex` in Python for MemoryBackend;
+  `RustMemoryBackend` exposes the same contract; `PositionalUnsupported`
+  on remote backends; duplicate-id rejection at load. Nothing else
+  changes yet.
+- **P2 — primitives.** Python reference implementations of
+  `nearest_after/before` (bisect) and `window_product`; Rust twins in
+  `prismql-rust` with the same signatures; hypothesis-style property
+  tests asserting Rust == reference on random sorted arrays. Old kernels
+  untouched.
+- **P3 — the single operator layer.** `processors/sequence.py`: every
+  operator once, over positions/timestamps, using the primitives.
+  INWINDOW/DURING co-occurrence become unordered here (D2 fixed once).
+  Executors (both `use_ir` paths — they share the helpers) call only
+  this layer. The old builders, `window.py` backtracking, dispatch
+  flags and operator-shaped kernels are deleted in the same series.
+  Subquery boundaries and final normalization operate on positions and
+  map back to ids at the edge.
+- **P4 — gates.** Classic/pipe IR equality (unchanged); `use_ir` on/off
+  equality (unchanged); Rust-primitives vs reference-primitives on the
+  full suite (env flag forcing the reference); Chicago full-tuple
+  equality vs the committed 372 result plus a positional benchmark
+  query; relabeled corpora (gapped numeric, non-lexical strings).
+- **P5 — docs with each phase**: both references, gotchas, CHANGELOG
+  (semantic changes: INWINDOW truly unordered; gapped-id distance is
+  stream distance; string ids everywhere; PositionalUnsupported).
 
-## Risks and open questions for review
-
-1. **Load order vs timestamp-sorted axis.** Load order is explicit and
-   cheap but pushes ordering responsibility to the loader. The
-   alternative (sort by configured timestamp field at load, tie-break
-   by load index) is friendlier for ad-hoc corpora but hides a sort and
-   must decide where unparseable timestamps go. Which contract?
-2. **FFI boundary.** Positions across the boundary (Rust never sees
-   ids) vs. teaching Rust about string ids. The former keeps Rust
-   untouched but adds two O(k) mappings per merge.
-3. **Perf.** id ↔ position mapping per merge over result-sized sets;
-   expected negligible vs merge cost, must be measured on Chicago.
-4. **Did anything rely on id-distance semantics?** The Chicago
-   benchmark's ids are dense, so 372 should hold; needs the re-run.
-5. **Interaction with the planned ingest layer** (DuckDB → flat stream):
-   the loader becomes the single place that defines stream order — is
-   that the right home, or should the backend always re-sort by time?
+Estimate: P1 one day, P2 one day, P3 two to three days, P4 one day.
+Grammar and IR untouched throughout.
 
 ## Review amendments (GPT-6 Astra via Codex, 2026-09-18)
 
