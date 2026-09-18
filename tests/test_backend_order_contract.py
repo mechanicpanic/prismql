@@ -62,3 +62,39 @@ def test_memory_backend_timestamps_are_utc_micros_per_position():
 def test_memory_backend_rejects_duplicate_ids():
     with pytest.raises(ValueError, match="duplicate id"):
         MemoryBackend(documents=[{"id": 1, "text": "a"}, {"id": 1, "text": "b"}])
+
+
+try:
+    from prismql.backends.rust_memory import RUST_BACKEND_AVAILABLE, RustMemoryBackend
+except ImportError:  # pragma: no cover
+    RUST_BACKEND_AVAILABLE = False
+
+RUST_DOCS = [
+    {"id": 10, "user": "a", "text": "x", "timestamp": 1_000},
+    {"id": 3, "user": "b", "text": "y", "timestamp": "2024-01-01T00:00:00"},
+    {"id": 7, "user": "c", "text": "z"},
+]
+
+
+@pytest.mark.skipif(not RUST_BACKEND_AVAILABLE, reason="prismql_rust not installed")
+class TestRustOrderContract:
+    def test_matches_memory_backend(self):
+        py = MemoryBackend(documents=RUST_DOCS)
+        rs = RustMemoryBackend(documents=RUST_DOCS)
+        assert rs.has_order_axis()
+        assert rs.positions([7, 10, 3]) == py.positions([7, 10, 3]) == [2, 0, 1]
+        assert rs.sorted_positions([7, 10]) == [0, 2]
+        assert rs.ids_at([1, 2]) == py.ids_at([1, 2]) == [3, 7]
+        assert rs.timestamps_at([0, 1, 2], "timestamp") == py.timestamps_at(
+            [0, 1, 2], "timestamp"
+        )
+
+    def test_unknown_id_raises_key_error(self):
+        with pytest.raises(KeyError):
+            RustMemoryBackend(documents=RUST_DOCS).positions([99])
+
+    def test_duplicate_ids_rejected(self):
+        with pytest.raises(ValueError, match="duplicate id"):
+            RustMemoryBackend(
+                documents=[{"id": 1, "text": "a"}, {"id": 1, "text": "b"}]
+            )

@@ -1,11 +1,12 @@
 """Rust-based in-memory backend with 10-100x performance improvements."""
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from ..types import Document, MessageGroup, MessageId, QueryResult
 from .base import SearchBackend
+from .order import OrderIndex, epoch_micros
 
 try:
     from prismql_rust import RustMemoryBackend as _RustMemoryBackend
@@ -102,6 +103,18 @@ class RustMemoryBackend(SearchBackend):
         if timestamp_fields is None:
             timestamp_fields = ["timestamp"]
         self.timestamp_fields = list(timestamp_fields)
+
+        # The ordinal axis (spec 2026-09-18), on the Python side: the custom
+        # Rust kernels are being retired, so no new FFI. Built before the
+        # Rust backend so a duplicate id fails with the same message as
+        # MemoryBackend.
+        self.order = OrderIndex(
+            ids=[doc[id_field] for doc in self.documents],
+            timestamps={
+                f: [epoch_micros(doc.get(f)) for doc in self.documents]
+                for f in self.timestamp_fields
+            },
+        )
 
         # Create the Rust backend
         try:
@@ -275,6 +288,24 @@ class RustMemoryBackend(SearchBackend):
             except (ValueError, OSError, OverflowError):
                 continue
         return result
+
+    # -- order contract (spec 2026-09-18) ---------------------------------
+    def has_order_axis(self) -> bool:
+        return True
+
+    def positions(self, ids: Iterable[MessageId]) -> list[int]:
+        return self.order.positions(ids)
+
+    def sorted_positions(self, ids: Iterable[MessageId]) -> list[int]:
+        return self.order.sorted_positions(ids)
+
+    def ids_at(self, positions: Iterable[int]) -> list[MessageId]:
+        return self.order.ids_at(positions)
+
+    def timestamps_at(
+        self, positions: Iterable[int], field: str
+    ) -> list[Optional[int]]:
+        return self.order.timestamps_at(positions, field)
 
     def filter_by_time_range(
         self,
