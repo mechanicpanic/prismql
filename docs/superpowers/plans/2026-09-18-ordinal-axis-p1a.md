@@ -439,18 +439,22 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 3: `RustMemoryBackend` implements the contract over new FFI methods
+### Task 3: `RustMemoryBackend` implements the contract (Python-side axis, no new FFI)
+
+*Amended 2026-09-18 after the Polars spike: the custom Rust kernels are
+being retired (spec rev. 2 + spike), so no new Rust methods. The wrapper
+builds the same `OrderIndex` from its document list — enough for parity
+tests until P3 removes the dual paths.*
 
 **Files:**
-- Modify: `../prismql-rust/src/backend.rs` (add three `#[pymethods]`; duplicate-id check in `new`, ~lines 195–209)
-- Modify: `src/prismql/backends/rust_memory.py` (handshake ~line 84; new methods after `get_timestamps`)
-- Test: `tests/test_backend_order_contract.py` (append), `../prismql-rust/src/backend.rs` unit test
+- Modify: `src/prismql/backends/rust_memory.py` (`__init__` after the Rust backend is constructed; new methods after `get_timestamps`)
+- Test: `tests/test_backend_order_contract.py` (append)
 
 **Interfaces:**
-- Consumes: contract names from Task 2.
-- Produces (Rust, on `RustMemoryBackend`): `positions_of(ids: Vec<usize>) -> Vec<Option<usize>>` (None for unknown), `ids_at(positions: Vec<usize>) -> PyResult<Vec<usize>>` (IndexError out of range), `timestamps_at(positions: Vec<usize>, field: &str) -> PyResult<Vec<Option<i64>>>` (ValueError unknown field; micros). Constructor raises `ValueError("duplicate id ...")`.
+- Consumes: `OrderIndex` (Task 1), contract names (Task 2), `MemoryBackend._epoch_micros` logic (duplicate it as a module-level helper in `order.py`: `epoch_micros(value) -> Optional[int]`, and have `MemoryBackend` use that too).
+- Produces: `RustMemoryBackend.order: OrderIndex` and the five contract methods; duplicate ids raise `ValueError("duplicate id ...")` from `OrderIndex` before the Rust constructor runs.
 
-- [ ] **Step 1: Write the failing Python tests** (append to `tests/test_backend_order_contract.py`)
+- [ ] **Step 1: Write the failing tests** (append to `tests/test_backend_order_contract.py`)
 
 ```python
 try:
@@ -477,9 +481,8 @@ class TestRustOrderContract:
         assert rs.timestamps_at([0, 1, 2], "timestamp") == py.timestamps_at([0, 1, 2], "timestamp")
 
     def test_unknown_id_raises_key_error(self):
-        rs = RustMemoryBackend(documents=RUST_DOCS)
         with pytest.raises(KeyError):
-            rs.positions([99])
+            RustMemoryBackend(documents=RUST_DOCS).positions([99])
 
     def test_duplicate_ids_rejected(self):
         with pytest.raises(ValueError, match="duplicate id"):
@@ -489,149 +492,56 @@ class TestRustOrderContract:
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `uv run pytest tests/test_backend_order_contract.py -q -k Rust`
-Expected: FAIL — `AttributeError: 'RustMemoryBackend' object has no attribute 'has_order_axis'` (and duplicate test: no error raised)
+Expected: FAIL — `AttributeError: 'RustMemoryBackend' object has no attribute 'has_order_axis'`
 
-- [ ] **Step 3: Rust — duplicate-id rejection in the constructor**
-
-In `../prismql-rust/src/backend.rs` constructor loop (the block containing `backend.id_to_index.insert(doc_id, idx);`, ~line 208), replace that line with:
-
-```rust
-            if let Some(prev) = backend.id_to_index.insert(doc_id, idx) {
-                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "duplicate id {} at positions {} and {}: ids must be unique",
-                    doc_id, prev, idx
-                )));
-            }
-```
-
-- [ ] **Step 4: Rust — the three methods** (add inside the `#[pymethods] impl RustMemoryBackend` block, next to `get_timestamps`, ~line 384)
-
-```rust
-    /// Load-order position of each id; None for unknown ids.
-    fn positions_of(&self, ids: Vec<MessageId>) -> Vec<Option<usize>> {
-        ids.iter().map(|id| self.id_to_index.get(id).copied()).collect()
-    }
-
-    /// Ids at load-order positions; IndexError when out of range.
-    fn ids_at(&self, positions: Vec<usize>) -> PyResult<Vec<MessageId>> {
-        let n = self.documents.len();
-        positions
-            .iter()
-            .map(|&p| {
-                self.documents.get(p).map(|d| d.id).ok_or_else(|| {
-                    PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
-                        "position {} out of range [0, {})", p, n
-                    ))
-                })
-            })
-            .collect()
-    }
-
-    /// Epoch microseconds (UTC) at positions for a cached timestamp field;
-    /// None where unparseable; ValueError for a field not cached.
-    fn timestamps_at(&self, positions: Vec<usize>, field: &str) -> PyResult<Vec<Option<i64>>> {
-        let cache = self.timestamp_caches.get(field).ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Timestamp field '{}' was not indexed; pass it via timestamp_fields at construction",
-                field
-            ))
-        })?;
-        positions
-            .iter()
-            .map(|&p| {
-                cache.get(p).map(|e| e.parsed().map(|ts| ts.timestamp_micros())).ok_or_else(|| {
-                    PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
-                        "position {} out of range [0, {})", p, cache.len()
-                    ))
-                })
-            })
-            .collect()
-    }
-```
-
-(`self.documents` is the `Vec<Document>` the constructor fills in load order — position is its index, which is exactly what `id_to_index` stores.)
-
-- [ ] **Step 5: Rust unit test** (append inside the existing `#[cfg(test)] mod tests` in `backend.rs`; if the module builds backends only through Python, skip this step and rely on the Python tests — do not invent a Rust-only constructor)
-
-- [ ] **Step 6: Rebuild the extension**
-
-Run:
-```bash
-cd ../prismql-rust && PATH="$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" cargo test --lib 2>&1 | tail -3
-cd ../prismql && PATH="$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" uv sync --reinstall-package prismql-rust --dev --extra server --extra repl --extra highlighting --extra mcp --extra tantivy 2>&1 | tail -1
-```
-Expected: Rust tests pass; `~ prismql-rust==0.1.0` reinstalled.
-
-- [ ] **Step 7: Python wrapper**
-
-In `src/prismql/backends/rust_memory.py`, extend the handshake tuple (Task from 2026-09-18 commit dc46d17) to:
+- [ ] **Step 3: Move `epoch_micros` to `order.py`** (module-level, used by both backends)
 
 ```python
-        required_kernels = (
-            "merge_within_time_window",
-            "merge_temporal_link",
-            "extend_temporal_link",
-            "get_timestamps",
-            "positions_of",
-            "ids_at",
-            "timestamps_at",
+# in src/prismql/backends/order.py
+from datetime import timezone
+from ..processors.temporal import TemporalProcessor
+
+def epoch_micros(value: object) -> Optional[int]:
+    """Any timestamp representation -> UTC epoch microseconds, or None."""
+    dt = TemporalProcessor._coerce_timestamp(value) if value is not None else None
+    if dt is None:
+        return None
+    return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1_000_000)
+```
+
+and in `MemoryBackend` replace the `_epoch_micros` staticmethod with `from .order import OrderIndex, epoch_micros` and `epoch_micros(doc.get("timestamp"))`.
+
+- [ ] **Step 4: Wire the wrapper.** In `RustMemoryBackend.__init__`, right after `self.timestamp_fields = list(timestamp_fields)` and BEFORE constructing `_RustMemoryBackend`:
+
+```python
+        # The ordinal axis (spec 2026-09-18). Built before the Rust backend
+        # so a duplicate id fails here with the same message as MemoryBackend.
+        self.order = OrderIndex(
+            ids=[doc[id_field] for doc in self.documents],
+            timestamps={
+                f: [epoch_micros(doc.get(f)) for doc in self.documents]
+                for f in self.timestamp_fields
+            },
         )
 ```
 
-Add after `get_timestamps`:
+and add the five methods (identical to MemoryBackend's, delegating to `self.order`). Add `from .order import OrderIndex, epoch_micros` and `Iterable` to imports.
 
-```python
-    # -- order contract (spec 2026-09-18) ---------------------------------
-    def has_order_axis(self) -> bool:
-        return True
+- [ ] **Step 5: Run tests**
 
-    def positions(self, ids: Iterable[MessageId]) -> list[int]:
-        wanted = list(ids)
-        found = self._backend.positions_of([i for i in wanted if self._valid_id(i)])
-        out: list[int] = []
-        it = iter(found)
-        for mid in wanted:
-            pos = next(it) if self._valid_id(mid) else None
-            if pos is None:
-                raise KeyError(mid)
-            out.append(pos)
-        return out
+Run: `uv run pytest tests/test_backend_order_contract.py tests/test_rust_memory_backend.py -q`
+Expected: pass.
 
-    def sorted_positions(self, ids: Iterable[MessageId]) -> list[int]:
-        return sorted(self.positions(ids))
-
-    def ids_at(self, positions: Iterable[int]) -> list[MessageId]:
-        return list(self._backend.ids_at(list(positions)))
-
-    def timestamps_at(self, positions: Iterable[int], field: str) -> list[Optional[int]]:
-        return list(self._backend.timestamps_at(list(positions), field))
-```
-
-Add `Iterable` to the `collections.abc` import.
-
-- [ ] **Step 8: Run tests**
-
-Run: `uv run pytest tests/test_backend_order_contract.py tests/test_temporal_utc.py tests/test_rust_memory_backend.py -q`
-Expected: all pass (the handshake test in `test_temporal_utc.py` still passes: its stub lacks the new kernels too, so it still raises `ImportError("too old")`).
-
-- [ ] **Step 9: Gate and commit — two repos**
+- [ ] **Step 6: Gate and commit**
 
 ```bash
-cd ../prismql-rust && git add src/backend.rs && git commit -m "Expose load-order positions and reject duplicate ids
+uv run ruff format . && uv run ruff check . --fix && uv run mypy src/prismql | tail -1
+git add src/prismql/backends/order.py src/prismql/backends/memory.py src/prismql/backends/rust_memory.py tests/test_backend_order_contract.py
+git commit -m "RustMemoryBackend exposes the order contract via OrderIndex
 
-positions_of / ids_at / timestamps_at expose the existing id_to_index
-and timestamp caches as the ordinal-axis contract (prismql spec
-2026-09-18, P1). The constructor now rejects duplicate ids instead of
-silently overwriting the mapping.
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
-cd ../prismql && uv run ruff format . && uv run ruff check . --fix && uv run mypy src/prismql | tail -1
-git add src/prismql/backends/rust_memory.py tests/test_backend_order_contract.py
-git commit -m "RustMemoryBackend implements the order contract
-
-Delegates to the new positions_of / ids_at / timestamps_at kernels;
-the capability handshake now requires them. Parity-tested against
-MemoryBackend.
+Same axis as MemoryBackend, built on the Python side from the document
+list (the custom Rust kernels are being retired, so no new FFI).
+Duplicate ids fail before the Rust constructor. Parity-tested.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
