@@ -128,6 +128,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"src/prismql/backends/base.py" = ["ARG002"]  # interface defaults that raise ignore their arguments
 "tests/*" = ["S101", "ANN201", "ANN001", "B017", "E712"]
 "tests/test_highlighting.py" = ["E402"]  # pytest.importorskip() must be called before imports
 "examples/**/*" = ["ANN201", "ANN001", "E501", "W291", "C901", "B007"]

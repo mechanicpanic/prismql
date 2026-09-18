@@ -1,9 +1,10 @@
 """Abstract base classes for PrismQL backends."""
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Optional
 
+from ..exceptions import PositionalUnsupportedError
 from ..types import Document, MessageId, NERLabel
 
 
@@ -105,6 +106,40 @@ class SearchBackend(ABC):
             NotImplementedError: If backend doesn't support semantic search
         """
         raise NotImplementedError("Semantic search not supported by this backend")
+
+    # ------------------------------------------------------------------
+    # Order contract (spec 2026-09-18, layer 2b). Position = load order.
+    # Backends without an axis MUST fail loudly here; order is never
+    # reconstructed from id values.
+    # ------------------------------------------------------------------
+    def has_order_axis(self) -> bool:
+        return False
+
+    def _no_axis(self) -> PositionalUnsupportedError:
+        return PositionalUnsupportedError(
+            f"{type(self).__name__} has no stream-order axis: positional "
+            "(INWINDOW, FOLLOWED_BY, ...) and temporal-sequence operators "
+            "cannot run on it. Use a backend with an OrderIndex (memory, "
+            "rust_memory) or load the corpus with a persisted position column."
+        )
+
+    def positions(self, ids: Iterable[MessageId]) -> list[int]:
+        """Load-order position of each id, order-preserving; KeyError if unknown."""
+        raise self._no_axis()
+
+    def sorted_positions(self, ids: Iterable[MessageId]) -> list[int]:
+        raise self._no_axis()
+
+    def ids_at(self, positions: Iterable[int]) -> list[MessageId]:
+        raise self._no_axis()
+
+    def timestamps_at(
+        self,
+        positions: Iterable[int],
+        field: str,
+    ) -> list[Optional[int]]:
+        """UTC epoch microseconds (or None) per position for a timestamp field."""
+        raise self._no_axis()
 
     @abstractmethod
     def search_by_field(

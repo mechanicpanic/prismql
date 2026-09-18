@@ -1,12 +1,13 @@
 """In-memory backend implementation for PrismQL."""
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Optional
 
 from ..config import DEFAULT_CONFIG, BackendConfig
 from ..tokenizers import generate_ngrams
 from ..types import Document, MessageId
 from .base import SearchBackend
+from .order import OrderIndex, epoch_micros
 from .semantic import SemanticIndex
 
 
@@ -96,6 +97,19 @@ class MemoryBackend(SearchBackend):
         # Build n-gram indexes with frequency filtering
         if self.config.enable_ngrams:
             self._build_ngram_indexes(doc_tokens)
+
+        # The ordinal axis: load order, ids as labels (spec 2026-09-18).
+        # Built last so a duplicate id fails before any index is trusted.
+        # The engine's timestamp_field is threaded through in P3; until
+        # then the axis carries the conventional "timestamp" column.
+        self.order = OrderIndex(
+            ids=[doc[id_field] for doc in self.documents],
+            timestamps={
+                "timestamp": [
+                    epoch_micros(doc.get("timestamp")) for doc in self.documents
+                ]
+            },
+        )
 
     def search_text(
         self, terms: Sequence[str], field: str = "text", operator: str = "OR"
@@ -221,6 +235,24 @@ class MemoryBackend(SearchBackend):
             return set(list(all_ids)[:limit])
 
         return all_ids
+
+    # -- order contract (spec 2026-09-18) ---------------------------------
+    def has_order_axis(self) -> bool:
+        return True
+
+    def positions(self, ids: Iterable[MessageId]) -> list[int]:
+        return self.order.positions(ids)
+
+    def sorted_positions(self, ids: Iterable[MessageId]) -> list[int]:
+        return self.order.sorted_positions(ids)
+
+    def ids_at(self, positions: Iterable[int]) -> list[MessageId]:
+        return self.order.ids_at(positions)
+
+    def timestamps_at(
+        self, positions: Iterable[int], field: str
+    ) -> list[Optional[int]]:
+        return self.order.timestamps_at(positions, field)
 
     def get_documents(self, ids: Sequence[MessageId]) -> list[Document]:
         """Retrieve documents by IDs."""
