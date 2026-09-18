@@ -36,6 +36,7 @@ nlp = [
 semantic = [
     "sentence-transformers>=2.2",
 ]
+arrow = ["pyarrow>=15"]
 highlighting = [
     "pygments>=2.0.0",
 ]
@@ -55,7 +56,7 @@ demo = [
     "pandas>=1.5.0",
     "pygments>=2.0.0",
 ]
-all = ["prismql[opensearch,elasticsearch,nlp,semantic,repl,highlighting,demo,server,mcp]"]
+all = ["prismql[opensearch,elasticsearch,nlp,semantic,arrow,repl,highlighting,demo,server,mcp]"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -174,7 +175,7 @@ ignore = [
 "demo/*.py" = ["ANN201", "E501", "C901", "S311", "SIM118"]  # Demo code: annotations, line length, complexity, random usage, style
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"  # mypy >= 2 dropped 3.9 as a target; the runtime floor stays 3.9 (CI tests it)
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

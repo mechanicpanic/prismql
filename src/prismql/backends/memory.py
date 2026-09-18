@@ -1,7 +1,9 @@
 """In-memory backend implementation for PrismQL."""
 
+from __future__ import annotations
+
 from collections.abc import Iterable, Sequence
-from typing import Optional
+from typing import Any
 
 from ..config import DEFAULT_CONFIG, BackendConfig
 from ..tokenizers import generate_ngrams
@@ -21,10 +23,10 @@ class MemoryBackend(SearchBackend):
 
     def __init__(  # noqa: C901
         self,
-        documents: Sequence[Document],
+        documents: Sequence[Document] | Any,
         id_field: str = "id",
-        config: Optional[BackendConfig] = None,
-        semantic_index: Optional[SemanticIndex] = None,
+        config: BackendConfig | None = None,
+        semantic_index: SemanticIndex | None = None,
     ) -> None:
         """
         Initialize the memory backend with documents.
@@ -36,6 +38,11 @@ class MemoryBackend(SearchBackend):
             semantic_index: Embedding index backing similar_to(); without
                 it, search_semantic() raises NotImplementedError
         """
+        # A corpus may arrive as an ordered Arrow table (spec, layer 1).
+        # Row order is load order; to_pylist() preserves it. (Zero-copy
+        # ingest on the Rust side is plan P1b.)
+        if hasattr(documents, "to_pylist") and hasattr(documents, "num_rows"):
+            documents = documents.to_pylist()
         self.documents = list(documents)
         self.id_field = id_field
         self.config = config or DEFAULT_CONFIG
@@ -226,7 +233,7 @@ class MemoryBackend(SearchBackend):
         """Get total number of documents."""
         return len(self.documents)
 
-    def get_all_document_ids(self, limit: Optional[int] = None) -> set[MessageId]:
+    def get_all_document_ids(self, limit: int | None = None) -> set[MessageId]:
         """Get all document IDs."""
         all_ids = set(self._id_to_doc.keys())
 
@@ -249,9 +256,7 @@ class MemoryBackend(SearchBackend):
     def ids_at(self, positions: Iterable[int]) -> list[MessageId]:
         return self.order.ids_at(positions)
 
-    def timestamps_at(
-        self, positions: Iterable[int], field: str
-    ) -> list[Optional[int]]:
+    def timestamps_at(self, positions: Iterable[int], field: str) -> list[int | None]:
         return self.order.timestamps_at(positions, field)
 
     def get_documents(self, ids: Sequence[MessageId]) -> list[Document]:

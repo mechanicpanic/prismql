@@ -1,8 +1,10 @@
 """Rust-based in-memory backend with 10-100x performance improvements."""
 
+from __future__ import annotations
+
 from collections.abc import Iterable, Sequence
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any
 
 from ..types import Document, MessageGroup, MessageId, QueryResult
 from .base import SearchBackend
@@ -37,13 +39,13 @@ class RustMemoryBackend(SearchBackend):
 
     def __init__(
         self,
-        documents: Sequence[Document],
+        documents: Sequence[Document] | Any,
         id_field: str = "id",
-        timestamp_fields: Optional[Sequence[str]] = None,
+        timestamp_fields: Sequence[str] | None = None,
         enable_ngrams: bool = False,
-        ngram_sizes: Optional[Sequence[int]] = None,
+        ngram_sizes: Sequence[int] | None = None,
         ngram_min_frequency: int = 2,
-        ngram_max_count: Optional[int] = None,
+        ngram_max_count: int | None = None,
     ) -> None:
         """
         Initialize the Rust memory backend with documents.
@@ -97,6 +99,11 @@ class RustMemoryBackend(SearchBackend):
                 "--manifest-path ../prismql-rust/Cargo.toml"
             )
 
+        # A corpus may arrive as an ordered Arrow table (spec, layer 1).
+        # Row order is load order; to_pylist() preserves it. (Zero-copy
+        # ingest on the Rust side is plan P1b.)
+        if hasattr(documents, "to_pylist") and hasattr(documents, "num_rows"):
+            documents = documents.to_pylist()
         # Convert documents to list if needed
         self.documents = list(documents)
         self.id_field = id_field
@@ -200,7 +207,7 @@ class RustMemoryBackend(SearchBackend):
         """Get total number of documents."""
         return self._backend.get_total_documents()  # type: ignore[no-any-return]
 
-    def get_all_document_ids(self, limit: Optional[int] = None) -> set[MessageId]:
+    def get_all_document_ids(self, limit: int | None = None) -> set[MessageId]:
         """
         Get all document IDs.
 
@@ -302,17 +309,15 @@ class RustMemoryBackend(SearchBackend):
     def ids_at(self, positions: Iterable[int]) -> list[MessageId]:
         return self.order.ids_at(positions)
 
-    def timestamps_at(
-        self, positions: Iterable[int], field: str
-    ) -> list[Optional[int]]:
+    def timestamps_at(self, positions: Iterable[int], field: str) -> list[int | None]:
         return self.order.timestamps_at(positions, field)
 
     def filter_by_time_range(
         self,
         message_ids: Sequence[MessageId],
         field: str,
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
         inclusive: bool = False,
     ) -> set[MessageId]:
         """Filter `message_ids` to those whose `field` timestamp lies in the
