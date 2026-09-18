@@ -1,6 +1,6 @@
 """Backend factory for unified configuration and setup."""
 
-from typing import Any, Optional
+from typing import Any
 
 from .base import NLPBackend, PrecomputedIndexes, SearchBackend
 
@@ -47,9 +47,9 @@ class BackendFactory:
         cls, config: dict[str, Any]
     ) -> tuple[
         SearchBackend,
-        Optional[NLPBackend],
-        Optional[PrecomputedIndexes],
-        Optional[dict[str, Any]],
+        NLPBackend | None,
+        PrecomputedIndexes | None,
+        dict[str, Any] | None,
     ]:
         """
         Create backends from configuration.

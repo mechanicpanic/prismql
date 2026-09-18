@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from antlr4 import CommonTokenStream, InputStream
 
@@ -25,10 +25,10 @@ class ValidationIssue:
 
     level: ValidationLevel
     message: str
-    suggestion: Optional[str] = None
-    line: Optional[int] = None
-    column: Optional[int] = None
-    code: Optional[str] = None  # Error code for programmatic handling
+    suggestion: str | None = None
+    line: int | None = None
+    column: int | None = None
+    code: str | None = None  # Error code for programmatic handling
 
     def __str__(self) -> str:
         """Format issue as human-readable string."""
@@ -109,9 +109,9 @@ class QueryValidator:
 
     def __init__(
         self,
-        user_dictionaries: Optional[dict[str, Any]] = None,
-        available_fields: Optional[list[str]] = None,
-        custom_features: Optional[dict[str, Any]] = None,
+        user_dictionaries: dict[str, Any] | None = None,
+        available_fields: list[str] | None = None,
+        custom_features: dict[str, Any] | None = None,
         check_deprecated: bool = True,
         check_performance: bool = True,
     ):
@@ -631,7 +631,7 @@ class QueryValidator:
 
 def validate_query(
     query: str,
-    user_dictionaries: Optional[dict[str, list[str]]] = None,
+    user_dictionaries: dict[str, list[str]] | None = None,
     **kwargs: Any,
 ) -> ValidationResult:
     """

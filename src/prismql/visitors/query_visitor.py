@@ -3,7 +3,7 @@
 import warnings
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from typing import Any, Optional, Union
+from typing import Any
 
 from ..aggregators.aggregator import Aggregator
 from ..aggregators.types import AggregateResult, AggregationFunction, GroupedResult
@@ -47,12 +47,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
     def __init__(
         self,
         search_backend: SearchBackend,
-        nlp_backend: Optional[NLPBackend] = None,
-        user_dictionaries: Optional[Mapping[str, Sequence[str]]] = None,
-        precomputed_indexes: Optional[PrecomputedIndexes] = None,
+        nlp_backend: NLPBackend | None = None,
+        user_dictionaries: Mapping[str, Sequence[str]] | None = None,
+        precomputed_indexes: PrecomputedIndexes | None = None,
         timestamp_field: str = "timestamp",
         text_match: str = "substring",
-        dictionary_modes: Optional[Mapping[str, str]] = None,
+        dictionary_modes: Mapping[str, str] | None = None,
     ) -> None:
         self.search_backend = search_backend
         self.nlp_backend = nlp_backend
@@ -77,12 +77,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # field-value partition instead of globally — greedy-global would
         # pick the nearest candidate from any partition and lose chains the
         # post-hoc validator can never recover.
-        self._seq_partition_key: Optional[tuple[str, str]] = None
+        self._seq_partition_key: tuple[str, str] | None = None
 
         # Pattern naming for result labeling
-        self.pattern_names: list[Optional[str]] = []
+        self.pattern_names: list[str | None] = []
 
-    def _extract_window_constraint(self, ctx: Any) -> Optional[WindowConstraint]:
+    def _extract_window_constraint(self, ctx: Any) -> WindowConstraint | None:
         """
         Extract window constraint from context.
 
@@ -111,13 +111,13 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def visitQuery(
         self, ctx: PrismQLParser.QueryContext
-    ) -> Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]:
+    ) -> QueryResult | NamedQueryResult | AggregateResult | GroupedResult:
         """Entry point - visit the query body."""
         return self.visitBody(ctx.body())
 
     def visitBody(
         self, ctx: PrismQLParser.BodyContext
-    ) -> Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]:
+    ) -> QueryResult | NamedQueryResult | AggregateResult | GroupedResult:
         """Process query body with optional window, grouping, aggregation,
         ordering, and limiting."""
         # Reset variable tracking and pattern names for this query
@@ -190,9 +190,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # merged groups (positions would point at the wrong messages).
             self.variable_constraints = []
             # Unwrap NamedQueryResult to plain QueryResult for merging
-            unwrapped_results: list[
-                Union[QueryResult, AggregateResult, GroupedResult]
-            ] = []
+            unwrapped_results: list[QueryResult | AggregateResult | GroupedResult] = []
             for result in subquery_results:
                 if isinstance(result, NamedQueryResult):
                     unwrapped_results.append(result.to_list())
@@ -267,7 +265,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             )
 
         # Step 3: Apply GROUP BY if specified
-        grouped_results: Optional[GroupedResult] = None
+        grouped_results: GroupedResult | None = None
         if ctx.groupby_clause():
             fields = self._extract_group_by_fields(ctx.groupby_clause())
             grouped_results = self.aggregator.group_by(results, fields)
@@ -312,7 +310,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
     def visitQuery_seq(
         self, ctx: PrismQLParser.Query_seqContext
     ) -> tuple[
-        list[Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]],
+        list[QueryResult | NamedQueryResult | AggregateResult | GroupedResult],
         bool,
     ]:
         """
@@ -353,7 +351,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # If all unordered (semicolons), collect all results for later merging
         if not has_positional:
             results: list[
-                Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]
+                QueryResult | NamedQueryResult | AggregateResult | GroupedResult
             ] = []
             for query_ctx in query_contexts:
                 result = self.visitQuery(query_ctx)
@@ -536,7 +534,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def visitRestriction(
         self, ctx: PrismQLParser.RestrictionContext
-    ) -> Union[set[MessageId], list[MessageGroup], PartialSequence]:
+    ) -> set[MessageId] | list[MessageGroup] | PartialSequence:
         """
         Process the sequential layer of a restriction.
 
@@ -612,7 +610,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
     @staticmethod
     def _leg_key(
         bucket: list[VariableConstraint],
-    ) -> Optional[tuple[str, str]]:
+    ) -> tuple[str, str] | None:
         """The (variable, field) a leg correlates on, if exactly one."""
         if len(bucket) == 1:
             return (bucket[0].variable_name, bucket[0].field_name)
@@ -620,11 +618,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _apply_sequential_link(
         self,
-        lhs: Union[set[MessageId], list[MessageGroup], PartialSequence],
+        lhs: set[MessageId] | list[MessageGroup] | PartialSequence,
         rhs: set[MessageId],
-        window: Optional[WindowConstraint],
+        window: WindowConstraint | None,
         operator: str,
-    ) -> Union[list[MessageGroup], PartialSequence]:
+    ) -> list[MessageGroup] | PartialSequence:
         """Evaluate one FOLLOWED_BY/PRECEDED_BY link, chaining through lhs."""
         # No window: defer — an enclosing link's trailing window evaluates us.
         if window is None:
@@ -645,7 +643,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _apply_link_evaluated(
         self,
-        lhs: Union[set[MessageId], list[MessageGroup]],
+        lhs: set[MessageId] | list[MessageGroup],
         rhs: set[MessageId],
         window: WindowConstraint,
         operator: str,
@@ -682,7 +680,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _apply_link_partitioned(
         self,
-        lhs: Union[set[MessageId], list[MessageGroup]],
+        lhs: set[MessageId] | list[MessageGroup],
         rhs: set[MessageId],
         window: WindowConstraint,
         operator: str,
@@ -729,11 +727,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _apply_negative_link(
         self,
-        lhs: Union[set[MessageId], list[MessageGroup], PartialSequence],
+        lhs: set[MessageId] | list[MessageGroup] | PartialSequence,
         rhs: set[MessageId],
-        window: Optional[WindowConstraint],
+        window: WindowConstraint | None,
         operator: str,
-    ) -> Union[set[MessageId], list[MessageGroup]]:
+    ) -> set[MessageId] | list[MessageGroup]:
         """Evaluate one NOT_FOLLOWED_BY/NOT_PRECEDED_BY link."""
         forward = operator == "NOT_FOLLOWED_BY"
 
@@ -759,7 +757,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def visitBool_restriction(
         self, ctx: PrismQLParser.Bool_restrictionContext
-    ) -> Union[set[MessageId], list[MessageGroup], PartialSequence]:
+    ) -> set[MessageId] | list[MessageGroup] | PartialSequence:
         """
         Process the boolean layer: NOT > AND > OR, parentheses, conditions.
 
@@ -1309,7 +1307,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _merge_queries(
         self,
-        subquery_results: list[Union[QueryResult, AggregateResult, GroupedResult]],
+        subquery_results: list[QueryResult | AggregateResult | GroupedResult],
         window_size: int,
     ) -> QueryResult:
         """Merge results from multiple subqueries."""
@@ -1430,9 +1428,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _evaluate_partial_sequence(
         self,
-        value: Union[set[MessageId], list[MessageGroup], PartialSequence],
+        value: set[MessageId] | list[MessageGroup] | PartialSequence,
         window: WindowConstraint,
-    ) -> Union[set[MessageId], list[MessageGroup]]:
+    ) -> set[MessageId] | list[MessageGroup]:
         """
         Recursively evaluate a PartialSequence with the given window constraint.
 
@@ -1704,7 +1702,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return timedelta(weeks=value)
         raise ValueError(f"Unsupported DURING time unit: {unit}")
 
-    def _temporal_link_kernel(self, name: str) -> Optional[Any]:
+    def _temporal_link_kernel(self, name: str) -> Any | None:
         """Return the backend's temporal-link kernel method, when usable.
 
         Backends offering `merge_temporal_link` / `extend_temporal_link`
@@ -2022,7 +2020,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _extract_aggregations(
         self, ctx: Any
-    ) -> list[tuple[AggregationFunction, Optional[str]]]:
+    ) -> list[tuple[AggregationFunction, str | None]]:
         """
         Extract aggregation functions from AGGREGATE clause.
 
@@ -2031,7 +2029,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         """
         from ..grammar.generated.PrismQLParser import PrismQLParser
 
-        aggregations: list[tuple[AggregationFunction, Optional[str]]] = []
+        aggregations: list[tuple[AggregationFunction, str | None]] = []
 
         # Get all aggregation function contexts
         agg_funcs = ctx.aggregation_func()
@@ -2126,7 +2124,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _parse_temporal_filter(
         self, ctx: Any
-    ) -> tuple[Optional[datetime], Optional[datetime], bool]:
+    ) -> tuple[datetime | None, datetime | None, bool]:
         """
         Parse temporal filter clause (BEFORE, AFTER, BETWEEN).
 
@@ -2210,8 +2208,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
     def _apply_temporal_filter(
         self,
         results: QueryResult,
-        start_time: Optional[datetime],
-        end_time: Optional[datetime],
+        start_time: datetime | None,
+        end_time: datetime | None,
         inclusive: bool = False,
     ) -> QueryResult:
         """
@@ -2270,7 +2268,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         return filtered_results
 
-    def _extract_quantifier(self, ctx: Any) -> tuple[int, Optional[int]]:
+    def _extract_quantifier(self, ctx: Any) -> tuple[int, int | None]:
         """
         Extract quantifier information from named_restriction context.
 

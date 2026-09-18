@@ -2,10 +2,10 @@
 Backend-agnostic query language for temporal/sequential pattern retrieval in conversational and event data; Python library + FastAPI server + live demo.
 
 ## What this project is
-- **Nature**: production (pre-release library, 0.1.0 unreleased; full discipline, no relaxations).
+- **Nature**: production (pre-release library, 0.1.0 unreleased; full discipline, no relaxations). CI matrix: 3.12, 3.13.
 - **NKS realm**: `prismql` (aleph/prismql, r72) — every session starts with `nks_orient` here.
 - **Focus holon**: `#1 «🔺 PrismQL engine contour»`.
-- **Stack**: Python 3.9–3.12 (uv), ANTLR4 parse + hand-written pipe-dialect parser over a shared frozen-dataclass IR; optional Rust kernels (PyO3/maturin, sibling repo); FastAPI server extra.
+- **Stack**: Python ≥ 3.12 (uv), ANTLR4 parse + hand-written pipe-dialect parser over a shared frozen-dataclass IR; Polars plan for sequence primitives (P2, `[plan]` extra); Rust kernels (PyO3/maturin, sibling repo) retiring after P3; FastAPI server extra.
 - **Production statement**: private repo backing a submission-track paper (EDBT'27 EA&B, due 2026-10-07) and a public demo (Railway deploy pending owner go-ahead). Breakage cost = wrong query results silently corrupting benchmark/paper claims; correctness regressions matter more than downtime.
 
 ## Persistence rules
@@ -29,7 +29,7 @@ Sanctioned deviation from the verstak standard (owner decision, 2026-07-12): the
 ## Commands
 | Action | Command |
 |---|---|
-| Install (full local dev) | `uv sync --dev --extra server --extra repl --extra highlighting --extra mcp --extra tantivy --extra arrow` |
+| Install (full local dev) | `uv sync --dev --extra server --extra repl --extra highlighting --extra mcp --extra tantivy --extra arrow --extra plan` |
 | Test | `uv run pytest` (~735 tests; `-m "not slow"` to skip slow) |
 | Lint + format | `uv run ruff format . && uv run ruff check . --fix` |
 | Typecheck | `uv run mypy src/prismql` |
@@ -52,7 +52,7 @@ Sanctioned deviation from the verstak standard (owner decision, 2026-07-12): the
 - Sibling repos: `../prismql-rust` (kernels), `~/Projects/research/prismql-research` (benchmarks, paper, eval), `../prismql-mcp`, `Chat-Corpora-Annotator` (original C# — consult for original algorithm semantics).
 
 ## Code conventions
-- Python 3.9 floor: module-level runtime type aliases use `Union[...]`; `X | None` in annotations is fine (`from __future__ import annotations`).
+- Python ≥ 3.12 (raised from 3.9 on 2026-09-19: Polars needs ≥ 3.10, 3.9 is EOL). Use `X | None` and PEP 604/585 syntax everywhere; `Union[...]` only survives in untouched legacy lines.
 - Two surface dialects, one IR: any semantics change must keep `parse_pipe(pipe) == lower_query(classic)` equality tests green and both dialect references (`LANGUAGE_REFERENCE.md`, `PIPE_REFERENCE.md`) in sync.
 - **Test discipline**: unit + integration (backend matrix); dialect equivalence via node-for-node IR equality; coverage uploaded to Codecov (no enforced threshold).
 - **Gotchas**:
@@ -62,7 +62,7 @@ Sanctioned deviation from the verstak standard (owner decision, 2026-07-12): the
   - **Stream order is the load order** (spec `docs/superpowers/specs/2026-09-18-ordinal-axis-design.md`). Ids are labels and must be unique (duplicates are a load error). Backends expose `positions/sorted_positions/ids_at/timestamps_at/has_order_axis`; backends without an axis raise `PositionalUnsupportedError`. Until P3 lands, positional operators still measure id distance on the Rust path and list index on the Python fallback — pinned as xfail(strict) contract tests; do not "fix" them piecemeal. INWINDOW is documented UNORDERED but both kernels still enforce restriction order (blocker, fixed by design in P3).
   - Rust kernels run only for numeric message ids; string ids fall back to Python (until P3/P4). Timestamp tie-break differs (rust: ascending id; python: set order) until P3.
   - A corpus can be loaded as an ordered Arrow table (`prismql.loaders.load_table`, `[arrow]` extra, `position` = row index); the Polars spike (`prismql-research/experiments/polars-spike/RESULTS.md`) showed a relational plan reproduces the engine tuple-for-tuple incl. Chicago 372 — P2 = Polars plan, Rust stays for tantivy.
-  - `uv run mypy src/prismql` shows ~11 errors locally in `repl.py`/`tantivy.py` that CI doesn't (optional extras installed locally, absent in CI). Baseline — do not "fix" with ignores; zero NEW errors is the bar. mypy ≥ 2 checks at `python_version = 3.10` (it dropped 3.9 as a target); the runtime floor is still 3.9.
+  - `uv run mypy src/prismql` shows ~11 errors locally in `repl.py`/`tantivy.py` that CI doesn't (optional extras installed locally, absent in CI). Baseline — do not "fix" with ignores; zero NEW errors is the bar. mypy checks at `python_version = 3.12`, matching the floor.
   - Plain `uv sync` strips extras and drops the suite to ~675 tests — reinstall with the full extras command above.
   - Window merge pairs DISTINCT messages, greedy-forward; a message satisfying two restrictions can't pair with itself (matters when authoring corpora/examples).
   - Demo eval corpora dictionary names collide across test cases — last definition wins in the union (see research repo eval).

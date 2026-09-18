@@ -1,5 +1,7 @@
 """Tests for Rust-based in-memory backend."""
 
+from datetime import UTC
+
 import pytest
 
 from prismql.backends.memory import MemoryBackend
@@ -140,7 +142,7 @@ class TestRustMemoryBackend:
         assert len(rust_docs) == 3
 
         # Check document contents match
-        for p_doc, r_doc in zip(python_docs, rust_docs):
+        for p_doc, r_doc in zip(python_docs, rust_docs, strict=False):
             assert p_doc["id"] == r_doc["id"]
             assert p_doc["user"] == r_doc["user"]
             assert p_doc["text"] == r_doc["text"]
@@ -263,9 +265,9 @@ class TestRustMemoryBackendTemporal:
 
     @pytest.fixture
     def timestamped_documents(self):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        base = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        base = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
         docs = []
         # 50 docs at 1-hour spacing — spans Jan 1 (24h) plus 2h of Jan 3
         for i in range(50):
@@ -304,9 +306,9 @@ class TestRustMemoryBackendTemporal:
             temporal_backend.filter_by_time_range([0, 1, 2], "missing_field")
 
     def test_filter_by_time_range_between(self, temporal_backend):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        base = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        base = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
         result = temporal_backend.filter_by_time_range(
             list(range(50)),
             "timestamp",
@@ -406,15 +408,15 @@ class TestRustMemoryBackendTemporal:
         assert got == []
 
     def test_during_query_end_to_end_matches_python_backend(self):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         from prismql import PrismQLEngine
 
-        base = datetime(2024, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+        base = datetime(2024, 3, 1, 12, 0, 0, tzinfo=UTC)
         docs = []
         users = ["alice", "bob", "alice", "bob", "alice", "bob"]
         offsets = [0, 10, 25, 200, 215, 230]  # seconds
-        for i, (u, off) in enumerate(zip(users, offsets)):
+        for i, (u, off) in enumerate(zip(users, offsets, strict=False)):
             docs.append(
                 {
                     "id": i,

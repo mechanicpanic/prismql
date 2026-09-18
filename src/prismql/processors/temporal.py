@@ -1,13 +1,13 @@
 """Temporal processing for PrismQL queries."""
 
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
+from typing import Any
 
 from ..types import MessageId, QueryResult
 
 
-class TemporalUnit(str, Enum):
+class TemporalUnit(StrEnum):
     """Time units for temporal operations."""
 
     SECOND = "second"
@@ -32,7 +32,7 @@ class TemporalProcessor:
 
     @staticmethod
     def parse_timestamp(
-        timestamp_str: str, reference_time: Optional[datetime] = None
+        timestamp_str: str, reference_time: datetime | None = None
     ) -> datetime:
         """
         Parse timestamp string to datetime object.
@@ -77,12 +77,11 @@ class TemporalProcessor:
     @staticmethod
     def _fromtimestamp_utc(value: float) -> datetime:
         """Epoch seconds -> naive UTC datetime (portable across machines)."""
-        from datetime import timezone
 
-        return datetime.fromtimestamp(value, tz=timezone.utc).replace(tzinfo=None)
+        return datetime.fromtimestamp(value, tz=UTC).replace(tzinfo=None)
 
     @staticmethod
-    def _coerce_timestamp(value: Any) -> Optional[datetime]:
+    def _coerce_timestamp(value: Any) -> datetime | None:
         """Convert a document timestamp value to a datetime, or None if it
         cannot be interpreted. Numeric epochs are interpreted as UTC."""
         try:
@@ -96,7 +95,7 @@ class TemporalProcessor:
 
     @staticmethod
     def parse_relative_time(
-        value: int, unit: TemporalUnit, reference_time: Optional[datetime] = None
+        value: int, unit: TemporalUnit, reference_time: datetime | None = None
     ) -> datetime:
         """
         Parse relative time (e.g., "5 hours ago") to absolute timestamp.
@@ -139,8 +138,8 @@ class TemporalProcessor:
         message_ids: set[MessageId],
         documents: list[dict[str, Any]],
         timestamp_field: str,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         inclusive: bool = False,
         id_field: str = "id",
     ) -> set[MessageId]:
@@ -179,9 +178,8 @@ class TemporalProcessor:
             if start_time is not None:
                 if start_time.tzinfo is not None and msg_time.tzinfo is None:
                     # Make msg_time aware (assume UTC)
-                    from datetime import timezone
 
-                    msg_time = msg_time.replace(tzinfo=timezone.utc)
+                    msg_time = msg_time.replace(tzinfo=UTC)
                 elif start_time.tzinfo is None and msg_time.tzinfo is not None:
                     # Make msg_time naive
                     msg_time = msg_time.replace(tzinfo=None)
@@ -189,9 +187,8 @@ class TemporalProcessor:
             if end_time is not None:
                 if end_time.tzinfo is not None and msg_time.tzinfo is None:
                     # Make msg_time aware (assume UTC)
-                    from datetime import timezone
 
-                    msg_time = msg_time.replace(tzinfo=timezone.utc)
+                    msg_time = msg_time.replace(tzinfo=UTC)
                 elif end_time.tzinfo is None and msg_time.tzinfo is not None:
                     # Make msg_time naive
                     msg_time = msg_time.replace(tzinfo=None)

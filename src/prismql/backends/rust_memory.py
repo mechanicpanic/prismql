@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..types import Document, MessageGroup, MessageId, QueryResult
@@ -289,7 +289,7 @@ class RustMemoryBackend(SearchBackend):
             try:
                 # divmod (not float division) keeps microsecond exactness
                 # for epochs where a float second loses sub-us precision.
-                result[mid] = datetime.fromtimestamp(seconds, tz=timezone.utc).replace(
+                result[mid] = datetime.fromtimestamp(seconds, tz=UTC).replace(
                     tzinfo=None
                 ) + timedelta(microseconds=micros)
             except (ValueError, OSError, OverflowError):

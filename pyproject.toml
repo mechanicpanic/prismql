@@ -5,16 +5,13 @@ description = "Pattern Recognition in Sequential Messages Query Language - A DSL
 authors = [{name = "Anna Smirnova", email = "anna.smirnova@unil.ch"}]
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 keywords = ["query-language", "chat-analysis", "nlp", "search", "dsl", "antlr"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Text Processing :: Linguistic",
@@ -37,6 +34,7 @@ semantic = [
     "sentence-transformers>=2.2",
 ]
 arrow = ["pyarrow>=15"]
+plan = ["polars>=1.44,<2", "pyarrow>=15"]
 highlighting = [
     "pygments>=2.0.0",
 ]
@@ -46,17 +44,16 @@ repl = [
 server = [
     "fastapi>=0.110",
     "uvicorn>=0.27",
-    "tomli>=2.0; python_version<'3.11'",
 ]
 mcp = [
-    "mcp>=2.0; python_version>='3.10'",
+    "mcp>=2.0",
 ]
 demo = [
     "streamlit>=1.28.0",
     "pandas>=1.5.0",
     "pygments>=2.0.0",
 ]
-all = ["prismql[opensearch,elasticsearch,nlp,semantic,arrow,repl,highlighting,demo,server,mcp]"]
+all = ["prismql[opensearch,elasticsearch,nlp,semantic,arrow,plan,repl,highlighting,demo,server,mcp]"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -101,7 +98,7 @@ packages = ["src/prismql"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py312"
 # "*.md": ruff >= 0.16 formats code blocks inside markdown; docs stay as authored.
 extend-exclude = ["src/prismql/grammar/generated", "*.md"]
 
@@ -175,7 +172,7 @@ ignore = [
 "demo/*.py" = ["ANN201", "E501", "C901", "S311", "SIM118"]  # Demo code: annotations, line length, complexity, random usage, style
 
 [tool.mypy]
-python_version = "3.10"  # mypy >= 2 dropped 3.9 as a target; the runtime floor stays 3.9 (CI tests it)
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

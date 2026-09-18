@@ -3,7 +3,7 @@
 import sys
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from .aggregators.types import AggregateResult, GroupedResult
 from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
@@ -37,13 +37,13 @@ class PrismQLRepl:
 
     def __init__(
         self,
-        search_backend: Optional[SearchBackend] = None,
-        nlp_backend: Optional[NLPBackend] = None,
-        precomputed_indexes: Optional[PrecomputedIndexes] = None,
-        user_dictionaries: Optional[dict[str, list[str]]] = None,
+        search_backend: SearchBackend | None = None,
+        nlp_backend: NLPBackend | None = None,
+        precomputed_indexes: PrecomputedIndexes | None = None,
+        user_dictionaries: dict[str, list[str]] | None = None,
         *,
-        engine: Optional[PrismQLEngine] = None,
-        server_config: Optional[ServerConfig] = None,
+        engine: PrismQLEngine | None = None,
+        server_config: ServerConfig | None = None,
     ) -> None:
         """
         Initialize the REPL.
@@ -85,7 +85,7 @@ class PrismQLRepl:
 
         # Setup prompt session if available
         if HAS_PROMPT_TOOLKIT:
-            self.session: Optional[PromptSession] = PromptSession(
+            self.session: PromptSession | None = PromptSession(
                 history=FileHistory(str(self.history_file))
             )
             if HAS_SYNTAX_HIGHLIGHTING:
@@ -103,7 +103,7 @@ class PrismQLRepl:
             self.lexer = None
             self.style = None
 
-    def _fetch_message(self, msg_id: Any) -> Optional[dict[str, Any]]:
+    def _fetch_message(self, msg_id: Any) -> dict[str, Any] | None:
         """Fetch a single message by ID from the backend."""
         try:
             # Get the document from backend
@@ -112,7 +112,7 @@ class PrismQLRepl:
         except Exception:
             return None
 
-    def _format_message(self, msg_id: Any, doc: Optional[dict[str, Any]]) -> str:
+    def _format_message(self, msg_id: Any, doc: dict[str, Any] | None) -> str:
         """Format a single message for display."""
         if not doc:
             return f"[{msg_id}]"
@@ -303,7 +303,7 @@ Press Ctrl+D or type \\quit to exit.
         """Get the prompt string."""
         return f"prismql[{self.query_count}]> "
 
-    def read_query(self) -> Optional[str]:
+    def read_query(self) -> str | None:
         """Read a query from user input."""
         try:
             query: str

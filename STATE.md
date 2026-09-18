@@ -22,6 +22,7 @@ it describes. Agent memory points here; it does not duplicate this.*
 - **One owner of merge semantics**: every operator implemented once in Python; executor = **Polars plan** over the Arrow corpus table (not Rust kernels). Rust stays for tantivy (text) only; `rust_memory` and its kernels retire after P3. — 2026-09-18
 - **Layer 1 contract is Arrow**, not JSON: corpus = ordered Arrow table; ingest = "anything → Arrow" (DuckDB recommended, not required); results = `(group, slot, position, id)` table; `list[list[MessageId]]` stays as the Python-facing view. — 2026-09-18
 - **Agent surface**: MCP-tool-returning-JSON is the wrong interface (whole output lands in context); target = skill + scriptable API with table results (code-execution model). MCP shim stays as a thin adapter. Own track, after P3. — 2026-09-18
+- **Python floor is 3.12** (from 3.9): Polars needs ≥ 3.10, 3.9 is EOL; CI matrix 3.12/3.13; `[plan]` extra = polars + pyarrow. — 2026-09-19
 - `similar_to` threshold required, no default, no top_k; v2 (scores-first ranking algebra) is the paper contribution. — 2026-07-16
 - INWINDOW is UNORDERED by definition (language reference); kernels that enforce order are defects. — reaffirmed 2026-09-18
 
@@ -40,7 +41,6 @@ it describes. Agent memory points here; it does not duplicate this.*
 5. Agent surface track; workbench M0–M3; mismatch diary Q04–Q18; `similar_to` v2.
 
 **Not decided / to verify**
-- **Python floor**: Polars requires ≥ 3.10; declared floor is 3.9 (EOL). Recommendation: raise to 3.10 (mypy 2 already targets it); until decided the `[plan]` extra carries a `python_version >= "3.10"` marker and CI's 3.9 job cannot run the plan suite.
 - Novelty claim for the ranked semantic join rests on 2026 preprints (HiMu unverified; VectraFlow verified).
 - Railway XFF/X-Real-IP behaviour on the live deploy; Chicago 372 re-run after the DST fixes (done implicitly by the spike: 372 reproduced on both sides).
 - swarmchasing hackathon (Oct 3–4, AI Village dataset, gated — access requested? not yet): language is strong for failure-shape questions; needs `!$k`; native ingest is layer 1.

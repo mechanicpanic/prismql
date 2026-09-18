@@ -1,7 +1,7 @@
 """PostgreSQL backend implementation for PrismQL."""
 
 from collections.abc import Sequence
-from typing import Any, Optional, Union
+from typing import Any
 
 from ..types import Document, MessageId
 from .base import SearchBackend
@@ -53,7 +53,7 @@ class PostgresBackend(SearchBackend):
 
     def __init__(
         self,
-        connection: Union[Any, str],
+        connection: Any | str,
         config: dict[str, Any],
         autocommit: bool = True,
     ) -> None:
@@ -211,7 +211,7 @@ class PostgresBackend(SearchBackend):
             result = cur.fetchone()
             return int(result[0]) if result else 0
 
-    def get_all_document_ids(self, limit: Optional[int] = None) -> set[MessageId]:
+    def get_all_document_ids(self, limit: int | None = None) -> set[MessageId]:
         """
         Get all document IDs (up to limit).
 
@@ -271,7 +271,7 @@ class PostgresBackend(SearchBackend):
             # Convert rows to dictionaries
             documents = []
             for row in cur.fetchall():
-                doc = dict(zip(columns, row))
+                doc = dict(zip(columns, row, strict=False))
                 documents.append(doc)
 
             return documents
@@ -312,7 +312,7 @@ class PostgresBackend(SearchBackend):
         with self.conn.cursor() as cur:
             cur.execute(sql, params)
             columns = [desc[0] for desc in cur.description]
-            return [dict(zip(columns, row)) for row in cur.fetchall()]
+            return [dict(zip(columns, row, strict=False)) for row in cur.fetchall()]
 
     def search_jsonb_field(
         self, field: str, json_path: str, value: Any

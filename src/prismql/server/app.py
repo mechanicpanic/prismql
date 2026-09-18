@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal
@@ -88,7 +88,7 @@ class ServerState:
         with self.lock:
             self.engines = engines
             self.exec_locks = {name: threading.Lock() for name in engines}
-            self.loaded_at = datetime.now(timezone.utc).isoformat()
+            self.loaded_at = datetime.now(UTC).isoformat()
 
     def engine_for(self, name: str | None) -> tuple[Any, CorpusConfig, threading.Lock]:
         resolved = name or self.config.default_corpus

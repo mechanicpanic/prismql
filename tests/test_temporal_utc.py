@@ -9,7 +9,7 @@ projection contract.
 """
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -45,7 +45,7 @@ def eastern_tz():
 
 
 def _utc_epoch(*args: int) -> int:
-    return int(datetime(*args, tzinfo=timezone.utc).timestamp())
+    return int(datetime(*args, tzinfo=UTC).timestamp())
 
 
 # US DST fall-back 2026-11-01: 05:30 UTC = 01:30 EDT, 06:30 UTC = 01:30 EST.

@@ -1,7 +1,7 @@
 """Utilities for building PrecomputedIndexes from various annotation formats."""
 
-from collections.abc import Mapping, Sequence
-from typing import Any, Callable, Optional
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
 from ..backends.base import PrecomputedIndexes
 from ..types import MessageId, NERLabel
@@ -35,9 +35,9 @@ class IndexBuilder:
     def from_message_annotations(
         messages: Sequence[Mapping[str, Any]],
         id_field: str = "id",
-        entity_field: Optional[str] = None,
-        question_detector: Optional[Callable[[Mapping[str, Any]], bool]] = None,
-        custom_fields: Optional[Mapping[str, Optional[Callable[[Any], Any]]]] = None,
+        entity_field: str | None = None,
+        question_detector: Callable[[Mapping[str, Any]], bool] | None = None,
+        custom_fields: Mapping[str, Callable[[Any], Any] | None] | None = None,
     ) -> PrecomputedIndexes:
         """
         Build indexes from message annotations.
@@ -141,9 +141,9 @@ class IndexBuilder:
     @staticmethod
     def from_separate_annotations(
         annotation_dict: Mapping[MessageId, Mapping[str, Any]],
-        entity_key: Optional[str] = None,
-        question_key: Optional[str] = None,
-        custom_feature_keys: Optional[Sequence[str]] = None,
+        entity_key: str | None = None,
+        question_key: str | None = None,
+        custom_feature_keys: Sequence[str] | None = None,
     ) -> PrecomputedIndexes:
         """
         Build indexes from separate annotation dictionary.

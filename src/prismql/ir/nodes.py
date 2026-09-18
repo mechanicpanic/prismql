@@ -28,7 +28,6 @@ Design notes (fidelity to the visitor semantics is the prime rule):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Union
 
 from ..aggregators.types import AggregationFunction
 
@@ -87,7 +86,7 @@ class Wildcard:
     """``*`` — match all documents."""
 
 
-Term = Union[Literal, Variable, Wildcard]
+Term = Literal | Variable | Wildcard
 
 
 # ---------------------------------------------------------------------------
@@ -171,17 +170,17 @@ class SimilarTo:
     threshold: float
 
 
-ConditionNode = Union[
-    Contains,
-    ContainsTokens,
-    ContainsPhrase,
-    FieldMatch,
-    MentionsUser,
-    IsQuestion,
-    MentionsEntity,
-    HasFeature,
-    SimilarTo,
-]
+ConditionNode = (
+    Contains
+    | ContainsTokens
+    | ContainsPhrase
+    | FieldMatch
+    | MentionsUser
+    | IsQuestion
+    | MentionsEntity
+    | HasFeature
+    | SimilarTo
+)
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +208,7 @@ class Or:
 # WindowConstraint mirrors prismql.types.WindowConstraint:
 # int  -> positional window (INWINDOW n / deprecated per-link WITHIN n)
 # (value, unit) -> temporal window (DURING value unit)
-WindowSpec = Union[int, tuple[int, str]]
+WindowSpec = int | tuple[int, str]
 
 
 @dataclass(frozen=True)
@@ -228,7 +227,7 @@ class SequenceLink:
     window: WindowSpec | None = None
 
 
-Expr = Union[ConditionNode, Not, And, Or, SequenceLink]
+Expr = ConditionNode | Not | And | Or | SequenceLink
 
 
 # ---------------------------------------------------------------------------
@@ -303,7 +302,7 @@ class RelativeTs:
     unit: str
 
 
-TimestampSpec = Union[AbsoluteTs, RelativeTs]
+TimestampSpec = AbsoluteTs | RelativeTs
 
 
 @dataclass(frozen=True)

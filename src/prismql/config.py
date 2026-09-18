@@ -1,7 +1,7 @@
 """Configuration classes for PrismQL backends."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Union
 
 
 @dataclass
@@ -22,7 +22,7 @@ class BackendConfig:
     """
 
     # Tokenization
-    tokenizer: Union[str, Callable[[str], list[str]]] = "unicode"
+    tokenizer: str | Callable[[str], list[str]] = "unicode"
     """
     Tokenization strategy:
     - 'word': Alphanumeric splitting (simple, fast)
@@ -49,7 +49,7 @@ class BackendConfig:
     ngram_min_frequency: int = 2
     """Minimum frequency threshold for n-grams (filters rare phrases to save memory)"""
 
-    ngram_max_count: Optional[int] = None
+    ngram_max_count: int | None = None
     """Maximum n-grams to keep (top-K most frequent). None = no limit"""
 
     # Substring indexing (future feature)

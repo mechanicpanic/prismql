@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import timezone
+from datetime import UTC
 
 from ..processors.temporal import TemporalProcessor
 from ..types import MessageId
@@ -20,7 +20,7 @@ def epoch_micros(value: object) -> int | None:
     dt = TemporalProcessor._coerce_timestamp(value) if value is not None else None
     if dt is None:
         return None
-    return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1_000_000)
+    return int(dt.replace(tzinfo=UTC).timestamp() * 1_000_000)
 
 
 class OrderIndex:

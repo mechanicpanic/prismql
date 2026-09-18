@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -22,21 +21,10 @@ def _resolve(base: Path, value: str | None) -> str | None:
 
 
 def _load_tomllib() -> Any:
-    """Import the toml parser lazily so this module stays importable on
-    Python < 3.11 without the server extra (the REPL imports us too)."""
-    if sys.version_info >= (3, 11):
-        import tomllib
+    """The stdlib toml parser (Python >= 3.11; the floor is 3.12)."""
+    import tomllib
 
-        return tomllib
-    try:  # pragma: no cover - exercised only on Python < 3.11
-        import tomli
-
-        return tomli
-    except ImportError as e:  # pragma: no cover
-        raise ImportError(
-            "Parsing prismql.toml on Python < 3.11 requires tomli: "
-            "uv pip install 'prismql[server]' (or just tomli)"
-        ) from e
+    return tomllib
 
 
 @dataclass

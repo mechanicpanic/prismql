@@ -93,6 +93,6 @@ class SemanticIndex:
         query = _normalize(self.embedder.encode([text])[0])
         return {
             doc_id
-            for doc_id, vector in zip(self._ids, self._vectors)
-            if sum(q * v for q, v in zip(query, vector)) >= threshold
+            for doc_id, vector in zip(self._ids, self._vectors, strict=False)
+            if sum(q * v for q, v in zip(query, vector, strict=False)) >= threshold
         }

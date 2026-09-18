@@ -1,32 +1,30 @@
 """Type definitions for PrismQL."""
 
 from collections.abc import Iterator, Sequence
-from typing import Any, Optional, Union
-
-from typing_extensions import TypeAlias
+from typing import Any, Union
 
 # Message ID type - can be int or str depending on backend
-MessageId: TypeAlias = Union[int, str]
+type MessageId = int | str
 
 # A group of messages (result of a single restriction)
-MessageGroup: TypeAlias = list[MessageId]
+type MessageGroup = list[MessageId]
 
 # List of message groups (result of a query)
-QueryResult: TypeAlias = list[MessageGroup]
+type QueryResult = list[MessageGroup]
 
 # Document/Message type from backends
-Document: TypeAlias = dict[str, Any]
+type Document = dict[str, Any]
 
 # Dictionary entry
-DictEntry: TypeAlias = Sequence[str]
+type DictEntry = Sequence[str]
 
 # NER label types
-NERLabel: TypeAlias = str
+type NERLabel = str
 
 # Window constraint types
-WindowConstraint: TypeAlias = Union[
-    int, tuple[int, str]
-]  # int for INWINDOW, (value, unit) for DURING
+type WindowConstraint = (
+    int | tuple[int, str]
+)  # int for INWINDOW, (value, unit) for DURING
 
 
 class PartialSequence:
@@ -88,7 +86,7 @@ class NamedQueryResult:
         ...     print(group)  # [1, 2]
     """
 
-    def __init__(self, results: QueryResult, pattern_names: list[Optional[str]]):
+    def __init__(self, results: QueryResult, pattern_names: list[str | None]):
         """
         Initialize named query result.
 

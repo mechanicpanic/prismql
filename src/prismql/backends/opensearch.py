@@ -1,7 +1,7 @@
 """OpenSearch backend implementation for PrismQL."""
 
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any
 
 from ..types import Document, MessageId
 from .base import SearchBackend
@@ -210,7 +210,7 @@ class OpenSearchBackend(SearchBackend):
         except Exception as e:
             raise RuntimeError(f"Failed to get document count: {e}") from e
 
-    def get_all_document_ids(self, limit: Optional[int] = None) -> set[MessageId]:
+    def get_all_document_ids(self, limit: int | None = None) -> set[MessageId]:
         """
         Get all document IDs (up to limit).
 
@@ -230,7 +230,7 @@ class OpenSearchBackend(SearchBackend):
         return self._execute_search(query, size=size)
 
     def _get_all_ids_with_scroll(
-        self, query: dict[str, Any], limit: Optional[int] = None
+        self, query: dict[str, Any], limit: int | None = None
     ) -> set[MessageId]:
         """Get all document IDs using scroll API for large datasets."""
         message_ids = set()

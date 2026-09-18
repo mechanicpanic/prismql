@@ -1,15 +1,13 @@
 """Type definitions for aggregation operations."""
 
 from collections.abc import Mapping, Sequence
-from enum import Enum
-from typing import Any, Optional, Union
-
-from typing_extensions import TypeAlias
+from enum import StrEnum
+from typing import Any
 
 from ..types import MessageGroup
 
 
-class AggregationFunction(str, Enum):
+class AggregationFunction(StrEnum):
     """Supported aggregation functions."""
 
     COUNT = "count"
@@ -22,7 +20,7 @@ class AggregationFunction(str, Enum):
 
 
 # Value type for aggregated results
-AggregateValue: TypeAlias = Union[int, float, list[Any]]
+type AggregateValue = int | float | list[Any]
 
 
 class AggregateResult:
@@ -35,10 +33,10 @@ class AggregateResult:
 
     def __init__(
         self,
-        value: Optional[AggregateValue] = None,
-        grouped_values: Optional[Mapping[str, AggregateValue]] = None,
-        function: Optional[AggregationFunction] = None,
-        field: Optional[str] = None,
+        value: AggregateValue | None = None,
+        grouped_values: Mapping[str, AggregateValue] | None = None,
+        function: AggregationFunction | None = None,
+        field: str | None = None,
     ) -> None:
         """
         Initialize aggregate result.

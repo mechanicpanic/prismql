@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Mapping
-from typing import Any, Optional
+from typing import Any
 
 from ..types import NERLabel
 from .base import NLPBackend
@@ -35,7 +35,7 @@ class SpacyBackend(NLPBackend):
         backend = SpacyBackend(nlp_model, config)
     """
 
-    def __init__(self, nlp: Any, config: Optional[dict[str, Any]] = None) -> None:
+    def __init__(self, nlp: Any, config: dict[str, Any] | None = None) -> None:
         """
         Initialize spaCy backend.
 

@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 from collections.abc import Sequence
 from statistics import mean
-from typing import Any, Optional
+from typing import Any
 
 from ..backends.base import SearchBackend
 from ..processors.temporal import TemporalProcessor, TemporalUnit
@@ -156,8 +156,8 @@ class Aggregator:
         self,
         results: QueryResult,
         function: AggregationFunction,
-        field: Optional[str] = None,
-        grouped_results: Optional[GroupedResult] = None,
+        field: str | None = None,
+        grouped_results: GroupedResult | None = None,
     ) -> AggregateResult:
         """
         Apply aggregation function to query results.
@@ -182,7 +182,7 @@ class Aggregator:
         self,
         results: QueryResult,
         function: AggregationFunction,
-        field: Optional[str] = None,
+        field: str | None = None,
     ) -> AggregateResult:
         """Apply aggregation to non-grouped results."""
 
@@ -224,7 +224,7 @@ class Aggregator:
         self,
         results: QueryResult,
         function: AggregationFunction,
-        field: Optional[str],
+        field: str | None,
     ) -> AggregateResult:
         """Apply statistical aggregation (SUM, AVG, MIN, MAX)."""
         if not field:
@@ -253,7 +253,7 @@ class Aggregator:
         self,
         grouped_results: GroupedResult,
         function: AggregationFunction,
-        field: Optional[str] = None,
+        field: str | None = None,
     ) -> AggregateResult:
         """Apply aggregation to grouped results."""
 

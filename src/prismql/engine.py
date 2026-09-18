@@ -1,7 +1,7 @@
 """Main PrismQL engine."""
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Optional, Union
+from typing import Any
 
 from antlr4 import CommonTokenStream, InputStream
 from antlr4.error.ErrorListener import ErrorListener
@@ -19,7 +19,7 @@ from .types import NamedQueryResult, QueryResult
 
 
 def normalize_dictionaries(
-    raw: Optional[Mapping[str, Any]],
+    raw: Mapping[str, Any] | None,
 ) -> tuple[dict[str, list[str]], dict[str, str]]:
     """Normalize the two accepted dictionary shapes.
 
@@ -93,9 +93,9 @@ class PrismQLEngine:
     def __init__(
         self,
         search_backend: SearchBackend,
-        nlp_backend: Optional[NLPBackend] = None,
-        user_dictionaries: Optional[Mapping[str, Any]] = None,
-        precomputed_indexes: Optional[PrecomputedIndexes] = None,
+        nlp_backend: NLPBackend | None = None,
+        user_dictionaries: Mapping[str, Any] | None = None,
+        precomputed_indexes: PrecomputedIndexes | None = None,
         timestamp_field: str = "timestamp",
         text_match: str = "substring",
         use_ir: bool = True,
@@ -220,7 +220,7 @@ class PrismQLEngine:
 
     def execute(
         self, query: str, dialect: str = "auto"
-    ) -> Union[QueryResult, NamedQueryResult, AggregateResult, GroupedResult]:
+    ) -> QueryResult | NamedQueryResult | AggregateResult | GroupedResult:
         """
         Parse and execute a PrismQL query.
 
@@ -283,7 +283,7 @@ class PrismQLEngine:
         return True
 
     def add_dictionary(
-        self, name: str, words: Sequence[str], match: Optional[str] = None
+        self, name: str, words: Sequence[str], match: str | None = None
     ) -> None:
         """
         Add or update a user dictionary.

@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 from ..types import Document, MessageId
 from .base import SearchBackend
@@ -47,9 +47,9 @@ class DuckDBBackend(SearchBackend):
 
     def __init__(
         self,
-        database: Union[str, Any] = ":memory:",
+        database: str | Any = ":memory:",
         table_name: str = "messages",
-        field_mappings: Optional[dict[str, str]] = None,
+        field_mappings: dict[str, str] | None = None,
         create_fts_index: bool = True,
     ) -> None:
         """
@@ -164,7 +164,7 @@ class DuckDBBackend(SearchBackend):
     @classmethod
     def from_parquet(
         cls,
-        parquet_path: Union[str, Path],
+        parquet_path: str | Path,
         table_name: str = "messages",
         id_field: str = "id",
         text_field: str = "text",
@@ -215,7 +215,7 @@ class DuckDBBackend(SearchBackend):
     @classmethod
     def from_csv(
         cls,
-        csv_path: Union[str, Path],
+        csv_path: str | Path,
         table_name: str = "messages",
         id_field: str = "id",
         text_field: str = "text",
@@ -364,7 +364,7 @@ class DuckDBBackend(SearchBackend):
         result = self.conn.execute(sql).fetchone()
         return int(result[0]) if result else 0
 
-    def get_all_document_ids(self, limit: Optional[int] = None) -> set[MessageId]:
+    def get_all_document_ids(self, limit: int | None = None) -> set[MessageId]:
         """
         Get all document IDs (up to limit).
 
@@ -408,12 +408,12 @@ class DuckDBBackend(SearchBackend):
         # Convert rows to dictionaries
         documents = []
         for row in result.fetchall():
-            doc = dict(zip(columns, row))
+            doc = dict(zip(columns, row, strict=False))
             documents.append(doc)
 
         return documents
 
-    def execute_query(self, sql: str, params: Optional[Sequence[Any]] = None) -> Any:
+    def execute_query(self, sql: str, params: Sequence[Any] | None = None) -> Any:
         """
         Execute a custom DuckDB SQL query.
 

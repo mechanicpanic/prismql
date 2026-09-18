@@ -1,7 +1,7 @@
 """Variable binding and validation for pattern matching."""
 
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any
 
 from ..backends.base import SearchBackend
 from ..types import MessageGroup, MessageId, QueryResult
@@ -49,7 +49,7 @@ class VariableValidator:
         self,
         search_backend: SearchBackend,
         constraints: Sequence[VariableConstraint],
-        id_field: Optional[str] = None,
+        id_field: str | None = None,
     ) -> None:
         """
         Initialize variable validator.
@@ -149,7 +149,7 @@ class VariableValidator:
             True if variable is bound consistently
         """
         # Extract values for this variable at each position
-        values: list[Optional[Any]] = []
+        values: list[Any | None] = []
 
         for constraint in constraints:
             # Check position is valid
@@ -174,7 +174,7 @@ class VariableValidator:
         first_value = values[0]
         return all(v == first_value for v in values)
 
-    def get_variable_bindings(self, group: MessageGroup) -> Optional[dict[str, Any]]:
+    def get_variable_bindings(self, group: MessageGroup) -> dict[str, Any] | None:
         """
         Get the variable bindings for a validated message group.
 

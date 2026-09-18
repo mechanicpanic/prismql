@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.12", "3.13"]
 
     steps:
     - uses: actions/checkout@v4
@@ -25,7 +25,7 @@ jobs:
       run: uv python install ${{ matrix.python-version }}
 
     - name: Install dependencies
-      run: uv sync --dev --no-group rust
+      run: uv sync --dev --no-group rust --extra arrow --extra plan --extra server --extra mcp
 
     - name: Run ruff format check
       run: uv run ruff format --check .
@@ -63,7 +63,7 @@ jobs:
       run: uv python install 3.11
 
     - name: Install dependencies
-      run: uv sync --dev --no-group rust
+      run: uv sync --dev --no-group rust --extra arrow --extra plan --extra server --extra mcp
 
     - name: Build package
       run: uv build

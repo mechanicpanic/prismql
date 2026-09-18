@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Optional
 
 from ..exceptions import PositionalUnsupportedError
 from ..types import Document, MessageId, NERLabel
@@ -137,7 +136,7 @@ class SearchBackend(ABC):
         self,
         positions: Iterable[int],
         field: str,
-    ) -> list[Optional[int]]:
+    ) -> list[int | None]:
         """UTC epoch microseconds (or None) per position for a timestamp field."""
         raise self._no_axis()
 
@@ -164,7 +163,7 @@ class SearchBackend(ABC):
         pass
 
     @abstractmethod
-    def get_all_document_ids(self, limit: Optional[int] = None) -> set[MessageId]:
+    def get_all_document_ids(self, limit: int | None = None) -> set[MessageId]:
         """
         Get all document IDs (up to limit).
 
@@ -284,10 +283,10 @@ class PrecomputedIndexes:
 
     def __init__(
         self,
-        entities: Optional[Mapping[NERLabel, set[MessageId]]] = None,
-        questions: Optional[set[MessageId]] = None,
-        user_mentions: Optional[Mapping[str, set[MessageId]]] = None,
-        custom_features: Optional[Mapping[str, set[MessageId]]] = None,
+        entities: Mapping[NERLabel, set[MessageId]] | None = None,
+        questions: set[MessageId] | None = None,
+        user_mentions: Mapping[str, set[MessageId]] | None = None,
+        custom_features: Mapping[str, set[MessageId]] | None = None,
     ) -> None:
         """
         Initialize precomputed indexes.

@@ -3,7 +3,7 @@ loudly with PositionalUnsupportedError (never reconstruct order from ids)."""
 
 # ruff: noqa: ARG002 - the stub backend ignores its arguments on purpose
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -55,7 +55,7 @@ def test_memory_backend_positions_follow_load_order_not_id_value():
 
 def test_memory_backend_timestamps_are_utc_micros_per_position():
     b = MemoryBackend(documents=DOCS)
-    micros_2024 = int(datetime(2024, 1, 1, tzinfo=timezone.utc).timestamp() * 1_000_000)
+    micros_2024 = int(datetime(2024, 1, 1, tzinfo=UTC).timestamp() * 1_000_000)
     assert b.timestamps_at([0, 1, 2], "timestamp") == [1_000_000_000, micros_2024, None]
 
 
