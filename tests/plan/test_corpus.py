@@ -42,7 +42,7 @@ def test_timestamp_micros_from_numeric_and_null():
     df = corpus_frame(pa.Table.from_pylist(docs)).collect()
     for row in df.iter_rows(named=True):
         src = next(d for d in docs if d["id"] == row["id"])
-        if "timestamp" in src:
+        if src["timestamp"] is not None:
             assert row["timestamp_us"] == src["timestamp"] * 1_000_000
         else:
             assert row["timestamp_us"] is None

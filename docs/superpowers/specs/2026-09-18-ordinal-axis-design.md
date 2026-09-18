@@ -63,6 +63,15 @@ promises ranges. Pinned xfail(strict) in the same file; P2/P3 must
 DEFINE range enumeration before implementing it — HEAD is not an oracle
 here.
 
+**A9. Every result group is sorted by id (found while testing P2 task 2,
+2026-09-19).** `query_visitor.py:490/496` and `executor.py:381/386` apply
+`sorted(group)` to every sequence group, so slot order is id order, not
+axis order. With time non-monotone in id order a temporal `X FOLLOWED_BY
+Y` returns `[y, x]` (the later message first). Same root as A1–A3 (id as
+coordinate); the plan primitives order slots by the axis and P3 removes
+the sort. HEAD is therefore a valid oracle for temporal links only on
+corpora whose id order is time order (`tests/plan/test_primitives_vs_engine.py`).
+
 **A5. Temporal tie-break differs by path** (known, documented): Rust sorts
 `(timestamp, id)`, Python sorts by timestamp with stable set-iteration
 order. Rust caches parsed UTC micros at ingest; Python parses per query.

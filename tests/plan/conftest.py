@@ -46,7 +46,9 @@ def random_corpus(
             "timestamp": t,
         }
         if nulls and rng.random() < 0.1:
-            del doc["timestamp"]
+            # Present-but-null, so an Arrow table inferred from the rows keeps
+            # the column (pyarrow infers the schema from the first row).
+            doc["timestamp"] = None
         docs.append(doc)
     return docs
 

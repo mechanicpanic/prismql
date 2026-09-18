@@ -256,6 +256,17 @@ Run: `uv run pytest tests/plan -q` → PASS. Gate, commit: `Add prismql.plan: co
 - Create: `src/prismql/plan/primitives.py`
 - Test: `tests/plan/test_primitives_vs_engine.py`
 
+> **Executed 2026-09-19 (commit follows this note).** Landed signature:
+> `nearest_link(lhs, rhs, *, axis, window, forward, key=None, eligible=None)`
+> — no `corpus` argument (the frames carry the axis); `eligible` is a
+> Polars expression over the pair with lhs columns prefixed `l_` and rhs
+> columns `r_`, evaluated *before* the nearest candidate is chosen
+> (finding 1). Two paths: asof (no `eligible`) and bucketized candidates +
+> argmin (with `eligible`); with `eligible=pl.lit(True)` they must agree —
+> the candidate path is the asof path's internal oracle. `window == 0` is an
+> explicit empty branch. New audit finding A9 (HEAD sorts every group by
+> id) narrowed the HEAD oracle for temporal links to monotone-time corpora.
+
 **Interfaces:**
 - Produces: `nearest_link(corpus: LazyFrame, lhs: LazyFrame, rhs: LazyFrame, *, axis: str, window: int, forward: bool, key: str | None = None) -> LazyFrame` where `lhs`/`rhs` are frames with at least `position`, `id` and (if `key`) the key column; `axis` is `"position"` or `"<field>_us"`; `window` in axis units (positions, or micros). Returns the result-frame schema with `slot 0 = earlier element` (i.e. `[rhs, lhs]` for backward, matching the engine's chronological order).
 
