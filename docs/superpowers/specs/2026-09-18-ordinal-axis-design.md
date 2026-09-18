@@ -250,13 +250,38 @@ Chicago tuple-equality and time on both `nearest_*` implementations
   `RustMemoryBackend` exposes the same contract; `PositionalUnsupportedError`
   on remote backends; duplicate-id rejection at load. Nothing else
   changes yet.
-- **P2 — primitives.** Python reference implementations of
-  `nearest_after/before` (bisect) and `window_product`; Rust twins in
-  `prismql-rust` with the same signatures; hypothesis-style property
-  tests asserting Rust == reference on random sorted arrays. Old kernels
-  untouched.
-- **P3 — the single operator layer.** `processors/sequence.py`: every
-  operator once, over positions/timestamps, using the primitives.
+- **P2 — primitives as a relational plan (revised after the Polars spike,
+  `prismql-research/experiments/polars-spike/RESULTS.md`).** The spike
+  reproduced the engine tuple-for-tuple on Chicago 100k/1m/full (incl.
+  the benchmark's 372) with Polars 5–80× faster than the Rust kernels and
+  ~65× faster construction. So the primitive layer is not Rust code but
+  a **Polars LazyFrame plan** built from the IR over the Arrow corpus
+  table (`position`, timestamp columns, correlation keys):
+  - `FOLLOWED_BY` / `PRECEDED_BY` (greedy nearest, strict `>`) =
+    `join_asof(strategy="forward"/"backward")` on the axis column with the
+    search key shifted by one unit and `tolerance = window − 1`
+    (positions: 1; timestamps: 1 µs); correlation `$k` = `by=`; body-level
+    DURING = post-filter on `last − first`.
+  - chains = successive asof joins from the last (or first) leg;
+  - `NOT_FOLLOWED_BY` / `NOT_PRECEDED_BY` = the same asof, keep rows with a
+    null match (anti-asof);
+  - co-occurrence (`INWINDOW` k groups, UNORDERED — fixes D2 by
+    construction): small positional windows = union of offset equi-joins
+    on `position + d`; temporal / large windows = the paper's §3
+    bucketization (join on `(key, bucket)` with neighbour expansion, then
+    exact span filter); one implementation parameterized by axis;
+    distinct-message rule = `a.position != b.position`.
+  - quantifiers `{n,}`, `{n,m}` = window functions over the matched set;
+  - **variable inequality `!$k`** (diary gap #1) = one filter on the joined
+    frame; it lands here, not as a separate feature.
+  The engine at HEAD is the **oracle**: every plan shape is tested
+  tuple-for-tuple against `PrismQLEngine` on seeded random corpora and
+  the Chicago tiers; nothing is wired into the executor yet.
+  Rust keeps tantivy (text) only. Generic range joins (`join_where`) are
+  explicitly NOT used (quadratic; killed at 1m in the spike).
+
+- **P3 — the single operator layer.** `prismql/plan/`: every
+  operator once, as a plan builder over the Arrow table (P2 primitives).
   INWINDOW/DURING co-occurrence become unordered here (D2 fixed once).
   Executors (both `use_ir` paths — they share the helpers) call only
   this layer. The old builders, `window.py` backtracking and dispatch
