@@ -46,7 +46,10 @@ class VariableValidator:
     """
 
     def __init__(
-        self, search_backend: SearchBackend, constraints: Sequence[VariableConstraint]
+        self,
+        search_backend: SearchBackend,
+        constraints: Sequence[VariableConstraint],
+        id_field: Optional[str] = None,
     ) -> None:
         """
         Initialize variable validator.
@@ -54,9 +57,14 @@ class VariableValidator:
         Args:
             search_backend: Backend to retrieve field values from documents
             constraints: List of variable constraints to enforce
+            id_field: Document field holding the message id. Defaults to
+                the backend's ``id_field`` (or ``"id"``); a hard-coded
+                ``"id"`` here silently emptied every result on corpora
+                with any other id field.
         """
         self.search_backend = search_backend
         self.constraints = list(constraints)
+        self.id_field: str = id_field or str(getattr(search_backend, "id_field", "id"))
 
         # Group constraints by variable name
         self.constraints_by_var: dict[str, list[VariableConstraint]] = {}
@@ -108,7 +116,7 @@ class VariableValidator:
         # Build lookup: message_id -> document
         doc_lookup: dict[MessageId, dict[str, Any]] = {}
         for doc in documents:
-            msg_id = doc.get("id")
+            msg_id = doc.get(self.id_field)
             if msg_id is not None:
                 doc_lookup[msg_id] = doc
 
@@ -185,7 +193,7 @@ class VariableValidator:
         # Build lookup
         doc_lookup: dict[MessageId, dict[str, Any]] = {}
         for doc in documents:
-            msg_id = doc.get("id")
+            msg_id = doc.get(self.id_field)
             if msg_id is not None:
                 doc_lookup[msg_id] = doc
 

@@ -1730,9 +1730,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
             projected = get_timestamps(list(msg_ids), self.timestamp_field)
             return dict(projected)
         documents = self.search_backend.get_documents(list(msg_ids))
+        id_field = getattr(self.search_backend, "id_field", "id")
         result: dict[MessageId, datetime] = {}
         for doc in documents:
-            msg_id = doc.get("id")
+            msg_id = doc.get(id_field)
             ts = doc.get(self.timestamp_field)
             if msg_id is None or ts is None:
                 continue
