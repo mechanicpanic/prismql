@@ -2,12 +2,13 @@
 
 *The one place project state lives. Updated in the same commit as the change
 it describes. Agent memory points here; it does not duplicate this.*
-*Last update: 2026-09-19.*
+*Last update: 2026-09-19 (P2 task 2).*
 
 ## Shipped (newest first)
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-19 | **P2 tasks 1–2**: `prismql.plan` (Arrow-native `corpus_frame`, hostile fixtures) and `nearest_link` — FOLLOWED_BY/PRECEDED_BY as a Polars plan, asof path + candidate path with eligibility inside selection (`!$k` works as a primitive), `(axis, position)` tie-break, proven vs HEAD where valid and vs a brute-force oracle elsewhere. New audit finding A9. `PROJECT.md` rewritten as the full project description. | `7ac4c81`, `526f37e`, `3152246`; plan `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md` |
 | 2026-09-18 | **Ordinal axis P1a**: `OrderIndex`, backend order contract (`positions / sorted_positions / ids_at / timestamps_at / has_order_axis`), `PositionalUnsupportedError`, duplicate ids rejected at load, `load_table()` + `[arrow]` extra (corpus as ordered Arrow table, `position` = row index). Semantics unchanged. | `916d10e`…`2c1b52a`; spec `docs/superpowers/specs/2026-09-18-ordinal-axis-design.md` |
 | 2026-09-18 | **Polars spike**: relational plan reproduces the engine tuple-for-tuple on Chicago 100k/1m/full incl. the benchmark's 372; 5–80× faster than the Rust kernels, ~65× on build. | `prismql-research/experiments/polars-spike/RESULTS.md` |
 | 2026-09-18 | Three silent-wrong fixes: 1M-id universe cap on positional paths and NOT (88% of pairs lost on 8.5M); PRECEDED_BY earliest-vs-nearest divergence; `id_field ≠ "id"` emptied `$k` and temporal results. Pipe-validator holes (#43). Deps upgraded (mcp 2, mypy 2), `prismql-mcp` ported to `MCPServer`. | `7d18c43`, `2b48a7c`, `d2c20f7`, `d732692`, `df71db0` |
@@ -32,9 +33,10 @@ it describes. Agent memory points here; it does not duplicate this.*
 - INWINDOW co-occurrence enforces restriction order in both kernels (`from(b), from(a) INWINDOW 3` → empty). Fixed by construction in P3; pinned `xfail(strict)` in `tests/test_positional_path_parity.py`.
 - Position is id-arithmetic on Rust, list-index on Python, lexical for string ids; pinned `xfail(strict)` in `tests/test_ordinal_axis_contract.py`. Fixed in P3.
 - A chain mixing positional and temporal links can reuse a message (`[[0,0,1]]`); quantifier ranges `{n,}`/`{n,m}` execute as `{n}`. Pinned `xfail(strict)` in `tests/test_engine_defects_pinned.py` (found by the P2 plan review, 2026-09-19). Fixed by construction in P3; range enumeration must be defined first.
+- Every result group is sorted by id (`query_visitor.py:490`, `executor.py:381`): with time non-monotone in id order a temporal link returns the later message first (A9, 2026-09-19). Not pinned separately — covered by the plan tests' oracle matrix; P3 removes the sort.
 
 **Next work, in order**
-1. **P2** — primitives as a Polars plan: `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md`, **revision 2 after the Astra review (NO-GO on the original Task 1; 12 binding amendments)**. Eligibility-before-nearest, `(axis, position)` tie-break, quantifiers as enumeration vs exhaustive oracle, group-preserving contracts, oracle matrix. Includes `!$k`.
+1. **P2** — primitives as a Polars plan: `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md`, revision 2 after the Astra review. **Tasks 1–2 done**; next: task 3 `extend_link` + `body_span_filter` (null timestamps reject the group), then `anti_link`, `cooccur` (k-way, exhaustive oracle), `quantify` (enumeration, exhaustive oracle), Chicago tier gates (100k → 1m; full tier only with separate authorization), docs.
 2. **P3** — single operator layer on the plan; delete both merge paths; expose `!$k` in both dialects; xfails flip.
 3. **P4** — gates: Chicago full-tuple equality (Q1–Q3), positional benchmark, relabeled corpora.
 4. Tantivy order axis (fast fields) → retire `rust_memory`.
