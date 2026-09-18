@@ -95,10 +95,38 @@ paths would move the class, not remove it. Revision 2 removes it.
    - `positions(ids) / ids_at(positions) / timestamps_at(positions)` on
      the backend.
    Rust cannot disagree with Python about what FOLLOWED_BY means because
-   it does not know FOLLOWED_BY exists. The existing operator-shaped
-   kernels (`merge_followed_by`, `merge_preceded_by`,
-   `merge_histogram_pruned`, `merge_temporal_link`,
-   `extend_temporal_link`, `merge_within_time_window`) are retired.
+   it does not know FOLLOWED_BY exists.
+
+   **What "retiring the operator-shaped kernels" means — and does not.**
+   The heavy loops do not leave Rust. `merge_followed_by` *is* sort +
+   `partition_point` per lhs + a distance check: that is
+   `nearest_after_within`. `merge_histogram_pruned` *is* the pruned
+   combinatorial product: that is `window_product`. `merge_temporal_link`
+   is the same bisect over the timestamp cache. The bodies survive as
+   primitives, together with the timestamp cache and the no-document-
+   materialization projection that bought Chicago's 7.5 s → 3.8 s. What
+   is removed is the **semantics** each kernel currently carries — which
+   axis, how a window distributes, how ties break, id-as-position — and
+   its duplicate in the Python fallback. The difference is not how much
+   runs in Rust but who owns meaning: a primitive's contract is one
+   mathematical sentence, tested against a Python reference; the
+   operator is composed once in Python. A pure-Python install runs the
+   same operator layer over the reference primitives (`bisect`) —
+   slower, never semantically different.
+
+   **Performance risk, stated honestly.** Costs that move to the Python
+   side: pair assembly from returned index arrays (a `zip` over a
+   million elements, ~0.1 s), FFI array conversion per chain link (tens
+   of ms per million), and sorting positions if it were done in Python
+   (~0.3 s per million — so `sorted_positions()` is served by the Rust
+   backend, not Python). Expected: within ±20 % of today's 3.8 s on
+   Chicago, plausibly faster (the current Python path re-sorts ids and
+   materializes documents). This is a hypothesis; P4 measures it. The
+   fallback that keeps the principle intact if index shipping proves
+   expensive: a fatter primitive, `nearest_pairs(xs, sorted_ys, d)`,
+   returning the pairs themselves — still one sentence of mathematics,
+   still property-tested, just more work on the Rust side of the
+   boundary.
 4. **Positional and temporal are the same algorithm on different axes.**
    INWINDOW = `window_product` over positions; DURING co-occurrence =
    `window_product` over timestamps. FOLLOWED_BY INWINDOW n =
@@ -167,8 +195,10 @@ Chicago tuple-equality and time on both `nearest_*` implementations
   operator once, over positions/timestamps, using the primitives.
   INWINDOW/DURING co-occurrence become unordered here (D2 fixed once).
   Executors (both `use_ir` paths — they share the helpers) call only
-  this layer. The old builders, `window.py` backtracking, dispatch
-  flags and operator-shaped kernels are deleted in the same series.
+  this layer. The old builders, `window.py` backtracking and dispatch
+  flags are deleted in the same series; the operator-shaped Rust
+  kernels are re-exported as the primitives (bodies kept, semantics
+  stripped) and their old entry points removed.
   Subquery boundaries and final normalization operate on positions and
   map back to ids at the edge.
 - **P4 — gates.** Classic/pipe IR equality (unchanged); `use_ir` on/off
