@@ -2,7 +2,7 @@
 
 *The one place project state lives. Updated in the same commit as the change
 it describes. Agent memory points here; it does not duplicate this.*
-*Last update: 2026-09-18.*
+*Last update: 2026-09-19.*
 
 ## Shipped (newest first)
 
@@ -30,15 +30,17 @@ it describes. Agent memory points here; it does not duplicate this.*
 **Blockers (silent-wrong class)**
 - INWINDOW co-occurrence enforces restriction order in both kernels (`from(b), from(a) INWINDOW 3` → empty). Fixed by construction in P3; pinned `xfail(strict)` in `tests/test_positional_path_parity.py`.
 - Position is id-arithmetic on Rust, list-index on Python, lexical for string ids; pinned `xfail(strict)` in `tests/test_ordinal_axis_contract.py`. Fixed in P3.
+- A chain mixing positional and temporal links can reuse a message (`[[0,0,1]]`); quantifier ranges `{n,}`/`{n,m}` execute as `{n}`. Pinned `xfail(strict)` in `tests/test_engine_defects_pinned.py` (found by the P2 plan review, 2026-09-19). Fixed by construction in P3; range enumeration must be defined first.
 
 **Next work, in order**
-1. **P2** — primitives as a Polars plan, engine as oracle: `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md` (8 tasks). Includes `!$k` (variable inequality — diary gap #1).
+1. **P2** — primitives as a Polars plan: `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md`, **revision 2 after the Astra review (NO-GO on the original Task 1; 12 binding amendments)**. Eligibility-before-nearest, `(axis, position)` tie-break, quantifiers as enumeration vs exhaustive oracle, group-preserving contracts, oracle matrix. Includes `!$k`.
 2. **P3** — single operator layer on the plan; delete both merge paths; expose `!$k` in both dialects; xfails flip.
 3. **P4** — gates: Chicago full-tuple equality (Q1–Q3), positional benchmark, relabeled corpora.
 4. Tantivy order axis (fast fields) → retire `rust_memory`.
 5. Agent surface track; workbench M0–M3; mismatch diary Q04–Q18; `similar_to` v2.
 
 **Not decided / to verify**
+- **Python floor**: Polars requires ≥ 3.10; declared floor is 3.9 (EOL). Recommendation: raise to 3.10 (mypy 2 already targets it); until decided the `[plan]` extra carries a `python_version >= "3.10"` marker and CI's 3.9 job cannot run the plan suite.
 - Novelty claim for the ranked semantic join rests on 2026 preprints (HiMu unverified; VectraFlow verified).
 - Railway XFF/X-Real-IP behaviour on the live deploy; Chicago 372 re-run after the DST fixes (done implicitly by the spike: 372 reproduced on both sides).
 - swarmchasing hackathon (Oct 3–4, AI Village dataset, gated — access requested? not yet): language is strong for failure-shape questions; needs `!$k`; native ingest is layer 1.
