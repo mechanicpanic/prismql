@@ -6,9 +6,65 @@
 
 **Architecture:** A new package `prismql/plan/` holds pure functions from `(corpus LazyFrame, predicate frames, parameters)` to a result frame `(group, slot, position, id)`. Each primitive is one function; each is tested against `PrismQLEngine` on seeded random corpora and on the Chicago tiers. Polars is an optional extra (`[plan]`); the engine keeps working without it.
 
-**Tech Stack:** Python 3.9+, polars ≥ 1.44, pyarrow (`[arrow]` extra, P1a), pytest. No Rust.
+**Tech Stack:** Python 3.10+ for the plan extra (Polars requires it — see revision note 10), polars pinned to the verified release (1.44.x), pyarrow (`[arrow]` extra, P1a), pytest. No Rust.
 
 **Spec:** `docs/superpowers/specs/2026-09-18-ordinal-axis-design.md` — "P2 — primitives as a relational plan"; evidence: `prismql-research/experiments/polars-spike/RESULTS.md`.
+
+> **Revision 2 (2026-09-19), after the GPT-6 Astra review — NO-GO on the
+> original Task 1; amendments below supersede the task bodies where they
+> conflict.** Review findings, in the order they bind this plan:
+>
+> 1. **Eligibility before nearest.** `!$k` / `$k` and any leg constraint
+>    must participate in *choosing* the nearest candidate, never as a filter
+>    after asof (nearest-then-filter drops a later eligible match —
+>    reproduced). `nearest_link` takes `eligible: pl.Expr | None` and
+>    `exclude_positions` (members already in the group) and selects the
+>    nearest candidate satisfying both. Equality keys may still use `by=`
+>    (same result, faster); inequality and "not already in group" cannot.
+> 2. **Tie-break is `(axis, position)`**, both directions; sort right
+>    frames by `[k, position]` (backward: position descending) before asof.
+>    `window == 0` is an explicit branch (no shifted-key trick: Polars
+>    accepts `tolerance=-1`).
+> 3. **Quantifiers are enumeration, not counting.** HEAD executes `{n,}` and
+>    `{n,m}` as `{n}` (A8) — define first: `{n,m}` over a restriction =
+>    all m′-subsets, n ≤ m′ ≤ m, of that restriction's matches within the
+>    window, one group per subset; `{n,}` = m′ up to the window's capacity.
+>    Test against an exhaustive Python oracle on tiny corpora, NOT HEAD.
+> 4. **Group-preserving contracts.** Every primitive consumes and produces
+>    the result-frame schema (whole groups), including subquery chains:
+>    `[A] ~>(n) [B]` joins *complete groups*, and when several rhs groups
+>    share the nearest boundary all of them expand (HEAD does this —
+>    `query_visitor.py:1393`); negation retains the whole lhs group.
+> 5. **Distinctness across axes** (A7, reproduced `[[0,0,1]]`): every leg
+>    excludes the group's existing positions regardless of axis.
+> 6. **Oracle matrix, not "HEAD except co-occurrence"**: HEAD parity only
+>    where HEAD is valid; independent (exhaustive, tiny-corpus) oracles for
+>    unordered co-occurrence, quantifier ranges, cross-axis distinctness,
+>    timestamp ties, relabeled/gapped/string ids. Fixtures must include
+>    non-monotone timestamps, ties, nulls and gapped ids — the original
+>    `random_corpus` (dense ids, strictly increasing time) masks all of it.
+> 7. **Task 1 was wrong on the data path**: `corpus_frame` must be
+>    Arrow-native (`pl.from_arrow`), *preserve* an existing `position`
+>    column (P1a's `load_table()` already adds it — the original code
+>    raised `DuplicateError`), honour a backend's `id_field`, and take an
+>    explicit adapter per source instead of duck-typing every backend.
+> 8. **Null timestamps**: any group with a missing timestamp on a temporal
+>    leg or body span is rejected (`temporal.py:319`), not span 0.
+> 9. **k-way co-occurrence**: all-member distinctness (not adjacent),
+>    canonicalization *after* variable constraints, equal timestamps allowed
+>    for distinct messages; tests over bucket boundaries, overlapping
+>    predicates, all restriction permutations, k ≥ 3, vs exhaustive oracle.
+> 10. **Python floor.** Polars ≥ 1.44 requires Python ≥ 3.10; the declared
+>     floor is 3.9. Decision for the owner (recorded in STATE.md): raise
+>     the floor to 3.10 (3.9 is EOL; mypy 2 already targets 3.10) — until
+>     then the extra carries `; python_version >= "3.10"`, and the
+>     capability policy for installs without Polars is decided with P3.
+> 11. **CI must install `[plan]`** and the plan suite must not be
+>     skippable there; pin the verified Polars release in the lock/CI env.
+> 12. **Benchmark envelope**: LazyFrame path incl. ingest, conversion,
+>     result-frame assembly and peak RSS; one subprocess, 4 threads,
+>     wall-clock watchdog, explicit memory/thermal stop; 100k → 1m, full
+>     tier only on separate authorization.
 
 ## Global Constraints
 
@@ -85,9 +141,15 @@ from prismql.plan.corpus import corpus_frame, to_groups  # noqa: E402
 from tests.plan.conftest import random_corpus  # noqa: E402
 
 
-def test_corpus_frame_has_position_and_micros():
+def test_corpus_frame_keeps_load_table_position(tmp_path):
+    import json
+
+    from prismql.loaders import load_table
+
     docs = random_corpus(1, n=5)
-    lf = corpus_frame(pa.Table.from_pylist(docs))
+    p = tmp_path / "c.jsonl"
+    p.write_text("\n".join(json.dumps(d) for d in docs))
+    lf = corpus_frame(load_table(p))  # position column already present
     df = lf.collect()
     assert df["position"].to_list() == [0, 1, 2, 3, 4]
     assert df["timestamp_us"].to_list() == [d["timestamp"] * 1_000_000 for d in docs]
@@ -138,20 +200,42 @@ from ..types import MessageId
 from . import _pl
 
 
-def corpus_frame(source: Any, *, timestamp_fields: tuple[str, ...] = ("timestamp",)) -> Any:
-    """Ordered corpus as a LazyFrame: position = row index, <f>_us per timestamp field."""
+def corpus_frame(table: Any, *, id_field: str = "id",
+                 timestamp_fields: tuple[str, ...] = ("timestamp",)) -> Any:
+    """Ordered corpus as a LazyFrame from an Arrow table (P1a `load_table()`).
+
+    Arrow-native (no Python rows). An existing `position` column is kept
+    (load_table already adds it); otherwise it is the row index. `id_field`
+    is aliased to `id` for the primitives. Each timestamp field gets
+    `<f>_us` (UTC epoch micros, null when unparseable) — computed in Polars
+    for numeric/temporal columns, via epoch_micros only for string columns.
+    """
     pl = _pl()
-    if hasattr(source, "documents"):  # a SearchBackend built from a document list
-        rows = list(source.documents)
-    elif hasattr(source, "to_pylist"):
-        rows = source.to_pylist()
-    else:
-        rows = list(source)
-    df = pl.DataFrame(rows).with_row_index("position").with_columns(pl.col("position").cast(pl.Int64))
+    df = pl.from_arrow(table)
+    if "position" not in df.columns:
+        df = df.with_row_index("position")
+    df = df.with_columns(pl.col("position").cast(pl.Int64))
+    if id_field != "id":
+        df = df.rename({id_field: "id"})
     for f in timestamp_fields:
-        if f in df.columns:
-            df = df.with_columns(pl.Series(f"{f}_us", [epoch_micros(v) for v in df[f].to_list()], dtype=pl.Int64))
+        if f not in df.columns:
+            continue
+        col = df[f]
+        if col.dtype.is_numeric():
+            df = df.with_columns((pl.col(f).cast(pl.Float64) * 1_000_000).round().cast(pl.Int64).alias(f"{f}_us"))
+        elif col.dtype == pl.Datetime:
+            df = df.with_columns(pl.col(f).dt.replace_time_zone("UTC").dt.epoch("us").alias(f"{f}_us"))
+        else:
+            df = df.with_columns(pl.Series(f"{f}_us", [epoch_micros(v) for v in col.to_list()], dtype=pl.Int64))
     return df.lazy()
+
+
+def corpus_frame_from_backend(backend: Any, **kw: Any) -> Any:
+    """Adapter for the two in-memory backends only (explicit, not duck-typed)."""
+    pa = __import__("pyarrow")
+    if not hasattr(backend, "documents"):
+        raise TypeError(f"{type(backend).__name__} has no document list; pass an Arrow table")
+    return corpus_frame(pa.Table.from_pylist(list(backend.documents)), id_field=getattr(backend, "id_field", "id"), **kw)
 
 
 def to_groups(result: Any) -> list[list[MessageId]]:
