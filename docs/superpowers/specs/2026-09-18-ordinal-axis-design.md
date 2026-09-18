@@ -215,7 +215,7 @@ Built once at load, immutable afterwards:
 caches: it exposes them under this contract and its id ingress/egress
 translate `int | str` labels at the wrapper. Remote backends
 (OpenSearch, Postgres, DuckDB) implement the contract from a persisted
-`position` column or **raise `PositionalUnsupported`** — positional and
+`position` column or **raise `PositionalUnsupportedError`** — positional and
 temporal-sequence queries fail explicitly there; boolean/set queries
 keep working. No silent reconstruction of order from ids anywhere.
 
@@ -247,7 +247,7 @@ Chicago tuple-equality and time on both `nearest_*` implementations
   operators, reversed-load ids, string ids separated by unmatched docs,
   subquery boundaries, duplicate-id rejection, 1M boundary.
 - **P1 — the axis and the table.** `load_documents` returns an ordered Arrow table (`position` = row index); `RustMemoryBackend` ingests Arrow (arrow-rs), no per-document dicts across FFI; `OrderIndex` in Python for MemoryBackend;
-  `RustMemoryBackend` exposes the same contract; `PositionalUnsupported`
+  `RustMemoryBackend` exposes the same contract; `PositionalUnsupportedError`
   on remote backends; duplicate-id rejection at load. Nothing else
   changes yet.
 - **P2 — primitives.** Python reference implementations of
@@ -272,7 +272,7 @@ Chicago tuple-equality and time on both `nearest_*` implementations
   query; relabeled corpora (gapped numeric, non-lexical strings).
 - **P5 — docs with each phase**: both references, gotchas, CHANGELOG
   (semantic changes: INWINDOW truly unordered; gapped-id distance is
-  stream distance; string ids everywhere; PositionalUnsupported).
+  stream distance; string ids everywhere; PositionalUnsupportedError).
 
 Estimate: P1 one day, P2 one day, P3 two to three days, P4 one day.
 Grammar and IR untouched throughout.

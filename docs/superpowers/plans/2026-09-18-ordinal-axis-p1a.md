@@ -4,7 +4,7 @@
 
 **Goal:** Give every backend an explicit, immutable stream-order axis (position ↔ id ↔ timestamp), make corpora loadable as ordered Arrow tables, and reject duplicate ids at load — without changing any query semantics yet.
 
-**Architecture:** A small `OrderIndex` (pure Python, built from the document sequence at load) becomes the single source of positions for `MemoryBackend`; `RustMemoryBackend` exposes the same contract from its existing `id_to_index` and timestamp caches through three new FFI methods; every other backend inherits a default that raises `PositionalUnsupported`. `load_table()` returns a pyarrow Table with `position = row index`; backends accept a Table or `list[dict]`. Nothing in the executor changes in this plan (that is P3).
+**Architecture:** A small `OrderIndex` (pure Python, built from the document sequence at load) becomes the single source of positions for `MemoryBackend`; `RustMemoryBackend` exposes the same contract from its existing `id_to_index` and timestamp caches through three new FFI methods; every other backend inherits a default that raises `PositionalUnsupportedError`. `load_table()` returns a pyarrow Table with `position = row index`; backends accept a Table or `list[dict]`. Nothing in the executor changes in this plan (that is P3).
 
 **Tech Stack:** Python 3.9+ (uv), pyarrow (new optional extra `arrow`), Rust/PyO3 0.25 in `../prismql-rust` (maturin), pytest.
 
@@ -25,8 +25,8 @@
 ## File map
 
 - Create `src/prismql/backends/order.py` — `OrderIndex`: positions, ids, per-field timestamps; duplicate-id rejection; timestamp-monotone warning. One responsibility: the axis.
-- Create `src/prismql/exceptions.py` addition — `PositionalUnsupported(PrismQLRuntimeError)`.
-- Modify `src/prismql/backends/base.py` — five contract methods on `SearchBackend` with default `raise PositionalUnsupported`.
+- Create `src/prismql/exceptions.py` addition — `PositionalUnsupportedError(PrismQLRuntimeError)`.
+- Modify `src/prismql/backends/base.py` — five contract methods on `SearchBackend` with default `raise PositionalUnsupportedError`.
 - Modify `src/prismql/backends/memory.py` — build `OrderIndex` in `__init__`, implement the contract by delegation, accept a pyarrow Table.
 - Modify `src/prismql/backends/rust_memory.py` — implement the contract over new FFI methods; extend the capability handshake; accept a pyarrow Table (via `to_pylist()` in this plan; zero-copy ingest is plan P1b).
 - Modify `../prismql-rust/src/backend.rs` — `positions_of`, `ids_at`, `timestamps_at`; duplicate-id rejection in the constructor.
@@ -37,7 +37,7 @@
 
 ---
 
-### Task 1: `PositionalUnsupported` and `OrderIndex`
+### Task 1: `PositionalUnsupportedError` and `OrderIndex`
 
 **Files:**
 - Modify: `src/prismql/exceptions.py` (append one class)
@@ -45,7 +45,7 @@
 - Test: `tests/test_order_index.py`
 
 **Interfaces:**
-- Produces: `class PositionalUnsupported(PrismQLRuntimeError)`;
+- Produces: `class PositionalUnsupportedError(PrismQLRuntimeError)`;
   `class OrderIndex` with `__init__(self, ids: Sequence[MessageId], timestamps: Mapping[str, Sequence[Optional[int]]] = {})`, `size() -> int`, `positions(ids: Iterable[MessageId]) -> list[int]` (order-preserving; unknown id → `KeyError`), `sorted_positions(ids) -> list[int]`, `ids_at(positions: Iterable[int]) -> list[MessageId]` (out of range → `IndexError`), `timestamps_at(positions, field: str) -> list[Optional[int]]` (unknown field → `KeyError`), `has_timestamp_field(field) -> bool`, `monotone_violations(field) -> int`.
   Timestamps are epoch **microseconds** UTC or `None`, one per position.
 
@@ -114,7 +114,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'prismql.backends.order
 Append to `src/prismql/exceptions.py` (after `PrismQLRuntimeError`):
 
 ```python
-class PositionalUnsupported(PrismQLRuntimeError):
+class PositionalUnsupportedError(PrismQLRuntimeError):
     """The backend has no stream-order axis, so positional and sequential
     operators cannot run on it. Boolean/set queries still work.
 
@@ -236,7 +236,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 2: Backend contract with `PositionalUnsupported` default; `MemoryBackend` wires the axis
+### Task 2: Backend contract with `PositionalUnsupportedError` default; `MemoryBackend` wires the axis
 
 **Files:**
 - Modify: `src/prismql/backends/base.py` (after `search_semantic`, ~line 108)
@@ -244,7 +244,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Test: `tests/test_backend_order_contract.py`
 
 **Interfaces:**
-- Consumes: `OrderIndex`, `PositionalUnsupported` (Task 1); `TemporalProcessor._coerce_timestamp` (`src/prismql/processors/temporal.py:85`, returns naive-UTC `datetime` or `None`).
+- Consumes: `OrderIndex`, `PositionalUnsupportedError` (Task 1); `TemporalProcessor._coerce_timestamp` (`src/prismql/processors/temporal.py:85`, returns naive-UTC `datetime` or `None`).
 - Produces on `SearchBackend`: `positions(ids) -> list[int]`, `sorted_positions(ids) -> list[int]`, `ids_at(positions) -> list[MessageId]`, `timestamps_at(positions, field) -> list[Optional[int]]`, `has_order_axis() -> bool`. `MemoryBackend.order: OrderIndex`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -252,14 +252,14 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```python
 # tests/test_backend_order_contract.py
 """Every backend exposes the order contract; those without an axis fail
-loudly with PositionalUnsupported (never reconstruct order from ids)."""
+loudly with PositionalUnsupportedError (never reconstruct order from ids)."""
 from datetime import datetime, timezone
 
 import pytest
 
 from prismql.backends.base import SearchBackend
 from prismql.backends.memory import MemoryBackend
-from prismql.exceptions import PositionalUnsupported
+from prismql.exceptions import PositionalUnsupportedError
 
 DOCS = [
     {"id": 10, "user": "a", "text": "x", "timestamp": 1_000},
@@ -291,7 +291,7 @@ def test_default_contract_raises_positional_unsupported():
         lambda: b.ids_at([0]),
         lambda: b.timestamps_at([0], "timestamp"),
     ):
-        with pytest.raises(PositionalUnsupported, match="no stream-order axis"):
+        with pytest.raises(PositionalUnsupportedError, match="no stream-order axis"):
             call()
 
 
@@ -332,8 +332,8 @@ Insert into `src/prismql/backends/base.py` after `search_semantic` (before `@abs
     def has_order_axis(self) -> bool:
         return False
 
-    def _no_axis(self) -> PositionalUnsupported:
-        return PositionalUnsupported(
+    def _no_axis(self) -> PositionalUnsupportedError:
+        return PositionalUnsupportedError(
             f"{type(self).__name__} has no stream-order axis: positional "
             "(INWINDOW, FOLLOWED_BY, ...) and temporal-sequence operators "
             "cannot run on it. Use a backend with an OrderIndex (memory, "
@@ -353,7 +353,7 @@ Insert into `src/prismql/backends/base.py` after `search_semantic` (before `@abs
         raise self._no_axis()
 ```
 
-and at the top of `base.py`: `from collections.abc import Iterable, Mapping, Sequence` (extend the existing import) and `from ..exceptions import PositionalUnsupported`.
+and at the top of `base.py`: `from collections.abc import Iterable, Mapping, Sequence` (extend the existing import) and `from ..exceptions import PositionalUnsupportedError`.
 
 - [ ] **Step 4: Build the axis in `MemoryBackend`**
 
@@ -428,7 +428,7 @@ git add src/prismql/backends/base.py src/prismql/backends/memory.py tests/test_b
 git commit -m "Expose the order contract on backends; MemoryBackend gets an axis
 
 positions/sorted_positions/ids_at/timestamps_at/has_order_axis on
-SearchBackend, defaulting to PositionalUnsupported so a backend without
+SearchBackend, defaulting to PositionalUnsupportedError so a backend without
 an axis fails loudly instead of order being reconstructed from ids.
 MemoryBackend builds an OrderIndex at load (positions = load order,
 duplicate ids rejected, timestamps as UTC epoch micros). No executor
@@ -741,14 +741,14 @@ uv.lock changes from the new extra are dependency work — commit them in this t
 - [ ] **Step 1: AGENTS.md gotcha** — replace the bullet "Rust kernels run only for numeric message ids; string ids fall back to Python. Timestamp tie-break differs…" with:
 
 ```markdown
-  - **Stream order is the load order** (spec `docs/superpowers/specs/2026-09-18-ordinal-axis-design.md`). Ids are labels and must be unique (duplicates are a load error). Backends expose `positions/sorted_positions/ids_at/timestamps_at`; backends without an axis raise `PositionalUnsupported`. Until P3 lands, positional operators still measure id distance on the Rust path and list index on the Python fallback — see the xfail(strict) contract tests; do not "fix" them piecemeal.
+  - **Stream order is the load order** (spec `docs/superpowers/specs/2026-09-18-ordinal-axis-design.md`). Ids are labels and must be unique (duplicates are a load error). Backends expose `positions/sorted_positions/ids_at/timestamps_at`; backends without an axis raise `PositionalUnsupportedError`. Until P3 lands, positional operators still measure id distance on the Rust path and list index on the Python fallback — see the xfail(strict) contract tests; do not "fix" them piecemeal.
   - Rust kernels run only for numeric message ids; string ids fall back to Python (until P4). Timestamp tie-break differs (rust: ascending id; python: set order) until P3.
 ```
 
 - [ ] **Step 2: CHANGELOG.md** — under Unreleased:
 
 ```markdown
-- Ordinal axis P1: `OrderIndex`, backend order contract (`positions`, `sorted_positions`, `ids_at`, `timestamps_at`, `has_order_axis`), `PositionalUnsupported` for backends without an axis, duplicate ids rejected at load (memory and rust), `load_table()` + `[arrow]` extra (corpus as an ordered Arrow table with `position` = row index). No query semantics changed.
+- Ordinal axis P1: `OrderIndex`, backend order contract (`positions`, `sorted_positions`, `ids_at`, `timestamps_at`, `has_order_axis`), `PositionalUnsupportedError` for backends without an axis, duplicate ids rejected at load (memory and rust), `load_table()` + `[arrow]` extra (corpus as an ordered Arrow table with `position` = row index). No query semantics changed.
 ```
 
 - [ ] **Step 3: Commit**

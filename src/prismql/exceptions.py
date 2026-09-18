@@ -62,3 +62,12 @@ class ConfigurationError(PrismQLError):
     """Raised when there's a configuration error."""
 
     pass
+
+
+class PositionalUnsupportedError(PrismQLRuntimeError):
+    """The backend has no stream-order axis, so positional and sequential
+    operators cannot run on it. Boolean/set queries still work.
+
+    Raised by SearchBackend's order-contract defaults; backends that carry
+    an OrderIndex (memory, rust_memory) override them.
+    """
