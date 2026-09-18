@@ -1,3 +1,8 @@
+## Unreleased
+
+- Ordinal axis P1a: `OrderIndex`, backend order contract (`positions`, `sorted_positions`, `ids_at`, `timestamps_at`, `has_order_axis`), `PositionalUnsupportedError` for backends without an axis, duplicate ids rejected at load (memory and rust), `load_table()` + `[arrow]` extra (corpus as an ordered Arrow table with `position` = row index). No query semantics changed.
+- Fixed: positional FOLLOWED_BY/PRECEDED_BY, chain extension and boolean NOT silently capped the document universe at 1,000,000 ids (88% of pairs lost on the 8.5M Chicago tier). Fixed: PRECEDED_BY picked the earliest predecessor on the Python path (nearest on Rust). Fixed: `id_field` other than `"id"` emptied pattern-variable and temporal results.
+
 # Changelog
 
 All notable changes to PrismQL will be documented in this file.

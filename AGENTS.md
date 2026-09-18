@@ -29,7 +29,7 @@ Sanctioned deviation from the verstak standard (owner decision, 2026-07-12): the
 ## Commands
 | Action | Command |
 |---|---|
-| Install (full local dev) | `uv sync --dev --extra server --extra repl --extra highlighting --extra mcp --extra tantivy` |
+| Install (full local dev) | `uv sync --dev --extra server --extra repl --extra highlighting --extra mcp --extra tantivy --extra arrow` |
 | Test | `uv run pytest` (~735 tests; `-m "not slow"` to skip slow) |
 | Lint + format | `uv run ruff format . && uv run ruff check . --fix` |
 | Typecheck | `uv run mypy src/prismql` |
@@ -59,12 +59,14 @@ Sanctioned deviation from the verstak standard (owner decision, 2026-07-12): the
   - `INWINDOW` is UNORDERED co-occurrence; `FOLLOWED_BY`/`PRECEDED_BY` are ordered and return complete sequences (`[[lhs, rhs], …]`). Boolean ops need `set`s — AND/OR on a completed sequence result is an error. Canonical: `INWINDOW`/`DURING`; `INWIN`/`WITHIN` deprecated.
   - The final link of a sequential chain must carry a window; one trailing window distributes per link (not whole-chain span). Quantifiers cannot appear inside chains (use explicit chaining).
   - `contains(x)` resolves `x` as a **dictionary name**, not a word; undefined dictionary = validator error.
-  - Rust kernels run only for numeric message ids; string ids fall back to Python. Timestamp tie-break differs (rust: ascending id; python: set order) — documented, acceptable.
-  - `uv run mypy src/prismql` shows ~11 errors locally in `repl.py`/`tantivy.py` that CI doesn't (optional extras installed locally, absent in CI). Baseline — do not "fix" with ignores; zero NEW errors is the bar.
+  - **Stream order is the load order** (spec `docs/superpowers/specs/2026-09-18-ordinal-axis-design.md`). Ids are labels and must be unique (duplicates are a load error). Backends expose `positions/sorted_positions/ids_at/timestamps_at/has_order_axis`; backends without an axis raise `PositionalUnsupportedError`. Until P3 lands, positional operators still measure id distance on the Rust path and list index on the Python fallback — pinned as xfail(strict) contract tests; do not "fix" them piecemeal. INWINDOW is documented UNORDERED but both kernels still enforce restriction order (blocker, fixed by design in P3).
+  - Rust kernels run only for numeric message ids; string ids fall back to Python (until P3/P4). Timestamp tie-break differs (rust: ascending id; python: set order) until P3.
+  - A corpus can be loaded as an ordered Arrow table (`prismql.loaders.load_table`, `[arrow]` extra, `position` = row index); the Polars spike (`prismql-research/experiments/polars-spike/RESULTS.md`) showed a relational plan reproduces the engine tuple-for-tuple incl. Chicago 372 — P2 = Polars plan, Rust stays for tantivy.
+  - `uv run mypy src/prismql` shows ~11 errors locally in `repl.py`/`tantivy.py` that CI doesn't (optional extras installed locally, absent in CI). Baseline — do not "fix" with ignores; zero NEW errors is the bar. mypy ≥ 2 checks at `python_version = 3.10` (it dropped 3.9 as a target); the runtime floor is still 3.9.
   - Plain `uv sync` strips extras and drops the suite to ~675 tests — reinstall with the full extras command above.
   - Window merge pairs DISTINCT messages, greedy-forward; a message satisfying two restrictions can't pair with itself (matters when authoring corpora/examples).
   - Demo eval corpora dictionary names collide across test cases — last definition wins in the union (see research repo eval).
-- Stage commits with explicit paths only — never `git add -A` (untracked handoffs/scratch live at repo root). Leave `uv.lock` changes uncommitted unless the change is dependency work.
+- Stage commits with explicit paths only — never `git add -A` (untracked handoffs/scratch live at repo root). `uv.lock` is gitignored in this repo; dependency changes are carried by the constraints in `pyproject.toml`.
 
 ## What to update when
 - `AGENTS.md` — commands, structure, conventions, or stack change.
