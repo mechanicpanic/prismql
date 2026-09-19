@@ -47,9 +47,27 @@ it describes. Agent memory points here; it does not duplicate this.*
 - Railway XFF/X-Real-IP behaviour on the live deploy; Chicago 372 re-run after the DST fixes (done implicitly by the spike: 372 reproduced on both sides).
 - swarmchasing hackathon (Oct 3–4, AI Village dataset, gated — access requested? not yet): language is strong for failure-shape questions; needs `!$k`; native ingest is layer 1.
 
+## Paper and studies
+
+- **Paper #1 "Same Pattern, Seven Engines"** — DRAFT v0.1 (`prismql-research/papers/prismql-workshop-paper/DRAFT.md`, SKELETON, VENUES, prior-art). Contributions are findings (engine camps, portability traps, counting-unfalsifiable, ground truth); PrismQL is the instrument. Venue: **EDBT 2027 EA&B, deadline 2026-10-07**, 12 pp, single-anonymous, byline Anna Smirnova. To fix before submission: the "Rust kernels = fastest row" claim (now the Polars plan), tied-timestamp figure, BibTeX, page trim.
+- **Paper #2 (ranked semantic join)** — prior art verified 2026-07-07: VectraFlow (CIDR'25) is the closest, a windowed threshold join with private code; HiMu was a citation error. Delta open: score algebra through boolean + temporal composition. Not started; competes with #3 for the post-EDBT slot.
+- **Paper #3 idea (Aleph, 2026-07-08): agentic TPM** — invert exhaustive temporal-pattern mining into an agent hypothesis → query → instances loop. `prismql-research/papers/agentic-tpm/IDEA.md`.
+- **Benchmarks**: Chicago crime (VLDB'23 Fig. 1, 8.47M events: 372 exact; naive SQL DNF; Flink/EQL in the stream-order tie camp; portability findings in the draft), fcc-situations (ground truth: 236 hand-annotated situations, cluster key = (topic, SId); per-situation macro-F1 0.754 vs ML 0.664; disentanglement DURING 600 → pairwise F1 0.795). Both in `prismql-research/benchmarks/`; data gitignored, refetchable.
+- **Next study (data located, not started)**: Reuters × WSJ stale-news lag — see `prismql-research/docs/development/NEXT-STUDY-reuters-wsj.md`.
+- **Eval re-score (#17)** still owed: the March 2026 LLM eval penalized query forms that are valid again; A/B harness ready, blocked on API keys.
+
+## History and lessons (why things are the way they are)
+
+- **Grammar precedence (2026-06-10, `ef6eed8`)**: ANTLR gives the FIRST alternative of a left-recursive rule the HIGHEST precedence, and only alternatives ending in the recursive ref get left-associativity — the Nov-2025 grammar got both wrong (sequential ops bound tightest, chains nested right). Fix = stratified `restriction` over `bool_restriction`. Lesson: prove precedence with IR-equality tests, not by reading the grammar.
+- **UNR dropped (2026-06-11, `c23ae36`)**: the paper said UNR "removes the match-order constraint"; the implementation did a Cartesian product ignoring the window. Kept only as reviewer history.
+- **Correctness cluster #18/#21/#23 (2026-06-11)**: positional subqueries group-wise, per-leg variable buckets, teachable errors for unbacked ops — the origin of rule 5 (silent-wrong = blocker).
+- **IR layer (2026-07, `52d3abf`)**: `IRExecutor` subclasses the visitor, so both paths are byte-identical by construction; deferred: retire the visitor, static window distribution, static leg buckets. Pipe dialect on top (`a7f085c`).
+- **Tantivy (2026-06-15)** locked the search / merge / orchestrate split; **kernels (#25, 2026-07-08)** made Rust the fastest row — superseded by the Polars plan (see Decided).
+- **Release plan**: `prismql-research/docs/development/PUBLIC_RELEASE_PLAN.md` is canonical for 0.1.0 (phases, addenda A–C). Remote private; nothing tagged or published.
+
 ## Where things live
 
 - Code: `~/Projects/vibes/prismql` (this repo), `../prismql-rust` (kernels, retiring), `~/Projects/research/prismql-research` (benchmarks, paper, eval, diary, spike, workbench scope).
 - Specs/plans: `docs/superpowers/specs/`, `docs/superpowers/plans/`. Reviews: `REVIEW-*.md`. Handoffs: `HANDOFF-*.md` (untracked, repo root).
 - Reading: Obsidian symlink vault `~/Vaults/prismql` (`START.md`).
-- Agent memory: `~/.claude/projects/-Users-aleph-Projects-vibes-prismql/memory/` — pointers and non-derivable context only.
+- Owner and machine facts: graph `@aleph/mind`. Open items: Todoist project `prismql`. The local agent memory dir is frozen (evacuated here, into the graphs and AGENTS.md on 2026-09-19).
