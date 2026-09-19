@@ -65,6 +65,10 @@ it describes. Agent memory points here; it does not duplicate this.*
 - **Tantivy (2026-06-15)** locked the search / merge / orchestrate split; **kernels (#25, 2026-07-08)** made Rust the fastest row — superseded by the Polars plan (see Decided).
 - **Release plan**: `prismql-research/docs/development/PUBLIC_RELEASE_PLAN.md` is canonical for 0.1.0 (phases, addenda A–C). Remote private; nothing tagged or published.
 
+## Repo standard
+
+iskronify contract 11 applied 2026-09-19: `AGENTS.md` re-projected (cover table, consent node `@aleph/prismql` #23 holds the open authorial slots), `make check` is the single gate and CI calls it, contract-11 hooks in `.claude/settings.json` (start, push, merge, memory-guard), role sub-agents in `.claude/agents/`, gotchas moved to graph nodes #24–#28, the local mypy baseline fixed at the source (0 errors).
+
 ## Where things live
 
 - Code: `~/Projects/vibes/prismql` (this repo), `../prismql-rust` (kernels, retiring), `~/Projects/research/prismql-research` (benchmarks, paper, eval, diary, spike, workbench scope).

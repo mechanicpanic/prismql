@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Orient before acting: read the memory index (MEMORY.md) and git status. Then nks_orient on realm prismql (r72), focus holon #1.\"}}'"
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Read the Start section of the iskron door skill first and finish it as readiness, not orientation; addresses: graph @aleph/prismql (r72), focus contour #1, agent karta #3, owner karta #2. Standing only on watch (the word вахта, start, an invitation line, a frame), one call: iskron_stand.\"}}'"
           }
         ]
       }
@@ -16,7 +16,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command // \"\"' | grep -q 'git push' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Post-push ritual: update project state (memory dir + NKS realm prismql) and run the after-green-push self-review on the pushed diff.\"}}' || true"
+            "command": "jq -r '.tool_input.command // \"\"' | grep -Eq '(^|[;&|(] *)(env +)?([A-Za-z_]+=[^ ]+ +)*git( -C [^ ]+)* push([ ;&|)]|$)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Push is not shipping: self-review the branch diff, do the vocabulary pass on the PR text, open the cold stage review (AGENTS.md, Холодное ревью этапа). Shipping = merge.\"}}' || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // \"\"' | grep -Eq '(^|[;&|(] *)gh pr merge|(checkout|switch) (main|master)[^;|]*&& *git( -C [^ ]+)* pull([ ;&|)]|$)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Merge: the four acts of AGENTS.md Жизненный цикл сессии — weave the shipped state, switch modes, close along the axis, reconcile; then feedback reflection if agreed.\"}}' || true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // \"\"' | grep -Eq '\\.claude/projects/.*/memory/' && { echo 'BLOCKED: local agent memory is forbidden entirely, not by category (AGENTS.md, Persistence rules). Route the fact: repo conventions / code facts → AGENTS.md; project state, this repo'\"'\"'s servers and dated duties → the project realm @aleph/prismql; a user-scoped fact no project owns → the personal realm @aleph/mind (minding skill). This dir stays frozen at its prohibition stub.' >&2; exit 2; } || exit 0"
           }
         ]
       }

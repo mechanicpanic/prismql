@@ -218,6 +218,8 @@ module = [
     "sentence_transformers.*",
     "polars",
     "polars.*",
+    "prompt_toolkit",
+    "prompt_toolkit.*",
 ]
 ignore_missing_imports = true
 

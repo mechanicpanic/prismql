@@ -26,7 +26,7 @@ import json
 import re
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ..config import DEFAULT_CONFIG, BackendConfig
 from ..types import Document, MessageId
@@ -37,7 +37,7 @@ try:
 
     _TANTIVY_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only without the extra
-    tantivy = None
+    tantivy = cast(Any, None)
     _TANTIVY_AVAILABLE = False
 
 _DOC_FIELD = "_doc"  # stored JSON of the original document (for get_documents)
@@ -305,6 +305,8 @@ class TantivyBackend(SearchBackend):
         for _score, addr in result.hits:
             stored = self._searcher.doc(addr)
             raw = stored.get_first(_DOC_FIELD)
+            if raw is None:
+                continue
             doc = raw if isinstance(raw, dict) else json.loads(raw)
             by_id[self._coerce_id(stored.get_first(self.id_field))] = doc
         # preserve requested order, drop misses, dedupe

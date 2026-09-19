@@ -14,10 +14,10 @@ from .types import NamedQueryResult
 
 # Try to import prompt_toolkit for rich REPL experience
 try:
-    from prompt_toolkit import PromptSession  # type: ignore[import-not-found]
-    from prompt_toolkit.history import FileHistory  # type: ignore[import-not-found]
-    from prompt_toolkit.lexers import PygmentsLexer  # type: ignore[import-not-found]
-    from prompt_toolkit.styles import Style  # type: ignore[import-not-found]
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.history import FileHistory
+    from prompt_toolkit.lexers import PygmentsLexer
+    from prompt_toolkit.styles import Style
 
     try:
         from .highlighting import PrismQLLexer
@@ -85,9 +85,11 @@ class PrismQLRepl:
 
         # Setup prompt session if available
         if HAS_PROMPT_TOOLKIT:
-            self.session: PromptSession | None = PromptSession(
+            self.session: PromptSession[str] | None = PromptSession(
                 history=FileHistory(str(self.history_file))
             )
+            self.lexer: PygmentsLexer | None
+            self.style: Style | None
             if HAS_SYNTAX_HIGHLIGHTING:
                 self.lexer = PygmentsLexer(PrismQLLexer)
                 self.style = Style.from_dict(

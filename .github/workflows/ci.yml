@@ -27,17 +27,8 @@ jobs:
     - name: Install dependencies
       run: uv sync --dev --no-group rust --extra arrow --extra plan --extra server --extra mcp
 
-    - name: Run ruff format check
-      run: uv run ruff format --check .
-
-    - name: Run ruff linting
-      run: uv run ruff check .
-
-    - name: Run mypy
-      run: uv run mypy src/prismql
-
-    - name: Run tests
-      run: uv run pytest --cov=prismql --cov-report=xml
+    - name: Quality gate (same call as local `make check`)
+      run: make check PYTEST_ARGS="--cov=prismql --cov-report=xml"
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
