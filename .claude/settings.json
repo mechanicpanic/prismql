@@ -28,6 +28,15 @@
             "command": "jq -r '.tool_input.command // \"\"' | grep -Eq '(^|[;&|(] *)gh pr merge|(checkout|switch) (main|master)[^;|]*&& *git( -C [^ ]+)* pull([ ;&|)]|$)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Merge: the four acts of AGENTS.md Жизненный цикл сессии — weave the shipped state, switch modes, close along the axis, reconcile; then feedback reflection if agreed.\"}}' || true"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // \"\"' | grep -qE '(^|/)specs/[^/]+\\.md$|(^|/)docs/.*design[^/]*\\.md$' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"A design draft was written; per AGENTS.md this file is a draft view — the graph is the design record. Intake it (intake skill, then design skill) in this session — do not defer to a push.\"}}' || true"
+          }
+        ]
       }
     ],
     "PreToolUse": [
