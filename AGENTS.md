@@ -6,7 +6,7 @@ Answers stand as a table, not prose: slot, value, source. Source is `derived` (f
 
 | Slot | Value | Source |
 |---|---|---|
-| Nature | production (pre-release library, 0.1.0 unreleased; full discipline, no relaxations) | `<not agreed — #23>` — agent's draft from the previous CLAUDE.md |
+| Nature | production (pre-release library, 0.1.0 unreleased; full discipline, no relaxations) | agreed: owner |
 | Graph | `@aleph/prismql (r72)` — every session starts here | derived |
 | Focus contour | `#1 «🔺 PrismQL engine contour»` | derived |
 | Repository | `github.com/mechanicpanic/prismql` — attribute `repository` of the contour, from origin | derived |
@@ -14,13 +14,13 @@ Answers stand as a table, not prose: slot, value, source. Source is `derived` (f
 | Owner role | `#2 «👤 Владелец языка»` — svatantra, `posed_to` address beyond the mandate | derived |
 | Stack | Python ≥ 3.12 (uv); ANTLR4 grammar + hand-written pipe parser over one frozen-dataclass IR; Polars plan for sequence primitives (`[plan]` extra); Rust kernels (PyO3, sibling repo) retiring after P3; FastAPI server extra | derived |
 | Gate | `make check` (`make check-fast` skips `slow`) | derived |
-| Consumers | paper EDBT'27 EA&B (benchmark numbers), public demo (Railway, deploy on the owner's word), swarmchasing hackathon, the owner via REPL/MCP; breakage shows as wrong query results, not crashes | `<not agreed — #23>` |
-| Cost of breakage | a construct that runs without error and returns wrong or empty results silently corrupts paper and benchmark claims — worse than downtime | `<not agreed — #23>` |
-| Reality | table in the *Reality* section | `<not agreed — #23>` |
+| Consumers | paper EDBT'27 EA&B (benchmark numbers), public demo (Railway, deploy on the owner's word), swarmchasing hackathon, the owner via REPL/MCP; breakage shows as wrong query results, not crashes | agreed: owner |
+| Cost of breakage | a construct that runs without error and returns wrong or empty results silently corrupts paper and benchmark claims — worse than downtime | agreed: owner |
+| Reality | table in the *Reality* section | agreed: owner |
 | Cross-project memory | personal graph `@aleph/mind` — exists, no question; no global instructions file; never a memory directory | derived |
-| Feedback reflection | yes / no | `<not agreed — #23>` |
+| Feedback reflection | yes | agreed: owner |
 | Workflow-suite interop | full (superpowers 6.3.0) | agreed: owner |
-| Consent | `#23 «🕮 Согласование iskronify для prismql»` — open slots: nature, consumers, cost of breakage, Reality, feedback reflection | derived |
+| Consent | none open — #23 answered by the owner | derived |
 
 ## Persistence rules
 State lives in the **repo** or in the **graph** — nowhere else. The harness's built-in memory (whatever it calls it — the per-project memory directory, conversation summaries, `/tmp`, machine-local files) is **forbidden entirely, not by category**: nothing goes there — no project fact, no user preference, no note on working style. The only file in the session's temp directory is the session ledger (iskron door Start): it dies with the session and moves neither to the graph nor to memory — that is not storage. (why: local memory is invisible to any other agent and any other machine, so it drifts silently — and breaks the reproducibility that makes a second machine or a second agent possible.)
@@ -146,13 +146,16 @@ Someone else's API, SDK, CLI, protocol, vendor schema. The agent **guesses** the
 Surfaces this repo leans on today: Polars (`join_asof`, lazy plans — spike-verified, `prismql-research/experiments/polars-spike/RESULTS.md`), pyarrow, tantivy 0.26 (stemmed tokens, quoted `parse_query`), the `mcp` SDK ≥ 2 (`MCPServer`), Railway's proxy headers (unverified live — see *Reality* ceiling).
 
 ## Reality — what a claim is checked against
-Not yet settled: run the interview (say iskronify) before accepting any behavioral claim here. The agent's drafted carriers (pytest on both execution paths + the plan oracles in `tests/plan`; Chicago 372 tuple-for-tuple; `demo/verify_examples.py` and `demo/e2e_container.py`; a live MCP stdio client; ceiling — the live Railway deploy and the LLM eval without API keys) wait for the owner's verification on consent node #23.
-
 | Claim class | Canonical carrier | How to observe | Who can |
 |---|---|---|---|
-| (to be agreed — #23) | | | |
+| Query semantics / correctness of an operator | the test suite on BOTH execution paths (IR and legacy visitor) plus the plan oracles | `make check` (or `make check-fast`); a semantics change adds an IR-equality or dual-path test; plan primitives: `uv run pytest tests/plan` — engine parity only where `STATE.md` says HEAD is a valid oracle, brute-force oracle elsewhere | agent |
+| Benchmark claim (speed, tuple counts) | Chicago crime tiers in `prismql-research/benchmarks/chicago-crime/data/` (`tier_100k`, `tier_1m`, `tier_full`), the 372-match reference | spike runners in `prismql-research/experiments/polars-spike/` and the benchmark runners; 100k and 1m freely; **full tier only on the owner's word** under the thermal watchdog (graph #27) | agent (100k/1m); user (full) |
+| Demo works (examples, server) | the running server on the demo config | `uv run prismql-server --config demo/prismql.toml` then `uv run python demo/verify_examples.py` | agent |
+| Demo container / deploy artifact | the built image | `docker build -t prismql-demo . && uv run python demo/e2e_container.py` | agent (docker present) |
+| MCP surface | a live stdio client against `prismql-mcp` | the stdio client test in the suite (`build_server()` + tool listing); manual: run `prismql-mcp` and list tools | agent |
+| Paper / benchmark numbers | committed `results-*.json` in the research repo and `STATE.md` | re-run the runner that produced the file; never edit a number by hand | agent |
 
-**Ceiling**: to be agreed — #23.
+**Ceiling**: the live Railway deployment (proxy headers, rate-limit identity) — no deploy without the owner; the LLM eval (#17) — needs API keys the agent does not hold; anything about the swarmchasing dataset before access is granted. These close only by the owner's observation or by convergence of independent sources, never as "verified".
 
 **The table grows by use.** The interview only seeds it. The moment a session taught you what the table does not hold — a carrier no one named; an observation that turned out reachable; one that turned out unreachable (→ *Ceiling*); a wrong command here — write the row *then*, in that session, before closing the work that taught it. (why: an unrecorded carrier is the one the next agent will not find, and the same claim is next accepted on weaker evidence.)
 
