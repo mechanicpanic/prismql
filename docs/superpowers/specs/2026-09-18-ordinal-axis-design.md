@@ -72,6 +72,19 @@ coordinate); the plan primitives order slots by the axis and P3 removes
 the sort. HEAD is therefore a valid oracle for temporal links only on
 corpora whose id order is time order (`tests/plan/test_primitives_vs_engine.py`).
 
+**A10. Pattern-variable links take the nearest candidate, then filter
+(found running the plan primitives against HEAD on the collusion.wiki
+stream, 2026-09-21).** `X AND from($u) FOLLOWED_BY Y AND from($u)` binds
+`$u` after the greedy nearest `Y` is chosen: with a `Y` by another user in
+between, the nearest fails the equality and the group is dropped instead
+of moving on to the nearest *eligible* `Y`. On a stream where every page
+has many authors (14,591 saves, 3,103 labels) a three-leg
+save→delete→save-by-the-same-label query returns 0 where 9 chains exist;
+both paths agree. `nearest_link`/`extend_link` evaluate `eligible` inside
+the selection (candidate path) and are correct by construction; P3 routes
+every `$k` link through them. Pinned: `tests/test_ordinal_axis_contract.py`
+(`test_pattern_variable_link_skips_a_distractor`).
+
 **A5. Temporal tie-break differs by path** (known, documented): Rust sorts
 `(timestamp, id)`, Python sorts by timestamp with stable set-iteration
 order. Rust caches parsed UTC micros at ingest; Python parses per query.

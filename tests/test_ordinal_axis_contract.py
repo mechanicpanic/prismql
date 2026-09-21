@@ -60,3 +60,38 @@ def test_string_ids_follow_load_order():
     # both — never m10 before m2.
     engine = PrismQLEngine(MemoryBackend(documents=STRING_IDS))
     assert engine.execute(FB) == [["m1", "m2"]]
+
+
+DISTRACTOR = [
+    {"id": 1, "user": "x", "kind": "save", "page": "P1", "timestamp": 100},
+    {"id": 2, "user": "a", "kind": "save", "page": "P1", "timestamp": 200},
+    {"id": 3, "user": "adm", "kind": "delete", "page": "P1", "timestamp": 300},
+    {"id": 4, "user": "y", "kind": "save", "page": "P1", "timestamp": 400},
+    {"id": 5, "user": "a", "kind": "save", "page": "P1", "timestamp": 500},
+]
+
+SAME_USER_AGAIN = (
+    "SELECT field(kind, save) AND from($u) FOLLOWED_BY field(kind, save) AND from($u)"
+    " DURING 1 day"
+)
+RESTORE = (
+    "SELECT field(kind, save) AND field(page, $p) AND from($u)"
+    " FOLLOWED_BY field(kind, delete) AND field(page, $p)"
+    " FOLLOWED_BY field(kind, save) AND field(page, $p) AND from($u)"
+    " DURING 1 day"
+)
+
+
+@pytest.mark.parametrize("use_ir", [True, False])
+@pytest.mark.xfail(
+    strict=True, reason="A10: $k links pick the nearest candidate, then filter"
+)
+def test_pattern_variable_link_skips_a_distractor(use_ir):
+    # A save by y (id 4) lies between a's two saves. The nearest eligible
+    # partner of 2 under from($u) is 5; the engine takes 4 first, fails
+    # the variable check and returns nothing — found on the collusion.wiki
+    # stream, where every page has many authors. nearest_link puts the
+    # eligibility inside the selection and returns [[2, 5]].
+    engine = PrismQLEngine(MemoryBackend(documents=DISTRACTOR), use_ir=use_ir)
+    assert engine.execute(SAME_USER_AGAIN) == [[2, 5]]
+    assert engine.execute(RESTORE) == [[2, 3, 5]]
