@@ -70,14 +70,15 @@ DISTRACTOR = [
     {"id": 5, "user": "a", "kind": "save", "page": "P1", "timestamp": 500},
 ]
 
-SAME_USER_AGAIN = (
-    "SELECT field(kind, save) AND from($u) FOLLOWED_BY field(kind, save) AND from($u)"
+TWO_VARS = (
+    "SELECT field(kind, save) AND field(page, $p) AND from($u)"
+    " FOLLOWED_BY field(kind, save) AND field(page, $p) AND from($u)"
     " DURING 1 day"
 )
-RESTORE = (
-    "SELECT field(kind, save) AND field(page, $p) AND from($u)"
-    " FOLLOWED_BY field(kind, delete) AND field(page, $p)"
-    " FOLLOWED_BY field(kind, save) AND field(page, $p) AND from($u)"
+SKIPPED_LEG = (
+    "SELECT field(kind, save) AND from($u)"
+    " FOLLOWED_BY field(kind, delete)"
+    " FOLLOWED_BY field(kind, save) AND from($u)"
     " DURING 1 day"
 )
 
@@ -87,11 +88,12 @@ RESTORE = (
     strict=True, reason="A10: $k links pick the nearest candidate, then filter"
 )
 def test_pattern_variable_link_skips_a_distractor(use_ir):
-    # A save by y (id 4) lies between a's two saves. The nearest eligible
-    # partner of 2 under from($u) is 5; the engine takes 4 first, fails
-    # the variable check and returns nothing — found on the collusion.wiki
-    # stream, where every page has many authors. nearest_link puts the
-    # eligibility inside the selection and returns [[2, 5]].
+    # A save by y (id 4) lies between a's two saves. One variable on a
+    # two-leg link is bucketed per value and finds [2, 5]; two variables on
+    # a leg, or a variable that skips the middle leg, fall back to
+    # nearest-then-filter, take 4 first and return nothing — found on the
+    # collusion.wiki stream, where every page has many authors.
+    # nearest_link/extend_link put the eligibility inside the selection.
     engine = PrismQLEngine(MemoryBackend(documents=DISTRACTOR), use_ir=use_ir)
-    assert engine.execute(SAME_USER_AGAIN) == [[2, 5]]
-    assert engine.execute(RESTORE) == [[2, 3, 5]]
+    assert engine.execute(TWO_VARS) == [[2, 5]]
+    assert engine.execute(SKIPPED_LEG) == [[2, 3, 5]]

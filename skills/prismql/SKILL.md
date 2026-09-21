@@ -6,8 +6,8 @@ description: Run PrismQL pattern-matching queries over sequential data (conversa
 # PrismQL — executable pattern queries over sequential data
 
 PrismQL is "regex for event sequences": a query language over ordered records.
-Two ways to run queries: a local **prismql-server** (preferred when running —
-warm engine, plain HTTP) or **inline Python** (no server needed).
+Two ways to run queries: a local **prismql-server** (preferred — warm
+engine, plain HTTP, hydrated results, teachable 422s) or **inline Python**.
 **Read `LANGUAGE_REFERENCE.md` in this skill directory before writing your
 first query**, then check the Pitfalls section below for the errors agents
 most commonly make.
@@ -15,7 +15,7 @@ most commonly make.
 ## Server mode (check this first)
 
 ```bash
-curl -s localhost:8901/health    # anything but connection-refused → server is up
+curl -s localhost:8901/health    # port from the server's prismql.toml; anything but connection-refused → up
 ```
 
 If up, query over HTTP — no Python, no data loading:
@@ -30,33 +30,93 @@ structured 422s whose `error.message` tells you how to fix the query.
 Iterate on dictionaries in-band — add `"dictionaries": {"name": ["term", …]}`
 to the request to define/override term lists for that query only; persist
 stable ones into the server's `prismql.toml` when done.
-For large result sets add `"output": "file"` (+ optional `"label"`): every
-group is written server-side as JSONL and the response carries only
-`{count, path, preview}` — read the file selectively, never inline it all.
+**The server caps groups per response** (`[server] max_results`, default 50;
+a larger `max_results` in the request is silently clamped and the response
+says `"truncated": true`). For a total, append `AGGREGATE count()` to the
+query — it counts every group, uncapped. To enumerate more than the cap add
+`"output": "file"` (+ optional `"label"`): every group is written
+server-side as JSONL and the response carries only `{count, path, preview}`
+— read the file selectively, never inline it all. This needs
+`[server] enable_file_output = true`; otherwise the server answers 403.
 `GET /schema` describes the loaded corpus — fields with coverage/types,
 example values for categorical fields (your `from()`/`field()` targets),
-configured dictionaries, and the text_match mode. Check it before writing
-queries against an unfamiliar corpus instead of guessing field names.
+configured dictionaries, and the text_match mode. **Read it before writing
+queries against an unfamiliar corpus instead of guessing field names.**
 `GET /reference` serves the full language doc; `POST /reload` re-reads the
-data file. To start a server: `prismql-server --config prismql.toml` (config
-holds backend, data path, dictionaries — see the repo README).
+data file.
+
+## Starting a server on your own events
+
+One JSON object per line; `id` and a timestamp field are the only ones the
+engine needs to know about, everything else is queryable with `field()`:
+
+```toml
+# prismql.toml
+[server]
+port = 8901
+
+[backend]
+type = "memory"                 # < ~100K rows; "tantivy" for real full-text
+data = "events.jsonl"           # .json / .jsonl / .csv / .parquet
+timestamp_fields = ["time"]     # parsed on load
+
+[engine]
+timestamp_field = "time"        # the axis DURING measures on
+
+[dictionaries]
+failures = ["failed", "error", "timeout"]
+```
+
+```bash
+uv sync --extra server --extra plan    # from a clone; not on PyPI yet
+uv run prismql-server --config prismql.toml
+```
+
+**Both timestamp keys are required.** Without `[engine].timestamp_field` a
+`DURING` query returns an empty result, not an error. Stream order is the
+file order; ids are labels and may be strings.
+
+## What the language is — and what its text matching is
+
+PrismQL asks for *sequences*: A then B within a window, A and B near each
+other, the same entity twice, A not followed by B. Every leg of a pattern is
+a filter on one event; the operators between legs are the language.
+
+Text matching exists only to name such a filter, and it is deliberately
+narrow — **no ranking, no relevance, a set of ids in, a set of ids out**:
+
+| Predicate | Matches | Backed by |
+|---|---|---|
+| `field(name, value)` | a field equals a value (case-insensitive); `from(x)` = `field(user, x)` | field index |
+| `contains(dict)` | the `text` field holds any term of a named dictionary | inverted token index (memory) / tantivy FTS |
+| `contains_tokens(dict)` | same, whole tokens only (keeps `C++`, emails) | same |
+| `contains_phrase("…")` | one exact phrase | same |
+| `similar_to("…", 0.7)` | embedding cosine ≥ threshold | semantic index, if configured |
+
+Only the `text` field is indexed for the text predicates (memory backend;
+tantivy takes `text_fields`). A dictionary is the semantic layer: invest
+there, and pass it in-band via `dictionaries` while iterating.
+
+## Known-wrong today (read before trusting a result)
+
+The legacy execution path is being replaced by a Polars plan (P3). Until
+then these return **wrong or empty results without an error**:
+
+- **Two variables on a leg, or a variable that skips a leg (A10).** A
+  single `$k` on a two-leg link is fine. `field(page,$p) AND from($u)` on
+  one leg, or `from($u) FOLLOWED_BY x FOLLOWED_BY from($u)`, pick the
+  nearest candidate first and only then check the variable; any other
+  entity's event in between drops the group, so the count is too low,
+  often 0. Cross-check by dropping one variable.
+- **Positional distance is id arithmetic on the Rust path (A2).** With
+  gapped or string ids prefer `DURING`, or assign sequential integer ids.
+- **Quantifier ranges run as their minimum (A8).** `{2,5}` means `{2}`.
+- **Groups are printed in id order, not stream order (A9).**
 
 ## Inline Python (no server)
 
-Not yet on PyPI — install from the local repo (or a git URL):
-
-```bash
-uv add --editable ~/Projects/vibes/prismql     # adjust path to your checkout
-# or: uv pip install ~/Projects/vibes/prismql/dist/prismql-0.1.0-py3-none-any.whl
-```
-
-If `import prismql` already works in the project (check first!), skip setup.
-Optional extras: `prismql[nlp]` (spaCy), `prismql[server,mcp]` (the server
-and MCP shim), `prismql[all]`.
-
-## Execution recipe
-
-Run queries inline via Bash. This snippet is verified working (2026-06-10):
+From a clone: `uv sync --extra plan`, or in another project
+`uv add --editable /path/to/prismql`. If `import prismql` already works, skip.
 
 ```bash
 uv run python - <<'EOF'
@@ -81,30 +141,21 @@ for group in engine.execute("SELECT contains(problems) FOLLOWED_BY contains(solu
 EOF
 ```
 
-### Backend selection (by dataset size)
+Backends: `MemoryBackend` (< ~100K rows), `TantivyBackend` (`[tantivy]`
+extra, real full-text), `DuckDBBackend` / `PostgresBackend` (data already
+there). Document format: dicts with `id`, `text` (for text ops), `user` (for
+`from()`), `timestamp` (for `DURING`); other fields allowed.
 
-| Backend | Import | When |
-|---|---|---|
-| `MemoryBackend(docs, id_field="id")` | `prismql.backends.memory` | < ~10K records, quick analysis |
-| `RustMemoryBackend(docs, id_field="id")` | `prismql.backends.rust_memory` | 10K–1M records (10–100x faster; needs `prismql_rust`) |
-| `DuckDBBackend(database, table_name, field_mappings)` | `prismql.backends.duckdb` | Parquet/CSV/larger-than-RAM analytics |
-| `PostgresBackend` | `prismql.backends.postgres` | Data already in Postgres |
-
-Document format: dicts with `id` (required), `text` (required for text ops),
-`user` (for `from()`), `timestamp` (for `DURING`). Other fields allowed.
-Records are matched by **positional distance = abs(id1 − id2)** for `INWINDOW`,
-so ids should be sequential integers in stream order.
-
-## Result shapes (verified)
+## Result shapes
 
 - `engine.execute(q)` → `list[list[id]]` — each inner list is one match group.
-  Sequential queries return ordered tuples: `[[problem_id, solution_id], ...]`.
-- `AGGREGATE count()` → `AggregateResult`; call `.to_dict()` →
+- `AGGREGATE count()` → `AggregateResult`; `.to_dict()` →
   `{'function': 'count', 'field': None, 'value': N}`.
 - `AS "name"` groups → `NamedQueryResult`; `.get_named_group(i)` → `{name: id}`.
-- Full records for a group: `backend.get_documents(group)`.
+- Full records for a group: `backend.get_documents(group)` (the server
+  hydrates them for you).
 
-## Pitfalls (verified against implementation)
+## Pitfalls
 
 1. **A chain's final link must carry a window.** One trailing window covers
    every windowless link (per link, not whole-chain span); links may also mix

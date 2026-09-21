@@ -106,6 +106,8 @@ from(bob) <~ from(alice) |> within(2)
 
 -- Negative lookahead: A NOT followed by B
 from(alice) !~> from(bob) |> within(5)
+-- The excluded side takes no pattern variable ($k): it is not part of the
+-- result group. Ask the positive question and subtract, or use a literal.
 
 -- Negative lookbehind: B NOT preceded by A
 from(bob) !<~ from(charlie) |> within(3)
