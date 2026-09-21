@@ -12,7 +12,7 @@ Answers stand as a table, not prose: slot, value, source. Source is `derived` (f
 | Repository | `github.com/mechanicpanic/prismql` — attribute `repository` of the contour, from origin | derived |
 | Agent role | `#3 «🤖 Агент-исполнитель prismql»` — adhikarin, steward of the contour; inbox `iskron_orient(focus="#3")` | derived |
 | Owner role | `#2 «👤 Владелец языка»` — svatantra, `posed_to` address beyond the mandate | derived |
-| Stack | Python ≥ 3.12 (uv); ANTLR4 grammar + hand-written pipe parser over one frozen-dataclass IR; Polars plan for sequence primitives (`[plan]` extra); Rust kernels (PyO3, sibling repo) retiring after P3; FastAPI server extra | derived |
+| Stack | Python ≥ 3.12 (uv); ANTLR4 grammar + hand-written pipe parser over one frozen-dataclass IR; Polars plan for sequence primitives (core dependency since P3); Rust kernels (PyO3, sibling repo) retiring after P3; FastAPI server extra | derived |
 | Gate | `make check` (`make check-fast` skips `slow`) | derived |
 | Consumers | paper EDBT'27 EA&B (benchmark numbers), public demo (Railway, deploy on the owner's word), swarmchasing hackathon, the owner via REPL/MCP; breakage shows as wrong query results, not crashes | agreed: owner |
 | Cost of breakage | a construct that runs without error and returns wrong or empty results silently corrupts paper and benchmark claims — worse than downtime | agreed: owner |
@@ -184,7 +184,7 @@ Untracked `HANDOFF-*.md` at the repo root are legacy drafts from before the grap
 ## Commands
 | Action | Command |
 |---|---|
-| Install (full local dev) | `uv sync --dev --extra server --extra repl --extra highlighting --extra mcp --extra tantivy --extra arrow --extra plan` (plain `uv sync` silently shrinks the suite — graph #26) |
+| Install (full local dev) | `uv sync --dev --extra server --extra repl --extra highlighting --extra mcp --extra tantivy` (plain `uv sync` silently shrinks the suite — graph #26) |
 | **Gate** (the same call CI makes) | `make check`; `make check-fast` skips `slow` |
 | Format + autofix | `make format` |
 | Regenerate parser (after grammar edits) | `./scripts/generate_parser.sh` (needs a JVM) |
@@ -199,7 +199,7 @@ Untracked `HANDOFF-*.md` at the repo root are legacy drafts from before the grap
 - `src/prismql/ir/` — the IR: `nodes.py` (frozen dataclasses), `lower.py` (only module touching ANTLR contexts), `executor.py` (subclasses the visitor).
 - `src/prismql/dialects/pipe.py` — pipe-dialect tokenizer + recursive-descent parser → the same IR.
 - `src/prismql/visitors/` — legacy parse-tree executor (`use_ir=False`); shared helpers live here, `IRExecutor` inherits them.
-- `src/prismql/plan/` — sequence primitives as a Polars plan (P2; `[plan]` extra; tested against the engine only where `STATE.md` says HEAD is a valid oracle).
+- `src/prismql/plan/` — sequence primitives as a Polars plan (P2; polars is core; tested against the engine only where `STATE.md` says HEAD is a valid oracle).
 - `src/prismql/processors/`, `aggregators/` — window merging, temporal filtering, aggregation.
 - `src/prismql/backends/` — memory, rust_memory, tantivy, opensearch, spacy + factory; `order.py` = the order axis (`OrderIndex`).
 - `src/prismql/loaders.py` — corpus as an ordered Arrow table (`load_table`).

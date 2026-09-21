@@ -1,6 +1,7 @@
 ## Unreleased
 
-### Changed (P3 task 1)
+### Changed (P3)
+- `polars` and `pyarrow` are core dependencies: the operator layer is a Polars plan over an Arrow table and every sequence/window query needs it. `[plan]` and `[arrow]` remain as empty aliases for one release.
 - An open quantifier range `{n,}` is rejected (`OPEN_QUANTIFIER`, both dialects, validator and runtime) unless `quantifier_ceiling = m` is configured (engine argument; `[engine] quantifier_ceiling` in `prismql.toml`, reported by `GET /schema`), in which case it reads as `{n,m}` (a minimum above the ceiling is rejected). Enumeration itself still runs as the minimum until the operator layer lands (A8). The plan enumerates groups up to an explicit size and never truncates silently (graph #46).
 
 ### Fixed (installation from a fresh clone)

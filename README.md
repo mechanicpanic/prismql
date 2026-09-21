@@ -21,7 +21,7 @@ The repository is private; you need an invitation, then:
 
 ```bash
 git clone git@github.com:mechanicpanic/prismql.git && cd prismql
-uv sync --extra server --extra plan --extra repl --extra highlighting
+uv sync --extra server --extra repl --extra highlighting
 make check-fast          # ~1,200 tests, under 10 s; the xfails are known defects, pinned on purpose
 ```
 
@@ -47,7 +47,7 @@ PrismQL is not on PyPI yet. From a clone:
 
 ```bash
 git clone https://github.com/mechanicpanic/prismql && cd prismql
-uv sync --extra plan --extra repl --extra highlighting   # REPL + Polars plan layer
+uv sync --extra repl --extra highlighting   # the REPL; the Polars plan layer is core
 uv run prismql --config prismql.toml                     # see "Try it on your own events"
 ```
 

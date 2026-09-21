@@ -68,7 +68,7 @@ failures = ["failed", "error", "timeout"]
 ```
 
 ```bash
-uv sync --extra server --extra plan    # from a clone; not on PyPI yet
+uv sync --extra server    # from a clone; not on PyPI yet
 uv run prismql-server --config prismql.toml
 ```
 
@@ -117,7 +117,7 @@ then these return **wrong or empty results without an error**:
 
 ## Inline Python (no server)
 
-From a clone: `uv sync --extra plan`, or in another project
+From a clone: `uv sync`, or in another project
 `uv add --editable /path/to/prismql`. If `import prismql` already works, skip.
 
 ```bash
