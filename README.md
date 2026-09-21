@@ -15,6 +15,32 @@ PrismQL is a domain-specific language for pattern matching and retrieval in conv
 - **User Dictionaries**: Define custom word lists for domain-specific searches
 - **Boolean Logic**: Combine conditions with AND, OR, NOT operators
 
+## For collaborators (start here)
+
+The repository is private; you need an invitation, then:
+
+```bash
+git clone git@github.com:mechanicpanic/prismql.git && cd prismql
+uv sync --extra server --extra plan --extra repl --extra highlighting
+make check-fast          # ~1,200 tests, under 10 s; the xfails are known defects, pinned on purpose
+```
+
+What to read, in order: `PROJECT.md` (one page), `STATE.md` (what is shipped,
+decided and open; the **audit findings A1–A10** there are the results you
+must not trust yet), `ARCHITECTURE.md` when you need the long version,
+`LANGUAGE_REFERENCE.md` / `PIPE_REFERENCE.md` for the two dialects.
+
+To query your own data, see "Try it on your own events" below. To let an
+agent query it, run the server and hand the agent the folder
+`skills/prismql/` — it is a self-contained skill (how to call the server,
+the language reference, the pitfalls, what is known-wrong today). No MCP,
+no Python on the agent's side, only `curl`.
+
+The sequence primitives that will replace the current engine live in
+`src/prismql/plan/` (Polars) and are usable from Python today — see
+`tests/plan/` for how each one is called. Where the engine and the plan
+disagree, the plan is right (`STATE.md`, A10).
+
 ## Installation
 
 PrismQL is not on PyPI yet. From a clone:
