@@ -8,6 +8,7 @@ it describes. Agent memory points here; it does not duplicate this.*
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-21 | **P2 complete**: all sequence primitives as a Polars plan in `prismql.plan` (tasks 3–8: chains with distinctness across axes, anti-links, unordered k-way co-occurrence, quantifier enumeration, `!$k` helper, Chicago 100k/1m gate). Engine divergences recorded: A9 (groups sorted by id), null-timestamp lhs kept by the engine on negative links. | `ad3c8dd`…`2523df4` + this commit |
 | 2026-09-19 | **P2 tasks 1–2**: `prismql.plan` (Arrow-native `corpus_frame`, hostile fixtures) and `nearest_link` — FOLLOWED_BY/PRECEDED_BY as a Polars plan, asof path + candidate path with eligibility inside selection (`!$k` works as a primitive), `(axis, position)` tie-break, proven vs HEAD where valid and vs a brute-force oracle elsewhere. New audit finding A9. `PROJECT.md` rewritten as the full project description. | `7ac4c81`, `526f37e`, `3152246`; plan `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md` |
 | 2026-09-18 | **Ordinal axis P1a**: `OrderIndex`, backend order contract (`positions / sorted_positions / ids_at / timestamps_at / has_order_axis`), `PositionalUnsupportedError`, duplicate ids rejected at load, `load_table()` + `[arrow]` extra (corpus as ordered Arrow table, `position` = row index). Semantics unchanged. | `916d10e`…`2c1b52a`; spec `docs/superpowers/specs/2026-09-18-ordinal-axis-design.md` |
 | 2026-09-18 | **Polars spike**: relational plan reproduces the engine tuple-for-tuple on Chicago 100k/1m/full incl. the benchmark's 372; 5–80× faster than the Rust kernels, ~65× on build. | `prismql-research/experiments/polars-spike/RESULTS.md` |
@@ -36,7 +37,7 @@ it describes. Agent memory points here; it does not duplicate this.*
 - Every result group is sorted by id (`query_visitor.py:490`, `executor.py:381`): with time non-monotone in id order a temporal link returns the later message first (A9, 2026-09-19). Not pinned separately — covered by the plan tests' oracle matrix; P3 removes the sort.
 
 **Next work, in order**
-1. **P2** — primitives as a Polars plan: `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md`, revision 2 after the Astra review. **Tasks 1–6 done** (`corpus_frame`, `nearest_link`, `extend_link` + `body_span_filter`, `anti_link`, `cooccur` — unordered by construction, `quantify` — enumeration with an explicit cap, `inequality` = `!$k`); next: Chicago tier gates (100k → 1m; full tier only with separate authorization), docs.
+1. **P2** — primitives as a Polars plan: `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md`, revision 2 after the Astra review. **All 8 tasks done 2026-09-21** — `prismql.plan` holds every primitive (`nearest_link`, `extend_link`, `body_span_filter`, `anti_link`, `cooccur`, `quantify`, `inequality` = `!$k`), proven against the engine where valid, exhaustive oracles elsewhere, and the Chicago 100k/1m tiers. Nothing wired into the executor yet.
 2. **P3** — single operator layer on the plan; delete both merge paths; expose `!$k` in both dialects; xfails flip.
 3. **P4** — gates: Chicago full-tuple equality (Q1–Q3), positional benchmark, relabeled corpora.
 4. Tantivy order axis (fast fields) → retire `rust_memory`.

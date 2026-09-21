@@ -417,10 +417,14 @@ Run → PASS on all seeds. If a seed fails, the diff IS the finding: record it i
 
 ### Task 7: Chicago tiers as a gate
 
+> **Executed 2026-09-21.** `tests/plan/test_chicago_tiers.py` (slow): Q1 positional, Q2 correlated temporal chain + body window, Q3 co-occurrence on the ordered subset — tuple-for-tuple on 100k (default) and 1m (`PRISMQL_TIERS=100k,1m`, 8 s). Full tier not run.
+
 - [ ] `tests/plan/test_chicago_tiers.py` (marked `slow`, skipped when `prismql-research/benchmarks/chicago-crime/data/tier_100k.parquet` is absent): rebuild the spike's Q1–Q3 through the primitives and assert tuple equality vs the engine on 100k (and 1m under `PRISMQL_TIERS=1m`).
 - [ ] Gate, commit: `Gate plan primitives on Chicago tiers`.
 
 ### Task 8: docs
+
+> **Executed 2026-09-21.** CHANGELOG entry under Unreleased; AGENTS.md already lists `src/prismql/plan/` and the `[plan]` extra. **P2 complete.**
 
 - [ ] CHANGELOG (Unreleased): P2 primitives, `[plan]` extra, `!$k` primitive (not yet exposed in syntax — P3 exposes it). AGENTS.md: structure line for `src/prismql/plan/`, install command `--extra plan`.
 - [ ] Commit.
