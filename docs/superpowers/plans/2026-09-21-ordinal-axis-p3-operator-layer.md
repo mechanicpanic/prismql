@@ -160,20 +160,22 @@ def link_groups(corpus, left: result, right: result, *, axis, window, forward) -
 
 **Files:** `src/prismql/ir/executor.py`; tests: the whole suite; `tests/test_ordinal_axis_contract.py`, `tests/test_engine_defects_pinned.py`, `tests/test_positional_path_parity.py`, `tests/test_quantifier_fix.py` (markers), `tests/plan/test_primitives_vs_engine.py` (HEAD is no longer the oracle: retarget its parity assertions at the brute oracles or delete the HEAD side — decide per test, note in the file docstring).
 
-- [ ] **Step 0:** `pyproject.toml`: `polars`, `pyarrow` → core dependencies; `[plan]` stays as an empty alias; cold clone `uv sync` (no extras) + `make check-fast` is part of this task's gate (revision 2, item 4).
-- [ ] **Step 1:** write the failing end-to-end tests first: the six A-contracts and D2 through `PrismQLEngine(use_ir=True)` on the contract fixtures **without** xfail (new file `tests/test_operator_layer_e2e.py`, parametrized over dialect).
-- [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** in `execute_body`: build `frame = query_frame(...)` once per body **only when the body needs an axis** (a sequence link, a window, a quantifier or a subquery continuation; set-only queries never touch it — revision 2, item 5); `execute_restriction` returns `Leg`/result frames instead of sets/lists for sequence links; comma rows with a window → `cooccur_row`; quantified restrictions → `quantified_row`; trailing `DURING` on comma rows → `body_span`; `SubqueryChain` positional continuations → `chain_groups`; `to_groups` at the edge. `VariableValidator` call removed (equalities are inside selection). Keep `NamedQueryResult`, aggregation, GROUP BY, ORDER BY, LIMIT on the group lists as today. Backends without an order axis: `PositionalUnsupportedError` surfaces unchanged.
-- [ ] **Step 4:** `make check` — every strict xfail that now passes is removed in this commit; anything that still fails is a defect to fix here, not to re-pin.
-- [ ] **Step 5:** commit `IR executor runs every operator through the plan; A2 A3 A7 A8 A9 A10 D2 contracts pass`.
+- [x] **Step 0:** `pyproject.toml`: `polars`, `pyarrow` → core dependencies; `[plan]` stays as an empty alias; cold clone `uv sync` (no extras) + `make check-fast` is part of this task's gate (revision 2, item 4).
+- [x] **Step 1:** write the failing end-to-end tests first: the six A-contracts and D2 through `PrismQLEngine(use_ir=True)` on the contract fixtures **without** xfail (new file `tests/test_operator_layer_e2e.py`, parametrized over dialect).
+- [x] **Step 2:** FAIL.
+- [x] **Step 3:** in `execute_body`: build `frame = query_frame(...)` once per body **only when the body needs an axis** (a sequence link, a window, a quantifier or a subquery continuation; set-only queries never touch it — revision 2, item 5); `execute_restriction` returns `Leg`/result frames instead of sets/lists for sequence links; comma rows with a window → `cooccur_row`; quantified restrictions → `quantified_row`; trailing `DURING` on comma rows → `body_span`; `SubqueryChain` positional continuations → `chain_groups`; `to_groups` at the edge. `VariableValidator` call removed (equalities are inside selection). Keep `NamedQueryResult`, aggregation, GROUP BY, ORDER BY, LIMIT on the group lists as today. Backends without an order axis: `PositionalUnsupportedError` surfaces unchanged.
+- [x] **Step 4:** `make check` — every strict xfail that now passes is removed in this commit; anything that still fails is a defect to fix here, not to re-pin.
+- [x] **Step 5:** commit `IR executor runs every operator through the plan; A2 A3 A7 A8 A9 A10 D2 contracts pass`.
 
 ## Task 6: the legacy visitor rides the same layer
 
 **Files:** `src/prismql/visitors/query_visitor.py`; tests: the `use_ir` on/off equality tests (must stay green) and the e2e file from Task 5 parametrized over `use_ir`.
 
-- [ ] **Step 1:** parametrize `tests/test_operator_layer_e2e.py` over `use_ir=[True, False]` → FAIL on `False`.
-- [ ] **Step 2:** make the four shared helpers delegate: `_apply_sequential_link` → `operators.link`, `_apply_negative_link` → `negative_link`, `_merge_restrictions` → `cooccur_row`, `_merge_subqueries_positional` → `chain_groups`; the visitor's body builds the same `query_frame`. `visitBody`'s temporal branch (`merge_within_time_window`) → `cooccur_row` + `body_span`.
-- [ ] **Step 3:** pass; commit `Legacy visitor runs the same operator layer`.
+- [x] **Step 1:** parametrize `tests/test_operator_layer_e2e.py` over `use_ir=[True, False]` → FAIL on `False`.
+- [x] **Step 2:** make the four shared helpers delegate: `_apply_sequential_link` → `operators.link`, `_apply_negative_link` → `negative_link`, `_merge_restrictions` → `cooccur_row`, `_merge_subqueries_positional` → `chain_groups`; the visitor's body builds the same `query_frame`. `visitBody`'s temporal branch (`merge_within_time_window`) → `cooccur_row` + `body_span`.
+- [x] **Step 3:** pass; commit `Legacy visitor runs the same operator layer`.
+
+> **Executed 2026-09-21 (tasks 5 and 6 together).** The four shared helpers of `PrismQLVisitor` were the seam: `plan/bridge.py` maps their inputs (sets, id groups, `_seq_leg_constraints`, `variable_constraints` by restriction index, the parser's windows) to the operator layer, so both paths switched in one commit. Per-leg constraint buckets are read by index (forward: rhs = bucket k for an lhs of k slots; backward: bucket last−k). Quantifier ranges are recorded per restriction (`_restriction_ranges`) and enumerated as a union over sizes. A lone plain restriction never builds a frame (revision 2, item 5). A negative link returns a set, as the old positional path did, so `A !~> B !<~ C` still chains. Tantivy gained an order index from its documents; OpenSearch (no axis) now raises on sequence operators, as the spec says. Markers removed: A2, A3, A7, A8, A10, D2. Semantics the spec changed and tests followed: subquery merges (one group per stage, union span in window), unordered pairs both ways, gapped ids adjacent in load order. The old builders are still in the file (Task 7). Suite time 4 s → 30 s: the per-call frame (`get_documents` per link) is the cost to measure in Task 9.
 
 ## Task 7: delete the second owner of semantics
 
