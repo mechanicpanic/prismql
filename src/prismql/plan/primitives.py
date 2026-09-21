@@ -496,10 +496,340 @@ def _candidates(
     )
 
 
+# ------------------------------------------------------------ group-level
+
+
+def _group_bounds(result: Any, corpus: Any, axis: str, prefix: str) -> Any:
+    """One row per group: first/last slot position and axis value, the
+    member list, the slot count, and every carried ``_v_`` column."""
+    pl = _pl()
+    carry = [c for c in result.collect_schema().names() if c.startswith("_v_")]
+    ax = corpus.select("position", pl.col(axis).alias("_ax"))
+    rows = result.join(ax, on="position", how="left").sort(["group", "slot"])
+    return (
+        rows.group_by("group", maintain_order=True)
+        .agg(
+            pl.col("position").first().alias(f"{prefix}first_pos"),
+            pl.col("position").last().alias(f"{prefix}last_pos"),
+            pl.col("_ax").first().alias(f"{prefix}first_ax"),
+            pl.col("_ax").last().alias(f"{prefix}last_ax"),
+            pl.col("_ax").null_count().alias(f"{prefix}nulls"),
+            pl.col("position").alias(f"{prefix}members"),
+            pl.len().alias(f"{prefix}n"),
+            *[pl.col(c).first().alias(f"{prefix}{c}") for c in carry],
+        )
+        .rename({"group": f"{prefix}group"})
+    )
+
+
+def _group_pairs(
+    pl: Any,
+    lb: Any,
+    rb: Any,
+    *,
+    window: int,
+    forward: bool,
+    eligible: Any | None,
+) -> Any:
+    """Left groups x nearest eligible right groups (all right groups whose
+    boundary is that nearest message), strictly ordered, within window,
+    members disjoint. Forward: left.last -> right.first; backward:
+    left.first <- right.last."""
+    l_ax = "l_last_ax" if forward else "l_first_ax"
+    r_ax = "r_first_ax" if forward else "r_last_ax"
+    r_pos = "r_first_pos" if forward else "r_last_pos"
+    w = max(window, 1)
+    lb = lb.filter(pl.col(l_ax).is_not_null())
+    rb = rb.filter(pl.col(r_ax).is_not_null())
+    offsets = [0, 1] if forward else [0, -1]
+    left = pl.concat(
+        [lb.with_columns(((pl.col(l_ax) // w) + d).alias("_b")) for d in offsets]
+    )
+    right = rb.with_columns((pl.col(r_ax) // w).alias("_b"))
+    pairs = left.join(right, on="_b", how="inner").drop("_b")
+    dist = (pl.col(r_ax) - pl.col(l_ax)) if forward else (pl.col(l_ax) - pl.col(r_ax))
+    disjoint = pl.col("l_members").list.set_intersection("r_members").list.len() == 0
+    cond = (dist > 0) & (dist <= window) & disjoint
+    if eligible is not None:
+        cond = cond & eligible
+    pairs = pairs.filter(cond).with_columns(dist.alias("_dist"))
+    # The nearest boundary message per left group: min distance, then the
+    # (axis, position) tie-break; every right group starting there expands.
+    best = pairs.sort(
+        ["l_group", "_dist", r_pos], descending=[False, False, not forward]
+    )
+    best = best.unique(subset=["l_group"], keep="first", maintain_order=True).select(
+        "l_group", pl.col("_dist").alias("_best"), pl.col(r_pos).alias("_best_pos")
+    )
+    return (
+        pairs.join(best, on="l_group", how="inner")
+        .filter(
+            (pl.col("_dist") == pl.col("_best"))
+            & (pl.col(r_pos) == pl.col("_best_pos"))
+        )
+        .drop(["_dist", "_best", "_best_pos"])
+    )
+
+
+def _expand_pairs(pl: Any, pairs: Any, left: Any, right: Any, forward: bool) -> Any:
+    """Matched (l_group, r_group) pairs -> a result frame: left slots then
+    right slots (forward) or right then left (backward); new group numbers
+    in the order of the pairs frame."""
+    l_carry = [c for c in left.collect_schema().names() if c.startswith("_v_")]
+    r_carry = [c for c in right.collect_schema().names() if c.startswith("_v_")]
+    numbered = pairs.with_row_index("_new").collect().lazy()  # one numbering
+    l_rows = left.rename({"group": "l_group"}).join(
+        numbered.select("l_group", "r_group", "_new", "l_n", "r_n"),
+        on="l_group",
+        how="inner",
+    )
+    r_rows = (
+        right.rename({"group": "r_group"})
+        .drop([c for c in r_carry if c in l_carry])
+        .join(
+            numbered.select("l_group", "r_group", "_new", "l_n", "r_n"),
+            on="r_group",
+            how="inner",
+        )
+    )
+    if forward:
+        r_rows = r_rows.with_columns((pl.col("slot") + pl.col("l_n")).cast(pl.UInt32))
+    else:
+        l_rows = l_rows.with_columns((pl.col("slot") + pl.col("r_n")).cast(pl.UInt32))
+    # Bindings: left's ride on every row; right's new ones are broadcast.
+    cols = ["_new", "slot", "position", "id"]
+    l_part = l_rows.select(*cols, *l_carry)
+    r_only = [c for c in r_carry if c not in l_carry]
+    if l_carry:
+        r_rows = r_rows.join(
+            l_rows.select("_new", *l_carry).unique(subset=["_new"]),
+            on="_new",
+            how="left",
+        )
+    r_part = r_rows.select(*cols, *l_carry, *r_only)
+    if r_only:
+        l_part = l_part.join(
+            r_rows.select("_new", *r_only).unique(subset=["_new"]),
+            on="_new",
+            how="left",
+        )
+    out = pl.concat(
+        [
+            l_part.select(*cols, *l_carry, *r_only),
+            r_part.select(*cols, *l_carry, *r_only),
+        ]
+    )
+    return (
+        out.rename({"_new": "group"})
+        .with_columns(
+            pl.col("group").cast(pl.UInt32), pl.col("position").cast(pl.Int64)
+        )
+        .sort(["group", "slot"])
+    )
+
+
+def link_groups(
+    corpus: Any,
+    left: Any,
+    right: Any,
+    *,
+    axis: str,
+    window: int,
+    forward: bool,
+    eligible: Any | None = None,
+) -> Any:
+    """``[A] FOLLOWED_BY [B]`` (forward) / ``PRECEDED_BY`` (backward) between
+    whole groups: for each left group the nearest right group whose first
+    slot (forward) / last slot (backward) lies strictly after / before the
+    left group's last / first slot within ``window`` on ``axis``; every
+    right group starting at that same nearest message expands; members
+    must be disjoint; a group with a null axis value on its boundary
+    cannot be placed and is dropped. The result concatenates the groups
+    in axis order and carries both sides' bindings (``eligible`` may
+    compare ``l__v_x`` with ``r__v_x``)."""
+    pl = _pl()
+    if window < 0:
+        raise ValueError(f"window must be >= 0, got {window}")
+    if window == 0:
+        return _empty_result(left)
+    lb = _group_bounds(left, corpus, axis, "l_")
+    rb = _group_bounds(right, corpus, axis, "r_")
+    pairs = _group_pairs(pl, lb, rb, window=window, forward=forward, eligible=eligible)
+    # Left groups keep their own order (already by axis); among the right
+    # groups that expand at one boundary, by their first slot's position,
+    # then their group number.
+    pairs = pairs.sort(["l_group", "r_first_pos", "r_group"])
+    return _expand_pairs(pl, pairs, left, right, forward)
+
+
+def anti_link_groups(
+    corpus: Any,
+    left: Any,
+    right: Any,
+    *,
+    axis: str,
+    window: int,
+    forward: bool,
+) -> Any:
+    """``[A] NOT_FOLLOWED_BY [B]`` / ``NOT_PRECEDED_BY``: the left groups with
+    no right group strictly after / before within ``window`` (members
+    disjoint). A left group with a null boundary axis value is dropped
+    (graph #47); ``window == 0`` keeps every placeable left group."""
+    pl = _pl()
+    if window < 0:
+        raise ValueError(f"window must be >= 0, got {window}")
+    lb = _group_bounds(left, corpus, axis, "l_")
+    bound_ax = "l_last_ax" if forward else "l_first_ax"
+    keep = lb.filter(pl.col(bound_ax).is_not_null())
+    if window > 0:
+        rb = _group_bounds(right, corpus, axis, "r_")
+        matched = _group_pairs(
+            pl, lb, rb, window=window, forward=forward, eligible=None
+        )
+        keep = keep.join(matched.select("l_group").unique(), on="l_group", how="anti")
+    order = ["l_last_ax", "l_last_pos"] if forward else ["l_first_ax", "l_first_pos"]
+    keep = keep.sort(order).select("l_group").with_row_index("_new")
+    return (
+        left.rename({"group": "l_group"})
+        .join(keep, on="l_group", how="inner")
+        .drop("l_group")
+        .rename({"_new": "group"})
+        .with_columns(pl.col("group").cast(pl.UInt32))
+        .sort(["group", "slot"])
+    )
+
+
+def cooccur_groups(
+    corpus: Any,
+    results: list[Any],
+    *,
+    axis: str,
+    window: int,
+) -> Any:
+    """``[A] + [B] (+ ...) INWINDOW n``: one group from each stage, members
+    pairwise disjoint, the union's axis span ``max - min <= window``;
+    stages are unordered (any order, set-deduplicated by the member set).
+    The result is the union in axis order; bindings of every stage ride
+    along (a variable two stages both bind must agree)."""
+    pl = _pl()
+    if window < 0:
+        raise ValueError(f"window must be >= 0, got {window}")
+    if not results:
+        raise ValueError("cooccur_groups needs at least one stage")
+    k = len(results)
+    bounds = [_group_bounds(r, corpus, axis, f"s{i}_") for i, r in enumerate(results)]
+    bounds = [
+        b.filter(pl.col(f"s{i}_nulls") == 0).select(
+            pl.col(f"s{i}_group"),
+            pl.col(f"s{i}_first_ax").alias(f"s{i}_lo"),
+            pl.col(f"s{i}_last_ax").alias(f"s{i}_hi"),
+            pl.col(f"s{i}_members"),
+            *[
+                pl.col(c)
+                for c in b.collect_schema().names()
+                if c.startswith(f"s{i}__v_")
+            ],
+        )
+        for i, b in enumerate(bounds)
+    ]
+    g = bounds[0].with_columns(
+        pl.col("s0_lo").alias("_lo"),
+        pl.col("s0_hi").alias("_hi"),
+        pl.col("s0_members").alias("_all"),
+    )
+    w = max(window, 1)
+    for i in range(1, k):
+        right = bounds[i].with_columns((pl.col(f"s{i}_lo") // w).alias("_b"))
+        b_lo = (pl.col("_hi") - window) // w
+        b_hi = (pl.col("_lo") + window) // w
+        left = g.with_columns(pl.int_ranges(b_lo, b_hi + 1).alias("_b")).explode("_b")
+        j = left.join(right, on="_b", how="inner").drop("_b")
+        fits = (
+            pl.max_horizontal("_hi", f"s{i}_hi") - pl.min_horizontal("_lo", f"s{i}_lo")
+        ) <= window
+        disjoint = pl.col("_all").list.set_intersection(f"s{i}_members").list.len() == 0
+        cond = fits & disjoint
+        # A variable both stages bind must agree.
+        for c in j.collect_schema().names():
+            if c.startswith(f"s{i}__v_"):
+                var = c[len(f"s{i}__v_") :]
+                for m in range(i):
+                    if f"s{m}__v_{var}" in j.collect_schema().names():
+                        cond = cond & (pl.col(c) == pl.col(f"s{m}__v_{var}"))
+        g = j.filter(cond).with_columns(
+            pl.min_horizontal("_lo", f"s{i}_lo").alias("_lo"),
+            pl.max_horizontal("_hi", f"s{i}_hi").alias("_hi"),
+            pl.col("_all").list.concat(f"s{i}_members").alias("_all"),
+        )
+    # Set-dedup by the member set; order by the sorted member positions.
+    g = g.with_columns(pl.col("_all").list.sort().alias("_key")).unique(
+        subset=["_key"], keep="first"
+    )
+    # Materialize before numbering: ``g`` is read once per stage below, and
+    # a lazy unique() may order rows differently on each evaluation — the
+    # numbering must be one fact, not one per read.
+    g = g.with_row_index("_new").collect().lazy()
+    # Expand: every stage's rows, renumbered; slots by (axis, position).
+    parts = []
+    for i, r in enumerate(results):
+        parts.append(
+            r.rename({"group": f"s{i}_group"})
+            .join(g.select(f"s{i}_group", "_new"), on=f"s{i}_group", how="inner")
+            .select("_new", "position", "id")
+        )
+    long = pl.concat(parts).join(
+        corpus.select("position", pl.col(axis).alias("_ax")), on="position", how="left"
+    )
+    long = long.sort(["_new", "_ax", "position"]).with_columns(
+        pl.int_range(pl.len()).over("_new").cast(pl.UInt32).alias("slot")
+    )
+    # Bindings: one value per variable per new group.
+    bind_cols = sorted(
+        {c.split("__v_", 1)[1] for c in g.collect_schema().names() if "__v_" in c}
+    )
+    binds = g.select("_new")
+    for var in bind_cols:
+        srcs = [c for c in g.collect_schema().names() if c.endswith(f"__v_{var}")]
+        binds = binds.join(
+            g.select("_new", pl.coalesce([pl.col(c) for c in srcs]).alias(f"_v_{var}")),
+            on="_new",
+            how="left",
+        )
+    # Group order: lexicographic over the canonical (axis, position) pairs —
+    # the same rule as cooccur, so two unions sharing a first member still
+    # order deterministically.
+    keyed = long.group_by("_new", maintain_order=True).agg(
+        pl.concat_str(
+            [
+                pl.col("_ax").cast(pl.Int64).cast(pl.Utf8).str.zfill(20),
+                pl.col("position").cast(pl.Utf8).str.zfill(12),
+            ],
+            separator=":",
+        )
+        .str.join(",")
+        .alias("_ord")
+    )
+    renum = keyed.sort("_ord").select("_new").with_row_index("group")
+    return (
+        long.join(renum, on="_new", how="inner")
+        .join(binds, on="_new", how="left")
+        .drop(["_new", "_ax"])
+        .select("group", "slot", "position", "id", *[f"_v_{v}" for v in bind_cols])
+        .with_columns(pl.col("position").cast(pl.Int64))
+        .sort(["group", "slot"])
+    )
+
+
 __all__ = [
     "RESULT_COLUMNS",
     "anti_link",
+    "anti_link_groups",
     "body_span_filter",
+    "cooccur",
+    "cooccur_groups",
     "extend_link",
+    "inequality",
+    "link_groups",
     "nearest_link",
+    "quantify",
 ]

@@ -12,9 +12,12 @@ from prismql.plan.frames import query_frame  # noqa: E402
 from prismql.plan.operators import (  # noqa: E402
     Leg,
     body_span,
+    chain_groups,
     cooccur_row,
     groups,
     link,
+    merge_groups,
+    negative_chain_groups,
     negative_link,
     quantified_row,
     variable_fields,
@@ -318,3 +321,40 @@ def test_key_path_is_not_taken_when_a_variable_spans_two_fields():
         groups(link(frame, None, both, one, window=3, forward=True, timestamp_field=TS))
         == []
     )
+
+
+# --- subquery stages (task 4) --------------------------------------------------
+
+
+def test_stage_operators_compose_with_bindings():
+    docs = [
+        {"id": 1, "user": "a", "kind": "X", "timestamp": 1},
+        {"id": 2, "user": "a", "kind": "Y", "timestamp": 2},
+        {"id": 3, "user": "b", "kind": "Z", "timestamp": 3},
+        {"id": 4, "user": "a", "kind": "Z", "timestamp": 4},
+        {"id": 5, "user": "a", "kind": "W", "timestamp": 5},
+    ]
+    x = Leg(_ids(docs, kind="X"), equal=(("u", "user"),))
+    y = Leg(_ids(docs, kind="Y"), equal=(("u", "user"),))
+    z = Leg(_ids(docs, kind="Z"), equal=(("u", "user"),))
+    w = Leg(_ids(docs, kind="W"), equal=(("u", "user"),))
+    frame = _frame(docs, [x, y, z, w])
+    first = link(
+        frame, None, x, y, window=3, forward=True, timestamp_field=TS
+    )  # [1,2] u=a
+    second = link(
+        frame, None, z, w, window=3, forward=True, timestamp_field=TS
+    )  # [4,5] u=a
+    chained = chain_groups(
+        frame, first, second, window=3, forward=True, timestamp_field=TS
+    )
+    assert groups(chained) == [[1, 2, 4, 5]]
+    assert chained.collect()["_v_u"].to_list() == ["a"] * 4
+    assert groups(
+        negative_chain_groups(
+            frame, first, second, window=1, forward=True, timestamp_field=TS
+        )
+    ) == [[1, 2]]
+    assert groups(
+        merge_groups(frame, [second, first], window=(10, "seconds"), timestamp_field=TS)
+    ) == [[1, 2, 4, 5]]

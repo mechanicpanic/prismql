@@ -23,9 +23,12 @@ from .corpus import to_groups
 from .frames import leg_frame
 from .primitives import (
     anti_link,
+    anti_link_groups,
     body_span_filter,
     cooccur,
+    cooccur_groups,
     extend_link,
+    link_groups,
     nearest_link,
     quantify,
 )
@@ -366,6 +369,60 @@ def quantified_row(
     return _attach_bindings(res, frame, 0, leg.equal)
 
 
+def chain_groups(
+    frame: Any,
+    left: Any,
+    right: Any,
+    *,
+    window: Window,
+    forward: bool,
+    timestamp_field: str,
+) -> Any:
+    """``[A] FOLLOWED_BY [B]`` / ``PRECEDED_BY`` between whole stage results:
+    nearest right group after / before each left group, both sides'
+    bindings carried, a variable both stages bind held equal."""
+    pl = _pl()
+    axis, w = axis_and_window(window, timestamp_field)
+    shared = _bound(left) & _bound(right)
+    eligible = (
+        pl.all_horizontal([pl.col(f"l__v_{v}") == pl.col(f"r__v_{v}") for v in shared])
+        if shared
+        else None
+    )
+    return link_groups(
+        frame, left, right, axis=axis, window=w, forward=forward, eligible=eligible
+    )
+
+
+def negative_chain_groups(
+    frame: Any,
+    left: Any,
+    right: Any,
+    *,
+    window: Window,
+    forward: bool,
+    timestamp_field: str,
+) -> Any:
+    """``[A] NOT_FOLLOWED_BY [B]`` / ``NOT_PRECEDED_BY``: the left stage's
+    groups with no right group within the window."""
+    axis, w = axis_and_window(window, timestamp_field)
+    return anti_link_groups(frame, left, right, axis=axis, window=w, forward=forward)
+
+
+def merge_groups(
+    frame: Any,
+    stages: Sequence[Any],
+    *,
+    window: Window,
+    timestamp_field: str,
+) -> Any:
+    """``[A] + [B] (+ ...) INWINDOW n`` / ``(A); (B) INWINDOW n``: unordered
+    co-occurrence of whole stage results, one group per stage, members
+    disjoint, the union's span within the window."""
+    axis, w = axis_and_window(window, timestamp_field)
+    return cooccur_groups(frame, list(stages), axis=axis, window=w)
+
+
 def body_span(
     frame: Any, result: Any, *, window: tuple[int, str], timestamp_field: str
 ) -> Any:
@@ -384,9 +441,12 @@ __all__ = [
     "Window",
     "axis_and_window",
     "body_span",
+    "chain_groups",
     "cooccur_row",
     "groups",
     "link",
+    "merge_groups",
+    "negative_chain_groups",
     "negative_link",
     "quantified_row",
     "variable_fields",
