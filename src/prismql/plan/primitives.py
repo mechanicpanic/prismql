@@ -102,18 +102,102 @@ def nearest_link(
     l_ax, r_ax = f"l_{axis}", f"r_{axis}"
     left = _prefixed(lhs, "l_", axis, key)
     right = _prefixed(rhs, "r_", axis, key)
-
-    if eligible is None:
-        joined = _asof(pl, left, right, l_ax, r_ax, window, forward, key)
-    else:
-        joined = _candidates(
-            pl, left, right, l_ax, r_ax, window, forward, key, eligible
-        )
-
+    joined = _link(pl, left, right, l_ax, r_ax, window, forward, key, eligible)
     legs = [("l_position", "l_id"), ("r_position", "r_id")]
     if not forward:
         legs.reverse()
     return _result(joined, legs, order=[l_ax, "l_position"])
+
+
+def extend_link(
+    corpus: Any,
+    seqs: Any,
+    rhs: Any,
+    *,
+    axis: str,
+    window: int,
+    forward: bool,
+    key: str | None = None,
+    eligible: Any | None = None,
+) -> Any:
+    """Extend every group of a result frame by one slot: the nearest ``rhs``
+    strictly after the group's last slot (forward) / before its first slot
+    (backward), within ``window`` on ``axis``.
+
+    ``corpus`` supplies the anchor's axis/key columns by ``position``. A
+    message already in the group is never eligible (distinctness across
+    axes — the engine's A7 defect is fixed here by construction). ``key``
+    is equality between the anchor and the new slot. Groups with no
+    eligible candidate are dropped; the others keep their group number.
+    """
+    pl = _pl()
+    if window < 0:
+        raise ValueError(f"window must be >= 0, got {window}")
+    if window == 0:
+        return _empty_result(seqs)
+    seqs = seqs.sort(["group", "slot"])
+    edge = pl.col("slot").max() if forward else pl.col("slot").min()
+    anchors = (
+        seqs.group_by("group", maintain_order=True)
+        .agg(
+            pl.col("position").filter(pl.col("slot") == edge).first().alias("position"),
+            pl.col("position").alias("_members"),
+            pl.col("slot").max().alias("_max_slot"),
+        )
+        .join(corpus, on="position", how="inner")
+    )
+    l_ax, r_ax = f"l_{axis}", f"r_{axis}"
+    left = _prefixed(anchors, "l_", axis, key)
+    right = _prefixed(rhs, "r_", axis, key)
+    distinct = ~pl.col("r_position").is_in(pl.col("l__members"))
+    eligible = distinct if eligible is None else (distinct & eligible)
+    joined = _link(pl, left, right, l_ax, r_ax, window, forward, key, eligible)
+    new_slot = (pl.col("l__max_slot") + 1) if forward else pl.lit(0, dtype=pl.UInt32)
+    added = joined.select(
+        pl.col("l_group").alias("group"),
+        new_slot.cast(pl.UInt32).alias("slot"),
+        pl.col("r_position").cast(pl.Int64).alias("position"),
+        pl.col("r_id").alias("id"),
+    )
+    survivors = added.select("group")
+    kept = seqs.join(survivors, on="group", how="semi")
+    if not forward:
+        kept = kept.with_columns((pl.col("slot") + 1).cast(pl.UInt32))
+    return pl.concat([kept, added]).sort(["group", "slot"])
+
+
+def body_span_filter(result: Any, corpus: Any, *, axis: str, span: int) -> Any:
+    """Keep groups whose ``max(axis) - min(axis) <= span``; a group with a
+    null axis value on any slot is rejected (not treated as span 0)."""
+    pl = _pl()
+    ax = corpus.select("position", pl.col(axis).alias("_ax"))
+    spans = (
+        result.join(ax, on="position", how="left")
+        .group_by("group")
+        .agg(
+            (pl.col("_ax").max() - pl.col("_ax").min()).alias("_span"),
+            pl.col("_ax").null_count().alias("_nulls"),
+        )
+        .filter((pl.col("_nulls") == 0) & (pl.col("_span") <= span))
+        .select("group")
+    )
+    return result.join(spans, on="group", how="semi").sort(["group", "slot"])
+
+
+def _link(
+    pl: Any,
+    left: Any,
+    right: Any,
+    l_ax: str,
+    r_ax: str,
+    window: int,
+    forward: bool,
+    key: str | None,
+    eligible: Any | None,
+) -> Any:
+    if eligible is None:
+        return _asof(pl, left, right, l_ax, r_ax, window, forward, key)
+    return _candidates(pl, left, right, l_ax, r_ax, window, forward, key, eligible)
 
 
 def _asof(
@@ -180,4 +264,4 @@ def _candidates(
     )
 
 
-__all__ = ["RESULT_COLUMNS", "nearest_link"]
+__all__ = ["RESULT_COLUMNS", "body_span_filter", "extend_link", "nearest_link"]

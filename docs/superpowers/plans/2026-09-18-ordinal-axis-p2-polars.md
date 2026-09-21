@@ -383,6 +383,8 @@ Run → PASS on all seeds. If a seed fails, the diff IS the finding: record it i
 
 ### Task 3: `extend_link` (chains) and `body_span_filter`
 
+> **Executed 2026-09-21.** `extend_link(corpus, seqs, rhs, *, axis, window, forward, key=None, eligible=None)` anchors on the last/first slot, looks the anchor up in `corpus` by position, and excludes the group's members from candidacy (distinctness across axes — A7 fixed by construction; the pinned `[[0,0,1]]` case returns `[]`). `body_span_filter(result, corpus, *, axis, span)` rejects groups with a null axis value. Oracles: HEAD for 3-leg positional chains on dense ids and for the `X/$u ~> Y/$u ~> Z/$u DURING 1h` chain + body `DURING 70 minutes` on monotone tie-free time; brute-force chain oracle on hostile fixtures incl. overlapping legs. `tests/plan/test_chains.py`.
+
 **Interfaces:** `extend_link(corpus, seqs: LazyFrame, rhs, *, axis, window, forward, key=None) -> LazyFrame` where `seqs` is a result frame; anchors on the last (forward) / first (backward) slot; appends/prepends one slot. `body_span_filter(result, corpus, *, axis, span) -> LazyFrame` keeps groups whose `max(axis) − min(axis) ≤ span`.
 
 - [ ] Tests: 3-leg chain `a ~> b ~> c` positional windows 2 and 5 vs engine; the Chicago-shaped `X/$u ~> Y/$u DURING 1m ~> Z/$u DURING 1m` + body `DURING 1m` vs engine on random corpora (5 seeds).

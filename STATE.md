@@ -36,7 +36,7 @@ it describes. Agent memory points here; it does not duplicate this.*
 - Every result group is sorted by id (`query_visitor.py:490`, `executor.py:381`): with time non-monotone in id order a temporal link returns the later message first (A9, 2026-09-19). Not pinned separately — covered by the plan tests' oracle matrix; P3 removes the sort.
 
 **Next work, in order**
-1. **P2** — primitives as a Polars plan: `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md`, revision 2 after the Astra review. **Tasks 1–2 done**; next: task 3 `extend_link` + `body_span_filter` (null timestamps reject the group), then `anti_link`, `cooccur` (k-way, exhaustive oracle), `quantify` (enumeration, exhaustive oracle), Chicago tier gates (100k → 1m; full tier only with separate authorization), docs.
+1. **P2** — primitives as a Polars plan: `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md`, revision 2 after the Astra review. **Tasks 1–3 done** (`corpus_frame`, `nearest_link`, `extend_link` + `body_span_filter`); next: `anti_link`, `cooccur` (k-way, exhaustive oracle), `quantify` (enumeration, exhaustive oracle), Chicago tier gates (100k → 1m; full tier only with separate authorization), docs.
 2. **P3** — single operator layer on the plan; delete both merge paths; expose `!$k` in both dialects; xfails flip.
 3. **P4** — gates: Chicago full-tuple equality (Q1–Q3), positional benchmark, relabeled corpora.
 4. Tantivy order axis (fast fields) → retire `rust_memory`.
