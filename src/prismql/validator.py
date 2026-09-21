@@ -251,15 +251,30 @@ class QueryValidator:
                 )
         return issues
 
+    def _min_above_ceiling(self, n: int) -> ValidationIssue:
+        return ValidationIssue(
+            level=ValidationLevel.ERROR,
+            message=(
+                f"{{{n},}} starts above quantifier_ceiling={self.quantifier_ceiling}: "
+                "no group can satisfy it"
+            ),
+            suggestion="Lower the minimum, or raise quantifier_ceiling",
+            code="OPEN_QUANTIFIER",
+        )
+
     def _check_open_quantifiers(self, query: str) -> list[ValidationIssue]:
         """Regex counterpart of the IR-walk open-range check (graph #46)."""
         import re
 
-        if self.quantifier_ceiling is not None:
-            return []
         issues: list[ValidationIssue] = []
-        for match in re.finditer(r"\{\s*(\d+)\s*,\s*\}", query):
+        # Quoted strings (AS "name", contains_phrase("…")) are not syntax.
+        bare = re.sub(r"\"[^\"]*\"|'[^']*'", "", query)
+        for match in re.finditer(r"\{\s*(\d+)\s*,\s*\}", bare):
             n = match.group(1)
+            if self.quantifier_ceiling is not None:
+                if int(n) > self.quantifier_ceiling:
+                    issues.append(self._min_above_ceiling(int(n)))
+                continue
             issues.append(
                 ValidationIssue(
                     level=ValidationLevel.ERROR,
@@ -294,6 +309,12 @@ class QueryValidator:
         self._check_ir_window(q.positional_window, issues)
         if isinstance(q.source, ir.RestrictionsRow):
             for item in q.source.items:
+                if (
+                    item.max_count is None
+                    and self.quantifier_ceiling is not None
+                    and item.min_count > self.quantifier_ceiling
+                ):
+                    issues.append(self._min_above_ceiling(item.min_count))
                 if item.max_count is None and self.quantifier_ceiling is None:
                     issues.append(
                         ValidationIssue(

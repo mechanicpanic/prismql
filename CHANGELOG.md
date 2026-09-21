@@ -1,7 +1,7 @@
 ## Unreleased
 
 ### Changed (P3 task 1)
-- An open quantifier range `{n,}` is rejected (`OPEN_QUANTIFIER`, both dialects, validator and runtime) unless `quantifier_ceiling = m` is configured (engine argument; `[engine] quantifier_ceiling` in `prismql.toml`, reported by `GET /schema`), in which case it reads as `{n,m}`. The plan enumerates groups up to an explicit size and never truncates silently (graph #46).
+- An open quantifier range `{n,}` is rejected (`OPEN_QUANTIFIER`, both dialects, validator and runtime) unless `quantifier_ceiling = m` is configured (engine argument; `[engine] quantifier_ceiling` in `prismql.toml`, reported by `GET /schema`), in which case it reads as `{n,m}` (a minimum above the ceiling is rejected). Enumeration itself still runs as the minimum until the operator layer lands (A8). The plan enumerates groups up to an explicit size and never truncates silently (graph #46).
 
 ### Fixed (installation from a fresh clone)
 - `uv sync` no longer requires the sibling `../prismql-rust` checkout: the Rust kernels left the declared dependency groups (they are installed by hand by the owner, `uv pip install ../prismql-rust`, and kept with `uv sync --inexact`). Any fresh clone resolves now; the test suite skips the Rust parametrizations when the crate is absent.

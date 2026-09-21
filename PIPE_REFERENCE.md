@@ -174,7 +174,8 @@ from(alice){2,}         -- At least 2: needs quantifier_ceiling (see below)
 `{n,}` has no upper bound to enumerate to, so it needs a ceiling: it is
 rejected (`OPEN_QUANTIFIER`) unless `quantifier_ceiling = m` is configured
 (`PrismQLEngine(quantifier_ceiling=m)`; server: `[engine] quantifier_ceiling`),
-which reads every `{n,}` as `{n,m}`. Prefer an explicit `{n,m}`.
+which reads every `{n,}` as `{n,m}`; a minimum above the ceiling is rejected too.
+Prefer an explicit `{n,m}`. Until the operator layer lands (P3), ranges run as their minimum (audit A8): `{2,}` with a ceiling of 3 still returns only pairs.
 
 ### 5. Pattern Variables
 

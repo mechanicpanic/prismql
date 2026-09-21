@@ -310,6 +310,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                     user_dictionaries={**corpus_cfg.dictionaries, **overlay},
                     timestamp_field=corpus_cfg.timestamp_field,
                     text_match=corpus_cfg.text_match,
+                    quantifier_ceiling=corpus_cfg.quantifier_ceiling,
                 )
             try:
                 result = engine.execute(req.query)

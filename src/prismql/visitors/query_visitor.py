@@ -2283,7 +2283,13 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 "quantifier_ceiling in prismql.toml) to close every open range "
                 "at m."
             )
-        return max(self.quantifier_ceiling, min_count)
+        if min_count > self.quantifier_ceiling:
+            raise PrismQLRuntimeError(
+                f"{{{min_count},}} starts above quantifier_ceiling="
+                f"{self.quantifier_ceiling}: no group can satisfy it. Lower the "
+                "minimum, or raise the ceiling."
+            )
+        return self.quantifier_ceiling
 
     def _extract_quantifier(self, ctx: Any) -> tuple[int, int | None]:
         """
