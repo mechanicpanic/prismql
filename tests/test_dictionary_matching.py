@@ -7,6 +7,7 @@ single-word terms use the dictionary's declared `match` mode, falling
 back to the engine-wide text_match.
 """
 
+import importlib.util
 import json
 
 import pytest
@@ -24,7 +25,16 @@ DOCS = [
 ]
 
 
-@pytest.fixture(params=[MemoryBackend, RustMemoryBackend])
+_RUST = pytest.param(
+    RustMemoryBackend,
+    marks=pytest.mark.skipif(
+        importlib.util.find_spec("prismql_rust") is None,
+        reason="prismql_rust not installed",
+    ),
+)
+
+
+@pytest.fixture(params=[MemoryBackend, _RUST])
 def backend(request):
     return request.param(documents=DOCS)
 

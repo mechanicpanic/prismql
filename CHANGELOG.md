@@ -1,5 +1,10 @@
 ## Unreleased
 
+### Fixed (installation from a fresh clone)
+- `uv sync` no longer requires the sibling `../prismql-rust` checkout: the Rust kernels left the declared dependency groups (they are installed by hand by the owner, `uv pip install ../prismql-rust`, and kept with `uv sync --inexact`). Any fresh clone resolves now; the test suite skips the Rust parametrizations when the crate is absent.
+- CI workflow was invalid YAML since June (`env` nested under `with`) and never ran a job; fixed, and it installs the way a clone does.
+- README: honest install (not on PyPI yet) and a "try it on your own events" walkthrough with the two timestamp keys a `DURING` query needs.
+
 ### Added (P2 — sequence primitives as a Polars plan, `[plan]` extra)
 - `prismql.plan`: `corpus_frame` (ordered Arrow table → LazyFrame with `position` and `<field>_us`), and the primitives `nearest_link`, `extend_link`, `body_span_filter`, `anti_link`, `cooccur`, `quantify`, plus `inequality(key)` (the `!$k` eligibility). One implementation per operator, both axes, string ids, eligibility inside candidate selection, distinctness across axes, unordered co-occurrence and quantifier enumeration by construction. Not wired into the executor yet (P3); proven tuple-for-tuple against the engine where it is a valid oracle and against exhaustive oracles elsewhere, and on the Chicago 100k/1m tiers (`tests/plan/test_chicago_tiers.py`, slow).
 

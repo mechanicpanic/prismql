@@ -188,7 +188,7 @@ Untracked `HANDOFF-*.md` at the repo root are legacy drafts from before the grap
 | **Gate** (the same call CI makes) | `make check`; `make check-fast` skips `slow` |
 | Format + autofix | `make format` |
 | Regenerate parser (after grammar edits) | `./scripts/generate_parser.sh` (needs a JVM) |
-| Rebuild Rust backend | `uv sync --reinstall-package prismql-rust` (cargo PATH — graph #24; CI: `uv sync --no-group rust`) |
+| Rust kernels (owner only, optional) | `uv pip install --reinstall ../prismql-rust` after the install line; then use `uv sync --inexact` so syncs keep it (cargo PATH — graph #24). Not a declared dependency: a path source broke every fresh clone (graph #45) |
 | Demo server | `uv run prismql-server --config demo/prismql.toml` → localhost:8901 |
 | Verify demo examples | `uv run python demo/verify_examples.py` |
 | Demo container E2E | `docker build -t prismql-demo . && uv run python demo/e2e_container.py` |

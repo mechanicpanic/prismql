@@ -286,18 +286,8 @@ dev = [
     "mypy>=1.0.0",
     "httpx>=0.27",
 ]
-# Local-dev acceleration: uv builds the sibling Rust crate (release wheel
-# via maturin) and keeps it across syncs — previously `uv sync` silently
-# pruned a maturin-develop install. Default group locally; CI machines
-# without the sibling checkout run `uv sync --no-group rust` (see
-# .github/workflows). Force a rebuild after Rust changes with:
-#   uv sync --reinstall-package prismql-rust
-rust = [
-    "prismql-rust",
-]
-
 [tool.uv]
-default-groups = ["dev", "rust"]
-
-[tool.uv.sources]
-prismql-rust = { path = "../prismql-rust" }
+default-groups = ["dev"]
+# The Rust kernels (sibling ../prismql-rust, retiring after P3) are NOT a
+# declared dependency: a path source would make every fresh clone fail to
+# resolve. Owner installs them by hand — see AGENTS.md "Rebuild Rust backend".

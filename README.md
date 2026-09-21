@@ -17,6 +17,16 @@ PrismQL is a domain-specific language for pattern matching and retrieval in conv
 
 ## Installation
 
+PrismQL is not on PyPI yet. From a clone:
+
+```bash
+git clone https://github.com/mechanicpanic/prismql && cd prismql
+uv sync --extra plan --extra repl --extra highlighting   # REPL + Polars plan layer
+uv run prismql --config prismql.toml                     # see "Try it on your own events"
+```
+
+Once released:
+
 ```bash
 pip install prismql
 
@@ -32,6 +42,42 @@ pip install prismql[nlp]
 # All extras
 pip install prismql[all]
 ```
+
+## Try it on your own events
+
+One JSON object per line, any fields; `id` and a timestamp field are the only
+ones the engine needs to know about:
+
+```jsonl
+{"id": "e1", "time": "2026-06-18T18:24:12Z", "kind": "save",   "page": "P1", "label": "A"}
+{"id": "e2", "time": "2026-06-18T18:24:31Z", "kind": "delete", "page": "P1", "label": "Admin"}
+{"id": "e3", "time": "2026-06-18T18:25:56Z", "kind": "save",   "page": "P1", "label": "A"}
+```
+
+```toml
+# prismql.toml
+[backend]
+type = "memory"
+data = "events.jsonl"
+timestamp_fields = ["time"]   # parsed on load
+
+[engine]
+timestamp_field = "time"      # the axis DURING measures on
+```
+
+```
+$ uv run prismql --config prismql.toml
+prismql[0]> SELECT field(kind, delete) AND field(page, $p) FOLLOWED_BY field(kind, save) AND field(page, $p) DURING 10 minutes
+Found 1 result(s):
+  Group 1:
+    [e2] ...
+    [e3] ...
+prismql[1]> \schema        # fields, coverage, examples
+prismql[2]> \quit
+```
+
+Both `timestamp_*` keys are needed today: without `[engine].timestamp_field`
+a `DURING` query returns nothing rather than an error.
 
 ## Server & agent integration
 
