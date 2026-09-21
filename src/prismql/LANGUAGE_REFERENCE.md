@@ -119,6 +119,8 @@ SELECT from(bob) PRECEDED_BY from(alice) INWINDOW 2
 
 -- Negative lookahead: A NOT followed by B
 SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 5
+-- The excluded side takes no pattern variable ($k): it is not part of the
+-- result group. Ask the positive question and subtract, or use a literal.
 
 -- Negative lookbehind: B NOT preceded by A
 SELECT from(bob) NOT_PRECEDED_BY from(charlie) INWINDOW 3
@@ -167,9 +169,14 @@ SELECT from(alice), from(bob) DURING 2 days
 
 ```prismql
 SELECT from(alice){2}          -- Exactly 2 messages
-SELECT from(alice){2,}         -- At least 2 messages
 SELECT from(alice){2,5}        -- Between 2 and 5 messages
+SELECT from(alice){2,}         -- At least 2: needs quantifier_ceiling (see below)
 ```
+
+`{n,}` has no upper bound to enumerate to, so it needs a ceiling: it is
+rejected (`OPEN_QUANTIFIER`) unless `quantifier_ceiling = m` is configured
+(`PrismQLEngine(quantifier_ceiling=m)`; server: `[engine] quantifier_ceiling`),
+which reads every `{n,}` as `{n,m}`. Prefer an explicit `{n,m}`.
 
 ### 5. Pattern Variables
 

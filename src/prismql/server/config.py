@@ -42,6 +42,7 @@ class CorpusConfig:
     timestamp_fields: list[str] = field(default_factory=lambda: ["timestamp"])
     timestamp_field: str = "timestamp"
     text_match: str = "substring"
+    quantifier_ceiling: int | None = None
     dictionaries: dict[str, Any] = field(default_factory=dict)
     # [corpora.<name>.semantic]: embedding model backing similar_to()
     semantic_model: str | None = None
@@ -63,6 +64,7 @@ class ServerConfig:
     timestamp_fields: list[str] = field(default_factory=lambda: ["timestamp"])
     timestamp_field: str = "timestamp"
     text_match: str = "substring"
+    quantifier_ceiling: int | None = None
     results_dir: str | None = None
     static_dir: str | None = None
     rate_limit_per_minute: int | None = None
@@ -98,6 +100,7 @@ class ServerConfig:
                 timestamp_fields=self.timestamp_fields,
                 timestamp_field=self.timestamp_field,
                 text_match=self.text_match,
+                quantifier_ceiling=self.quantifier_ceiling,
                 dictionaries=self.dictionaries,
                 semantic_model=self.semantic_model,
                 semantic_text_field=self.semantic_text_field,
@@ -153,6 +156,7 @@ def load_config(path: str | Path) -> ServerConfig:
             timestamp_fields=list(section.get("timestamp_fields", ["timestamp"])),
             timestamp_field=section.get("timestamp_field", "timestamp"),
             text_match=section.get("text_match", "substring"),
+            quantifier_ceiling=section.get("quantifier_ceiling"),
             dictionaries=dict(section.get("dictionaries", {})),
             semantic_model=semantic_section.get("model"),
             semantic_text_field=semantic_section.get("text_field", "text"),
@@ -183,6 +187,7 @@ def load_config(path: str | Path) -> ServerConfig:
         timestamp_fields=list(backend.get("timestamp_fields", ["timestamp"])),
         timestamp_field=engine.get("timestamp_field", "timestamp"),
         text_match=engine.get("text_match", "substring"),
+        quantifier_ceiling=engine.get("quantifier_ceiling"),
         results_dir=results_dir,
         static_dir=static_dir,
         rate_limit_per_minute=server.get("rate_limit_per_minute"),
@@ -306,6 +311,7 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         user_dictionaries=config.dictionaries or None,
         timestamp_field=config.timestamp_field,
         text_match=config.text_match,
+        quantifier_ceiling=config.quantifier_ceiling,
     )
 
 
@@ -358,6 +364,7 @@ def compute_schema(
         "id_field": config.id_field,
         "timestamp_field": config.timestamp_field,
         "text_match": config.text_match,
+        "quantifier_ceiling": config.quantifier_ceiling,
         "fields": fields,
         "dictionaries": {
             name: len(value["terms"] if isinstance(value, dict) else value)

@@ -53,8 +53,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
         timestamp_field: str = "timestamp",
         text_match: str = "substring",
         dictionary_modes: Mapping[str, str] | None = None,
+        quantifier_ceiling: int | None = None,
     ) -> None:
         self.search_backend = search_backend
+        self.quantifier_ceiling = quantifier_ceiling
         self.nlp_backend = nlp_backend
         self.user_dictionaries = user_dictionaries or {}
         self.text_match = text_match
@@ -434,6 +436,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
             # Extract quantifier if present
             min_count, max_count = self._extract_quantifier(named_restriction_ctx)
+            max_count = self._close_quantifier(min_count, max_count)
 
             # Track how many constraints exist before visiting this restriction
             num_constraints_before = len(self.variable_constraints)
@@ -2267,6 +2270,20 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 filtered_results.append(filtered_group)
 
         return filtered_results
+
+    def _close_quantifier(self, min_count: int, max_count: int | None) -> int:
+        """{n,} -> {n,ceiling}; no ceiling -> a teachable error (graph #46)."""
+        if max_count is not None:
+            return max_count
+        if self.quantifier_ceiling is None:
+            raise PrismQLRuntimeError(
+                f"{{{min_count},}} has no upper bound and no quantifier_ceiling is "
+                f"configured. Write {{{min_count},m}} with an explicit upper "
+                "bound, or set quantifier_ceiling (engine argument; [engine] "
+                "quantifier_ceiling in prismql.toml) to close every open range "
+                "at m."
+            )
+        return max(self.quantifier_ceiling, min_count)
 
     def _extract_quantifier(self, ctx: Any) -> tuple[int, int | None]:
         """

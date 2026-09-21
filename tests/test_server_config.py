@@ -32,6 +32,7 @@ id_field = "tick_id"
 
 [engine]
 timestamp_field = "ts"
+quantifier_ceiling = 4
 
 [dictionaries]
 file = "dicts.json"
@@ -40,6 +41,8 @@ file = "dicts.json"
     cfg = load_config(cfg_file)
     assert cfg.host == "0.0.0.0"
     assert cfg.port == 9000
+    assert cfg.quantifier_ceiling == 4
+    assert cfg.corpus("default").quantifier_ceiling == 4
     assert cfg.max_results == 25
     assert cfg.hydrate is False
     assert cfg.backend_type == "rust_memory"
@@ -63,6 +66,7 @@ def test_load_config_defaults(tmp_path):
     assert cfg.timestamp_field == "timestamp"
     assert cfg.id_field == "id"
     assert cfg.dictionaries == {}
+    assert cfg.quantifier_ceiling is None
 
 
 def test_load_config_inline_dictionaries(tmp_path):

@@ -167,9 +167,14 @@ Units: seconds, minutes, hours, days, weeks.
 
 ```
 from(alice){2}          -- Exactly 2 messages
-from(alice){2,}         -- At least 2 messages
 from(alice){2,5}        -- Between 2 and 5 messages
+from(alice){2,}         -- At least 2: needs quantifier_ceiling (see below)
 ```
+
+`{n,}` has no upper bound to enumerate to, so it needs a ceiling: it is
+rejected (`OPEN_QUANTIFIER`) unless `quantifier_ceiling = m` is configured
+(`PrismQLEngine(quantifier_ceiling=m)`; server: `[engine] quantifier_ceiling`),
+which reads every `{n,}` as `{n,m}`. Prefer an explicit `{n,m}`.
 
 ### 5. Pattern Variables
 

@@ -99,6 +99,7 @@ class PrismQLEngine:
         timestamp_field: str = "timestamp",
         text_match: str = "substring",
         use_ir: bool = True,
+        quantifier_ceiling: int | None = None,
     ) -> None:
         """
         Initialize the PrismQL engine.
@@ -124,6 +125,10 @@ class PrismQLEngine:
                 stemming for morphology-rich languages. "token": whole-token
                 matching via the tokenizer index (Lucene-era semantics).
                 contains_tokens() and contains_phrase() are unaffected.
+            quantifier_ceiling: Upper bound that closes an open range {n,}
+                as {n,m}. None (default): an open range is an error — the
+                engine enumerates groups up to an explicit size and never
+                truncates silently (graph @aleph/prismql #46).
 
         Note:
             The nlp_backend parameter is deprecated and will be removed in a future
@@ -170,6 +175,9 @@ class PrismQLEngine:
                 f"text_match must be 'substring' or 'token', got {text_match!r}"
             )
         self.text_match = text_match
+        if quantifier_ceiling is not None and quantifier_ceiling < 1:
+            raise ValueError("quantifier_ceiling must be >= 1")
+        self.quantifier_ceiling = quantifier_ceiling
 
         # One instance serves both execution paths: IRExecutor subclasses
         # PrismQLVisitor, so visitor.visit(tree) (legacy path) and
@@ -184,6 +192,7 @@ class PrismQLEngine:
             timestamp_field=timestamp_field,
             text_match=text_match,
             dictionary_modes=self.dictionary_modes,
+            quantifier_ceiling=quantifier_ceiling,
         )
 
     @staticmethod

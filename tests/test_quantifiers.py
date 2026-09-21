@@ -29,7 +29,8 @@ MESSAGES = [
 def engine():
     """Create a PrismQL engine with sample data."""
     backend = MemoryBackend(MESSAGES)
-    return PrismQLEngine(search_backend=backend)
+    # Open ranges need a ceiling (graph #46); this file exercises {n,}.
+    return PrismQLEngine(search_backend=backend, quantifier_ceiling=10)
 
 
 class TestExactQuantifiers:

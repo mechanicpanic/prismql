@@ -344,6 +344,7 @@ class IRExecutor(PrismQLVisitor):
         for item in row.items:
             pattern_name = item.name
             min_count = item.min_count
+            self._close_quantifier(min_count, item.max_count)
 
             num_constraints_before = len(self.variable_constraints)
             self._seq_leg_constraints = []

@@ -114,6 +114,7 @@ class QueryValidator:
         custom_features: dict[str, Any] | None = None,
         check_deprecated: bool = True,
         check_performance: bool = True,
+        quantifier_ceiling: int | None = None,
     ):
         """
         Initialize validator.
@@ -124,6 +125,8 @@ class QueryValidator:
             custom_features: Available custom features
             check_deprecated: Whether to warn about deprecated syntax
             check_performance: Whether to suggest performance improvements
+            quantifier_ceiling: When set, an open range {n,} is read as {n,m};
+                when None, an open range is an error (graph #46)
         """
         from .engine import normalize_dictionaries
 
@@ -133,6 +136,7 @@ class QueryValidator:
         self.custom_features = set(custom_features or {})
         self.check_deprecated = check_deprecated
         self.check_performance = check_performance
+        self.quantifier_ceiling = quantifier_ceiling
 
     def validate(self, query: str, dialect: str = "auto") -> ValidationResult:
         """
@@ -247,6 +251,32 @@ class QueryValidator:
                 )
         return issues
 
+    def _check_open_quantifiers(self, query: str) -> list[ValidationIssue]:
+        """Regex counterpart of the IR-walk open-range check (graph #46)."""
+        import re
+
+        if self.quantifier_ceiling is not None:
+            return []
+        issues: list[ValidationIssue] = []
+        for match in re.finditer(r"\{\s*(\d+)\s*,\s*\}", query):
+            n = match.group(1)
+            issues.append(
+                ValidationIssue(
+                    level=ValidationLevel.ERROR,
+                    message=(
+                        f"{{{n},}} has no upper bound and no quantifier_ceiling "
+                        "is configured"
+                    ),
+                    suggestion=(
+                        f"Write {{{n},m}} with an explicit upper bound, or set "
+                        "quantifier_ceiling ([engine] quantifier_ceiling in "
+                        "prismql.toml) to close every open range at m"
+                    ),
+                    code="OPEN_QUANTIFIER",
+                )
+            )
+        return issues
+
     def _check_ir_semantics(self, ir_query: Any) -> list[ValidationIssue]:
         """IR-walk counterparts of the classic string checks."""
         issues: list[ValidationIssue] = []
@@ -264,6 +294,23 @@ class QueryValidator:
         self._check_ir_window(q.positional_window, issues)
         if isinstance(q.source, ir.RestrictionsRow):
             for item in q.source.items:
+                if item.max_count is None and self.quantifier_ceiling is None:
+                    issues.append(
+                        ValidationIssue(
+                            level=ValidationLevel.ERROR,
+                            message=(
+                                f"{{{item.min_count},}} has no upper bound and no "
+                                "quantifier_ceiling is configured"
+                            ),
+                            suggestion=(
+                                f"Write {{{item.min_count},m}} with an explicit upper "
+                                "bound, or set quantifier_ceiling ([engine] "
+                                "quantifier_ceiling in prismql.toml) to close "
+                                "every open range at m"
+                            ),
+                            code="OPEN_QUANTIFIER",
+                        )
+                    )
                 self._check_ir_expr(item.expr, True, issues)
         elif isinstance(q.source, ir.SubqueryChain):
             self._check_ir_query(q.source.head, issues)
@@ -470,6 +517,7 @@ class QueryValidator:
 
         # Check similar_to() thresholds (parity with the IR-walk check)
         issues.extend(self._check_similar_thresholds(query))
+        issues.extend(self._check_open_quantifiers(query))
 
         # Check for undefined custom features
         feature_pattern = r"(\w+)\(\)"

@@ -111,6 +111,8 @@ then these return **wrong or empty results without an error**:
 - **Positional distance is id arithmetic on the Rust path (A2).** With
   gapped or string ids prefer `DURING`, or assign sequential integer ids.
 - **Quantifier ranges run as their minimum (A8).** `{2,5}` means `{2}`.
+- **`{n,}` is rejected unless `[engine] quantifier_ceiling = m` is set** (then it
+  means `{n,m}`); the 422 says so. Prefer an explicit `{n,m}`.
 - **Groups are printed in id order, not stream order (A9).**
 
 ## Inline Python (no server)
