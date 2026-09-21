@@ -191,14 +191,9 @@ class IRExecutor(PrismQLVisitor):
         else:
             results = []
 
-        # Step 2.3: variable validation.
-        if self.variable_constraints:
-            from ..processors.variables import VariableValidator
-
-            validator = VariableValidator(
-                self.search_backend, self.variable_constraints
-            )
-            results = validator.validate_results(results)
+        # Step 2.3 (variable validation) is gone: equalities are held inside
+        # candidate selection by the operator layer (graph #8); a post-hoc
+        # pass that indexed groups by id order dropped valid groups (A9).
 
         # Step 2.4: temporal window filtering (DURING).
         if temporal_window is not None:
@@ -372,12 +367,12 @@ class IRExecutor(PrismQLVisitor):
                     if len(result) < min_count:
                         return ([], False)
                     for group in result[:min_count]:
-                        restriction_results.append(sorted(group))
+                        restriction_results.append(list(group))
                         self.pattern_names.append(pattern_name)
                         self.current_restriction_position += 1
                 else:
                     for group in result:
-                        restriction_results.append(sorted(group))
+                        restriction_results.append(list(group))
                         self.pattern_names.append(pattern_name)
                         self.current_restriction_position += 1
             else:

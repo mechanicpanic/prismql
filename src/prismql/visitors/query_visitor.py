@@ -19,7 +19,7 @@ from ..plan.bridge import (
     run_negative_link,
 )
 from ..processors.temporal import TemporalProcessor, TemporalUnit
-from ..processors.variables import VariableConstraint, VariableValidator
+from ..processors.variables import VariableConstraint
 from ..types import (
     MessageGroup,
     MessageId,
@@ -221,12 +221,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
         else:
             results = []
 
-        # Step 2.3: Apply variable validation if any variables were used
-        if self.variable_constraints:
-            validator = VariableValidator(
-                self.search_backend, self.variable_constraints
-            )
-            results = validator.validate_results(results)
+        # Step 2.3 (variable validation) is gone: equalities are held inside
+        # candidate selection by the operator layer (graph #8); a post-hoc
+        # pass that indexed groups by id order dropped valid groups (A9).
 
         # Step 2.4: Apply temporal window filtering if DURING was used
         if temporal_window is not None:
@@ -485,13 +482,13 @@ class PrismQLVisitor(BasePrismQLVisitor):
                         return ([], False)
                     # Add each group separately
                     for group in result[:min_count]:
-                        restriction_results.append(sorted(group))
+                        restriction_results.append(list(group))
                         self.pattern_names.append(pattern_name)
                         self.current_restriction_position += 1
                 else:
                     # No quantifier - add all groups
                     for group in result:
-                        restriction_results.append(sorted(group))
+                        restriction_results.append(list(group))
                         self.pattern_names.append(pattern_name)
                         self.current_restriction_position += 1
             else:

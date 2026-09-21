@@ -31,9 +31,6 @@ def engine_with_test_data():
     return PrismQLEngine(backend)
 
 
-@pytest.mark.xfail(
-    reason="Known issue: quantifiers use position-based constraints in INWINDOW (see QUANTIFIER_BUG_ANALYSIS.md)"
-)
 def test_quantifier_equals_explicit_repetition(engine_with_test_data):
     """Test that from($user){2} produces same results as from($user), from($user)."""
     engine = engine_with_test_data
@@ -60,9 +57,6 @@ def test_quantifier_equals_explicit_repetition(engine_with_test_data):
     )
 
 
-@pytest.mark.xfail(
-    reason="Known issue: quantifiers use position-based constraints in INWINDOW (see QUANTIFIER_BUG_ANALYSIS.md)"
-)
 def test_quantifier_with_simple_case(engine_with_test_data):
     """Test quantifier with simpler case - same user posting twice."""
     engine = engine_with_test_data
@@ -83,9 +77,6 @@ def test_quantifier_with_simple_case(engine_with_test_data):
     assert set_quantifier == set_explicit
 
 
-@pytest.mark.xfail(
-    reason="Known issue: quantifiers use position-based constraints in INWINDOW (see QUANTIFIER_BUG_ANALYSIS.md)"
-)
 def test_quantifier_three_times(engine_with_test_data):
     """Test quantifier {3} for three occurrences."""
     engine = engine_with_test_data
