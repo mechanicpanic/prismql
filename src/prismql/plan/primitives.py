@@ -199,6 +199,109 @@ def anti_link(
     return _result(left, [("l_position", "l_id")], order=[l_ax, "l_position"])
 
 
+def cooccur(
+    frames: list[Any],
+    *,
+    axis: str,
+    window: int,
+    key: str | None = None,
+) -> Any:
+    """Unordered co-occurrence (INWINDOW / DURING over a comma list): every
+    combination of one row per frame whose members are pairwise distinct
+    and whose axis span ``max - min <= window``; ``key`` requires equality
+    across all members. Restriction order is irrelevant by definition
+    (spec D2): each group is canonicalized by ``(axis, position)`` and
+    deduplicated as a set, so ``cooccur([A, B]) == cooccur([B, A])``.
+
+    Slots are ranks in that canonical order; groups are ordered by their
+    canonical ``(axis, position)`` tuples.
+    """
+    pl = _pl()
+    if window < 0:
+        raise ValueError(f"window must be >= 0, got {window}")
+    if not frames:
+        raise ValueError("cooccur needs at least one frame")
+    k = len(frames)
+
+    def leg(i: int) -> Any:
+        cols = [
+            pl.col("position").alias(f"p{i}"),
+            pl.col(axis).alias(f"a{i}"),
+            pl.col("id").alias(f"i{i}"),
+        ]
+        if key:
+            cols.append(pl.col(key).alias(f"k{i}"))
+        drop = [axis] + ([key] if key else [])
+        return frames[i].drop_nulls(drop).select(cols)
+
+    g = leg(0).with_columns(pl.col("a0").alias("_lo"), pl.col("a0").alias("_hi"))
+    # window == 0 still admits equal axis values on distinct messages
+    # (ties): bucket by max(window, 1) so the join key is well defined.
+    w = max(window, 1)
+    for i in range(1, k):
+        right = leg(i).with_columns((pl.col(f"a{i}") // w).alias("_b"))
+        b_lo = (pl.col("_hi") - window) // w
+        b_hi = (pl.col("_lo") + window) // w
+        left = g.with_columns(pl.int_ranges(b_lo, b_hi + 1).alias("_b")).explode("_b")
+        on, right_on = ["_b"], ["_b"]
+        if key:
+            on.append("k0")
+            right_on.append(f"k{i}")
+        j = left.join(right, left_on=on, right_on=right_on, how="inner")
+        members = [pl.col(f"p{m}") for m in range(i)]
+        distinct = pl.all_horizontal([pl.col(f"p{i}") != m for m in members])
+        fits = (pl.col(f"a{i}") >= pl.col("_hi") - window) & (
+            pl.col(f"a{i}") <= pl.col("_lo") + window
+        )
+        g = (
+            j.filter(distinct & fits)
+            .with_columns(
+                pl.min_horizontal("_lo", f"a{i}").alias("_lo"),
+                pl.max_horizontal("_hi", f"a{i}").alias("_hi"),
+            )
+            .drop("_b")
+        )
+    g = g.drop(["_lo", "_hi"])
+    # Canonical order inside a group: (axis, position); dedupe as a set.
+    g = g.with_row_index("_row")
+    long = pl.concat(
+        [
+            g.select(
+                "_row",
+                pl.col(f"a{i}").alias("_ax"),
+                pl.col(f"p{i}").cast(pl.Int64).alias("position"),
+                pl.col(f"i{i}").alias("id"),
+            )
+            for i in range(k)
+        ]
+    ).sort(["_row", "_ax", "position"])
+    long = long.with_columns(
+        pl.int_range(pl.len()).over("_row").cast(pl.UInt32).alias("slot")
+    )
+    keyed = long.group_by("_row").agg(
+        pl.col("_ax").alias("_axs"),
+        pl.col("position").alias("_pos"),
+    )
+    # Group order = the canonical (axis, position) pairs compared slot by slot.
+    order_cols: list[str] = []
+    for i in range(k):
+        keyed = keyed.with_columns(
+            pl.col("_axs").list.get(i).alias(f"_oa{i}"),
+            pl.col("_pos").list.get(i).alias(f"_op{i}"),
+        )
+        order_cols += [f"_oa{i}", f"_op{i}"]
+    keyed = (
+        keyed.unique(subset=["_pos"], keep="first")
+        .sort(order_cols)
+        .with_row_index("group")
+    )
+    return (
+        long.join(keyed.select("_row", "group"), on="_row", how="inner")
+        .select("group", "slot", "position", "id")
+        .sort(["group", "slot"])
+    )
+
+
 def body_span_filter(result: Any, corpus: Any, *, axis: str, span: int) -> Any:
     """Keep groups whose ``max(axis) - min(axis) <= span``; a group with a
     null axis value on any slot is rejected (not treated as span 0)."""
