@@ -131,11 +131,13 @@ def to_groups(result) -> list[list[MessageId]]                                  
 ```
 Axis selection: `int` window → `axis="position"`; tuple → `axis=f"{timestamp_field}_us"` with the window converted to microseconds.
 
-- [ ] **Step 1: failing tests** — one per function, on the hostile fixtures of `tests/plan/conftest.py` (gapped ids, string ids, ties, nulls), against the brute oracles; plus the A10 fixture from `tests/test_ordinal_axis_contract.py` (`TWO_VARS`, `SKIPPED_LEG`) expecting `[[2,5]]` / `[[2,3,5]]`.
-- [ ] **Step 2:** FAIL (module missing).
-- [ ] **Step 3:** implement as thin composition over the primitives; variables: collect `(var, field)` pairs across legs, `key` only when one pair is shared by every leg of the link, everything else into `eligible` as `pl.col(f"r_{field}") == pl.col(f"l_{field}")` — for legs beyond the two of the current link the earlier slot's value must be carried on the seqs frame (`extend_link` anchors on the last slot only): carry bound values as extra columns `_v_<var>` on the result frame at the moment they bind, and compare against them.
-- [ ] **Step 4:** pass; `make check-fast`.
-- [ ] **Step 5:** commit `Plan: the operator layer — links, negation, co-occurrence, quantifiers over the primitives`.
+- [x] **Step 1: failing tests** — one per function, on the hostile fixtures of `tests/plan/conftest.py` (gapped ids, string ids, ties, nulls), against the brute oracles; plus the A10 fixture from `tests/test_ordinal_axis_contract.py` (`TWO_VARS`, `SKIPPED_LEG`) expecting `[[2,5]]` / `[[2,3,5]]`.
+- [x] **Step 2:** FAIL (module missing).
+- [x] **Step 3:** implement as thin composition over the primitives; variables: collect `(var, field)` pairs across legs, `key` only when one pair is shared by every leg of the link, everything else into `eligible` as `pl.col(f"r_{field}") == pl.col(f"l_{field}")` — for legs beyond the two of the current link the earlier slot's value must be carried on the seqs frame (`extend_link` anchors on the last slot only): carry bound values as extra columns `_v_<var>` on the result frame at the moment they bind, and compare against them.
+- [x] **Step 4:** pass; `make check-fast`.
+- [x] **Step 5:** commit `Plan: the operator layer — links, negation, co-occurrence, quantifiers over the primitives`.
+
+> **Executed 2026-09-21.** `extend_link(carry=)` and `cooccur(fields=, eligible=)` landed first (revision 2, items 1–2). Bindings attach by joining the binding slot back to the frame and broadcasting over the group; a variable is bound once (first leg that names it). `key` (asof `by=`) is used only for a lone shared variable on a fresh two-leg link; every other constraint is `eligible`. `to_groups` accepts lazy frames and assembles groups with one `group_by().agg()` (graph #14). 40 tests: A10 fixtures (two variables, skipped leg, `!$k`), the review's co-occurrence case, brute-oracle parity for chains/co-occurrence/quantifiers/negation on hostile corpora, body span with nulls, A9 slot order.
 
 ## Task 4: group-to-group links for subquery chains
 
