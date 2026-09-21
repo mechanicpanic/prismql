@@ -98,11 +98,13 @@ def query_frame(backend, ids: Iterable[MessageId], *, fields: Sequence[str], tim
 def leg_frame(frame: pl.LazyFrame, ids: Iterable[MessageId]) -> pl.LazyFrame   # rows of one predicate set
 ```
 
-- [ ] **Step 1: failing test** — `MemoryBackend` with string ids in non-lexical load order and one unparseable timestamp; assert positions equal load order, the `_us` column is null for the bad row, `leg_frame` keeps only the requested ids, and a backend with `has_order_axis() == False` raises `PositionalUnsupportedError`.
-- [ ] **Step 2:** run → FAIL (module missing).
-- [ ] **Step 3:** implement with `backend.positions(ids)` (order-preserving) + `backend.get_documents(ids)`; timestamps through `epoch_micros`; `fields` restricted to what the query's legs reference (variables' fields) — the frame is small by construction. Build with `pl.DataFrame({...}).lazy()`; never `pl.from_dicts` on free-form documents (schema inference — graph #26 style trap).
-- [ ] **Step 4:** pass; `make check-fast`.
-- [ ] **Step 5:** commit `Plan: the per-query frame from the order axis and the participating ids`.
+- [x] **Step 1: failing test** — `MemoryBackend` with string ids in non-lexical load order and one unparseable timestamp; assert positions equal load order, the `_us` column is null for the bad row, `leg_frame` keeps only the requested ids, and a backend with `has_order_axis() == False` raises `PositionalUnsupportedError`.
+- [x] **Step 2:** run → FAIL (module missing).
+- [x] **Step 3:** implement with `backend.positions(ids)` (order-preserving) + `backend.get_documents(ids)`; timestamps through `epoch_micros`; `fields` restricted to what the query's legs reference (variables' fields) — the frame is small by construction. Build with `pl.DataFrame({...}).lazy()`; never `pl.from_dicts` on free-form documents (schema inference — graph #26 style trap).
+- [x] **Step 4:** pass; `make check-fast`.
+- [x] **Step 5:** commit `Plan: the per-query frame from the order axis and the participating ids`.
+
+> **Executed 2026-09-21.** The memory backend's order index only carries `timestamp`; a configured `timestamp_field` outside it is parsed from the documents with `epoch_micros` (null when unparseable). Duplicated ids collapse; rows come out in load order.
 
 ## Task 3: the operator layer, against the P2 oracles
 
