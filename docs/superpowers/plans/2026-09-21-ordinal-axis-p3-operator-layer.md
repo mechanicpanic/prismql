@@ -10,6 +10,15 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-18-ordinal-axis-design.md` — "P3 — the single operator layer", the review amendments (strict temporal inequality; `(ts, pos)` only orders candidates; backend temporal APIs stay id-based), and audit A1–A10. Decisions taken for this plan (graph `@aleph/prismql`): **#46** `{n,}` without a ceiling is rejected at validation, `[engine] quantifier_ceiling = m` turns it into `{n,m}`; **#47** an lhs row without an axis value on a negative link is not in the result. Defects it closes: #12 (D2), #16 (A7/A8), #29 (A9), #44 (A10). Kriya **#11**; transformation **#15**.
 
+> **Revision 2 (2026-09-21), after the Codex adversarial review of the plan and task 1** (session `01a0c4fb`). Amendments below supersede task bodies where they conflict:
+>
+> 1. **Bound variable values must survive `extend_link`.** The primitive rebuilds its anchor frame from `position`, `_members` and `_max_slot` only, so a `_v_<var>` column carried on the seqs frame is dropped before `eligible` is evaluated (reproduced: `ColumnNotFoundError`), and its final `concat` needs matching schemas. Task 3 therefore begins with a primitive change: `extend_link` (and `link_groups`, Task 4) take `carry: Sequence[str]` — result-frame columns to keep on the anchor and on the added slot — and the operator layer stores bindings as `_v_<var>` from the leg that binds them. Tested with two groups sharing an anchor but carrying different bindings, plus `SKIPPED_LEG`.
+> 2. **Co-occurrence needs assignment-aware eligibility.** P2 `cooccur` takes one shared `key`, projects other fields away and canonicalizes before returning, so a second binding (`from($u) AND field(page,$p), from($u) AND field(page,$p) INWINDOW 3` over `(a,P1)`,`(a,P2)`) cannot be enforced. Task 3 extends `cooccur` with `eligible: pl.Expr | None` evaluated over the slot-prefixed columns (`_f{i}_<field>`) **before** canonicalization/dedup, and `quantify` inherits it. Tests: several variables, cross-field bindings, a variable absent from one member.
+> 3. **Every subquery operation gets a replacement before deletion.** Besides positional continuations, the executor merges unordered subqueries (`SELECT (…); (…) INWINDOW n` → `_merge_queries` → `WindowProcessor.merge_queries`) and the grammar admits negative positional continuations. Task 4 adds `cooccur_groups` (unordered k-way co-occurrence of whole groups by boundary) and `anti_link_groups` (NOT_FOLLOWED_BY / NOT_PRECEDED_BY between groups) beside `link_groups`, each with a brute oracle; Task 7's deletion is gated on a **call-site** grep (every former caller resolved), not only a symbol list.
+> 4. **Polars becomes a core dependency in Task 5, not Task 9**: from the first engine integration a bare install must still run every formerly supported query. Task 5 step 0 moves `polars`/`pyarrow` into `[project.dependencies]`, keeps `[plan]` as an empty alias, and the cold-clone check (`uv sync` without extras → `make check-fast`) is part of its gate.
+> 5. **Set-only queries never build a frame.** `execute_body` constructs the per-query frame only when the body carries a sequence link, a window, a quantifier or a subquery continuation; boolean/set queries keep running on backends without an order axis (`PositionalUnsupportedError` stays reserved for the operators that need the axis).
+> 6. **Task 1 amended by the review** (landed): a minimum above the ceiling is rejected; quoted strings are stripped before the classic regex; the server's per-request dictionary overlay keeps the ceiling; the docs say plainly that enumeration still runs as the minimum (A8) until Task 5 lands the operator layer. Ceiling tests assert against expected groups (triples included) once Task 3's `quantified_row` exists — parity between `{2,}` and `{2,3}` alone proved nothing.
+
 ## Global Constraints
 
 - Silent-wrong is the enemy: every task ends with `make check` green and, from Task 4 on, with the xfail markers it makes pass **removed in the same commit** (a strict xfail that passes fails the suite — that is the signal).
@@ -111,9 +120,9 @@ class Leg:
 Window = int | tuple[int, str]                # INWINDOW n | DURING (value, unit)
 
 def link(frame, seqs: pl.LazyFrame | None, lhs: Leg, rhs: Leg, *, window: Window, forward: bool, timestamp_field) -> pl.LazyFrame
-    # seqs None: nearest_link(lhs, rhs); else extend_link(frame, seqs, rhs). key = the single shared (var, field) if exactly one, else None; eligible = conjunction of equalities/inequalities across ALL bound legs (A10 fixed here), computed on the prefixed columns.
+    # seqs None: nearest_link(lhs, rhs); else extend_link(frame, seqs, rhs, carry=[every _v_<var> column]) (revision 2, item 1). key = the single shared (var, field) if exactly one, else None; eligible = conjunction of equalities/inequalities across ALL bound legs (A10 fixed here), computed on the prefixed columns.
 def negative_link(frame, lhs: Leg, rhs: Leg, *, window, forward, timestamp_field) -> pl.LazyFrame   # anti_link; null-axis lhs dropped (#47)
-def cooccur_row(frame, legs: list[Leg], *, window: Window, timestamp_field) -> pl.LazyFrame        # unordered, k-way (D2 fixed here); variables via key/eligible
+def cooccur_row(frame, legs: list[Leg], *, window: Window, timestamp_field) -> pl.LazyFrame        # unordered, k-way (D2 fixed here); variables via key + eligible over slot-prefixed columns, before canonicalization (revision 2, item 2)
 def quantified_row(frame, leg: Leg, *, n_min, n_max, window, timestamp_field) -> pl.LazyFrame     # quantify
 def body_span(frame, result, *, window: tuple[int,str], timestamp_field) -> pl.LazyFrame          # body_span_filter for the trailing DURING on comma rows
 def to_groups(result) -> list[list[MessageId]]                                                     # slots in axis order (A9 fixed here)
@@ -128,7 +137,7 @@ Axis selection: `int` window → `axis="position"`; tuple → `axis=f"{timestamp
 
 ## Task 4: group-to-group links for subquery chains
 
-**Files:** `src/prismql/plan/primitives.py` (+`link_groups`), `tests/plan/test_link_groups.py`, `operators.py` (+`chain_groups`).
+**Files:** `src/prismql/plan/primitives.py` (+`link_groups`, `anti_link_groups`, `cooccur_groups`; `extend_link` gains `carry`), `tests/plan/test_link_groups.py`, `operators.py` (+`chain_groups`, `merge_groups`, `negative_chain_groups`).
 
 **Interfaces:**
 ```python
@@ -138,15 +147,17 @@ def link_groups(corpus, left: result, right: result, *, axis, window, forward) -
 
 - [ ] **Step 1:** failing test against a brute oracle (enumerate all left×right pairs, pick by the rule) on tiny corpora, including the shared-boundary case and a right group overlapping the left group (must be excluded).
 - [ ] **Step 2–4:** implement via boundaries (`group_by group → min/max slot position`) + `nearest_link` on the boundary frames with `eligible` = "no member overlap" (`is_in` over member lists), then re-expand; pass.
-- [ ] **Step 5:** commit `Plan: link_groups — subquery chains as group-to-group nearest links`.
+- [ ] **Step 5:** same cycle for `anti_link_groups` (lhs groups with no eligible rhs group within the window) and `cooccur_groups` (unordered co-occurrence of whole groups: pairwise boundary distance within the window, all members distinct), each against a brute oracle.
+- [ ] **Step 6:** commit `Plan: group-to-group links, negation and co-occurrence for subquery chains`.
 
 ## Task 5: wire the IR executor
 
 **Files:** `src/prismql/ir/executor.py`; tests: the whole suite; `tests/test_ordinal_axis_contract.py`, `tests/test_engine_defects_pinned.py`, `tests/test_positional_path_parity.py`, `tests/test_quantifier_fix.py` (markers), `tests/plan/test_primitives_vs_engine.py` (HEAD is no longer the oracle: retarget its parity assertions at the brute oracles or delete the HEAD side — decide per test, note in the file docstring).
 
+- [ ] **Step 0:** `pyproject.toml`: `polars`, `pyarrow` → core dependencies; `[plan]` stays as an empty alias; cold clone `uv sync` (no extras) + `make check-fast` is part of this task's gate (revision 2, item 4).
 - [ ] **Step 1:** write the failing end-to-end tests first: the six A-contracts and D2 through `PrismQLEngine(use_ir=True)` on the contract fixtures **without** xfail (new file `tests/test_operator_layer_e2e.py`, parametrized over dialect).
 - [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** in `execute_body`: build `frame = query_frame(backend, union of all leg ids, fields=variable fields, timestamp_field)` once per body; `execute_restriction` returns `Leg`/result frames instead of sets/lists for sequence links; comma rows with a window → `cooccur_row`; quantified restrictions → `quantified_row`; trailing `DURING` on comma rows → `body_span`; `SubqueryChain` positional continuations → `chain_groups`; `to_groups` at the edge. `VariableValidator` call removed (equalities are inside selection). Keep `NamedQueryResult`, aggregation, GROUP BY, ORDER BY, LIMIT on the group lists as today. Backends without an order axis: `PositionalUnsupportedError` surfaces unchanged.
+- [ ] **Step 3:** in `execute_body`: build `frame = query_frame(...)` once per body **only when the body needs an axis** (a sequence link, a window, a quantifier or a subquery continuation; set-only queries never touch it — revision 2, item 5); `execute_restriction` returns `Leg`/result frames instead of sets/lists for sequence links; comma rows with a window → `cooccur_row`; quantified restrictions → `quantified_row`; trailing `DURING` on comma rows → `body_span`; `SubqueryChain` positional continuations → `chain_groups`; `to_groups` at the edge. `VariableValidator` call removed (equalities are inside selection). Keep `NamedQueryResult`, aggregation, GROUP BY, ORDER BY, LIMIT on the group lists as today. Backends without an order axis: `PositionalUnsupportedError` surfaces unchanged.
 - [ ] **Step 4:** `make check` — every strict xfail that now passes is removed in this commit; anything that still fails is a defect to fix here, not to re-pin.
 - [ ] **Step 5:** commit `IR executor runs every operator through the plan; A2 A3 A7 A8 A9 A10 D2 contracts pass`.
 
@@ -162,7 +173,7 @@ def link_groups(corpus, left: result, right: result, *, axis, window, forward) -
 
 **Files:** delete `processors/window.py`, `processors/variables.py`; in `query_visitor.py` delete the builders listed in *File Structure*; in `backends/memory.py`, `backends/base.py`, `backends/rust_memory.py` delete `merge_within_time_window`, `filter_by_time_window`, the positional/temporal kernel entry points; `backends/factory.py` drops the kernel capability handshake; `tests/test_rust_memory_backend.py` shrinks to search-only or is deleted with the backend.
 
-- [ ] **Step 1:** `grep -rn "RUST_.*AVAILABLE\|_temporal_link_kernel\|merge_within_time_window\|filter_by_time_window\|VariableValidator\|WindowProcessor" src tests` — the list is the deletion list.
+- [ ] **Step 1:** `grep -rn "RUST_.*AVAILABLE\|_temporal_link_kernel\|merge_within_time_window\|filter_by_time_window\|VariableValidator\|WindowProcessor\|_merge_queries\|_merge_subqueries_positional" src tests` — the deletion list **and** the call-site list: every caller must already resolve to the operator layer (unordered subquery merge → `merge_groups`, negative continuations → `negative_chain_groups`), or the task stops (revision 2, item 3).
 - [ ] **Step 2:** delete; `make check` green; `uv run python -c "import prismql_rust"` absent → suite identical (Task 7 is the proof that Rust is off the operator path).
 - [ ] **Step 3:** decision recorded in the graph on #41 (Rust contour): kept as search-only or retired — by what the tests said.
 - [ ] **Step 4:** commit `Delete the legacy merge builders, the variable validator and the Rust operator kernels`.
@@ -176,7 +187,7 @@ def link_groups(corpus, left: result, right: result, *, axis, window, forward) -
 ## Task 9: gates, docs, graph
 
 - [ ] **Step 1:** `tests/plan/test_chicago_tiers.py` gains the engine-vs-oracle full-tuple assertions through `PrismQLEngine` on 100k/1m (`PRISMQL_TIERS=100k,1m make check`); a positional tier query is added. Full tier only on the owner's word (graph #27).
-- [ ] **Step 2:** `pyproject.toml`: polars + pyarrow move from `[plan]` to core dependencies (the engine cannot run sequences without them); `[plan]` extra kept as an empty alias for one release; `PlanUnavailableError` stays for the import guard.
+- [ ] **Step 2:** (moved to Task 5 step 0 by revision 2) — confirm `[plan]` alias and `PlanUnavailableError` guard are still coherent.
 - [ ] **Step 3:** `LANGUAGE_REFERENCE.md` + `PIPE_REFERENCE.md`: INWINDOW truly unordered; positional distance = stream distance; string ids; `{n,}` ceiling; `!$k`; negative link drops axis-less lhs. `CHANGELOG.md` Unreleased: the semantic changes by name. `STATE.md`: P3 shipped, A1–A10/D2 closed, "HEAD is a valid oracle only…" paragraph deleted. `AGENTS.md`: Rust rows removed from Commands; `skills/prismql/SKILL.md`: "Known-wrong today" section deleted.
 - [ ] **Step 4:** graph: #11 modes → pratyakshita/vartamana; #8 (single operator layer) realized; #6 (two owners) → atita; #12 #16 #29 #44 `addressed_by` #11 and released on the verifier's verdict; #14 (speed risk) answered by the tier numbers; #43 seed rewritten to "what stands now"; #41 by Task 7's decision.
 - [ ] **Step 5:** cold review (`reviewer` sub-agent, separate worktree) on the whole branch diff; verifier on the claim "Chicago 100k/1m tuples equal the oracle and 372 stands" before anything is released in the graph.
