@@ -132,6 +132,7 @@ class IRExecutor(PrismQLVisitor):
         self.pattern_names = []
         self._seq_leg_constraints = []
         self._seq_partition_key = None
+        self._restriction_ranges = []
 
         # Step 1: window extraction.
         window_size = self.DEFAULT_WINDOW_SIZE
@@ -151,18 +152,8 @@ class IRExecutor(PrismQLVisitor):
             if is_sequential and len(q.source.items) == 1:
                 results = restriction_results
             elif temporal_window is not None:
-                can_fuse = hasattr(
-                    self.search_backend, "merge_within_time_window"
-                ) and self.search_backend.has_timestamp_field(  # type: ignore[attr-defined]
-                    self.timestamp_field
-                )
-                if can_fuse:
-                    results = self.search_backend.merge_within_time_window(  # type: ignore[attr-defined]
-                        restriction_results, self.timestamp_field, temporal_window
-                    )
-                    temporal_window = None
-                else:
-                    results = self._generate_all_combinations(restriction_results)
+                results = self._merge_restrictions(restriction_results, temporal_window)
+                temporal_window = None
             else:
                 results = self._merge_restrictions(restriction_results, window_size)
         elif isinstance(q.source, SubqueryChain):
@@ -344,7 +335,9 @@ class IRExecutor(PrismQLVisitor):
         for item in row.items:
             pattern_name = item.name
             min_count = item.min_count
-            self._close_quantifier(min_count, item.max_count)
+            self._restriction_ranges.append(
+                (min_count, self._close_quantifier(min_count, item.max_count))
+            )
 
             num_constraints_before = len(self.variable_constraints)
             self._seq_leg_constraints = []

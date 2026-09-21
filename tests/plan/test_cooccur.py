@@ -191,13 +191,13 @@ def test_positional_matches_engine_on_the_ordered_subset(oracle, seed, window):
         seed, n=200, gapped_ids=False, monotone_time=True, ties=False, nulls=False
     )
     lf = _frame(docs)
-    a_ids = {d["id"] for d in docs if d["user"] == "a"}
     unordered = to_groups(
         cooccur(
             [_pred(lf, user="a"), _pred(lf, user="b")], axis="position", window=window
         ).collect()
     )
-    got = [g for g in unordered if g[0] in a_ids]
+    # Since P3 the engine IS the plan: full, unordered equality.
+    got = unordered
     want = oracle(docs).execute(f"SELECT from(a), from(b) INWINDOW {window}")
     assert got == want
     assert got, "the fixture must produce matches"

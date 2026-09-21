@@ -1,7 +1,6 @@
 """Target semantics for the ordinal axis (docs/superpowers/specs/
-2026-09-18-ordinal-axis-design.md). These are xfail(strict): they document
-the contract the refactor must deliver and fail loudly once a phase makes
-them pass without the marker being removed.
+2026-09-18-ordinal-axis-design.md). Once xfail(strict) pins of the audit
+defects; since the operator layer (P3) they pass and stand as the contract.
 
 Today: positional distance is id arithmetic on the Rust path and list
 index on the Python fallback (A2), and string ids sort lexicographically
@@ -37,7 +36,6 @@ def python_paths(monkeypatch):
     monkeypatch.setattr(window_mod, "RUST_AVAILABLE", False)
 
 
-@pytest.mark.xfail(strict=True, reason="A2: Rust path measures id distance")
 def test_gapped_ids_are_adjacent_in_the_stream_on_rust_path():
     # ids 1 and 10 are consecutive documents: stream distance 1.
     engine = PrismQLEngine(MemoryBackend(documents=GAPPED))
@@ -46,14 +44,12 @@ def test_gapped_ids_are_adjacent_in_the_stream_on_rust_path():
 
 
 @pytest.mark.usefixtures("python_paths")
-@pytest.mark.xfail(strict=True, reason="A2: INWINDOW python branch uses id arithmetic")
 def test_gapped_ids_are_adjacent_in_the_stream_on_python_path():
     engine = PrismQLEngine(MemoryBackend(documents=GAPPED))
     assert engine.execute(FB) == [[1, 10]]
     assert engine.execute(CO) == [[1, 10]]
 
 
-@pytest.mark.xfail(strict=True, reason="A3: string ids sort lexicographically")
 def test_string_ids_follow_load_order():
     # m2 is the message after m1; m10 is two positions away (within 3),
     # so the greedy nearest match is m2, and co-occurrence pairs m1 with
@@ -84,9 +80,6 @@ SKIPPED_LEG = (
 
 
 @pytest.mark.parametrize("use_ir", [True, False])
-@pytest.mark.xfail(
-    strict=True, reason="A10: $k links pick the nearest candidate, then filter"
-)
 def test_pattern_variable_link_skips_a_distractor(use_ir):
     # A save by y (id 4) lies between a's two saves. One variable on a
     # two-leg link is bucketed per value and finds [2, 5]; two variables on

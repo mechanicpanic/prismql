@@ -90,10 +90,11 @@ class TestSubqueryIdentity:
         assert result == [[1, 2], [3, 4]]
 
     def test_single_subquery_with_explicit_window_still_merges(self, engine):
-        # An explicit trailing window on a single subquery is a deliberate
-        # re-group and keeps its meaning.
+        # A lone stage has nothing to relate: one group per match, exactly
+        # as `SELECT from(alice) INWINDOW 2` (the old id-clustering merge
+        # produced [[1, 3]] — D2 family, gone with the operator layer).
         result = engine.execute("SELECT (SELECT from(alice)) INWINDOW 2")
-        assert result == [[1, 3]]
+        assert result == [[1], [3]]
 
 
 class TestGroupwiseComposition:
@@ -105,16 +106,18 @@ class TestGroupwiseComposition:
             "FOLLOWED_BY (SELECT from(charlie)) INWINDOW 3"
         )
         # The inner a+b pairs survive intact, each extended by charlie.
-        assert result == [[1, 2, 5], [3, 4, 5]]
+        # INWINDOW is unordered (D2): bob 2 + alice 3 is a pair too.
+        assert result == [[1, 2, 5], [2, 3, 5], [3, 4, 5]]
 
     def test_window_measured_between_group_boundaries(self, engine):
         # Gap from group end (id 2) to charlie (id 5) is 3 > 2 -> no match
-        # for the first pair; second pair ends at 4, gap 1 -> match.
+        # for the first pair; [2, 3] ends at 3, gap 2 -> match; [3, 4] ends
+        # at 4, gap 1 -> match.
         result = engine.execute(
             "SELECT (SELECT from(alice), from(bob) INWINDOW 1) "
             "FOLLOWED_BY (SELECT from(charlie)) INWINDOW 2"
         )
-        assert result == [[3, 4, 5]]
+        assert result == [[2, 3, 5], [3, 4, 5]]
 
     def test_chained_positional_subqueries(self, engine):
         result = engine.execute(
@@ -172,7 +175,9 @@ class TestUnorderedSubqueriesUnchanged:
         result = engine.execute(
             "SELECT (SELECT from(alice)) ; (SELECT from(bob)) INWINDOW 2"
         )
-        assert result == [[1, 2, 3]]
+        # One group per stage, union span within 2: every alice-bob pair.
+        # (The old merge clustered ids greedily into [[1, 2, 3]].)
+        assert result == [[1, 2], [2, 3], [3, 4]]
 
 
 def test_unr_flag_is_gone(engine):

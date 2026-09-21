@@ -45,11 +45,6 @@ def test_chained_preceded_by_picks_nearest_predecessor(engine):
     assert result == [[2, 3, 4]]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="INWINDOW is documented UNORDERED (A, B == B, A) but both kernels "
-    "enforce restriction order; blocker pending semantics decision",
-)
 def test_inwindow_is_commutative(engine):
     forward = engine.execute("SELECT from(b), from(a) INWINDOW 3")
     backward = engine.execute("SELECT from(a), from(b) INWINDOW 3")

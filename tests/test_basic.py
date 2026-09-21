@@ -121,7 +121,9 @@ def test_window_constraints():
     print(f"Window test results: {results}")
 
     # Should find (1,3) since they're 2 apart, and (10,11) since they're 1 apart
-    assert len(results) == 2
+    assert (
+        len(results) == 3
+    )  # ids are labels: 3 and 10 are adjacent in load order (spec, P3)
     assert [1, 3] in results  # problem at 1, solution at 3
     assert [10, 11] in results  # problem at 10, solution at 11
 

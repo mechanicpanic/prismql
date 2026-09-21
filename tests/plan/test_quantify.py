@@ -135,7 +135,7 @@ def test_range_is_enumeration_not_minimum(oracle):
         ).collect()
     )
     engine = oracle(docs).execute("SELECT from(a){2,3} INWINDOW 4")
-    assert [g for g in got if len(g) == 2] == engine
+    assert got == engine  # since P3 the engine enumerates ranges too
     assert any(len(g) == 3 for g in got)
 
 

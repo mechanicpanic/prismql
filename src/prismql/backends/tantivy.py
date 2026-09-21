@@ -24,13 +24,14 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any, cast
 
 from ..config import DEFAULT_CONFIG, BackendConfig
 from ..types import Document, MessageId
 from .base import SearchBackend
+from .order import OrderIndex, epoch_micros
 
 try:
     import tantivy
@@ -88,8 +89,19 @@ class TantivyBackend(SearchBackend):
         ):
             self._open_existing(index_path)
         else:
-            self._build(
-                list(documents or []), text_fields, index_path, heap_size, num_threads
+            docs = list(documents or [])
+            self._build(docs, text_fields, index_path, heap_size, num_threads)
+            # The order axis (spec layer 2b): load order of the documents we
+            # were given. An index opened from disk carries no axis.
+            self.order = OrderIndex(
+                ids=[doc[self.id_field] for doc in docs if self.id_field in doc],
+                timestamps={
+                    "timestamp": [
+                        epoch_micros(doc.get("timestamp"))
+                        for doc in docs
+                        if self.id_field in doc
+                    ]
+                },
             )
 
         self._index.reload()
@@ -279,6 +291,33 @@ class TantivyBackend(SearchBackend):
     # ----------------------------------------------------------- corpus stats
     def get_total_documents(self) -> int:
         return int(self._searcher.num_docs)
+
+    # -- order contract (spec 2026-09-18) ---------------------------------
+    def has_order_axis(self) -> bool:
+        return getattr(self, "order", None) is not None
+
+    def positions(self, ids: Iterable[MessageId]) -> list[int]:
+        if not self.has_order_axis():
+            raise self._no_axis()
+        return self.order.positions(ids)
+
+    def sorted_positions(self, ids: Iterable[MessageId]) -> list[int]:
+        if not self.has_order_axis():
+            raise self._no_axis()
+        return self.order.sorted_positions(ids)
+
+    def ids_at(self, positions: Iterable[int]) -> list[MessageId]:
+        if not self.has_order_axis():
+            raise self._no_axis()
+        return self.order.ids_at(positions)
+
+    def timestamps_at(self, positions: Iterable[int], field: str) -> list[int | None]:
+        if not self.has_order_axis():
+            raise self._no_axis()
+        return self.order.timestamps_at(positions, field)
+
+    def has_timestamp_field(self, field: str) -> bool:
+        return self.has_order_axis() and self.order.has_timestamp_field(field)
 
     def get_all_document_ids(self, limit: int | None = None) -> set[MessageId]:
         if self._searcher.num_docs == 0:

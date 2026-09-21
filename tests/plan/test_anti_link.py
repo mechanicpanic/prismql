@@ -116,7 +116,7 @@ def test_temporal_matches_engine_without_nulls(oracle, seed, forward):
     )
 
 
-def test_null_timestamp_lhs_is_rejected_unlike_engine(oracle):
+def test_null_timestamp_lhs_is_rejected(oracle):
     docs = [
         {"id": 0, "kind": "X", "user": "u", "text": "", "timestamp": None},
         {"id": 1, "kind": "X", "user": "u", "text": "", "timestamp": 100},
@@ -134,7 +134,7 @@ def test_null_timestamp_lhs_is_rejected_unlike_engine(oracle):
     assert got == [[1]]
     assert oracle(docs).execute(
         "SELECT field(kind, X) NOT_FOLLOWED_BY field(kind, Y) DURING 1 minute"
-    ) == [[0], [1]]  # the engine keeps the timestamp-less message
+    ) == [[1]]  # since P3 the engine drops it too (graph #47)
 
 
 @pytest.mark.parametrize("seed", range(8))

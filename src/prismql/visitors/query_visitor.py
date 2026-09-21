@@ -11,6 +11,13 @@ from ..backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
 from ..exceptions import PrismQLRuntimeError
 from ..grammar.generated.PrismQLParser import PrismQLParser
 from ..grammar.generated.PrismQLVisitor import PrismQLVisitor as BasePrismQLVisitor
+from ..plan.bridge import (
+    run_chain_groups,
+    run_cooccur,
+    run_link,
+    run_merge_groups,
+    run_negative_link,
+)
 from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..processors.variables import VariableConstraint, VariableValidator
 from ..types import (
@@ -80,6 +87,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # pick the nearest candidate from any partition and lose chains the
         # post-hoc validator can never recover.
         self._seq_partition_key: tuple[str, str] | None = None
+        # (min, max) per restriction item of the current body, in order
+        # (quantifier ranges are enumerated by the operator layer — A8).
+        self._restriction_ranges: list[tuple[int, int]] = []
 
         # Pattern naming for result labeling
         self.pattern_names: list[str | None] = []
@@ -128,6 +138,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         self.pattern_names = []
         self._seq_leg_constraints = []
         self._seq_partition_key = None
+        self._restriction_ranges = []
 
         # Step 1: Extract window size if specified (position-based or time-based)
         window_size = self.DEFAULT_WINDOW_SIZE
@@ -160,28 +171,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
             if is_sequential and len(ctx.restrictions().named_restriction()) == 1:
                 results = restriction_results
             elif temporal_window is not None:
-                # For temporal windows we need ALL combinations (not just
-                # non-overlapping pairs from the greedy algorithm). The Rust
-                # backend fuses generation + span filtering with pruning, so
-                # infeasible combinations are never materialized; the Python
-                # fallback builds the full cartesian product and filters it
-                # in Step 2.4.
-                can_fuse = hasattr(
-                    self.search_backend, "merge_within_time_window"
-                ) and self.search_backend.has_timestamp_field(  # type: ignore[attr-defined]
-                    self.timestamp_field
-                )
-                if can_fuse:
-                    results = self.search_backend.merge_within_time_window(  # type: ignore[attr-defined]
-                        restriction_results, self.timestamp_field, temporal_window
-                    )
-                    # Span filter already applied; skip Step 2.4. (Variable
-                    # validation in Step 2.3 commutes with the span filter —
-                    # both are per-group predicates — and runs faster on the
-                    # already-filtered set.)
-                    temporal_window = None
-                else:
-                    results = self._generate_all_combinations(restriction_results)
+                # Unordered co-occurrence under a time span: the operator
+                # layer enforces the whole-group span itself (Step 2.4 is
+                # then redundant for these rows).
+                results = self._merge_restrictions(restriction_results, temporal_window)
+                temporal_window = None
             else:
                 results = self._merge_restrictions(restriction_results, window_size)
         elif ctx.query_seq():
@@ -437,6 +431,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # Extract quantifier if present
             min_count, max_count = self._extract_quantifier(named_restriction_ctx)
             max_count = self._close_quantifier(min_count, max_count)
+            self._restriction_ranges.append((min_count, max_count))
 
             # Track how many constraints exist before visiting this restriction
             num_constraints_before = len(self.variable_constraints)
@@ -632,16 +627,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return PartialSequence(lhs, rhs, operator)
 
         evaluated = self._evaluate_partial_sequence(lhs, window)
-
-        # Correlation-key pushdown: when every leg shares one $var on the
-        # same field, greedy matching must run within each field-value
-        # partition. Greedy-global would pair each lhs with its nearest rhs
-        # from ANY partition; the validator then kills the mixed group and
-        # the in-partition match it shadowed is silently lost.
-        if self._seq_partition_key is not None:
-            return self._apply_link_partitioned(
-                evaluated, rhs, window, operator, self._seq_partition_key[1]
-            )
         return self._apply_link_evaluated(evaluated, rhs, window, operator)
 
     def _apply_link_evaluated(
@@ -651,34 +636,17 @@ class PrismQLVisitor(BasePrismQLVisitor):
         window: WindowConstraint,
         operator: str,
     ) -> list[MessageGroup]:
-        """Dispatch one positive link on an already-evaluated lhs."""
-        forward = operator == "FOLLOWED_BY"
-
-        # Temporal window (DURING)
-        if isinstance(window, tuple):
-            duration = self._duration_tuple_to_timedelta(window)
-            if isinstance(lhs, list):
-                if forward:
-                    return self._extend_sequences_followed_by_temporal(
-                        lhs, rhs, duration
-                    )
-                return self._extend_sequences_preceded_by_temporal(lhs, rhs, duration)
-            return self._create_sequential_pairs_temporal(
-                lhs, rhs, duration, forward=forward
-            )
-
-        # Positional window (INWINDOW)
-        window_size: int = window
-        if isinstance(lhs, list):
-            if forward:
-                return self._extend_sequences_followed_by(lhs, rhs, window_size)
-            return self._extend_sequences_preceded_by(lhs, rhs, window_size)
-        if forward:
-            matching_lhs = self._apply_followed_by(lhs, rhs, window_size)
-        else:
-            matching_lhs = self._apply_preceded_by(lhs, rhs, window_size)
-        return self._create_sequential_pairs(
-            matching_lhs, rhs, window_size, forward=forward
+        """One positive link through the operator layer (graph #8): the
+        nearest eligible rhs per lhs slot, variables held inside candidate
+        selection, positional or temporal by the window's kind."""
+        return run_link(
+            self.search_backend,
+            self.timestamp_field,
+            lhs,
+            rhs,
+            self._seq_leg_constraints,
+            window,
+            operator == "FOLLOWED_BY",
         )
 
     def _apply_link_partitioned(
@@ -749,14 +717,21 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 f"{operator} cannot be chained with other sequential operators"
             )
 
-        if isinstance(window, tuple):
-            duration = self._duration_tuple_to_timedelta(window)
-            if forward:
-                return self._apply_not_followed_by_temporal(lhs, rhs, duration)
-            return self._apply_not_preceded_by_temporal(lhs, rhs, duration)
-        if forward:
-            return self._apply_not_followed_by(lhs, rhs, window)
-        return self._apply_not_preceded_by(lhs, rhs, window)
+        lhs_constraints = (
+            self._seq_leg_constraints[0] if self._seq_leg_constraints else []
+        )
+        kept = run_negative_link(
+            self.search_backend,
+            self.timestamp_field,
+            lhs,
+            rhs,
+            lhs_constraints,
+            window,
+            forward,
+        )
+        # A negative link narrows a set; it stays a set so a further negative
+        # link (or the row's window) can take it.
+        return {g[0] for g in kept}
 
     def visitBool_restriction(
         self, ctx: PrismQLParser.Bool_restrictionContext
@@ -1285,66 +1260,59 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # Convert tuples to lists
         return [list(combo) for combo in all_combinations]
 
-    def _merge_restrictions(
-        self, groups: list[MessageGroup], window_size: int
-    ) -> QueryResult:
-        """
-        Merge restriction results within sliding windows.
+    def _constraints_by_restriction(self, n: int) -> list[list[Any]]:
+        buckets: list[list[Any]] = [[] for _ in range(n)]
+        for c in self.variable_constraints:
+            if 0 <= c.position < n:
+                buckets[c.position].append(c)
+        return buckets
 
-        This implements the core windowing logic that groups messages
-        that appear within window_size of each other.
-        """
+    def _merge_restrictions(
+        self, groups: list[MessageGroup], window: Any
+    ) -> QueryResult:
+        """A comma row under one window (positional int or a timedelta):
+        unordered co-occurrence through the operator layer, quantifier
+        ranges enumerated, variables held inside the enumeration."""
         if not groups:
             return []
-
-        # If single group, each message becomes its own result group
-        if len(groups) == 1:
-            return [[msg_id] for msg_id in groups[0]]
-
-        # Otherwise, implement sliding window merge
-        # This is a simplified version - full implementation would use
-        # the histogram-based algorithm from the C# code
-        from ..processors.window import WindowProcessor
-
-        return WindowProcessor.merge_restrictions(groups, window_size)
+        if len(groups) == 1 and all(
+            lo == hi == 1 for lo, hi in self._restriction_ranges
+        ):
+            # A lone restriction has nothing to relate: one group per match,
+            # and no order axis is needed (set-only queries run on any backend).
+            return [[m] for m in groups[0]]
+        sets = [set(g) for g in groups]
+        ranges = self._restriction_ranges if len(self._restriction_ranges) else None
+        if ranges is not None and sum(lo for lo, _ in ranges) != len(sets):
+            ranges = None  # sequential items expanded differently; no ranges
+        return run_cooccur(
+            self.search_backend,
+            self.timestamp_field,
+            sets,
+            self._constraints_by_restriction(len(sets)),
+            window,
+            ranges=ranges,
+        )
 
     def _merge_queries(
         self,
         subquery_results: list[QueryResult | AggregateResult | GroupedResult],
         window_size: int,
     ) -> QueryResult:
-        """Merge results from multiple subqueries."""
+        """``(A); (B) INWINDOW n``: unordered co-occurrence of whole stages."""
         if not subquery_results:
             return []
-
-        # Validate that subqueries don't have aggregations
+        stages: list[list[MessageGroup]] = []
         for i, result in enumerate(subquery_results):
             if isinstance(result, (AggregateResult, GroupedResult)):
                 raise ValueError(
                     f"Subquery {i + 1} contains aggregation/grouping which is not "
                     "supported in query sequences. Apply aggregation at the top level."
                 )
-
-        # Flatten all groups from all subqueries
-        all_groups: list[MessageGroup] = []
-        for subquery_result in subquery_results:
-            all_groups.extend(subquery_result)  # type: ignore[arg-type]
-
-        # Apply window processing
-        from ..processors.window import WindowProcessor
-
-        return WindowProcessor.merge_queries(all_groups, window_size)
-
-    @staticmethod
-    def _groups_by_boundary(
-        groups: list[MessageGroup], end: bool
-    ) -> dict[MessageId, list[MessageGroup]]:
-        """Index groups by their boundary message: last (max) or first (min)."""
-        bounds: dict[MessageId, list[MessageGroup]] = {}
-        for group in groups:
-            boundary = max(group) if end else min(group)
-            bounds.setdefault(boundary, []).append(group)
-        return bounds
+            stages.append(list(result))
+        return run_merge_groups(
+            self.search_backend, self.timestamp_field, stages, window_size
+        )
 
     def _merge_subqueries_positional(
         self,
@@ -1353,81 +1321,21 @@ class PrismQLVisitor(BasePrismQLVisitor):
         operator_ctx: Any,
         window: int,
     ) -> QueryResult:
-        """
-        Merge two subquery results using a positional operator.
-
-        Operates on whole groups: group A is FOLLOWED_BY group B when every
-        message of A precedes every message of B and the positional distance
-        from A's last message to B's first is within the window. Greedy
-        closest-match per LHS group, mirroring the restriction-level
-        sequential semantics. Matched groups are concatenated chronologically.
-
-        Args:
-            lhs_result: Result from the left subquery
-            rhs_result: Result from the right subquery
-            operator_ctx: The positional operator context (FollowedBy, PrecededBy, etc.)
-            window: Window size for the operator
-
-        Returns:
-            Merged query result with groups that satisfy the positional constraint
-        """
-        lhs_groups = [group for group in lhs_result if group]
-        rhs_groups = [group for group in rhs_result if group]
+        """``(A) FOLLOWED_BY (B) INWINDOW n`` and its kin between whole stage
+        results, through the operator layer: nearest right group per left
+        group, every group at that boundary expanding, members disjoint."""
         op = operator_ctx.getText().upper().replace("_", "")
-
-        if op in ("FOLLOWEDBY", "NOTFOLLOWEDBY"):
-            # Constraint runs forward from each LHS group's end to an RHS
-            # group's start.
-            lhs_bounds = self._groups_by_boundary(lhs_groups, end=True)
-            rhs_bounds = self._groups_by_boundary(rhs_groups, end=False)
-        elif op in ("PRECEDEDBY", "NOTPRECEDEDBY"):
-            # Constraint runs backward from each LHS group's start to an RHS
-            # group's end.
-            lhs_bounds = self._groups_by_boundary(lhs_groups, end=False)
-            rhs_bounds = self._groups_by_boundary(rhs_groups, end=True)
-        else:
+        if op not in ("FOLLOWEDBY", "PRECEDEDBY", "NOTFOLLOWEDBY", "NOTPRECEDEDBY"):
             raise ValueError(f"Unknown positional operator: {operator_ctx.getText()}")
-
-        lhs_ids = set(lhs_bounds)
-        rhs_ids = set(rhs_bounds)
-
-        if op == "FOLLOWEDBY":
-            matching_lhs = self._apply_followed_by(lhs_ids, rhs_ids, window)
-            pairs = self._create_sequential_pairs(
-                matching_lhs, rhs_ids, window, forward=True
-            )
-            return [
-                sorted(a_group) + sorted(b_group)
-                for a_end, b_start in pairs
-                for a_group in lhs_bounds[a_end]
-                for b_group in rhs_bounds[b_start]
-            ]
-        if op == "PRECEDEDBY":
-            matching_lhs = self._apply_preceded_by(lhs_ids, rhs_ids, window)
-            # Pairs come back chronological: [rhs_end, lhs_start]
-            pairs = self._create_sequential_pairs(
-                matching_lhs, rhs_ids, window, forward=False
-            )
-            return [
-                sorted(b_group) + sorted(a_group)
-                for b_end, a_start in pairs
-                for b_group in rhs_bounds[b_end]
-                for a_group in lhs_bounds[a_start]
-            ]
-        if op == "NOTFOLLOWEDBY":
-            surviving = self._apply_not_followed_by(lhs_ids, rhs_ids, window)
-            return [
-                sorted(group)
-                for boundary in sorted(surviving)
-                for group in lhs_bounds[boundary]
-            ]
-        # NOTPRECEDEDBY
-        surviving = self._apply_not_preceded_by(lhs_ids, rhs_ids, window)
-        return [
-            sorted(group)
-            for boundary in sorted(surviving)
-            for group in lhs_bounds[boundary]
-        ]
+        return run_chain_groups(
+            self.search_backend,
+            self.timestamp_field,
+            [g for g in lhs_result if g],
+            [g for g in rhs_result if g],
+            window,
+            forward=op.endswith("FOLLOWEDBY"),
+            negative=op.startswith("NOT"),
+        )
 
     def _evaluate_partial_sequence(
         self,

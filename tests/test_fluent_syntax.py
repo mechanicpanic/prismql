@@ -86,7 +86,9 @@ def test_fluent_window_constraints():
     results = engine.execute(
         "SELECT contains(problems), contains(solutions) INWINDOW 3"
     )
-    assert len(results) == 2
+    assert (
+        len(results) == 3
+    )  # ids are labels: 3 and 10 are adjacent in load order (spec, P3)
     assert [1, 3] in results
     assert [10, 11] in results
 
