@@ -22,7 +22,7 @@ The candidate path is the internal oracle for the asof path: with
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from . import _pl
@@ -216,6 +216,7 @@ def cooccur(
     key: str | None = None,
     fields: Sequence[str] = (),
     eligible: Any | None = None,
+    bindings: Mapping[str, tuple[int, str]] | None = None,
 ) -> Any:
     """Unordered co-occurrence (INWINDOW / DURING over a comma list): every
     combination of one row per frame whose members are pairwise distinct
@@ -232,6 +233,13 @@ def cooccur(
     canonicalization and set-dedup — the second pattern variable of a
     comma list lives here (``f0_page == f1_page``), where a post-filter on
     the canonical group could not tell the slots apart.
+
+    ``bindings`` maps a variable name to ``(member index, field)``: the
+    value that member's field has in the assignment comes out as a
+    ``_v_<var>`` column, constant within the group — read from the member
+    that binds it, *before* canonicalization forgets which member was
+    which. Two assignments with the same member set but different
+    bindings are different groups.
     """
     pl = _pl()
     if window < 0:
@@ -281,7 +289,10 @@ def cooccur(
         )
     if eligible is not None:
         g = g.filter(eligible)
-    g = g.drop(["_lo", "_hi"])
+    bind_cols = [f"_v_{v}" for v in (bindings or {})]
+    g = g.with_columns(
+        [pl.col(f"f{i}_{f}").alias(f"_v_{v}") for v, (i, f) in (bindings or {}).items()]
+    ).drop(["_lo", "_hi"])
     # Canonical order inside a group: (axis, position); dedupe as a set.
     g = g.with_row_index("_row")
     long = pl.concat(
@@ -302,6 +313,8 @@ def cooccur(
         pl.col("_ax").alias("_axs"),
         pl.col("position").alias("_pos"),
     )
+    if bind_cols:
+        keyed = keyed.join(g.select("_row", *bind_cols), on="_row", how="left")
     # Group order = the canonical (axis, position) pairs compared slot by slot.
     order_cols: list[str] = []
     for i in range(k):
@@ -311,13 +324,13 @@ def cooccur(
         )
         order_cols += [f"_oa{i}", f"_op{i}"]
     keyed = (
-        keyed.unique(subset=["_pos"], keep="first")
+        keyed.unique(subset=["_pos", *bind_cols], keep="first")
         .sort(order_cols)
         .with_row_index("group")
     )
     return (
-        long.join(keyed.select("_row", "group"), on="_row", how="inner")
-        .select("group", "slot", "position", "id")
+        long.join(keyed.select("_row", "group", *bind_cols), on="_row", how="inner")
+        .select("group", "slot", "position", "id", *bind_cols)
         .sort(["group", "slot"])
     )
 

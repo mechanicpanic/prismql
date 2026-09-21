@@ -265,3 +265,56 @@ def test_slots_follow_the_axis_not_the_id():
     frame = _frame(docs, [a, b])
     res = link(frame, None, a, b, window=(1, "day"), forward=True, timestamp_field=TS)
     assert groups(res) == [[9, 1]]  # A9: the engine would print [1, 9]
+
+
+# --- the review's three counterexamples (session 01a0c515) --------------------
+
+
+def test_cooccur_binds_from_the_member_that_names_the_variable():
+    docs = [
+        {"id": 1, "user": "wrong", "timestamp": 1},
+        {"id": 2, "user": "right", "timestamp": 2},
+        {"id": 3, "user": "wrong", "timestamp": 3},
+        {"id": 4, "user": "right", "timestamp": 4},
+    ]
+    named = Leg(frozenset({2}), equal=(("u", "user"),))
+    plain = Leg(frozenset({1}))
+    tail = Leg(frozenset({3, 4}), equal=(("u", "user"),))
+    frame = _frame(docs, [named, plain, tail])
+    row = cooccur_row(frame, [named, plain], window=4, timestamp_field=TS)
+    assert groups(row) == [[1, 2]]
+    assert row.collect()["_v_u"].to_list() == ["right", "right"]
+    ext = link(frame, row, None, tail, window=4, forward=True, timestamp_field=TS)
+    assert groups(ext) == [[1, 2, 4]]
+
+
+def test_bindings_attach_at_each_groups_own_last_slot():
+    docs = [
+        {"id": 1, "timestamp": 1},
+        {"id": 2, "timestamp": 2},
+        {"id": 3, "user": "a", "timestamp": 3},
+        {"id": 4, "user": "a", "timestamp": 4},
+    ]
+    q = Leg(frozenset({1, 2}))
+    bind = Leg(frozenset({3}), equal=(("u", "user"),))
+    hold = Leg(frozenset({4}), equal=(("u", "user"),))
+    frame = _frame(docs, [q, bind, hold])
+    res = quantified_row(frame, q, n_min=1, n_max=2, window=4, timestamp_field=TS)
+    res = link(frame, res, None, bind, window=4, forward=True, timestamp_field=TS)
+    res = link(frame, res, None, hold, window=4, forward=True, timestamp_field=TS)
+    assert groups(res) == [[1, 3, 4], [2, 3, 4], [1, 2, 3, 4]]
+
+
+def test_key_path_is_not_taken_when_a_variable_spans_two_fields():
+    docs = [
+        {"id": 1, "user": "a", "page": "x", "timestamp": 1},
+        {"id": 2, "user": "a", "page": "y", "timestamp": 2},
+    ]
+    both = Leg(frozenset({1}), equal=(("u", "user"), ("u", "page")))
+    one = Leg(frozenset({2}), equal=(("u", "user"),))
+    frame = _frame(docs, [both, one])
+    assert groups(cooccur_row(frame, [both, one], window=3, timestamp_field=TS)) == []
+    assert (
+        groups(link(frame, None, both, one, window=3, forward=True, timestamp_field=TS))
+        == []
+    )

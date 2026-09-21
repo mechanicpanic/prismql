@@ -94,7 +94,7 @@ def _bound(result: Any) -> set[str]:
 
 
 def _attach_bindings(
-    result: Any, frame: Any, slot: int, bindings: Sequence[Binding]
+    result: Any, frame: Any, slot: int | str, bindings: Sequence[Binding]
 ) -> Any:
     """Copy the value of each (var, field) from ``slot`` onto every row of
     its group as ``_v_<var>`` — the group's binding of that variable."""
@@ -107,8 +107,11 @@ def _attach_bindings(
     if not new:
         return result
     fields = list(dict.fromkeys(f for _, f in new))
+    # "last" = the group's own last slot: groups of different lengths
+    # (a quantified range extended by a link) have different maxima.
+    at = pl.col("slot").max().over("group") if slot == "last" else pl.lit(slot)
     values = (
-        result.filter(pl.col("slot") == slot)
+        result.filter(pl.col("slot") == at)
         .select("group", "position")
         .join(frame.select("position", *fields), on="position", how="left")
         .select("group", *[pl.col(f).alias(f"_v_{v}") for v, f in new])
@@ -116,50 +119,75 @@ def _attach_bindings(
     return result.join(values, on="group", how="left")
 
 
+def _self_consistency(prefix: str, leg: Leg) -> list[Any]:
+    """A variable named twice on one leg with different fields means those
+    fields agree on that row (``field(user,$u) AND field(page,$u)``)."""
+    pl = _pl()
+    first: dict[str, str] = {}
+    conds: list[Any] = []
+    for v, f in leg.equal:
+        if v in first and first[v] != f:
+            conds.append(pl.col(f"{prefix}{f}") == pl.col(f"{prefix}{first[v]}"))
+        first.setdefault(v, f)
+    return conds
+
+
+def _fresh_link_constraints(lhs: Leg, rhs: Leg) -> tuple[str | None, Any | None]:
+    pl = _pl()
+    if (
+        len(lhs.equal) == 1
+        and len(rhs.equal) == 1
+        and lhs.equal[0] == rhs.equal[0]
+        and not rhs.unequal
+        and not lhs.unequal
+    ):
+        return rhs.equal[0][1], None
+    conds = _self_consistency("l_", lhs) + _self_consistency("r_", rhs)
+    lhs_fields: dict[str, list[str]] = {}
+    for v, f in lhs.equal:
+        lhs_fields.setdefault(v, []).append(f)
+    for v, f in rhs.equal:
+        for g in lhs_fields.get(v, []):
+            conds.append(pl.col(f"r_{f}") == pl.col(f"l_{g}"))
+    for v, f in rhs.unequal:
+        if v not in lhs_fields:
+            raise PrismQLRuntimeError(
+                f"!${v} refers to a variable no earlier leg binds"
+            )
+        for g in lhs_fields[v]:
+            conds.append(pl.col(f"r_{f}") != pl.col(f"l_{g}"))
+    return None, (pl.all_horizontal(conds) if conds else None)
+
+
+def _extension_constraints(seqs: Any, rhs: Leg) -> tuple[str | None, Any | None]:
+    pl = _pl()
+    bound = _bound(seqs)
+    conds = _self_consistency("r_", rhs)
+    for v, f in rhs.equal:
+        if v in bound:
+            conds.append(pl.col(f"r_{f}") == pl.col(f"l__v_{v}"))
+    for v, f in rhs.unequal:
+        if v not in bound:
+            raise PrismQLRuntimeError(
+                f"!${v} refers to a variable no earlier leg binds"
+            )
+        conds.append(pl.col(f"r_{f}") != pl.col(f"l__v_{v}"))
+    return None, (pl.all_horizontal(conds) if conds else None)
+
+
 def _link_constraints(
     seqs: Any | None, lhs: Leg | None, rhs: Leg
 ) -> tuple[str | None, Any | None]:
-    """The (key, eligible) for one link: equality on a variable the anchor
-    binds becomes ``by=`` when it is the only constraint on a single field
-    of an ordinary two-leg link; everything else — a second variable, an
-    inequality, a value bound by an earlier slot — is an ``eligible``
-    expression over the prefixed columns, evaluated before the nearest
-    candidate is chosen."""
-    pl = _pl()
-    conds: list[Any] = []
-    key: str | None = None
+    """The (key, eligible) for one link. ``key`` (asof ``by=``) only when
+    the link's whole constraint is one variable on one field, named once
+    on each side of a fresh two-leg link; anything else — a second
+    variable, a variable on two fields, an inequality, a value bound by an
+    earlier slot — is an ``eligible`` expression over the prefixed
+    columns, evaluated before the nearest candidate is chosen."""
     if seqs is None:
         assert lhs is not None
-        lhs_vars = dict(lhs.equal)
-        shared = [(v, f) for v, f in rhs.equal if v in lhs_vars]
-        if (
-            len(shared) == 1
-            and not rhs.unequal
-            and lhs_vars[shared[0][0]] == shared[0][1]
-        ):
-            key = shared[0][1]
-        else:
-            for v, f in shared:
-                conds.append(pl.col(f"r_{f}") == pl.col(f"l_{lhs_vars[v]}"))
-        for v, f in rhs.unequal:
-            if v not in lhs_vars:
-                raise PrismQLRuntimeError(
-                    f"!${v} refers to a variable no earlier leg binds"
-                )
-            conds.append(pl.col(f"r_{f}") != pl.col(f"l_{lhs_vars[v]}"))
-    else:
-        bound = _bound(seqs)
-        for v, f in rhs.equal:
-            if v in bound:
-                conds.append(pl.col(f"r_{f}") == pl.col(f"l__v_{v}"))
-        for v, f in rhs.unequal:
-            if v not in bound:
-                raise PrismQLRuntimeError(
-                    f"!${v} refers to a variable no earlier leg binds"
-                )
-            conds.append(pl.col(f"r_{f}") != pl.col(f"l__v_{v}"))
-    eligible = pl.all_horizontal(conds) if conds else None
-    return key, eligible
+        return _fresh_link_constraints(lhs, rhs)
+    return _extension_constraints(seqs, rhs)
 
 
 # ------------------------------------------------------------- operators
@@ -182,7 +210,6 @@ def link(
     slot at its last (forward) / first (backward) member (``extend_link``).
     Bindings ride on the result as ``_v_<var>``.
     """
-    pl = _pl()
     axis, w = axis_and_window(window, timestamp_field)
     right = leg_frame(frame, rhs.ids)
     key, eligible = _link_constraints(seqs, lhs, rhs)
@@ -214,10 +241,7 @@ def link(
         carry=carry,
     )
     if forward:
-        new_slot = res.select(pl.col("slot").max()).collect().item()
-        if new_slot is None:
-            return res
-        return _attach_bindings(res, frame, int(new_slot), rhs.equal)
+        return _attach_bindings(res, frame, "last", rhs.equal)
     return _attach_bindings(res, frame, 0, rhs.equal)
 
 
@@ -251,15 +275,24 @@ def negative_link(
     return _attach_bindings(res, frame, 0, lhs.equal)
 
 
-def _cooccur_constraints(legs: Sequence[Leg]) -> tuple[str | None, Any | None]:
+def _cooccur_constraints(
+    legs: Sequence[Leg],
+) -> tuple[str | None, Any | None, dict[str, tuple[int, str]]]:
+    """(key, eligible, bindings) for a comma list. ``key`` only when the
+    whole constraint is one variable on one field named exactly once by
+    every member; otherwise every equality/inequality is ``eligible`` over
+    the member-prefixed columns. ``bindings`` says which member's field
+    carries each variable's value."""
     pl = _pl()
     first_leg: dict[str, tuple[int, str]] = {}
     conds: list[Any] = []
     for i, leg in enumerate(legs):
+        conds += _self_consistency(f"f{i}_", leg)
         for v, f in leg.equal:
             if v in first_leg:
                 j, g = first_leg[v]
-                conds.append(pl.col(f"f{i}_{f}") == pl.col(f"f{j}_{g}"))
+                if j != i:
+                    conds.append(pl.col(f"f{i}_{f}") == pl.col(f"f{j}_{g}"))
             else:
                 first_leg[v] = (i, f)
     for i, leg in enumerate(legs):
@@ -270,12 +303,13 @@ def _cooccur_constraints(legs: Sequence[Leg]) -> tuple[str | None, Any | None]:
                 )
             j, g = first_leg[v]
             conds.append(pl.col(f"f{i}_{f}") != pl.col(f"f{j}_{g}"))
-    # One variable, on one field, named by every member: a join key.
-    if len(first_leg) == 1 and not any(leg.unequal for leg in legs):
-        ((v, (_, f)),) = first_leg.items()
-        if all(any(vv == v and ff == f for vv, ff in leg.equal) for leg in legs):
-            return f, None
-    return None, (pl.all_horizontal(conds) if conds else None)
+    if (
+        len(first_leg) == 1
+        and all(len(leg.equal) == 1 and not leg.unequal for leg in legs)
+        and len({leg.equal[0] for leg in legs}) == 1
+    ):
+        return legs[0].equal[0][1], None, first_leg
+    return None, (pl.all_horizontal(conds) if conds else None), first_leg
 
 
 def cooccur_row(
@@ -286,22 +320,19 @@ def cooccur_row(
     timestamp_field: str,
 ) -> Any:
     """A comma list under one window: unordered k-way co-occurrence,
-    members distinct, variables held inside the enumeration."""
+    members distinct, variables held inside the enumeration and bound
+    from the member that names them (before canonicalization)."""
     axis, w = axis_and_window(window, timestamp_field)
-    key, eligible = _cooccur_constraints(legs)
-    res = cooccur(
+    key, eligible, bindings = _cooccur_constraints(legs)
+    return cooccur(
         [leg_frame(frame, leg.ids) for leg in legs],
         axis=axis,
         window=w,
         key=key,
         fields=variable_fields(legs),
         eligible=eligible,
+        bindings=bindings,
     )
-    # Canonical slots are not leg slots: bind from whichever slot carries
-    # the value — after canonicalization every member of the group agrees
-    # on each variable by construction, so slot 0 is as good as any.
-    bindings = tuple(b for leg in legs for b in leg.equal)
-    return _attach_bindings(res, frame, 0, bindings)
 
 
 def quantified_row(
