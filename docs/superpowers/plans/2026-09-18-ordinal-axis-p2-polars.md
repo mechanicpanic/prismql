@@ -409,6 +409,8 @@ Run → PASS on all seeds. If a seed fails, the diff IS the finding: record it i
 
 ### Task 6: `quantify` and `variable_filter` (`!$k`)
 
+> **Executed 2026-09-21.** `quantify(frame, *, axis, window, n_min, n_max, key=None, max_size=6)` = enumeration: the union over `n ∈ [n_min, n_max]` of `cooccur([frame] * n)` (n = 1 is the restriction itself), smaller subsets first, canonical order inside. `{n,}` passes `n_max=None` and is bounded by an explicit `max_size` (subsets grow as C(matches, n); an implicit ceiling would be silent-wrong) — the ceiling policy for the language surface is a P3 decision. Oracle = exhaustive `itertools.combinations` in `tests/plan/test_quantify.py`; HEAD parity only for exact `{n}` on dense ids; `{2,3}` is shown to yield triples the engine drops (A8). `variable_filter` became the one-line helper `inequality(key)` — the `!$k` eligibility for `nearest_link` / `extend_link` / `anti_link` — because eligibility already lives inside candidate selection (review finding 1).
+
 - [ ] `quantify(frame, *, n_min, n_max)` = window function `count over group ≥ n_min` (and `≤ n_max`); test vs engine `from(a){2,} INWINDOW 5`.
 - [ ] `variable_filter(joined, left_col, right_col, equal: bool)` — the `!$k` inequality is `equal=False`; test: `a/$u ~> !$u` yields only different-user pairs on random corpora, and equals `nearest_link` with `key` when `equal=True`. This is diary gap #1 landing as one filter.
 - [ ] Gate, commit.

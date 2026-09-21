@@ -302,6 +302,69 @@ def cooccur(
     )
 
 
+def quantify(
+    frame: Any,
+    *,
+    axis: str,
+    window: int,
+    n_min: int,
+    n_max: int | None,
+    key: str | None = None,
+    max_size: int = 6,
+) -> Any:
+    """A quantified restriction ``{n_min,n_max}``: every subset of ``n``
+    distinct matches of ``frame`` (``n_min <= n <= n_max``) whose axis span
+    is within ``window`` — one group per subset, canonical
+    ``(axis, position)`` order, set-deduplicated. This is enumeration, not
+    counting: ``{2,3}`` yields the pairs AND the triples (the engine runs
+    ranges as their minimum — audit A8).
+
+    ``{n,}`` has no natural ceiling — the caller passes ``n_max=None`` and
+    ``max_size`` bounds the enumeration explicitly (subsets grow as
+    ``C(matches_in_window, n)``); exceeding it silently would be the
+    silent-wrong class this project forbids, so it is a hard cap, not a
+    default guess.
+    """
+    pl = _pl()
+    if n_min < 1:
+        raise ValueError("quantifier minimum must be >= 1")
+    top = max_size if n_max is None else n_max
+    if top > max_size:
+        raise ValueError(f"quantifier upper bound {top} exceeds max_size={max_size}")
+    if top < n_min:
+        raise ValueError(f"quantifier range {{{n_min},{top}}} is empty")
+    parts = []
+    for n in range(n_min, top + 1):
+        if n == 1:
+            one = frame.drop_nulls([axis] + ([key] if key else [])).sort(
+                [axis, "position"]
+            )
+            parts.append(_result(one, [("position", "id")], order=[axis, "position"]))
+        else:
+            parts.append(cooccur([frame] * n, axis=axis, window=window, key=key))
+    # Renumber groups across sizes: smaller subsets first, then canonical order.
+    out = []
+    for i, part in enumerate(parts):
+        out.append(
+            part.with_columns((pl.col("group").cast(pl.Int64) + i * 10**12).alias("_g"))
+        )
+    merged = pl.concat(out).sort(["_g", "slot"])
+    groups = merged.select("_g").unique(maintain_order=True).with_row_index("group")
+    return (
+        merged.drop("group")
+        .join(groups, on="_g", how="inner")
+        .select("group", "slot", "position", "id")
+        .sort(["group", "slot"])
+    )
+
+
+def inequality(key: str) -> Any:
+    """The ``!$k`` eligibility for ``nearest_link`` / ``extend_link`` /
+    ``anti_link``: the candidate's ``key`` differs from the anchor's."""
+    pl = _pl()
+    return pl.col(f"r_{key}") != pl.col(f"l_{key}")
+
+
 def body_span_filter(result: Any, corpus: Any, *, axis: str, span: int) -> Any:
     """Keep groups whose ``max(axis) - min(axis) <= span``; a group with a
     null axis value on any slot is rejected (not treated as span 0)."""
