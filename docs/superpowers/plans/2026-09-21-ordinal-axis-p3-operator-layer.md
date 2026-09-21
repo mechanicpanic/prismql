@@ -149,10 +149,12 @@ def link_groups(corpus, left: result, right: result, *, axis, window, forward) -
     # for each left group, the nearest right group whose first slot (forward) / last slot (backward) lies strictly after the left group's last / before its first slot within window; when several right groups share the nearest boundary all expand (visitor:1393 behaviour, spec amendment 4); members distinct across groups.
 ```
 
-- [ ] **Step 1:** failing test against a brute oracle (enumerate all left×right pairs, pick by the rule) on tiny corpora, including the shared-boundary case and a right group overlapping the left group (must be excluded).
-- [ ] **Step 2–4:** implement via boundaries (`group_by group → min/max slot position`) + `nearest_link` on the boundary frames with `eligible` = "no member overlap" (`is_in` over member lists), then re-expand; pass.
-- [ ] **Step 5:** same cycle for `anti_link_groups` (lhs groups with no eligible rhs group within the window) and `cooccur_groups` (unordered co-occurrence of whole groups: pairwise boundary distance within the window, all members distinct), each against a brute oracle.
-- [ ] **Step 6:** commit `Plan: group-to-group links, negation and co-occurrence for subquery chains`.
+- [x] **Step 1:** failing test against a brute oracle (enumerate all left×right pairs, pick by the rule) on tiny corpora, including the shared-boundary case and a right group overlapping the left group (must be excluded).
+- [x] **Step 2–4:** implement via boundaries (`group_by group → min/max slot position`) + `nearest_link` on the boundary frames with `eligible` = "no member overlap" (`is_in` over member lists), then re-expand; pass.
+- [x] **Step 5:** same cycle for `anti_link_groups` (lhs groups with no eligible rhs group within the window) and `cooccur_groups` (unordered co-occurrence of whole groups: pairwise boundary distance within the window, all members distinct), each against a brute oracle.
+- [x] **Step 6:** commit `Plan: group-to-group links, negation and co-occurrence for subquery chains`.
+
+> **Executed 2026-09-21.** Three primitives (`link_groups`, `anti_link_groups`, `cooccur_groups`) plus wrappers (`chain_groups`, `negative_chain_groups`, `merge_groups`). Rules fixed by the oracles: forward links go left.last → right.first, backward left.first ← right.last; every right group starting at the nearest boundary message expands, ordered by its first slot then group number; members disjoint; a group with a null boundary cannot be placed. `cooccur_groups` = one group per stage, union span within the window, set-dedup by member set, canonical order over the (axis, position) sequence. Gotcha found: a lazy `unique()` reordered rows between two reads of the same frame, mis-pairing stages — numbered frames are now materialized once (also applied to `_expand_pairs`).
 
 ## Task 5: wire the IR executor
 
