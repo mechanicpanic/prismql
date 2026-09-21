@@ -166,6 +166,39 @@ def extend_link(
     return pl.concat([kept, added]).sort(["group", "slot"])
 
 
+def anti_link(
+    lhs: Any,
+    rhs: Any,
+    *,
+    axis: str,
+    window: int,
+    forward: bool,
+    key: str | None = None,
+    eligible: Any | None = None,
+) -> Any:
+    """NOT_FOLLOWED_BY / NOT_PRECEDED_BY: the ``lhs`` rows for which no
+    eligible ``rhs`` lies strictly after (forward) / before (backward)
+    within ``window`` on ``axis``. One slot per group, ordered by the lhs
+    row's ``(axis, position)``.
+
+    An lhs row with a null axis value cannot be shown to have no follower
+    and is dropped (the engine keeps it — recorded as a divergence).
+    ``window == 0`` keeps every lhs row: nothing lies within distance 0.
+    """
+    pl = _pl()
+    if window < 0:
+        raise ValueError(f"window must be >= 0, got {window}")
+    l_ax = f"l_{axis}"
+    left = _prefixed(lhs, "l_", axis, key)
+    if window > 0:
+        right = _prefixed(rhs, "r_", axis, key)
+        matched = _link(
+            pl, left, right, l_ax, f"r_{axis}", window, forward, key, eligible
+        )
+        left = left.join(matched.select("l_position"), on="l_position", how="anti")
+    return _result(left, [("l_position", "l_id")], order=[l_ax, "l_position"])
+
+
 def body_span_filter(result: Any, corpus: Any, *, axis: str, span: int) -> Any:
     """Keep groups whose ``max(axis) - min(axis) <= span``; a group with a
     null axis value on any slot is rejected (not treated as span 0)."""
@@ -264,4 +297,10 @@ def _candidates(
     )
 
 
-__all__ = ["RESULT_COLUMNS", "body_span_filter", "extend_link", "nearest_link"]
+__all__ = [
+    "RESULT_COLUMNS",
+    "anti_link",
+    "body_span_filter",
+    "extend_link",
+    "nearest_link",
+]

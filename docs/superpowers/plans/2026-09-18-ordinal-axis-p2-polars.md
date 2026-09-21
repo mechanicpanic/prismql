@@ -393,6 +393,8 @@ Run → PASS on all seeds. If a seed fails, the diff IS the finding: record it i
 
 ### Task 4: `anti_link` — NOT_FOLLOWED_BY / NOT_PRECEDED_BY
 
+> **Executed 2026-09-21.** `anti_link(lhs, rhs, *, axis, window, forward, key=None, eligible=None)` = lhs rows with no eligible candidate (anti-join on the nearest-link match); one slot; `window == 0` keeps every lhs row. **Divergence recorded:** an lhs row with a null axis value is dropped (finding 8), whereas HEAD keeps a timestamp-less message as "not followed" — pinned in `tests/plan/test_anti_link.py::test_null_timestamp_lhs_is_rejected_unlike_engine`; HEAD parity for temporal anti-links therefore runs on fixtures without nulls.
+
 - [ ] Tests vs engine: `SELECT from(a) NOT_FOLLOWED_BY from(b) INWINDOW 3` and the backward form, 5 seeds.
 - [ ] Implement: same asof as `nearest_link`, keep rows where the match is null; result has one slot.
 - [ ] Gate, commit.
