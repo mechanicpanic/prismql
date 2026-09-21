@@ -22,6 +22,7 @@ The candidate path is the internal oracle for the asof path: with
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from . import _pl
@@ -119,6 +120,7 @@ def extend_link(
     forward: bool,
     key: str | None = None,
     eligible: Any | None = None,
+    carry: Sequence[str] = (),
 ) -> Any:
     """Extend every group of a result frame by one slot: the nearest ``rhs``
     strictly after the group's last slot (forward) / before its first slot
@@ -129,6 +131,11 @@ def extend_link(
     axes — the engine's A7 defect is fixed here by construction). ``key``
     is equality between the anchor and the new slot. Groups with no
     eligible candidate are dropped; the others keep their group number.
+
+    ``carry`` names extra columns of ``seqs`` (constant within a group —
+    bound pattern-variable values, ``_v_<var>``) that ride on the anchor
+    as ``l_<name>`` so ``eligible`` can compare the candidate against them,
+    and are copied onto the added slot so the schema stays whole.
     """
     pl = _pl()
     if window < 0:
@@ -143,6 +150,7 @@ def extend_link(
             pl.col("position").filter(pl.col("slot") == edge).first().alias("position"),
             pl.col("position").alias("_members"),
             pl.col("slot").max().alias("_max_slot"),
+            *[pl.col(c).first().alias(c) for c in carry],
         )
         .join(corpus, on="position", how="inner")
     )
@@ -158,6 +166,7 @@ def extend_link(
         new_slot.cast(pl.UInt32).alias("slot"),
         pl.col("r_position").cast(pl.Int64).alias("position"),
         pl.col("r_id").alias("id"),
+        *[pl.col(f"l_{c}").alias(c) for c in carry],
     )
     survivors = added.select("group")
     kept = seqs.join(survivors, on="group", how="semi")
@@ -205,6 +214,8 @@ def cooccur(
     axis: str,
     window: int,
     key: str | None = None,
+    fields: Sequence[str] = (),
+    eligible: Any | None = None,
 ) -> Any:
     """Unordered co-occurrence (INWINDOW / DURING over a comma list): every
     combination of one row per frame whose members are pairwise distinct
@@ -215,6 +226,12 @@ def cooccur(
 
     Slots are ranks in that canonical order; groups are ordered by their
     canonical ``(axis, position)`` tuples.
+
+    ``fields`` are projected per member as ``f<i>_<field>`` and ``eligible``
+    is an expression over them, evaluated on every assignment *before*
+    canonicalization and set-dedup — the second pattern variable of a
+    comma list lives here (``f0_page == f1_page``), where a post-filter on
+    the canonical group could not tell the slots apart.
     """
     pl = _pl()
     if window < 0:
@@ -231,6 +248,7 @@ def cooccur(
         ]
         if key:
             cols.append(pl.col(key).alias(f"k{i}"))
+        cols += [pl.col(f).alias(f"f{i}_{f}") for f in fields]
         drop = [axis] + ([key] if key else [])
         return frames[i].drop_nulls(drop).select(cols)
 
@@ -261,6 +279,8 @@ def cooccur(
             )
             .drop("_b")
         )
+    if eligible is not None:
+        g = g.filter(eligible)
     g = g.drop(["_lo", "_hi"])
     # Canonical order inside a group: (axis, position); dedupe as a set.
     g = g.with_row_index("_row")

@@ -71,9 +71,15 @@ def corpus_frame_from_backend(backend: Any, **kw: Any) -> Any:
 
 
 def to_groups(result: Any) -> list[list[MessageId]]:
-    """Result frame (group, slot, position, id) -> the Python-facing groups."""
-    df = result.sort(["group", "slot"])
-    out: list[list[MessageId]] = []
-    for _, sub in df.group_by("group", maintain_order=True):
-        out.append(sub["id"].to_list())
-    return out
+    """Result frame (group, slot, position, id) -> the Python-facing groups.
+
+    Lazy or eager; one aggregation, no per-group Python loop (graph #14)."""
+    pl = _pl()
+    lf = result.lazy() if hasattr(result, "lazy") else result
+    df = (
+        lf.sort(["group", "slot"])
+        .group_by("group", maintain_order=True)
+        .agg(pl.col("id"))
+        .collect()
+    )
+    return [list(ids) for ids in df["id"].to_list()]
