@@ -44,7 +44,7 @@
 
 **Interfaces:** Produces `PrismQLEngine(..., quantifier_ceiling=None)`, `ValidationIssue` code `OPEN_QUANTIFIER`, runtime `PrismQLRuntimeError` with the same message when validation is bypassed.
 
-- [ ] **Step 1: failing test**
+- [x] **Step 1: failing test**
 
 ```python
 import pytest
@@ -70,10 +70,12 @@ def test_open_range_with_ceiling_means_closed_range():
     )
 ```
 
-- [ ] **Step 2:** `uv run pytest tests/test_quantifier_ceiling.py -v` → FAIL (no such code / no such kwarg).
-- [ ] **Step 3:** implement: validator emits `OPEN_QUANTIFIER` with suggestion `"Write {n,m} with an explicit upper bound, or set [engine] quantifier_ceiling = m"`; engine stores the ceiling and passes it to both executors; `execute_restrictions` substitutes `max_count = ceiling` or raises the same message. Server config parses `[engine] quantifier_ceiling` (int, optional) and `GET /schema` reports it.
-- [ ] **Step 4:** test passes; `make check-fast` green (the A8 xfail in `test_engine_defects_pinned.py` may now *error* instead of fail — if so change its query to `{2,4}` so it still pins "ranges run as their minimum").
-- [ ] **Step 5:** both references: quantifier section says `{n,}` needs the ceiling setting. Commit: `Quantifiers: an open range needs an explicit ceiling (graph #46)`.
+- [x] **Step 2:** `uv run pytest tests/test_quantifier_ceiling.py -v` → FAIL (no such code / no such kwarg).
+- [x] **Step 3:** implement: validator emits `OPEN_QUANTIFIER` with suggestion `"Write {n,m} with an explicit upper bound, or set [engine] quantifier_ceiling = m"`; engine stores the ceiling and passes it to both executors; `execute_restrictions` substitutes `max_count = ceiling` or raises the same message. Server config parses `[engine] quantifier_ceiling` (int, optional) and `GET /schema` reports it.
+- [x] **Step 4:** test passes; `make check-fast` green (the A8 xfail in `test_engine_defects_pinned.py` may now *error* instead of fail — if so change its query to `{2,4}` so it still pins "ranges run as their minimum").
+- [x] **Step 5:** both references: quantifier section says `{n,}` needs the ceiling setting. Commit: `Quantifiers: an open range needs an explicit ceiling (graph #46)`.
+
+> **Executed 2026-09-21.** Classic validation runs regex checks on the parse tree, not the IR walk, so the check exists twice (`_check_open_quantifiers` beside `_check_ir_query`), like the `similar_to` threshold. The A8 pin still xfails unchanged (it fails on the `{2,3}` assertion before reaching `{2,}`). `tests/test_quantifiers.py` got a ceiling of 10 in its fixture. `GET /schema` reports the ceiling.
 
 ## Task 2: the per-query frame
 
