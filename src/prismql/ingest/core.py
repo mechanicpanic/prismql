@@ -106,7 +106,7 @@ def _to_utc_micros(s: pl.Series, unit: str | None = None) -> pl.Series:
                 raise ValueError(
                     f"time_unit must be one of {sorted(_UNITS)}, got {unit!r}"
                 )
-            micros = f * _UNITS[unit]
+            micros: pl.Series | pl.Expr = f * _UNITS[unit]
         else:
             # Per value, by magnitude: |x| < 1e11 seconds (to 5138 AD),
             # < 1e14 milliseconds, < 1e17 microseconds, else nanoseconds.
