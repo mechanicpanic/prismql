@@ -1,7 +1,8 @@
 /* PrismQL board — canvas tokens, base and layout (graph @aleph/prismql, node
    #76). Ported from docs/superpowers/specs/board-design/Main.dc.html
-   <style> (~lines 14-97); inspector/editor/full-view rules live in
-   board-views.css to keep this file under the 150-line budget. The canvas's
+   <style> (~lines 14-97), one rule per line, same order as the canvas.
+   Inspector/editor rules live in board-views.css, full-view rules in
+   board-full.css — split to stay under the 150-line budget. The canvas's
    fixed 1440x900 becomes 100vw x 100vh here; .sc-interp qualifiers (a DC
    templating artifact, never present in this static markup) are dropped. */
 html, body { height: 100%; }
@@ -16,6 +17,11 @@ html, body { height: 100%; }
   .app { grid-template-columns: minmax(0, 1fr) 520px; }
   .rail { display: none; }
 }
+/* [hidden] is a UA default (display:none) that .fv{display:grid} on #full
+   would otherwise override once that class alone decides visibility —
+   pin it !important so the full view stays hidden until fullview.js
+   removes the attribute (graph @aleph/prismql, node #76). */
+[hidden] { display: none !important; }
 body{margin:0;font-family:"Instrument Sans",system-ui,sans-serif;background:#0b0b10;color:#e8e8f0}
 a{color:#22d3ee}a:hover{color:#67e8f9}
 .t-dark{--bg:#0b0b10;--panel:#0f0f15;--surface:#13131a;--hover:#181821;--sel:#1a1f2c;--sunken:#09090d;--line:#20202b;--line-2:#2e2e3c;--text:#ececf3;--text-2:#c9c9d5;--muted:#9a9aab;--faint:#80808f;--ok:#4ade80;--ok-bg:#0f2418;--warn:#f2b45a;--warn-bg:#261d0d;--err:#f87171;--err-bg:#2a1214;--err-line:#5a2a2e;--focus:#22d3ee;--accent:#22d3ee;--accent-ink:#06121a;--mark:#3b3413;--k-evaluate:#a78bfa;--k-search:#f2b45a;--k-similar:#22d3ee;--tk-keyword:#b39dff;--tk-fn:#79c0ff;--tk-var:#eba6ff;--tk-str:#8ad9be;--tk-num:#6fe0c0;--tk-punct:#6f6f82;--skel:#16161f;--skel-hi:#22222e;color-scheme:dark}

@@ -855,6 +855,8 @@ def test_board_page_and_lexer_are_served_from_the_package(client):
         "fullview.js",
         "board.js",
         "board.css",
+        "board-views.css",
+        "board-full.css",
     ):
         resp = client.get(f"/board/{asset}")
         assert resp.status_code == 200, asset

@@ -10,6 +10,7 @@
     rel="stylesheet" />
   <link rel="stylesheet" href="board.css" />
   <link rel="stylesheet" href="board-views.css" />
+  <link rel="stylesheet" href="board-full.css" />
 </head>
 <body>
   <div id="app" class="app t-dark">
@@ -36,7 +37,20 @@
           aria-label="Search the journal" />
       </label>
       <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
-        <button class="iconbtn" type="button" id="theme-toggle" aria-label="Switch theme" title="Switch theme"></button>
+        <button class="iconbtn" type="button" id="theme-toggle" aria-label="Switch to light theme"
+          title="Switch to light theme">
+          <svg id="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path
+              d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4">
+            </path>
+          </svg>
+          <svg id="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
+            <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path>
+          </svg>
+        </button>
         <button class="primary" type="button" id="new-query">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
             stroke-linecap="round" aria-hidden="true">
@@ -78,7 +92,7 @@
         <div id="journal-errpill"></div>
         <span style="margin-left: auto; font-size: 12px; color: var(--faint);">newest first</span>
       </div>
-      <div class="chips" id="journal-chips"></div>
+      <div class="chips" id="journal-chips" hidden></div>
       <div class="list" id="journal-list" tabindex="0"
         aria-label="Requests. Arrow keys move, Enter opens the output full screen"></div>
     </main>
@@ -91,7 +105,7 @@
       <div class="pane" id="inspector-pane"></div>
     </aside>
 
-    <div id="full" class="fv" hidden></div>
+    <section id="full" class="fv" tabindex="-1" aria-label="Request output" hidden></section>
   </div>
 
   <script src="prismql-lexer.js"></script>

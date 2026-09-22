@@ -7,7 +7,11 @@
 
   async function activity(since) {
     const r = await fetch("/activity?since=" + (since || 0) + "&limit=200");
-    return r.json();
+    try {
+      return await r.json();
+    } catch (e) {
+      throw new Error("activity: bad response (" + r.status + ")");
+    }
   }
 
   function stream(since, onEntry, onState) {
@@ -19,7 +23,17 @@
     function open() {
       if (closed) return;
       es = new EventSource("/activity/stream?since=" + lastSeq);
-      es.addEventListener("seq", function () {
+      es.addEventListener("seq", function (m) {
+        const serverSeq = Number(m.data);
+        if (!Number.isNaN(serverSeq) && serverSeq < lastSeq) {
+          // The server's own counter is behind what we last saw — it
+          // restarted. Rebase on its count and tell the caller to clear
+          // and backfill rather than stay deaf waiting for seq > lastSeq.
+          lastSeq = serverSeq;
+          if (onState) onState("reset");
+        } else if (!Number.isNaN(serverSeq)) {
+          lastSeq = Math.max(lastSeq, serverSeq);
+        }
         if (onState) onState("live");
       });
       es.onmessage = function (m) {
@@ -33,10 +47,22 @@
         if (onEntry) onEntry(entry);
       };
       es.onerror = function () {
-        if (onState) onState("down");
+        // Once a connection has opened, EventSource sets readyState back to
+        // CONNECTING (and retries on its own) for ANY interruption — the
+        // server's own clean end-of-stream (our ttl idle close) included.
+        // CLOSED here means the browser gave up — a genuine fatal error
+        // (e.g. the initial handshake failed) — and is the only case that
+        // should flash "down" and back off (graph @aleph/prismql, node #76).
+        const fatal = es && es.readyState === EventSource.CLOSED;
         if (es) es.close();
         es = null;
-        if (!closed) retryTimer = setTimeout(open, 4000);
+        if (closed) return;
+        if (fatal) {
+          if (onState) onState("down");
+          retryTimer = setTimeout(open, 4000);
+        } else {
+          open();
+        }
       };
     }
     open();
@@ -61,7 +87,11 @@
     const url = "/results/" + encodeURIComponent(rid) + "?" + params.toString();
     const r = await fetch(url);
     if (r.status === 404) return { gone: true };
-    return r.json();
+    try {
+      return await r.json();
+    } catch (e) {
+      return { error: { type: "http", message: "bad response (" + r.status + ")" } };
+    }
   }
 
   function jsonlUrl(rid, hydrate) {
@@ -73,7 +103,11 @@
 
   async function corpora() {
     const r = await fetch("/corpora");
-    return r.json();
+    try {
+      return await r.json();
+    } catch (e) {
+      throw new Error("corpora: bad response (" + r.status + ")");
+    }
   }
 
   async function evaluate(body) {
@@ -82,7 +116,13 @@
       headers: { "Content-Type": "application/json", "X-PrismQL-Client": "board" },
       body: JSON.stringify(body),
     });
-    return { status: r.status, body: await r.json() };
+    let parsed = null;
+    try {
+      parsed = await r.json();
+    } catch (e) {
+      parsed = null;
+    }
+    return { status: r.status, body: parsed };
   }
 
   const api = {
