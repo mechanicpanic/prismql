@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (P3)
+- `!$k` in both dialects: "unequal to the value an earlier leg bound to `$k`", chosen inside candidate selection; `UNBOUND_NEGATED_VARIABLE` when nothing bound it.
+
 ### Changed (P3 — one operator layer)
 - Every sequence/window operator executes through `prismql.plan` on both execution paths: FOLLOWED_BY / PRECEDED_BY and their negations, chains, INWINDOW / DURING comma rows, quantifiers, subquery stages. The Python builders, the backtracking window merger, the post-hoc variable validator and the Rust operator kernels are deleted; `RustMemoryBackend` remains as a search-only backend. Semantics now match the language reference where the engine used to diverge (audit A1–A10, D2): stream distance on gapped and string ids, unordered co-occurrence, no message reuse across axes, ranges enumerated, slots in axis order, variables held inside candidate selection, one group per subquery stage with the union's span in the window. Backends without an order axis (OpenSearch) raise `PositionalUnsupportedError` on sequence operators.
 - `polars` and `pyarrow` are core dependencies: the operator layer is a Polars plan over an Arrow table and every sequence/window query needs it. `[plan]` and `[arrow]` remain as empty aliases for one release.

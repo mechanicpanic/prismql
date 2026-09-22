@@ -104,22 +104,46 @@ def test_q2_correlated_temporal_chain_with_body_window(tier):
     assert want
 
 
-def test_q3_cooccurrence_on_the_ordered_subset(tier):
+# Tuple counts committed by the Polars spike (prismql-research/experiments/
+# polars-spike/RESULTS.md): the independent oracle now that the engine *is*
+# the plan. Q3's committed count is the ordered subset (the spike compared
+# against the D2-era engine); the full unordered result is checked against
+# the primitive.
+COMMITTED = {
+    "100k": {"q1": 1288, "q2": 4, "q3_ordered": 1966},
+    "1m": {"q1": 20831, "q2": 28, "q3_ordered": 30832},
+}
+
+
+def test_q3_cooccurrence_unordered(tier, request):
     lf, engine = tier
-    robbery = set(
-        lf.filter(pl.col("type") == "ROBBERY").select("id").collect()["id"].to_list()
+    name = request.node.callspec.id
+    got = to_groups(
+        cooccur([_sel(lf, "ROBBERY"), _sel(lf, "BATTERY")], axis="position", window=5)
     )
-    got = [
-        g
-        for g in to_groups(
-            cooccur(
-                [_sel(lf, "ROBBERY"), _sel(lf, "BATTERY")], axis="position", window=5
-            ).collect()
-        )
-        if g[0] in robbery
-    ]
     want = engine.execute(
         'SELECT field(type, "ROBBERY"), field(type, "BATTERY") INWINDOW 5'
     )
     assert _tuples(got) == _tuples(want)
-    assert want
+    robbery = set(
+        lf.filter(pl.col("type") == "ROBBERY").select("id").collect()["id"].to_list()
+    )
+    assert len([g for g in want if g[0] in robbery]) == COMMITTED[name]["q3_ordered"]
+
+
+def test_committed_counts(tier, request):
+    """Q1 and Q2 through the engine equal the counts the spike committed."""
+    _, engine = tier
+    name = request.node.callspec.id
+    q1 = engine.execute(
+        'SELECT field(type, "ROBBERY") FOLLOWED_BY field(type, "BATTERY") INWINDOW 5'
+    )
+    q2 = engine.execute(
+        'SELECT field(type, "ROBBERY") AND field(cell, $c) '
+        'FOLLOWED_BY field(type, "BATTERY") AND field(cell, $c) DURING 30 minutes '
+        'FOLLOWED_BY field(type, "MOTOR VEHICLE THEFT") AND field(cell, $c) '
+        "DURING 30 minutes "
+        "DURING 30 minutes"
+    )
+    assert len(q1) == COMMITTED[name]["q1"]
+    assert len(q2) == COMMITTED[name]["q2"]

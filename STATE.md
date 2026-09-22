@@ -8,6 +8,7 @@ it describes. Agent memory points here; it does not duplicate this.*
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-22 | **P3 complete — one operator layer.** Both execution paths run every sequence/window operator through `prismql.plan` (`plan/operators.py` over the P2 primitives, `plan/bridge.py` from the executors' state, `plan/frames.py` per-query frame from the backend's order axis). Deleted: the Python builders, the backtracking window merger, the post-hoc variable validator, the Rust operator kernels (`RustMemoryBackend` stays search-only, graph #51). Audit A1–A10 and D2 closed by construction; every `xfail(strict)` contract passes and its marker is gone. `!$k` in both dialects; `{n,}` needs `quantifier_ceiling` (graph #46); polars/pyarrow core. Real-data check: collusion.wiki three-leg same-label restore 0 → 47 chains. Codex adversarial reviews of the plan and of tasks 2–3 found seven real defects before merge (binding from the wrong member, global slot maximum, key path swallowing a cross-field equality, …), all fixed with regressions. | plan `docs/superpowers/plans/2026-09-21-ordinal-axis-p3-operator-layer.md` |
 | 2026-09-21 | **P2 complete**: all sequence primitives as a Polars plan in `prismql.plan` (tasks 3–8: chains with distinctness across axes, anti-links, unordered k-way co-occurrence, quantifier enumeration, `!$k` helper, Chicago 100k/1m gate). Engine divergences recorded: A9 (groups sorted by id), null-timestamp lhs kept by the engine on negative links. | `ad3c8dd`…`2523df4` + this commit |
 | 2026-09-21 | **Audit A10** (silent-wrong, both paths): two variables on one leg, or a variable that skips a leg of a chain, fall back to nearest-then-filter, so any other-key event in between empties the result (a single `$k` on a two-leg link is fine); found by running the P2 primitives against HEAD on the collusion.wiki export (3-leg same-label restore: HEAD 0, plan 9). Pinned xfail(strict); the plan primitives are correct by construction; P3 fixes it by routing `$k` links through them. Cold-clone check the same day: `uv sync` on a fresh clone fails on the `../prismql-rust` path source (any group, any flags) — see open items. | `tests/test_ordinal_axis_contract.py`, spec A10 |
 | 2026-09-19 | **P2 tasks 1–2**: `prismql.plan` (Arrow-native `corpus_frame`, hostile fixtures) and `nearest_link` — FOLLOWED_BY/PRECEDED_BY as a Polars plan, asof path + candidate path with eligibility inside selection (`!$k` works as a primitive), `(axis, position)` tie-break, proven vs HEAD where valid and vs a brute-force oracle elsewhere. New audit finding A9. `PROJECT.md` rewritten as the full project description. | `7ac4c81`, `526f37e`, `3152246`; plan `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md` |
@@ -22,27 +23,23 @@ it describes. Agent memory points here; it does not duplicate this.*
 ## Decided
 
 - **Stream order = load order; ids are labels** (unique; no `order="id"` switch). Loader owns ordering. — 2026-09-18
-- **One owner of merge semantics**: every operator implemented once in Python; executor = **Polars plan** over the Arrow corpus table (not Rust kernels). Rust stays for tantivy (text) only; `rust_memory` and its kernels retire after P3. — 2026-09-18
+- **One owner of merge semantics**: every operator implemented once; executor = **Polars plan** over the per-query frame from the order axis. Rust stays for tantivy (text) only; `rust_memory` is search-only, its kernels are gone. — 2026-09-18, done 2026-09-22
 - **Layer 1 contract is Arrow**, not JSON: corpus = ordered Arrow table; ingest = "anything → Arrow" (DuckDB recommended, not required); results = `(group, slot, position, id)` table; `list[list[MessageId]]` stays as the Python-facing view. — 2026-09-18
 - **Agent surface**: MCP-tool-returning-JSON is the wrong interface (whole output lands in context); target = skill + scriptable API with table results (code-execution model). MCP shim stays as a thin adapter. Own track, after P3. — 2026-09-18
-- **Python floor is 3.12** (from 3.9): Polars needs ≥ 3.10, 3.9 is EOL; CI matrix 3.12/3.13; `[plan]` extra = polars + pyarrow. — 2026-09-19
+- **Python floor is 3.12** (from 3.9): Polars needs ≥ 3.10, 3.9 is EOL; CI matrix 3.12/3.13; polars + pyarrow are core since P3 (`[plan]`/`[arrow]` empty aliases for one release). — 2026-09-19, 2026-09-22
 - `similar_to` threshold required, no default, no top_k; v2 (scores-first ranking algebra) is the paper contribution. — 2026-07-16
 - INWINDOW is UNORDERED by definition (language reference); kernels that enforce order are defects. — reaffirmed 2026-09-18
 
 ## Open
 
 **Blockers (silent-wrong class)**
-- INWINDOW co-occurrence enforces restriction order in both kernels (`from(b), from(a) INWINDOW 3` → empty). Fixed by construction in P3; pinned `xfail(strict)` in `tests/test_positional_path_parity.py`.
-- Position is id-arithmetic on Rust, list-index on Python, lexical for string ids; pinned `xfail(strict)` in `tests/test_ordinal_axis_contract.py`. Fixed in P3.
-- A chain mixing positional and temporal links can reuse a message (`[[0,0,1]]`); quantifier ranges `{n,}`/`{n,m}` execute as `{n}`. Pinned `xfail(strict)` in `tests/test_engine_defects_pinned.py` (found by the P2 plan review, 2026-09-19). Fixed by construction in P3; range enumeration must be defined first.
-- Every result group is sorted by id (`query_visitor.py:490`, `executor.py:381`): with time non-monotone in id order a temporal link returns the later message first (A9, 2026-09-19). Not pinned separately — covered by the plan tests' oracle matrix; P3 removes the sort.
+- None open. The audit defects A1–A10 and D2 (2026-09-18/21) are closed by the operator layer and stand as ordinary contract tests (`tests/test_ordinal_axis_contract.py`, `tests/test_engine_defects_pinned.py`, `tests/test_positional_path_parity.py`).
 
 **Next work, in order**
-1. **P2** — primitives as a Polars plan: `docs/superpowers/plans/2026-09-18-ordinal-axis-p2-polars.md`, revision 2 after the Astra review. **All 8 tasks done 2026-09-21** — `prismql.plan` holds every primitive (`nearest_link`, `extend_link`, `body_span_filter`, `anti_link`, `cooccur`, `quantify`, `inequality` = `!$k`), proven against the engine where valid, exhaustive oracles elsewhere, and the Chicago 100k/1m tiers. Nothing wired into the executor yet.
-2. **P3** — single operator layer on the plan; delete both merge paths; expose `!$k` in both dialects; xfails flip.
-3. **P4** — gates: Chicago full-tuple equality (Q1–Q3), positional benchmark, relabeled corpora.
-4. Tantivy order axis (fast fields) → retire `rust_memory`.
-5. Agent surface track; workbench M0–M3; mismatch diary Q04–Q18; `similar_to` v2.
+1. **P4 gates** — Chicago full-tuple equality on the tiers is in `tests/plan/test_chicago_tiers.py` (100k/1m via `PRISMQL_TIERS`; full tier on the owner's word); still to add: a positional benchmark query on the full tier, relabeled corpora (gapped numeric, non-lexical strings) on the tiers.
+2. **Frame cost** — the per-link frame (`get_documents` of the participating ids per call) is the known cost of the bridge; measure on the full tier before optimizing (risk #14: 1m tier Q2 0.41 s vs the spike's 0.012 s direct).
+3. Tantivy order axis from fast fields for indexes opened from disk (today: only when built from documents); remote backends (OpenSearch) need an order contract or stay set-only.
+4. Agent surface track; workbench M0–M3; mismatch diary Q04–Q18; `similar_to` v2.
 
 **Not decided / to verify**
 - Novelty claim for the ranked semantic join rests on 2026 preprints (HiMu unverified; VectraFlow verified).
