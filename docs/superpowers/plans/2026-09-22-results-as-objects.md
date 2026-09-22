@@ -599,7 +599,7 @@ git commit -m "Evaluate keeps its result under an id and answers with the first 
 - Produces:
   - `GET /results/{rid}?offset=0&limit=20&hydrate=&fields=a,b` → the page payload plus `result_id`, `ok: true`. `limit` is capped at `config.max_results`. `fields` is comma-separated.
   - `GET /results/{rid}.jsonl?hydrate=&fields=` → `application/x-ndjson`, every stored item, one per line, streamed in windows of 1000.
-  - An unknown or evicted id → 404 `{"ok": false, "error": {"type": "gone", "message": "result r7 is not kept any more (evicted or the corpus was reloaded); run the query again"}}`.
+  - An unknown or evicted id, or one computed on an earlier corpus load (`stored.load != state.generation`, set by Task 4's fix: an evaluate in flight across `/reload` must never be paged through the new order axis) → 404 `{"ok": false, "error": {"type": "gone", "message": "result r7 is not kept any more (evicted or the corpus was reloaded); run the query again"}}`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -663,7 +663,7 @@ Expected: FAIL with 404 from the unrouted path on the first two tests.
         rid: str, hydrate: bool | None = None, fields: str | None = None
     ) -> Any:
         stored = state.results.get(rid)
-        if stored is None:
+        if stored is None or stored.load != state.generation:
             return _gone(rid)
         engine, corpus_cfg, _lock = state.engine_for(stored.corpus)
         args = _page_args(hydrate, fields)
@@ -689,7 +689,7 @@ Expected: FAIL with 404 from the unrouted path on the first two tests.
         fields: str | None = None,
     ) -> Any:
         stored = state.results.get(rid)
-        if stored is None:
+        if stored is None or stored.load != state.generation:
             return _gone(rid)
         engine, corpus_cfg, _lock = state.engine_for(stored.corpus)
         payload = page_payload(
