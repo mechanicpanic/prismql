@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -12,6 +13,11 @@ from typing import Any
 from ..reference import load_reference
 
 DEFAULT_URL = "http://127.0.0.1:8901"
+# What evaluate() actually hands back as a page-able id ("r<N>"); anything
+# else must not reach the URL path unquoted — a dotted/query-bearing id can
+# hit a different route (e.g. /results/{id}.jsonl) or drop offset/limit
+# silently instead of erroring.
+_RESULT_ID_RE = re.compile(r"^r\d+$")
 
 _TOOL_DESCRIPTION = """\
 Run a PrismQL query against the configured event corpus.
@@ -27,10 +33,13 @@ freely, then ask the user to persist stable ones into the server config:
   dictionaries={"spikes": ["spike", "surge", "gap up"]}
 On multi-corpus servers pass corpus="name" to target a specific corpus
 (default corpus otherwise; unknown names return the available list).
-Every result is kept on the server: the reply carries `total`, the first
-`max_results` groups and a `result_id`. Page on with result_page(result_id,
-offset, limit) instead of re-running the query. For a whole result on disk
-pass output="file" (server-side [server] enable_file_output).
+Match results (FOLLOWED_BY/PRECEDED_BY chains, INWINDOW, etc.) are kept on
+the server: the reply carries `total`, the first `max_results` groups and a
+`result_id`. Page with result_page(result_id, offset, limit) while
+`truncated` is true; the server caps `limit`. Aggregate and GROUP BY
+answers are small and returned inline only — they carry no `result_id` and
+are not kept. For a whole result on disk pass output="file" (server-side
+[server] enable_file_output).
 Read the prismql://reference resource for the full language before
 writing complex queries. Returns JSON with matched event groups,
 hydrated with full event content.
@@ -57,7 +66,16 @@ def _call(
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as resp:
-            loaded: dict[str, Any] = json.loads(resp.read())
+            try:
+                loaded: dict[str, Any] = json.loads(resp.read())
+            except ValueError:
+                return {
+                    "ok": False,
+                    "error": {
+                        "type": "http",
+                        "message": "non-JSON response from server",
+                    },
+                }
             return loaded
     except urllib.error.HTTPError as e:
         try:
@@ -107,8 +125,20 @@ def page_via_http(
     result_id: str, offset: int = 0, limit: int = 20, base_url: str | None = None
 ) -> dict[str, Any]:
     """GET one page of a kept result; structured errors, never raises."""
+    if not _RESULT_ID_RE.match(result_id):
+        return {
+            "ok": False,
+            "error": {
+                "type": "bad_request",
+                "message": (
+                    "result_id must look like 'r<N>' (as returned by "
+                    f"evaluate); got {result_id!r}"
+                ),
+            },
+        }
     query = urllib.parse.urlencode({"offset": offset, "limit": limit})
-    return _call("GET", f"/results/{result_id}?{query}", None, base_url)
+    rid = urllib.parse.quote(result_id, safe="")
+    return _call("GET", f"/results/{rid}?{query}", None, base_url)
 
 
 def build_server() -> Any:
@@ -137,8 +167,11 @@ def build_server() -> Any:
 
     @server.tool(
         description=(
-            "Page a kept result by the result_id an earlier evaluate() call "
-            "returned, instead of re-running the query."
+            "Page a kept match result by the result_id an earlier evaluate() "
+            "call returned, while its `truncated` is true, instead of "
+            "re-running the query. Returns one page: total, offset, count, "
+            "truncated and the page's results. A `gone` error means the "
+            "result was evicted or the corpus reloaded — re-run the query."
         )
     )
     def result_page(result_id: str, offset: int = 0, limit: int = 20) -> str:

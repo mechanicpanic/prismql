@@ -21,6 +21,40 @@ def test_default_url():
     assert DEFAULT_URL == "http://127.0.0.1:8901"
 
 
+@pytest.mark.parametrize("bad_id", ["r1.jsonl", "r1#x", "r1?x=", "../activity"])
+def test_page_via_http_rejects_malformed_result_ids(bad_id):
+    # no server listening anywhere reachable — the check must precede the
+    # call, or these would either 404 the wrong route, mis-parse the query
+    # string, or (for a path-traversal id) reach a route outside /results
+    result = page_via_http(bad_id, base_url="http://127.0.0.1:9")
+    assert result["ok"] is False
+    assert result["error"]["type"] == "bad_request"
+    assert bad_id in result["error"]["message"]
+
+
+def test_call_never_raises_on_a_non_json_success_body(monkeypatch):
+    import urllib.request
+
+    from prismql.server import mcp
+
+    class FakeResponse:
+        def read(self) -> bytes:
+            return b"not json"
+
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_a, **_k: FakeResponse())
+    result = mcp._call("GET", "/whatever", None, "http://127.0.0.1:9")
+    assert result == {
+        "ok": False,
+        "error": {"type": "http", "message": "non-JSON response from server"},
+    }
+
+
 def test_round_trip_against_app(tmp_path):
     """End-to-end through a real socket: uvicorn in a thread."""
     pytest.importorskip("fastapi")
@@ -58,9 +92,13 @@ def test_round_trip_against_app(tmp_path):
     rid = result["result_id"]
     page = page_via_http(rid, offset=1, limit=1, base_url="http://127.0.0.1:8929")
     assert page["count"] == 1
+    assert page["results"][0]["ids"] == [2]
+    assert page["truncated"] is False
 
-    # a bogus/stale result id comes back as the server's structured 404
-    gone = page_via_http("no-such-id", base_url="http://127.0.0.1:8929")
+    # a well-formed but stale/unknown result id comes back as the server's
+    # structured 404 — validation only rejects malformed ids, not unknown
+    # ones (those still need the server's own "gone" answer)
+    gone = page_via_http("r999999", base_url="http://127.0.0.1:8929")
     assert gone["ok"] is False
     assert gone["error"]["type"] == "gone"
 
