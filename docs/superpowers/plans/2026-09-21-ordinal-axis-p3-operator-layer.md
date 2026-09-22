@@ -198,11 +198,13 @@ def link_groups(corpus, left: result, right: result, *, axis, window, forward) -
 
 ## Task 9: gates, docs, graph
 
-- [ ] **Step 1:** `tests/plan/test_chicago_tiers.py` gains the engine-vs-oracle full-tuple assertions through `PrismQLEngine` on 100k/1m (`PRISMQL_TIERS=100k,1m make check`); a positional tier query is added. Full tier only on the owner's word (graph #27).
-- [ ] **Step 2:** (moved to Task 5 step 0 by revision 2) — confirm `[plan]` alias and `PlanUnavailableError` guard are still coherent.
-- [ ] **Step 3:** `LANGUAGE_REFERENCE.md` + `PIPE_REFERENCE.md`: INWINDOW truly unordered; positional distance = stream distance; string ids; `{n,}` ceiling; `!$k`; negative link drops axis-less lhs. `CHANGELOG.md` Unreleased: the semantic changes by name. `STATE.md`: P3 shipped, A1–A10/D2 closed, "HEAD is a valid oracle only…" paragraph deleted. `AGENTS.md`: Rust rows removed from Commands; `skills/prismql/SKILL.md`: "Known-wrong today" section deleted.
-- [ ] **Step 4:** graph: #11 modes → pratyakshita/vartamana; #8 (single operator layer) realized; #6 (two owners) → atita; #12 #16 #29 #44 `addressed_by` #11 and released on the verifier's verdict; #14 (speed risk) answered by the tier numbers; #43 seed rewritten to "what stands now"; #41 by Task 7's decision.
+- [x] **Step 1:** `tests/plan/test_chicago_tiers.py` gains the engine-vs-oracle full-tuple assertions through `PrismQLEngine` on 100k/1m (`PRISMQL_TIERS=100k,1m make check`); a positional tier query is added. Full tier only on the owner's word (graph #27).
+- [x] **Step 2:** (moved to Task 5 step 0 by revision 2) — confirm `[plan]` alias and `PlanUnavailableError` guard are still coherent.
+- [x] **Step 3:** `LANGUAGE_REFERENCE.md` + `PIPE_REFERENCE.md`: INWINDOW truly unordered; positional distance = stream distance; string ids; `{n,}` ceiling; `!$k`; negative link drops axis-less lhs. `CHANGELOG.md` Unreleased: the semantic changes by name. `STATE.md`: P3 shipped, A1–A10/D2 closed, "HEAD is a valid oracle only…" paragraph deleted. `AGENTS.md`: Rust rows removed from Commands; `skills/prismql/SKILL.md`: "Known-wrong today" section deleted.
+- [x] **Step 4:** graph: #11 modes → pratyakshita/vartamana; #8 (single operator layer) realized; #6 (two owners) → atita; #12 #16 #29 #44 `addressed_by` #11 and released on the verifier's verdict; #14 (speed risk) answered by the tier numbers; #43 seed rewritten to "what stands now"; #41 by Task 7's decision.
 - [ ] **Step 5:** cold review (`reviewer` sub-agent, separate worktree) on the whole branch diff; verifier on the claim "Chicago 100k/1m tuples equal the oracle and 372 stands" before anything is released in the graph.
+
+> **Executed 2026-09-22 (steps 1–4).** The tier tests assert the spike's committed counts through the engine (parity alone would be circular now). polars core landed in task 5. Docs: STATE (P3 complete, no open silent-wrong blocker, next work), AGENTS (plan package, tier command), PROJECT (layer 3 today), CHANGELOG (!$k, the layer), the skill, both references. Graph: #11 pratyakshita/vartamana, #8 vartamana, #6 atita, #12/#16/#29/#44 released via #11, #14 measured and accepted, #51 Rust decision, #43 seed. Step 5 (cold review by the reviewer role in a worktree + Codex adversarial review) launched; the graph release of #11 waits for their verdicts and the owner's push.
 
 ## Self-review
 
