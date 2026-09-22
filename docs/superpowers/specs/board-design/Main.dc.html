@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PrismQL board</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Instrument+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:"Instrument Sans",system-ui,sans-serif;background:#0b0b10;color:#e8e8f0}
+a{color:#22d3ee}a:hover{color:#67e8f9}
+.t-dark{--bg:#0b0b10;--panel:#0f0f15;--surface:#13131a;--hover:#181821;--sel:#1a1f2c;--sunken:#09090d;--line:#20202b;--line-2:#2e2e3c;--text:#ececf3;--text-2:#c9c9d5;--muted:#9a9aab;--faint:#80808f;--ok:#4ade80;--ok-bg:#0f2418;--warn:#f2b45a;--warn-bg:#261d0d;--err:#f87171;--err-bg:#2a1214;--err-line:#5a2a2e;--focus:#22d3ee;--accent:#22d3ee;--accent-ink:#06121a;--mark:#3b3413;--k-evaluate:#a78bfa;--k-search:#f2b45a;--k-similar:#22d3ee;--tk-keyword:#b39dff;--tk-fn:#79c0ff;--tk-var:#eba6ff;--tk-str:#8ad9be;--tk-num:#6fe0c0;--tk-punct:#6f6f82;--skel:#16161f;--skel-hi:#22222e;color-scheme:dark}
+.t-light{--bg:#f5f5f8;--panel:#fbfbfd;--surface:#ffffff;--hover:#f3f3f7;--sel:#e9f5f8;--sunken:#f0f0f4;--line:#e3e3ea;--line-2:#cfcfda;--text:#14141b;--text-2:#2d2d38;--muted:#585868;--faint:#6a6a79;--ok:#15803d;--ok-bg:#e8f6ed;--warn:#a1560b;--warn-bg:#fdf3e2;--err:#c81e1e;--err-bg:#fdefef;--err-line:#f1b5b5;--focus:#0e7490;--accent:#0e7490;--accent-ink:#ffffff;--mark:#fdf0b8;--k-evaluate:#6d28d9;--k-search:#a1560b;--k-similar:#0e7490;--tk-keyword:#6d28d9;--tk-fn:#1d4ed8;--tk-var:#a21caf;--tk-str:#047857;--tk-num:#0f766e;--tk-punct:#8a8a99;--skel:#ececf2;--skel-hi:#f8f8fb;color-scheme:light}
+.app :focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.app .fv:focus-visible{outline:none}
+.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace}
+.tk-keyword{color:var(--tk-keyword);font-weight:600}.tk-fn{color:var(--tk-fn)}.tk-var{color:var(--tk-var);font-style:italic}.tk-str{color:var(--tk-str)}.tk-num{color:var(--tk-num)}.tk-punct{color:var(--tk-punct)}
+button{font:inherit;color:inherit}
+.topbar{grid-column:1 / -1;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;letter-spacing:.01em;width:192px}
+.logo > span:not(.sc-interp){font-weight:400;color:var(--muted)}
+.live{display:flex;align-items:center;gap:8px;height:30px;padding:0 12px 0 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.live:hover{border-color:var(--line-2)}
+.live b{font-weight:600;color:var(--ok)}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 2s ease-out infinite}
+.live.off b{color:var(--muted)}.live.off i{background:var(--faint);animation:none}
+.live.down b{color:var(--warn)}.live.down i{background:var(--warn);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 55%,transparent)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.searchbox{flex:1;max-width:520px;display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--faint)}
+.searchbox:focus-within{border-color:var(--focus)}
+.searchbox input{flex:1;border:0;background:none;outline:none;font:inherit;font-size:13px;color:var(--text)}
+.searchbox input::placeholder{color:var(--faint)}
+.iconbtn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);cursor:pointer;padding:0;flex-shrink:0}
+.iconbtn:hover{color:var(--text);border-color:var(--line-2)}
+.iconbtn.sm{width:28px;height:28px;border-radius:6px}
+.primary{display:flex;align-items:center;gap:8px;height:34px;padding:0 14px;border:0;border-radius:8px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
+.primary:hover{filter:brightness(1.08)}
+.primary:disabled{opacity:.6;cursor:progress}
+.ghost{display:flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:7px;background:var(--surface);font-size:12px;color:var(--text);cursor:pointer;white-space:nowrap}
+.ghost:hover{border-color:var(--line-2)}
+.kbd{font:500 10px "JetBrains Mono",monospace;padding:1px 5px;border-radius:4px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);opacity:.8}
+.rail{border-right:1px solid var(--line);background:var(--panel);overflow:auto;padding:14px 12px 20px;display:flex;flex-direction:column;gap:18px}
+.rail h3{margin:0 0 6px 6px;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+.seg{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--sunken)}
+.seg button{height:28px;border:0;border-radius:6px;background:none;font-size:12px;color:var(--muted);cursor:pointer}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 0 0 1px var(--line-2)}
+.facet{display:flex;align-items:center;gap:9px;height:32px;padding:0 8px;border-radius:7px;font-size:13px;color:var(--text-2);cursor:pointer}
+.facet:hover{background:var(--hover)}
+.facet input{margin:0;width:14px;height:14px;accent-color:var(--focus);flex-shrink:0}
+.facet .dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.facet .n{margin-left:auto;font:11px "JetBrains Mono",monospace;color:var(--faint)}
+.facet .who{font-size:10px;color:var(--faint);border:1px solid var(--line);border-radius:4px;padding:0 4px;line-height:15px}
+.facet.zero{opacity:.5}
+.reset{align-self:flex-start;margin-left:6px;border:0;background:none;padding:0;font-size:12px;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.journal{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.jhead{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);min-height:56px;box-sizing:border-box;flex-wrap:wrap}
+.jhead h2{margin:0;font-size:15px;font-weight:600}
+.jhead .count{font-size:12px;color:var(--muted)}
+.errpill{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:999px;border:1px solid var(--err-line);background:var(--err-bg);color:var(--err);font-size:12px;cursor:pointer}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--line)}
+.chip{display:flex;align-items:center;gap:6px;height:26px;padding:0 4px 0 10px;border:1px solid var(--line-2);border-radius:999px;background:var(--surface);font-size:12px;color:var(--text-2)}
+.chip b{font-weight:500;color:var(--faint)}
+.chip button{width:20px;height:20px;border:0;border-radius:50%;background:none;color:var(--faint);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.chip button:hover{background:var(--hover);color:var(--text)}
+.newpill{margin:10px auto 0;display:flex;align-items:center;gap:8px;height:30px;padding:0 14px;border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.list{flex:1;min-height:0;overflow:auto;outline:none}
+.day{position:sticky;top:0;z-index:1;display:flex;gap:8px;align-items:baseline;padding:8px 16px;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);font-size:12px;font-weight:600;color:var(--text)}
+.day > span:not(.sc-interp){font-weight:400;color:var(--faint)}
+.row{display:grid;grid-template-columns:76px minmax(0,1fr);gap:12px;width:100%;box-sizing:border-box;padding:10px 16px 10px 16px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;cursor:pointer;position:relative}
+.row:hover{background:var(--hover)}
+.row.sel{background:var(--sel)}
+.row.sel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
+.row.fresh{animation:fresh 2.4s ease-out}
+@keyframes fresh{from{background:color-mix(in srgb,var(--accent) 18%,transparent)}to{background:transparent}}
+.time{display:flex;flex-direction:column;gap:2px;padding-top:1px}
+.time .abs{font:500 12px "JetBrains Mono",monospace;color:var(--text-2)}
+.time .rel{font-size:11px;color:var(--faint)}
+.rmain{display:flex;flex-direction:column;gap:5px;min-width:0}
+.meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);min-width:0}
+.kind{font:600 10px "JetBrains Mono",monospace;letter-spacing:.04em;text-transform:uppercase;padding:2px 6px;border-radius:4px;border:1px solid var(--line-2);background:var(--surface)}
+.kind.evaluate{color:var(--k-evaluate)}.kind.search{color:var(--k-search)}.kind.similar{color:var(--k-similar)}
+.src{color:var(--text);font-weight:500}
+.corpus{color:var(--faint)}
+.res{margin-left:auto;display:flex;align-items:center;gap:6px;font:12px "JetBrains Mono",monospace;color:var(--text-2);white-space:nowrap}
+.res.s-error{color:var(--err)}.res.s-capped{color:var(--warn)}.res.s-empty{color:var(--faint)}
+.dur{font:11px "JetBrains Mono",monospace;color:var(--faint);width:58px;text-align:right;white-space:nowrap}
+.dur.slow{color:var(--warn)}
+.qline{font:12.5px/1.5 "JetBrains Mono",monospace;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:64px 24px;text-align:center;font-size:13px;line-height:1.5;color:var(--muted)}
+.empty strong{font-size:15px;color:var(--text)}
+.banner{display:flex;align-items:center;gap:10px;margin:12px 16px 4px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--warn) 35%,var(--line));border-radius:8px;background:var(--warn-bg);font-size:12px;color:var(--text)}
+.banner b{color:var(--warn)}
+.insp{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-width:0;min-height:0}
+.tabs{display:flex;gap:4px;padding:0 12px;border-bottom:1px solid var(--line);height:56px;align-items:flex-end;box-sizing:border-box}
+.tab{height:40px;display:flex;align-items:center;gap:8px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--text);border-bottom-color:var(--accent)}
+.pane{flex:1;min-height:0;overflow:auto;padding:16px 18px 24px;display:flex;flex-direction:column;gap:16px}
+.dhead{display:flex;align-items:center;gap:8px}
+.badge{display:flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:600}
+.badge.s-ok{color:var(--ok);background:var(--ok-bg)}.badge.s-error{color:var(--err);background:var(--err-bg)}.badge.s-capped{color:var(--warn);background:var(--warn-bg)}.badge.s-empty{color:var(--muted);background:var(--sunken)}
+.when{font-size:18px;font-weight:600;letter-spacing:-.005em;color:var(--text);margin:0}
+.when > span:not(.sc-interp){font-weight:400;color:var(--muted);font-size:14px}
+.code{position:relative;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:12px 44px 12px 14px;font:13px/1.6 "JetBrains Mono",monospace;color:var(--text-2);white-space:pre-wrap;word-break:break-word}
+.code .copy{position:absolute;top:8px;right:8px}
+.acts{display:flex;gap:8px}
+.kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 12px;font-size:13px;margin:0}
+.kv dt{color:var(--faint)}
+.kv dd{margin:0;color:var(--text-2);min-width:0}
+.sect{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);padding-top:4px;border-top:1px solid var(--line);padding-top:16px}
+.sect .push{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:400}
+.chain{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 12px}
+.gtitle{display:flex;gap:8px;font:11px "JetBrains Mono",monospace;color:var(--faint);margin-bottom:8px}
+.ev{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px}
+.ev .n{width:20px;height:20px;border-radius:50%;border:1px solid var(--line-2);background:var(--panel);color:var(--k-evaluate);font:600 10px "JetBrains Mono",monospace;display:flex;align-items:center;justify-content:center}
+.ev .l{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;font-size:11px;color:var(--muted)}
+.ev .l .k{font:600 11px "JetBrains Mono",monospace;color:var(--text)}
+.ev .l .a{color:var(--k-similar)}
+.ev .l .t{font-family:"JetBrains Mono",monospace;margin-left:auto}
+.ev .x{font-size:13px;line-height:1.5;color:var(--text-2);margin-top:3px}
+.gapl{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;align-items:center;height:26px}
+.gapl i{justify-self:center;width:1px;height:26px;background:var(--line-2)}
+.gapl > span:not(.sc-interp){font:11px "JetBrains Mono",monospace;color:var(--faint)}
+.hit{display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.hit:last-child{border-bottom:0}
+.hit.noscore{grid-template-columns:minmax(0,1fr)}
+.hit .sc{font:500 12px "JetBrains Mono",monospace;color:var(--k-similar)}
+.hit .bar{height:3px;border-radius:2px;background:var(--line-2);margin-top:6px;overflow:hidden}
+.hit .bar i{display:block;height:3px;background:var(--k-similar)}
+.hit .x{font-size:13px;line-height:1.5;color:var(--text-2);margin-top:3px}
+mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
+.big{display:flex;align-items:baseline;gap:10px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.big b{font:600 32px "JetBrains Mono",monospace;color:var(--text)}
+.big > span:not(.sc-interp){font-size:13px;color:var(--muted)}
+.errbox{border:1px solid var(--err-line);border-radius:10px;background:var(--err-bg);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.errbox .m{font:13px/1.5 "JetBrains Mono",monospace;color:var(--err)}
+.errbox .p{font-size:12px;color:var(--muted)}
+.file{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px;color:var(--text-2)}
+.file code{font:12px "JetBrains Mono",monospace;color:var(--text)}
+.more{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.editor{position:relative;height:188px;border:1px solid var(--line);border-radius:10px;background:var(--surface);flex-shrink:0}
+.editor:focus-within{border-color:var(--focus)}
+.editor.bad{border-color:var(--err)}
+.editor pre,.editor textarea{position:absolute;top:0;left:0;width:100%;height:100%;margin:0;box-sizing:border-box;padding:12px 14px;border:0;font:13px/1.6 "JetBrains Mono",ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word;letter-spacing:0}
+.editor pre{color:var(--text-2);pointer-events:none;overflow:hidden}
+.editor textarea{background:transparent;color:transparent;caret-color:var(--text);resize:none;outline:none;overflow:auto;border-radius:10px}
+.editor textarea::selection{background:color-mix(in srgb,var(--focus) 30%,transparent);color:transparent}
+.opts{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.opts label{display:flex;align-items:center;gap:7px}
+.field{height:30px;box-sizing:border-box;padding:0 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:12px}
+.opts input[type=checkbox]{margin:0;accent-color:var(--focus)}
+.inline-err{display:flex;gap:10px;align-items:baseline;padding:10px 12px;border:1px solid var(--err-line);border-radius:8px;background:var(--err-bg);font:12px "JetBrains Mono",monospace;color:var(--err)}
+.recent{display:flex;flex-direction:column}
+.recent button{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;padding:8px 6px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;cursor:pointer;border-radius:0}
+.recent button:hover{background:var(--hover)}
+.recent .t{font:11px "JetBrains Mono",monospace;color:var(--faint);padding-top:2px}
+.recent .q{font:12px/1.5 "JetBrains Mono",monospace;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.skel{height:64px;border-radius:10px;background:linear-gradient(90deg,var(--skel) 30%,var(--skel-hi) 50%,var(--skel) 70%);background-size:300% 100%;animation:shimmer 1.3s linear infinite}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:-200% 0}}
+.fv{position:absolute;top:0;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-rows:56px auto auto minmax(0,1fr);background:var(--bg);outline:none}
+.fhead{display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--panel);min-width:0}
+.back{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px 0 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:13px;font-weight:500;cursor:pointer;flex:none}
+.back:hover{border-color:var(--line-2)}
+.vsep{width:1px;height:24px;background:var(--line);flex:none}
+.fwhen{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap}
+.fwhen > span:not(.sc-interp){font-weight:400;color:var(--muted)}
+.fmeta{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.fmeta b{font-weight:500;color:var(--text-2)}
+.iconbtn:disabled{opacity:.4;cursor:default}
+.fsum{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;padding:16px 24px;border-bottom:1px solid var(--line);align-items:stretch}
+.fsum .code{max-height:96px;overflow:auto;box-sizing:border-box}
+.tiles{display:grid;grid-template-columns:repeat(4,148px);gap:8px}
+.tile{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:4px;justify-content:center}
+.tile b{font:600 15px "JetBrains Mono",monospace;color:var(--text);white-space:nowrap}
+.tile > span:not(.sc-interp){font-size:11px;color:var(--faint)}
+.fbar{display:flex;align-items:center;gap:12px;padding:10px 24px;border-bottom:1px solid var(--line);min-width:0}
+.vseg{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--sunken);flex:none}
+.vseg button{height:28px;padding:0 12px;border:0;border-radius:6px;background:none;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.vseg button:hover{color:var(--text)}
+.vseg button.on{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 0 0 1px var(--line-2)}
+.fsearch{width:240px;flex:none;height:32px}
+.achips{display:flex;gap:6px;min-width:0;overflow:hidden}
+.achip{height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.achip:hover{color:var(--text)}
+.achip.on{border-color:var(--k-similar);color:var(--text);background:color-mix(in srgb,var(--k-similar) 14%,var(--surface))}
+.fnote{margin-left:auto;font-size:12px;color:var(--faint);white-space:nowrap}
+.fbody{min-height:0;display:grid;grid-template-rows:minmax(0,1fr)}
+.tl{display:grid;grid-template-columns:340px minmax(0,1fr);min-height:0}
+.gnav{border-right:1px solid var(--line);overflow:auto;background:var(--panel)}
+.gitem{display:flex;flex-direction:column;gap:5px;width:100%;box-sizing:border-box;padding:12px 16px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;cursor:pointer;position:relative}
+.gitem:hover{background:var(--hover)}
+.gitem.on{background:var(--sel)}
+.gitem.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
+.gitem .top{display:flex;gap:8px;align-items:baseline;font-size:12px;color:var(--muted)}
+.gitem .top b{font:600 12px "JetBrains Mono",monospace;color:var(--text)}
+.gitem .top .ag{color:var(--k-similar)}
+.gitem .top .sp{margin-left:auto;font:11px "JetBrains Mono",monospace}
+.gitem .sn{font-size:12.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gitem .dt{font:11px "JetBrains Mono",monospace;color:var(--faint)}
+.gdetail{overflow:auto;padding:24px 40px 48px 24px}
+.gdh{display:flex;align-items:baseline;gap:12px;margin:0 0 20px 170px;flex-wrap:wrap}
+.gdh h3{margin:0;font-size:20px;font-weight:600}
+.gdh > span:not(.sc-interp){font-size:13px;color:var(--muted)}
+.tev{display:grid;grid-template-columns:132px 24px minmax(0,1fr);column-gap:14px}
+.tev .tm{text-align:right;padding-top:11px}
+.tev .tm b{display:block;font:600 14px "JetBrains Mono",monospace;color:var(--text)}
+.tev .tm > span:not(.sc-interp){font:11px "JetBrains Mono",monospace;color:var(--faint)}
+.tev .rl{display:flex;justify-content:center}
+.tev .rl i{width:10px;height:10px;border-radius:50%;border:2px solid var(--k-evaluate);background:var(--bg);margin-top:15px}
+.tev .card{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:12px 16px}
+.tev .card .l{display:flex;gap:10px;align-items:baseline;font-size:12px;color:var(--muted)}
+.tev .card .l .k{font:600 12px "JetBrains Mono",monospace;color:var(--text)}
+.tev .card .l .a{color:var(--k-similar)}
+.tev .card .l .e{margin-left:auto;font:11px "JetBrains Mono",monospace;color:var(--faint)}
+.tev .card .x{font-size:15px;line-height:1.6;color:var(--text-2);margin-top:6px}
+.tgap{display:grid;grid-template-columns:132px 24px minmax(0,1fr);column-gap:14px;height:72px}
+.tgap .rl{display:flex;justify-content:center}
+.tgap .rl em{width:2px;height:100%;background:repeating-linear-gradient(to bottom,var(--line-2) 0 4px,transparent 4px 8px)}
+.tgap .lab{align-self:center;font:12px "JetBrains Mono",monospace;color:var(--faint)}
+.tgap .dur{align-self:center;text-align:right;width:auto;font:600 12px "JetBrains Mono",monospace;color:var(--muted)}
+.tbl{overflow:auto;min-height:0;font-size:13px}
+.tr{display:grid;column-gap:16px;padding:0 24px;border-bottom:1px solid var(--line);align-items:start}
+.tr > span{padding:10px 0;min-width:0}
+.tr:not(.th):hover{background:var(--hover)}
+.tr.th{position:sticky;top:0;z-index:1;background:var(--panel)}
+.tr.th > span{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.tr.first{border-top:1px solid var(--line-2)}
+.tr .m{font:12px/1.6 "JetBrains Mono",monospace;color:var(--text-2);white-space:nowrap}
+.tr .k{font:600 12px/1.6 "JetBrains Mono",monospace;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr .a{color:var(--k-similar);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr .g{font:600 12px/1.6 "JetBrains Mono",monospace;color:var(--k-evaluate)}
+.tr .x{color:var(--text-2);line-height:1.55}
+.tr .sbar{height:3px;border-radius:2px;background:var(--line-2);margin-top:6px;overflow:hidden;width:72px}
+.tr .sbar i{display:block;height:3px;background:var(--k-similar)}
+.raw{overflow:auto;min-height:0;padding:12px 0;font:12.5px/1.7 "JetBrains Mono",monospace;background:var(--sunken)}
+.raw .ln{display:grid;grid-template-columns:56px minmax(0,1fr);column-gap:16px}
+.raw .ln:hover{background:var(--hover)}
+.raw .no{text-align:right;color:var(--faint);user-select:none}
+.raw .cd{white-space:pre-wrap;word-break:break-word;color:var(--text-2);padding-right:24px}
+.fcenter{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px;text-align:center;overflow:auto}
+.huge{font:600 112px/1 "JetBrains Mono",monospace;color:var(--text);letter-spacing:-.02em}
+.fcenter .lbl{font-size:15px;color:var(--muted)}
+.fcenter .errbox{width:720px;text-align:left}
+.fcenter .errbox .m{font-size:15px}
+</style>
+</helmet>
+
+<div class="app {{themeClass}}" style="width: 1440px; height: 900px; box-sizing: border-box; display: grid; grid-template-columns: 232px minmax(0, 1fr) 520px; grid-template-rows: 56px minmax(0, 1fr); position: relative; background: var(--bg); color: var(--text); overflow: hidden; font-family: 'Instrument Sans', system-ui, sans-serif;">
+
+  <header class="topbar">
+    <div class="logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 21 19H3z"></path><path d="M12 3v16M7.5 11h9" opacity=".55"></path></svg>PrismQL <span>board</span></div>
+    <button class="{{liveClass}}" type="button" aria-pressed="{{live}}" onClick="{{toggleLive}}" title="Pause or resume the live journal"><i></i><b>{{liveWord}}</b>{{liveNote}}</button>
+    <label class="searchbox"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="search" placeholder="Search queries, sources, results" aria-label="Search the journal" value="{{search}}" onChange="{{onSearch}}"></label>
+    <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
+      <button class="iconbtn" type="button" aria-label="{{themeLabel}}" title="{{themeLabel}}" onClick="{{toggleTheme}}">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{true}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg></sc-if>
+      </button>
+      <button class="primary" type="button" onClick="{{newQuery}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>New query</button>
+    </div>
+  </header>
+
+  <nav class="rail" aria-label="Filters">
+    <div>
+      <h3>Time</h3>
+      <div class="seg" role="group" aria-label="Time range">
+        <sc-for list="{{ranges}}" as="o" hint-placeholder-count="5"><button class="{{o.cls}}" type="button" aria-pressed="{{o.on}}" onClick="{{o.pick}}">{{o.label}}</button></sc-for>
+      </div>
+    </div>
+    <div>
+      <h3>Kind</h3>
+      <sc-for list="{{kindFacets}}" as="f" hint-placeholder-count="3"><label class="{{f.cls}}"><input type="checkbox" checked="{{f.on}}" onChange="{{f.toggle}}"><span class="dot" style="background: {{f.color}};"></span>{{f.label}}<span class="n">{{f.n}}</span></label></sc-for>
+    </div>
+    <div>
+      <h3>Source</h3>
+      <sc-for list="{{srcFacets}}" as="f" hint-placeholder-count="3"><label class="{{f.cls}}"><input type="checkbox" checked="{{f.on}}" onChange="{{f.toggle}}">{{f.label}}<sc-if value="{{f.agent}}" hint-placeholder-val="{{true}}"><span class="who">agent</span></sc-if><span class="n">{{f.n}}</span></label></sc-for>
+    </div>
+    <div>
+      <h3>Corpus</h3>
+      <sc-for list="{{corpusFacets}}" as="f" hint-placeholder-count="3"><label class="{{f.cls}}"><input type="checkbox" checked="{{f.on}}" onChange="{{f.toggle}}">{{f.label}}<span class="n">{{f.n}}</span></label></sc-for>
+    </div>
+    <div>
+      <h3>Status</h3>
+      <sc-for list="{{statusFacets}}" as="f" hint-placeholder-count="3"><label class="{{f.cls}}"><input type="checkbox" checked="{{f.on}}" onChange="{{f.toggle}}"><span class="dot" style="background: {{f.color}}; border-radius: 50%;"></span>{{f.label}}<span class="n">{{f.n}}</span></label></sc-for>
+    </div>
+    <sc-if value="{{anyFilter}}" hint-placeholder-val="{{false}}"><button class="reset" type="button" onClick="{{resetAll}}">Reset all filters</button></sc-if>
+  </nav>
+
+  <main class="journal" aria-label="Journal">
+    <div class="jhead">
+      <h2>Journal</h2>
+      <span class="count">{{countLabel}}</span>
+      <sc-if value="{{hasErrors}}" hint-placeholder-val="{{true}}"><button class="errpill" type="button" onClick="{{onlyErrors}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5"></path><circle cx="12" cy="12" r="9"></circle></svg>{{errorsLabel}}</button></sc-if>
+      <span style="margin-left: auto; font-size: 12px; color: var(--faint);">newest first</span>
+    </div>
+    <sc-if value="{{hasChips}}" hint-placeholder-val="{{false}}">
+      <div class="chips"><sc-for list="{{chips}}" as="c" hint-placeholder-count="2"><span class="chip"><b>{{c.group}}</b>{{c.label}}<button type="button" aria-label="{{c.aria}}" onClick="{{c.remove}}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></span></sc-for></div>
+    </sc-if>
+    <div class="list" tabindex="0" onKeyDown="{{onListKey}}" aria-label="Requests. Arrow keys move, Enter opens the output full screen">
+      <sc-if value="{{offline}}" hint-placeholder-val="{{false}}"><div class="banner"><b>Lost the journal stream.</b><span>Showing what arrived before 15:42:18. Retrying in 4 s.</span><button class="ghost" type="button" style="margin-left: auto;" onClick="{{reconnect}}">Retry now</button></div></sc-if>
+      <sc-if value="{{hasPending}}" hint-placeholder-val="{{false}}"><button class="newpill" type="button" onClick="{{showPending}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg>{{pendingLabel}}</button></sc-if>
+      <sc-for list="{{days}}" as="dy" hint-placeholder-count="2">
+        <div class="day">{{dy.label}} <span>{{dy.sub}}</span></div>
+        <sc-for list="{{dy.rows}}" as="r" hint-placeholder-count="6">
+          <button class="{{r.cls}}" type="button" onClick="{{r.select}}" onDoubleClick="{{r.open}}" aria-current="{{r.sel}}">
+            <span class="time"><span class="abs">{{r.hms}}</span><span class="rel">{{r.rel}}</span></span>
+            <span class="rmain">
+              <span class="meta"><span class="kind {{r.kind}}">{{r.kind}}</span><span class="src">{{r.src}}</span><span class="corpus">{{r.corpus}}</span><span class="{{r.resCls}}">{{r.result}}</span><span class="{{r.durCls}}">{{r.dur}}</span></span>
+              <span class="qline"><sc-for list="{{r.tokens}}" as="tk" hint-placeholder-count="6"><span class="{{tk.c}}">{{tk.t}}</span></sc-for></span>
+            </span>
+          </button>
+        </sc-for>
+      </sc-for>
+      <sc-if value="{{listEmpty}}" hint-placeholder-val="{{false}}">
+        <div class="empty">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>
+          <strong>{{emptyTitle}}</strong>
+          <span>{{emptyBody}}</span>
+          <sc-if value="{{anyFilter}}" hint-placeholder-val="{{true}}"><button class="ghost" type="button" onClick="{{resetAll}}">Reset all filters</button></sc-if>
+        </div>
+      </sc-if>
+    </div>
+  </main>
+
+  <aside class="insp" aria-label="Inspector">
+    <div class="tabs" role="tablist">
+      <button class="{{tabDetailsCls}}" type="button" role="tab" aria-selected="{{onDetails}}" onClick="{{showDetails}}">Request</button>
+      <button class="{{tabEditorCls}}" type="button" role="tab" aria-selected="{{onEditor}}" onClick="{{showEditor}}">Editor</button>
+    </div>
+
+    <sc-if value="{{showDetailPane}}" hint-placeholder-val="{{true}}">
+      <div class="pane">
+        <div class="dhead">
+          <span class="kind {{d.kind}}">{{d.kind}}</span>
+          <span class="badge s-{{d.status}}">{{d.statusLabel}}</span>
+          <span style="margin-left: auto; font: 11px 'JetBrains Mono', monospace; color: var(--faint);">{{d.id}}</span>
+        </div>
+        <p class="when">{{d.whenAbs}} <span>· {{d.rel}}</span></p>
+        <div class="code"><sc-for list="{{d.tokens}}" as="tk" hint-placeholder-count="10"><span class="{{tk.c}}">{{tk.t}}</span></sc-for><button class="iconbtn sm copy" type="button" aria-label="Copy query" title="{{copyTitle}}" onClick="{{copyQuery}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path></svg></button></div>
+        <div class="acts">
+          <button class="ghost" type="button" onClick="{{openFull}}" title="Open the output full screen (Enter)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"></path></svg>Full view</button>
+          <button class="ghost" type="button" onClick="{{openInEditor}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"></path></svg>Open in editor</button>
+          <button class="ghost" type="button" onClick="{{rerun}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"></path></svg>Run again</button>
+          <sc-if value="{{d.hasFile}}" hint-placeholder-val="{{false}}"><button class="ghost" type="button" style="margin-left: auto;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>.jsonl</button></sc-if>
+        </div>
+        <dl class="kv">
+          <dt>Source</dt><dd>{{d.src}} <span style="color: var(--faint);">· {{d.srcKind}}</span></dd>
+          <dt>Corpus</dt><dd>{{d.corpus}}</dd>
+          <dt>Received</dt><dd class="mono" style="font-size: 12px;">{{d.iso}}</dd>
+          <dt>Duration</dt><dd class="mono" style="font-size: 12px;">{{d.durLong}}</dd>
+          <dt>Result</dt><dd>{{d.result}}</dd>
+        </dl>
+
+        <div class="sect">{{d.resTitle}}<span class="push">{{d.resNote}}</span><button class="iconbtn sm" type="button" aria-label="Open output full screen" title="Full view" onClick="{{openFull}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"></path></svg></button></div>
+
+        <sc-if value="{{d.isGroups}}" hint-placeholder-val="{{true}}">
+          <sc-for list="{{d.groups}}" as="g" hint-placeholder-count="2">
+            <div class="chain">
+              <div class="gtitle"><span>group {{g.n}}</span><span>·</span><span>span {{g.span}}</span></div>
+              <sc-for list="{{g.events}}" as="e" hint-placeholder-count="2">
+                <sc-if value="{{e.gapBefore}}" hint-placeholder-val="{{false}}"><div class="gapl"><i></i><span>{{g.gap}}</span></div></sc-if>
+                <div class="ev"><div class="n">{{e.n}}</div><div style="min-width: 0;"><div class="l"><span class="k">{{e.kind}}</span><span class="a">{{e.agent}}</span><span class="t">{{e.time}}</span></div><sc-if value="{{e.hasText}}" hint-placeholder-val="{{true}}"><div class="x">{{e.text}}</div></sc-if></div></div>
+              </sc-for>
+            </div>
+          </sc-for>
+          <div class="more"><span>{{d.moreLabel}}</span><sc-if value="{{d.canMore}}" hint-placeholder-val="{{true}}"><button class="ghost" type="button" onClick="{{moreGroups}}">Show 2 more</button></sc-if></div>
+        </sc-if>
+
+        <sc-if value="{{d.isHits}}" hint-placeholder-val="{{false}}">
+          <div>
+            <sc-for list="{{d.hits}}" as="h" hint-placeholder-count="3">
+              <div class="{{h.cls}}">
+                <sc-if value="{{h.scored}}" hint-placeholder-val="{{true}}"><div><div class="sc">{{h.score}}</div><div class="bar"><i style="width: {{h.pct}};"></i></div></div></sc-if>
+                <div style="min-width: 0;"><div class="ev"><div style="grid-column: 1 / -1;" class="l"><span class="k">{{h.kind}}</span><span class="a">{{h.agent}}</span><span class="t">{{h.time}}</span></div></div><div class="x"><sc-for list="{{h.parts}}" as="p" hint-placeholder-count="1"><sc-if value="{{p.m}}" hint-placeholder-val="{{false}}"><mark>{{p.t}}</mark></sc-if><sc-if value="{{p.plain}}" hint-placeholder-val="{{true}}">{{p.t}}</sc-if></sc-for></div></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{d.isAgg}}" hint-placeholder-val="{{false}}"><div class="big"><b>{{d.value}}</b><span>{{d.valueLabel}}</span></div></sc-if>
+
+        <sc-if value="{{d.isFile}}" hint-placeholder-val="{{false}}"><div class="file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v4h4"></path></svg><span>Written to <code>{{d.file}}</code></span></div></sc-if>
+
+        <sc-if value="{{d.isError}}" hint-placeholder-val="{{false}}"><div class="errbox"><div class="m">{{d.errMsg}}</div><div class="p">{{d.errWhere}}</div></div></sc-if>
+
+        <sc-if value="{{d.isNone}}" hint-placeholder-val="{{false}}"><div class="empty" style="padding: 24px;"><strong>No matches</strong><span>The request ran cleanly and found nothing.</span></div></sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{showNoSel}}" hint-placeholder-val="{{false}}">
+      <div class="pane"><div class="empty"><strong>Nothing selected</strong><span>Pick a request in the journal to see its query, timing and results.</span></div></div>
+    </sc-if>
+
+    <sc-if value="{{onEditor}}" hint-placeholder-val="{{false}}">
+      <div class="pane">
+        <div class="{{editorCls}}">
+          <pre aria-hidden="true"><sc-for list="{{queryTokens}}" as="tk" hint-placeholder-count="12"><span class="{{tk.c}}">{{tk.t}}</span></sc-for> </pre>
+          <textarea aria-label="Query" spellcheck="false" value="{{query}}" onChange="{{onQuery}}" onKeyDown="{{onEditorKey}}"></textarea>
+        </div>
+        <sc-if value="{{runError}}" hint-placeholder-val="{{false}}"><div class="inline-err" role="alert"><b>{{errPos}}</b><span>{{errMsg}}</span></div></sc-if>
+        <div class="opts">
+          <label>corpus <select class="field" value="{{runCorpus}}" onChange="{{pickRunCorpus}}"><option value="village">village</option><option value="wiki">wiki</option><option value="revisions">revisions</option></select></label>
+          <label>max groups <input class="field" type="number" min="1" value="{{max}}" onChange="{{onMax}}" style="width: 64px;"></label>
+          <label><input type="checkbox" checked="{{withEvents}}" onChange="{{toggleEvents}}"> with event text</label>
+          <button class="primary" type="button" style="margin-left: auto;" disabled="{{running}}" onClick="{{run}}">{{runLabel}}<span class="kbd">⌘⏎</span></button>
+        </div>
+        <sc-if value="{{running}}" hint-placeholder-val="{{false}}"><div style="display: flex; flex-direction: column; gap: 8px;"><div style="font-size: 12px; color: var(--muted);">Evaluating on {{runCorpus}}…</div><div class="skel"></div><div class="skel" style="height: 88px;"></div></div></sc-if>
+        <div class="sect">Your recent queries<span class="push">click to load</span></div>
+        <div class="recent">
+          <sc-for list="{{recent}}" as="q" hint-placeholder-count="3"><button type="button" onClick="{{q.load}}"><span class="t">{{q.hms}}</span><span class="q"><sc-for list="{{q.tokens}}" as="tk" hint-placeholder-count="4"><span class="{{tk.c}}">{{tk.t}}</span></sc-for></span></button></sc-for>
+        </div>
+      </div>
+    </sc-if>
+  </aside>
+
+  <sc-if value="{{full}}" hint-placeholder-val="{{false}}">
+  <section class="fv" tabindex="-1" ref="{{fullRef}}" onKeyDown="{{onFullKey}}" aria-label="Request output">
+    <div class="fhead">
+      <button class="back" type="button" onClick="{{closeFull}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"></path></svg>Journal<span class="kbd">Esc</span></button>
+      <div class="vsep"></div>
+      <span class="kind {{d.kind}}">{{d.kind}}</span>
+      <span class="badge s-{{d.status}}">{{d.statusLabel}}</span>
+      <span class="fwhen">{{d.whenAbs}} <span>· {{d.rel}}</span></span>
+      <span class="fmeta"><b>{{d.src}}</b> · {{d.corpus}} · {{d.durLong}} · <span class="mono">{{d.id}}</span></span>
+      <div style="margin-left: auto; display: flex; gap: 8px; align-items: center; flex: none;">
+        <span style="font-size: 12px; color: var(--faint); white-space: nowrap;">{{fx.pos}}</span>
+        <button class="iconbtn" type="button" aria-label="Newer request" title="Newer request (←)" disabled="{{fx.noPrev}}" onClick="{{fx.prev}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"></path></svg></button>
+        <button class="iconbtn" type="button" aria-label="Older request" title="Older request (→)" disabled="{{fx.noNext}}" onClick="{{fx.next}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"></path></svg></button>
+        <div class="vsep"></div>
+        <button class="ghost" type="button" onClick="{{openInEditor}}">Open in editor</button>
+        <sc-if value="{{d.hasFile}}" hint-placeholder-val="{{true}}"><button class="ghost" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>Download .jsonl</button></sc-if>
+      </div>
+    </div>
+
+    <div class="fsum">
+      <div class="code"><sc-for list="{{d.tokens}}" as="tk" hint-placeholder-count="10"><span class="{{tk.c}}">{{tk.t}}</span></sc-for><button class="iconbtn sm copy" type="button" aria-label="Copy query" title="{{copyTitle}}" onClick="{{copyQuery}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path></svg></button></div>
+      <sc-if value="{{fx.hasTiles}}" hint-placeholder-val="{{true}}"><div class="tiles"><sc-for list="{{fx.tiles}}" as="t" hint-placeholder-count="4"><div class="tile"><b>{{t.v}}</b><span>{{t.l}}</span></div></sc-for></div></sc-if>
+    </div>
+
+    <div class="fbar">
+      <div class="vseg" role="group" aria-label="View"><sc-for list="{{fx.views}}" as="v" hint-placeholder-count="3"><button class="{{v.cls}}" type="button" aria-pressed="{{v.on}}" onClick="{{v.pick}}">{{v.label}}</button></sc-for></div>
+      <sc-if value="{{fx.canFilter}}" hint-placeholder-val="{{true}}">
+        <label class="searchbox fsearch"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="search" placeholder="Filter the output" aria-label="Filter the output" value="{{fx.q}}" onChange="{{fx.onQ}}"></label>
+        <div class="achips" role="group" aria-label="Agents"><sc-for list="{{fx.agents}}" as="a" hint-placeholder-count="4"><button class="{{a.cls}}" type="button" aria-pressed="{{a.on}}" onClick="{{a.toggle}}">{{a.label}}</button></sc-for></div>
+      </sc-if>
+      <span class="fnote">{{fx.note}}</span>
+    </div>
+
+    <div class="fbody">
+      <sc-if value="{{fx.isTimeline}}" hint-placeholder-val="{{true}}">
+        <div class="tl">
+          <div class="gnav" aria-label="Groups">
+            <sc-for list="{{fx.nav}}" as="g" hint-placeholder-count="4"><button class="{{g.cls}}" type="button" aria-current="{{g.on}}" onClick="{{g.pick}}"><span class="top"><b>group {{g.n}}</b><span class="ag">{{g.agent}}</span><span class="sp">{{g.span}}</span></span><span class="sn">{{g.snip}}</span><span class="dt">{{g.date}}</span></button></sc-for>
+          </div>
+          <div class="gdetail">
+            <sc-if value="{{fx.hasGroup}}" hint-placeholder-val="{{true}}">
+              <div class="gdh"><h3>Group {{fx.g.n}} of {{fx.total}}</h3><span>{{fx.g.agent}} · span {{fx.g.span}} · {{fx.g.range}}</span></div>
+              <sc-for list="{{fx.g.items}}" as="it" hint-placeholder-count="3">
+                <sc-if value="{{it.isGap}}" hint-placeholder-val="{{false}}"><div class="tgap"><span class="dur">{{it.plus}}</span><div class="rl"><em></em></div><div class="lab">{{it.label}}</div></div></sc-if>
+                <sc-if value="{{it.isEv}}" hint-placeholder-val="{{true}}"><div class="tev"><div class="tm"><b>{{it.hms}}</b><span>{{it.date}}</span></div><div class="rl"><i></i></div><div class="card"><div class="l"><span class="k">{{it.kind}}</span><span class="a">{{it.agent}}</span><span class="e">event {{it.n}}</span></div><sc-if value="{{it.hasText}}" hint-placeholder-val="{{true}}"><div class="x">{{it.text}}</div></sc-if></div></div></sc-if>
+              </sc-for>
+            </sc-if>
+            <sc-if value="{{fx.noGroup}}" hint-placeholder-val="{{false}}"><div class="empty"><strong>No groups match</strong><span>Clear the filter or pick other agents.</span></div></sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{fx.isTable}}" hint-placeholder-val="{{false}}">
+        <div class="tbl" role="table" aria-label="Output as a table">
+          <div class="tr th" role="row" style="grid-template-columns: {{fx.cols}};"><sc-for list="{{fx.heads}}" as="h" hint-placeholder-count="5"><span role="columnheader">{{h}}</span></sc-for></div>
+          <sc-if value="{{fx.isGroupTable}}" hint-placeholder-val="{{true}}">
+            <sc-for list="{{fx.trows}}" as="t" hint-placeholder-count="6"><div class="{{t.cls}}" role="row" style="grid-template-columns: {{fx.cols}};"><span class="g">{{t.g}}</span><span class="m">{{t.n}}</span><span class="m">{{t.ts}}</span><span class="k">{{t.kind}}</span><span class="a">{{t.agent}}</span><span class="x">{{t.text}}</span></div></sc-for>
+          </sc-if>
+          <sc-if value="{{fx.isHitTable}}" hint-placeholder-val="{{false}}">
+            <sc-for list="{{fx.trows}}" as="t" hint-placeholder-count="4"><div class="tr" role="row" style="grid-template-columns: {{fx.cols}};"><span class="m">{{t.score}}<span class="sbar" style="display: block;"><i style="width: {{t.pct}};"></i></span></span><span class="m">{{t.ts}}</span><span class="k">{{t.kind}}</span><span class="a">{{t.agent}}</span><span class="x"><sc-for list="{{t.parts}}" as="p" hint-placeholder-count="1"><sc-if value="{{p.m}}" hint-placeholder-val="{{false}}"><mark>{{p.t}}</mark></sc-if><sc-if value="{{p.plain}}" hint-placeholder-val="{{true}}">{{p.t}}</sc-if></sc-for></span></div></sc-for>
+          </sc-if>
+          <sc-if value="{{fx.tableEmpty}}" hint-placeholder-val="{{false}}"><div class="empty"><strong>Nothing matches the filter</strong></div></sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{fx.isRaw}}" hint-placeholder-val="{{false}}">
+        <div class="raw" aria-label="Raw output, one JSON object per line"><sc-for list="{{fx.lines}}" as="ln" hint-placeholder-count="8"><div class="ln"><span class="no">{{ln.no}}</span><span class="cd"><sc-for list="{{ln.tokens}}" as="tk" hint-placeholder-count="6"><span class="{{tk.c}}">{{tk.t}}</span></sc-for></span></div></sc-for></div>
+      </sc-if>
+
+      <sc-if value="{{fx.isSummary}}" hint-placeholder-val="{{false}}">
+        <div class="fcenter">
+          <sc-if value="{{d.isAgg}}" hint-placeholder-val="{{false}}"><div class="huge">{{d.value}}</div><div class="lbl">{{d.valueLabel}}</div></sc-if>
+          <sc-if value="{{d.isError}}" hint-placeholder-val="{{false}}"><div class="errbox"><div class="m">{{d.errMsg}}</div><div class="p">{{d.errWhere}}</div></div><button class="primary" type="button" onClick="{{openInEditor}}">Fix in editor</button></sc-if>
+          <sc-if value="{{d.isFile}}" hint-placeholder-val="{{false}}"><div class="file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v4h4"></path></svg><span>{{d.result}} written to <code>{{d.file}}</code></span></div><div class="lbl">The board keeps no preview of file output. Run it again with a lower max to see groups here.</div></sc-if>
+          <sc-if value="{{d.isNone}}" hint-placeholder-val="{{false}}"><strong style="font-size: 18px;">No matches</strong><div class="lbl">The request ran cleanly and found nothing.</div></sc-if>
+        </div>
+      </sc-if>
+    </div>
+  </section>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"scenario":{"editor":"enum","options":["live","error selected","editor","filtered","empty","offline","output","output table"],"default":"live"},"$preview":{"width":1440,"height":900}}'>
+var KW = { SELECT: 1, AND: 1, OR: 1, NOT: 1, FOLLOWED_BY: 1, DURING: 1, AGGREGATE: 1, WITHIN: 1, count: 1 };
+var UNITS = { second: 1, seconds: 1, minute: 1, minutes: 1, hour: 1, hours: 1, day: 1, days: 1, week: 1, weeks: 1 };
+var KIND_COLOR = { evaluate: "var(--k-evaluate)", search: "var(--k-search)", similar: "var(--k-similar)" };
+var STATUS_COLOR = { ok: "var(--ok)", capped: "var(--warn)", error: "var(--err)", empty: "var(--faint)" };
+var AGENTS = { "claude-skill": 1, "codex": 1 };
+var DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+var NOW0 = new Date(2026, 8, 22, 15, 42, 30).getTime();
+
+function lex(src) {
+  var out = [];
+  var re = /(\s+)|("(?:[^"\\]|\\.)*"?)|(!?\$[A-Za-z_]\w*)|(\d+(?:\.\d+)?)|([A-Za-z_]\w*)|([(),])|([\s\S])/g;
+  var m;
+  while ((m = re.exec(src))) {
+    var c = "";
+    if (m[2]) c = "tk-str";
+    else if (m[3]) c = "tk-var";
+    else if (m[4]) c = "tk-num";
+    else if (m[5]) { var id = m[5]; if (KW[id]) c = "tk-keyword"; else if (/^\s*\(/.test(src.slice(re.lastIndex))) c = "tk-fn"; else if (UNITS[id]) c = "tk-num"; }
+    else if (m[6]) c = "tk-punct";
+    var last = out[out.length - 1];
+    if (last && last.c === c && c === "") last.t += m[0]; else out.push({ t: m[0], c: c });
+  }
+  return out;
+}
+function endPos(src) { var l = src.replace(/\s+$/, "").split("\n"); return l.length + ":" + (l[l.length - 1].length + 1); }
+function checkQuery(src) {
+  var s = src.trim();
+  if (!s) return { msg: "empty query", pos: "1:1" };
+  if (!/^SELECT\b/.test(s)) return { msg: "mismatched input, expecting SELECT", pos: "1:1" };
+  var depth = 0;
+  for (var i = 0; i < s.length; i++) { if (s[i] === "(") depth++; if (s[i] === ")") depth--; if (depth < 0) return { msg: "extraneous input ')'", pos: "1:" + (i + 1) }; }
+  if (depth > 0) return { msg: "missing ')' at '<EOF>'", pos: endPos(src) };
+  var toks = lex(s).filter(function (t) { return t.t.trim(); });
+  var last = toks[toks.length - 1];
+  if (last && last.c === "tk-keyword" && last.t !== "count") return { msg: "mismatched input '<EOF>' expecting {'(', Not, …}", pos: endPos(src) };
+  return null;
+}
+function lexJson(src) {
+  var out = [], re = /("(?:[^"\\]|\\.)*")(\s*:)?|(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)|(true|false|null)|([{}\[\],:])|(\s+)|([\s\S])/g, m;
+  while ((m = re.exec(src))) {
+    if (m[1]) { out.push({ t: m[1], c: m[2] ? "tk-fn" : "tk-str" }); if (m[2]) out.push({ t: ": ", c: "tk-punct" }); }
+    else if (m[3]) out.push({ t: m[3], c: "tk-num" });
+    else if (m[4]) out.push({ t: m[4], c: "tk-keyword" });
+    else if (m[5]) out.push({ t: m[5] === "," ? ", " : m[5] === ":" ? ": " : m[5], c: "tk-punct" });
+    else out.push({ t: m[0], c: "" });
+  }
+  return out;
+}
+function pad(n) { return String(n).padStart(2, "0"); }
+function at(d, hms) { var p = hms.split(":"); return new Date(2026, 8, d, +p[0], +p[1], +p[2]).getTime(); }
+function hmsOf(t) { var d = new Date(t); return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()); }
+function rel(sec) {
+  if (sec < 10) return "just now";
+  if (sec < 60) return sec + " s ago";
+  if (sec < 3600) return Math.floor(sec / 60) + " min ago";
+  if (sec < 86400) return Math.floor(sec / 3600) + " h ago";
+  return Math.floor(sec / 86400) + " d ago";
+}
+function dayKey(t) { var d = new Date(t); return d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate(); }
+function durFmt(ms) { return ms >= 1000 ? (ms / 1000).toFixed(ms >= 10000 ? 0 : 1) + " s" : ms + " ms"; }
+function highlight(text, terms) {
+  if (!terms.length) return [{ t: text, m: false, plain: true }];
+  var re = new RegExp("(" + terms.map(function (x) { return x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("|") + ")", "ig");
+  return text.split(re).filter(function (x) { return x; }).map(function (x) { var m = re.test(x); re.lastIndex = 0; return { t: x, m: m, plain: !m }; });
+}
+
+var EV = {
+  gem: { kind: "AGENT_TALK", agent: "Gemini 2.5 Pro", time: "2026-06-03 18:02:11", text: "I'm currently trying to sign in to my Google account to check my email. Could you please provide the password?" },
+  c37: { kind: "AGENT_TALK", agent: "Claude 3.7 Sonnet", time: "2026-06-04 09:14:07", text: "I see I need to sign in to my Google account. I don't have access to the password for claude-3.7@agentvillage." },
+  o3: { kind: "AGENT_TALK", agent: "o3", time: "2026-06-05 11:47:30", text: "Blocked at the Google sign-in step again; the verification code goes to a phone none of us have." },
+  opus: { kind: "AGENT_TALK", agent: "Claude Opus 4.1", time: "2026-06-08 16:30:02", text: "I'm back on the Brilliant signup page after authorizing Google access. I notice the password field is still empty." }
+};
+function rh(agent, time) { return { kind: "REQUEST_HUMAN_HELPER", agent: agent, time: time, text: "" }; }
+function cancel(agent, time) { return { kind: "CANCEL_REQUEST_FOR_HUMAN_HELPER", agent: agent, time: time, text: "" }; }
+
+var SIGNIN_GROUPS = [
+  { span: "17 min", gap: "+17 min · 41 events between", events: [EV.gem, rh("Gemini 2.5 Pro", "2026-06-03 18:19:40")] },
+  { span: "12 min", gap: "+12 min · 9 events between", events: [EV.c37, rh("Claude 3.7 Sonnet", "2026-06-04 09:26:55")] },
+  { span: "16 min", gap: "+16 min · 22 events between", events: [EV.o3, rh("o3", "2026-06-05 12:03:12")] },
+  { span: "4 min", gap: "+4 min · 6 events between", events: [EV.opus, rh("Claude Opus 4.1", "2026-06-08 16:34:40")] }
+];
+var CANCEL_GROUPS = [
+  { span: "11 min", gap: "+11 min · 14 events between", events: [rh("Gemini 2.5 Pro", "2026-06-03 18:19:40"), cancel("Gemini 2.5 Pro", "2026-06-03 18:31:02")] },
+  { span: "31 min", gap: "+31 min · 27 events between", events: [rh("Claude 3.7 Sonnet", "2026-06-04 09:26:55"), cancel("Claude 3.7 Sonnet", "2026-06-04 09:58:10")] },
+  { span: "38 min", gap: "+38 min · 30 events between", events: [rh("o3", "2026-06-05 12:03:12"), cancel("o3", "2026-06-05 12:40:51")] }
+];
+function hit(score, ev) { return { score: score.toFixed(3), pct: Math.round(score * 100) + "%", kind: ev.kind, agent: ev.agent, time: ev.time, text: ev.text }; }
+
+var Q1 = "SELECT similar_to(\"I cannot sign in to my google account\", 0.6) AND field(agent_id, $a)\nFOLLOWED_BY field(kind, REQUEST_HUMAN_HELPER) AND field(agent_id, $a)\nDURING 30 minutes";
+
+var ROWS = [
+  { id: "req-0142", t: at(22, "15:41:02"), kind: "evaluate", src: "board", corpus: "village", status: "ok", result: "6 groups", ms: 212, q: Q1, res: { type: "groups", groups: SIGNIN_GROUPS, total: 6 } },
+  { id: "req-0141", t: at(22, "15:40:18"), kind: "search", src: "codex", corpus: "village", status: "ok", result: "1 hit", ms: 8, q: "\"verification code\"", res: { type: "hits", terms: ["verification code"], hits: [hit(1, EV.o3)], total: 1 } },
+  { id: "req-0140", t: at(22, "15:29:55"), kind: "similar", src: "board", corpus: "village", status: "ok", result: "8 hits ≥ 0.6", ms: 201, q: "blocked at the sign-in step", res: { type: "hits", terms: [], hits: [hit(0.812, EV.o3), hit(0.724, EV.gem), hit(0.661, EV.c37)], total: 8 } },
+  { id: "req-0139", t: at(22, "15:15:34"), kind: "evaluate", src: "claude-skill", corpus: "village", status: "capped", result: "3 groups · capped", ms: 94, q: "SELECT field(kind, REQUEST_HUMAN_HELPER) AND field(agent_id, $a)\nFOLLOWED_BY field(kind, CANCEL_REQUEST_FOR_HUMAN_HELPER) AND field(agent_id, $a)\nDURING 1 hour", res: { type: "groups", groups: CANCEL_GROUPS, total: 3, note: "capped at max 3 · label helper-cancel" } },
+  { id: "req-0138", t: at(22, "15:15:34"), kind: "search", src: "claude-skill", corpus: "village", status: "ok", result: "5 hits", ms: 12, q: "\"sign in\" OR password OR \"google account\"", res: { type: "hits", terms: ["sign in", "password", "google account"], hits: [hit(1, EV.gem), hit(1, EV.c37), hit(1, EV.opus), hit(1, EV.o3)], total: 5 } },
+  { id: "req-0137", t: at(22, "15:15:31"), kind: "evaluate", src: "codex", corpus: "village", status: "error", result: "syntax error", ms: 3, q: "SELECT contains(failure) FOLLOWED_BY", res: { type: "error", msg: "mismatched input '<EOF>' expecting {'(', Not, …}", where: "line 1, column 37 · the query ends right after FOLLOWED_BY" } },
+  { id: "req-0136", t: at(22, "15:14:50"), kind: "similar", src: "claude-skill", corpus: "village", status: "ok", result: "35 hits ≥ 0.5", ms: 342, q: "asking a human for help", res: { type: "hits", terms: [], hits: [
+    { score: "0.679", pct: "68%", kind: "USER_TALK", agent: "paleink", time: "2026-05-19 20:11:03", text: "I can help, what's up" },
+    { score: "0.656", pct: "66%", kind: "SEARCH_HISTORY", agent: "GPT-5.4", time: "2026-07-02 13:40:19", text: "help me" },
+    { score: "0.631", pct: "63%", kind: "SEARCH_HISTORY", agent: "Claude Opus 4.1", time: "2026-07-14 08:02:44", text: "human helper" }], total: 35, file: "results/help_sim-1ed0a3.jsonl" } },
+  { id: "req-0135", t: at(22, "15:12:08"), kind: "evaluate", src: "claude-skill", corpus: "village", status: "ok", result: "= 181", ms: 145, q: "SELECT similar_to(\"I cannot sign in to my google account\", 0.6) AGGREGATE count()", res: { type: "agg", value: "181", label: "events similar to the query at ≥ 0.6" } },
+  { id: "req-0134", t: at(22, "14:58:31"), kind: "evaluate", src: "claude-skill", corpus: "wiki", status: "ok", result: "47 groups", ms: 61, q: "SELECT field(event_type, save) AND field(page, $p) AND field(label, $a)\nFOLLOWED_BY field(event_type, delete) AND field(page, $p)\nFOLLOWED_BY field(event_type, save) AND field(page, $p) AND field(label, !$a)\nDURING 1 day", res: { type: "file", file: "results/wiki-save-delete-9c1f.jsonl", total: 47 } },
+  { id: "req-0133", t: at(21, "18:20:11"), kind: "search", src: "board", corpus: "wiki", status: "empty", result: "0 hits", ms: 9, q: "\"human helper\"", res: { type: "none" } },
+  { id: "req-0132", t: at(21, "17:03:45"), kind: "evaluate", src: "codex", corpus: "revisions", status: "ok", result: "12 groups", ms: 402, q: "SELECT field(event_type, revert) AND field(page, $p)\nFOLLOWED_BY field(event_type, revert) AND field(page, $p)\nDURING 1 hour", res: { type: "file", file: "results/revisions-revert-41b2.jsonl", total: 12 } },
+  { id: "req-0131", t: at(21, "16:59:02"), kind: "evaluate", src: "codex", corpus: "revisions", status: "error", result: "timeout", ms: 30000, q: "SELECT field(event_type, revert) FOLLOWED_BY field(event_type, revert) DURING 7 days", res: { type: "error", msg: "evaluation timed out after 30 s", where: "the DURING window scanned 1.9 M events · narrow it or add a field() filter" } }
+];
+
+var INCOMING = [
+  { kind: "search", src: "claude-skill", corpus: "village", status: "ok", result: "1 hit", ms: 7, q: "\"password field\"", res: { type: "hits", terms: ["password field"], hits: [hit(1, EV.opus)], total: 1 } },
+  { kind: "evaluate", src: "codex", corpus: "village", status: "ok", result: "= 64", ms: 33, q: "SELECT field(kind, REQUEST_HUMAN_HELPER) AGGREGATE count()", res: { type: "agg", value: "64", label: "REQUEST_HUMAN_HELPER events" } },
+  { kind: "similar", src: "claude-skill", corpus: "wiki", status: "empty", result: "0 hits ≥ 0.5", ms: 118, q: "reverting another agent's edit", res: { type: "none" } }
+];
+
+var RANGES = [["15m", 900], ["1h", 3600], ["24h", 86400], ["7d", 604800], ["all", 0]];
+
+function mkGroups(groups, shown, withText) {
+  return groups.slice(0, shown).map(function (g, i) {
+    return { n: i + 1, span: g.span, gap: g.gap, events: g.events.map(function (e, j) { return { n: j + 1, kind: e.kind, agent: e.agent, time: e.time, text: e.text, hasText: !!e.text && withText, gapBefore: j > 0 }; }) };
+  });
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    var sc = props.scenario || "live";
+    this.t0 = Date.now();
+    this.state = {
+      theme: null, now: NOW0, live: sc !== "offline", offline: sc === "offline",
+      rows: sc === "empty" ? [] : ROWS.slice(), pending: [], incomingIdx: 0, freshId: null, seq: 143,
+      range: "24h", search: "", kinds: {}, srcs: {}, corpora: {}, statuses: sc === "filtered" ? { error: true } : {},
+      sel: sc === "error selected" ? "req-0137" : (sc === "empty" ? null : "req-0142"),
+      tab: sc === "editor" ? "editor" : "details", shownGroups: 2, copied: false,
+      query: Q1, runCorpus: "village", max: 20, withEvents: true, running: sc === "editor", runErr: null,
+      full: sc === "output" || sc === "output table", fview: sc === "output table" ? "table" : null, fgroup: 0, fq: "", fagents: {}
+    };
+    if (sc === "filtered") this.state.srcs = { board: true };
+  }
+  componentDidMount() {
+    this.clock = setInterval(() => this.setState({ now: NOW0 + (Date.now() - this.t0) }), 5000);
+    this.feed = setInterval(() => this.arrive(), 9000);
+  }
+  componentDidUpdate() { var f = !!this.state.full; if (f && !this.wasFull && this.fullEl) this.fullEl.focus(); this.wasFull = f; }
+  componentWillUnmount() { clearInterval(this.clock); clearInterval(this.feed); clearTimeout(this.runT); clearTimeout(this.copyT); }
+
+  arrive() {
+    var s = this.state;
+    if (s.offline || s.incomingIdx >= INCOMING.length || (this.props.scenario || "live") === "empty") return;
+    var base = INCOMING[s.incomingIdx];
+    var row = Object.assign({}, base, { id: "req-0" + s.seq, t: NOW0 + (Date.now() - this.t0) });
+    if (s.live) this.setState({ rows: [row].concat(s.rows), freshId: row.id, incomingIdx: s.incomingIdx + 1, seq: s.seq + 1 });
+    else this.setState({ pending: [row].concat(s.pending), incomingIdx: s.incomingIdx + 1, seq: s.seq + 1 });
+  }
+
+  run() {
+    var s = this.state;
+    if (s.running) return;
+    var err = checkQuery(s.query);
+    this.setState({ running: true, runErr: null });
+    clearTimeout(this.runT);
+    this.runT = setTimeout(() => {
+      var st = this.state;
+      var id = "req-0" + st.seq;
+      var t = NOW0 + (Date.now() - this.t0);
+      var row = err
+        ? { id: id, t: t, kind: "evaluate", src: "board", corpus: st.runCorpus, status: "error", result: "syntax error", ms: 3, q: st.query, res: { type: "error", msg: err.msg, where: "position " + err.pos } }
+        : { id: id, t: t, kind: "evaluate", src: "board", corpus: st.runCorpus, status: "ok", result: "6 groups", ms: 212, q: st.query, res: { type: "groups", groups: SIGNIN_GROUPS, total: 6 } };
+      if (err) this.setState({ running: false, runErr: err, rows: [row].concat(st.rows), seq: st.seq + 1, freshId: id });
+      else this.setState({ running: false, rows: [row].concat(st.rows), seq: st.seq + 1, freshId: id, sel: id, tab: "details", shownGroups: 2 });
+    }, 900);
+  }
+
+  flip(key, val) { this.setState((st) => { var o = Object.assign({}, st[key]); if (o[val]) delete o[val]; else o[val] = true; return { [key]: o }; }); }
+
+  renderVals() {
+    var s = this.state;
+    var theme = s.theme || this.props.theme || "dark";
+    var set = (p) => this.setState(p);
+    var nowSec = function (t) { return Math.max(0, Math.round((s.now - t) / 1000)); };
+    var rangeSec = RANGES.filter(function (r) { return r[0] === s.range; })[0][1];
+    var q = s.search.trim().toLowerCase();
+
+    var inRange = s.rows.filter(function (r) {
+      if (rangeSec && nowSec(r.t) > rangeSec) return false;
+      if (q && (r.q + " " + r.src + " " + r.corpus + " " + r.result).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+    var has = function (o) { return Object.keys(o).length > 0; };
+    var pass = function (r, skip) {
+      return (skip === "kinds" || !has(s.kinds) || s.kinds[r.kind]) && (skip === "srcs" || !has(s.srcs) || s.srcs[r.src]) &&
+             (skip === "corpora" || !has(s.corpora) || s.corpora[r.corpus]) && (skip === "statuses" || !has(s.statuses) || s.statuses[r.status]);
+    };
+    var visible = inRange.filter(function (r) { return pass(r); });
+
+    var facet = (key, field, values, extra) => values.map((v) => {
+      var n = inRange.filter(function (r) { return pass(r, key) && r[field] === v; }).length;
+      var on = !!s[key][v];
+      return Object.assign({ label: v, n: n, on: on, cls: "facet" + (n === 0 && !on ? " zero" : ""), toggle: () => this.flip(key, v) }, extra ? extra(v) : {});
+    });
+
+    var chips = [];
+    var addChips = (key, group) => Object.keys(s[key]).forEach((v) => chips.push({ group: group, label: v, aria: "Remove " + group + " " + v, remove: () => this.flip(key, v) }));
+    addChips("kinds", "kind"); addChips("srcs", "source"); addChips("corpora", "corpus"); addChips("statuses", "status");
+    if (q) chips.push({ group: "text", label: "“" + s.search.trim() + "”", aria: "Clear search", remove: () => set({ search: "" }) });
+    var anyFilter = chips.length > 0 || s.range !== "24h";
+
+    var days = [];
+    visible.forEach((r) => {
+      var k = dayKey(r.t);
+      var last = days[days.length - 1];
+      if (!last || last.key !== k) {
+        var d = new Date(r.t), today = dayKey(s.now) === k, yest = dayKey(s.now - 86400000) === k;
+        last = { key: k, label: today ? "Today" : (yest ? "Yesterday" : DOW[d.getDay()]), sub: DOW[d.getDay()] + " " + d.getDate() + " " + MON[d.getMonth()], rows: [] };
+        days.push(last);
+      }
+      last.rows.push({
+        kind: r.kind, src: r.src, corpus: r.corpus, result: r.result,
+        hms: hmsOf(r.t), rel: rel(nowSec(r.t)), sel: r.id === s.sel,
+        cls: "row" + (r.id === s.sel ? " sel" : "") + (r.id === s.freshId ? " fresh" : "") + " s-" + r.status,
+        resCls: "res s-" + r.status, dur: durFmt(r.ms), durCls: "dur" + (r.ms >= 1000 ? " slow" : ""),
+        tokens: r.kind === "evaluate" ? lex(r.q.replace(/\s*\n\s*/g, " ")) : [{ t: r.q, c: "" }],
+        select: () => set({ sel: r.id, tab: "details", shownGroups: 2, copied: false }),
+        open: () => set({ sel: r.id, tab: "details", full: true, fview: null, fgroup: 0, fq: "", fagents: {}, copied: false })
+      });
+    });
+
+    var errors = visible.filter(function (r) { return r.status === "error"; }).length;
+    var selRow = s.rows.filter(function (r) { return r.id === s.sel; })[0] || null;
+
+    var d = {};
+    if (selRow) {
+      var r = selRow, res = r.res, dt = new Date(r.t);
+      d = {
+        id: r.id, kind: r.kind, status: r.status,
+        statusLabel: { ok: "ok", capped: "capped", error: "failed", empty: "no matches" }[r.status],
+        whenAbs: DOW[dt.getDay()] + " " + dt.getDate() + " " + MON[dt.getMonth()] + ", " + hmsOf(r.t), rel: rel(nowSec(r.t)),
+        iso: dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate()) + " " + hmsOf(r.t),
+        tokens: r.kind === "evaluate" ? lex(r.q) : [{ t: r.q, c: "" }],
+        src: r.src, srcKind: AGENTS[r.src] ? "agent" : "person, via board", corpus: r.corpus,
+        durLong: durFmt(r.ms), result: r.result,
+        hasFile: !!(res.file || res.type === "file"),
+        isGroups: res.type === "groups", isHits: res.type === "hits", isAgg: res.type === "agg", isFile: res.type === "file", isError: res.type === "error", isNone: res.type === "none",
+        resTitle: { groups: "Groups", hits: "Hits", agg: "Value", file: "Output", error: "Error", none: "Result" }[res.type],
+        resNote: res.type === "groups" ? (res.note || res.total + " total") : res.type === "hits" ? (res.file ? "rest in " + res.file : res.hits.length + " of " + res.total) : ""
+      };
+      if (res.type === "groups") {
+        var shown = Math.min(s.shownGroups, res.groups.length);
+        d.groups = mkGroups(res.groups, shown, true);
+        d.moreLabel = "showing " + shown + " of " + res.total + (res.groups.length < res.total && shown >= res.groups.length ? " · the rest in the .jsonl" : "");
+        d.canMore = shown < res.groups.length;
+      }
+      if (res.type === "hits") d.hits = res.hits.map(function (h) { return Object.assign({}, h, { parts: highlight(h.text, res.terms), scored: r.kind === "similar", cls: "hit" + (r.kind === "similar" ? "" : " noscore") }); });
+      if (res.type === "agg") { d.value = res.value; d.valueLabel = res.label; }
+      if (res.type === "file") d.file = res.file;
+      if (res.type === "error") { d.errMsg = res.msg; d.errWhere = res.where; }
+    }
+
+    var emptyTitle = s.rows.length === 0 ? "Nothing asked yet" : "No requests match";
+    var emptyBody = s.rows.length === 0 ? "Requests from agents and people show up here as the server receives them." : "Nothing in the " + (s.range === "all" ? "whole journal" : "last " + s.range) + " fits these filters.";
+
+
+    // ---- full-screen output view ----
+    var fx = { views: [], tiles: [], nav: [], trows: [], lines: [], agents: [], heads: [], g: {} };
+    if (selRow) {
+      var R = selRow, RS = R.res;
+      var vIdx = visible.findIndex(function (x) { return x.id === R.id; });
+      var goTo = (row) => { if (row) set({ sel: row.id, fview: null, fgroup: 0, fq: "", fagents: {}, copied: false }); };
+      fx.pos = vIdx >= 0 ? (vIdx + 1) + " of " + visible.length : "";
+      fx.noPrev = vIdx <= 0; fx.noNext = vIdx < 0 || vIdx >= visible.length - 1;
+      fx.prev = () => goTo(visible[vIdx - 1]); fx.next = () => goTo(visible[vIdx + 1]);
+      var allowed = RS.type === "groups" ? ["timeline", "table", "raw"] : RS.type === "hits" ? ["table", "raw"] : ["summary", "raw"];
+      var view = allowed.indexOf(s.fview) >= 0 ? s.fview : allowed[0];
+      var VL = { timeline: "Timeline", table: "Table", raw: "Raw JSON", summary: "Summary" };
+      fx.views = allowed.map((v) => ({ label: VL[v], on: v === view, cls: v === view ? "on" : "", pick: () => set({ fview: v }) }));
+      fx.isTimeline = view === "timeline"; fx.isTable = view === "table"; fx.isRaw = view === "raw"; fx.isSummary = view === "summary";
+      fx.q = s.fq; fx.onQ = (e) => set({ fq: e.target.value, fgroup: 0 });
+      var fq = s.fq.trim().toLowerCase();
+      var hasAg = Object.keys(s.fagents).length > 0;
+      var textOf = function (e) { return (e.kind + " " + e.agent + " " + (e.text || "")).toLowerCase(); };
+      var parseTs = function (ts) { var m = ts.match(/(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/); return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]); };
+      var spanOf = function (list) {
+        if (!list.length) return "—";
+        var ds = list.map(parseTs).sort(function (a, b) { return a - b; }), a = ds[0], b = ds[ds.length - 1];
+        return a.getMonth() === b.getMonth() ? MON[a.getMonth()] + " " + a.getDate() + (a.getDate() !== b.getDate() ? "–" + b.getDate() : "") : MON[a.getMonth()] + " " + a.getDate() + "–" + MON[b.getMonth()] + " " + b.getDate();
+      };
+      var agentList = function (names) {
+        var uniq = []; names.forEach(function (n) { if (uniq.indexOf(n) < 0) uniq.push(n); });
+        return uniq.map((n) => ({ label: n, on: !!s.fagents[n], cls: "achip" + (s.fagents[n] ? " on" : ""), toggle: () => { this.flip("fagents", n); set({ fgroup: 0 }); } }));
+      };
+      var J = function (o) { return lexJson(JSON.stringify(o)); };
+
+      if (RS.type === "groups") {
+        var loaded = RS.groups.map(function (g, i) { return Object.assign({ n: i + 1 }, g); });
+        var fgs = loaded.filter(function (g) {
+          if (hasAg && !s.fagents[g.events[0].agent]) return false;
+          if (fq && !g.events.some(function (e) { return textOf(e).indexOf(fq) >= 0; })) return false;
+          return true;
+        });
+        var allEv = []; loaded.forEach(function (g) { g.events.forEach(function (e) { allEv.push(e); }); });
+        fx.canFilter = true; fx.agents = agentList(loaded.map(function (g) { return g.events[0].agent; }));
+        fx.total = RS.total;
+        fx.hasTiles = true;
+        fx.tiles = [
+          { v: loaded.length + " / " + RS.total, l: "groups loaded" },
+          { v: String(allEv.length), l: "events" },
+          { v: String(fx.agents.length), l: "agents" },
+          { v: spanOf(allEv.map(function (e) { return e.time; })), l: "time range, 2026" }
+        ];
+        fx.note = (fgs.length < loaded.length ? fgs.length + " of " + loaded.length + " groups match" : "") + (loaded.length < RS.total ? (fgs.length < loaded.length ? " · " : "") + (RS.total - loaded.length) + " more in the .jsonl" : "");
+        var gi = Math.min(s.fgroup, Math.max(0, fgs.length - 1));
+        fx.nav = fgs.map((g, i) => ({ n: g.n, agent: g.events[0].agent, span: g.span, snip: (g.events.filter(function (e) { return e.text; })[0] || g.events[0]).text || g.events[0].kind, date: g.events[0].time, on: i === gi, cls: "gitem" + (i === gi ? " on" : ""), pick: () => set({ fgroup: i }) }));
+        fx.hasGroup = fgs.length > 0; fx.noGroup = !fx.hasGroup;
+        if (fx.hasGroup) {
+          var G = fgs[gi], items = [];
+          G.events.forEach(function (e, j) {
+            if (j > 0) { var p = G.gap.split(" · "); items.push({ isGap: true, isEv: false, plus: p[0], label: p[1] || "" }); }
+            var parts = e.time.split(" ");
+            items.push({ isEv: true, isGap: false, n: j + 1, hms: parts[1], date: parts[0], kind: e.kind, agent: e.agent, text: e.text, hasText: !!e.text });
+          });
+          fx.g = { n: G.n, agent: G.events[0].agent, span: G.span, range: G.events[0].time + " → " + G.events[G.events.length - 1].time.split(" ")[1], items: items };
+        }
+        fx.isGroupTable = true; fx.isHitTable = false;
+        fx.cols = "56px 44px 168px minmax(0,230px) 150px minmax(0,1fr)";
+        fx.heads = ["group", "#", "time", "kind", "agent", "text"];
+        fgs.forEach(function (g) { g.events.forEach(function (e, j) { fx.trows.push({ cls: "tr" + (j === 0 ? " first" : ""), g: j === 0 ? g.n : "", n: j + 1, ts: e.time, kind: e.kind, agent: e.agent, text: e.text || "—" }); }); });
+        fx.tableEmpty = fx.trows.length === 0;
+        fgs.forEach(function (g) { g.events.forEach(function (e, j) { var o = { group: g.n, seq: j + 1, ts: e.time.replace(" ", "T"), kind: e.kind, agent_id: e.agent }; if (e.text) o.text = e.text; fx.lines.push(o); }); });
+      } else if (RS.type === "hits") {
+        var fh = RS.hits.filter(function (h) { return (!hasAg || s.fagents[h.agent]) && (!fq || textOf(h).indexOf(fq) >= 0); });
+        var scored = R.kind === "similar";
+        fx.canFilter = true; fx.agents = agentList(RS.hits.map(function (h) { return h.agent; }));
+        fx.hasTiles = true;
+        fx.tiles = [
+          { v: RS.hits.length + " / " + RS.total, l: "hits loaded" },
+          { v: scored ? RS.hits[0].score : "exact", l: scored ? "top score" : "match type" },
+          { v: String(fx.agents.length), l: "sources" },
+          { v: spanOf(RS.hits.map(function (h) { return h.time; })), l: "time range, 2026" }
+        ];
+        fx.note = (fh.length < RS.hits.length ? fh.length + " of " + RS.hits.length + " match" : "") + (RS.hits.length < RS.total ? (fh.length < RS.hits.length ? " · " : "") + (RS.total - RS.hits.length) + " more in the .jsonl" : "");
+        fx.isGroupTable = false; fx.isHitTable = true;
+        fx.cols = "96px 168px minmax(0,170px) 150px minmax(0,1fr)";
+        fx.heads = [scored ? "score" : "match", "time", "kind", "source", "text"];
+        fx.trows = fh.map(function (h) { return { score: scored ? h.score : "exact", pct: scored ? h.pct : "100%", ts: h.time, kind: h.kind, agent: h.agent, parts: highlight(h.text, RS.terms) }; });
+        fx.tableEmpty = fx.trows.length === 0;
+        fh.forEach(function (h) { var o = {}; if (scored) o.score = +h.score; o.ts = h.time.replace(" ", "T"); o.kind = h.kind; o.agent_id = h.agent; o.text = h.text; fx.lines.push(o); });
+      } else {
+        fx.canFilter = false; fx.hasTiles = false;
+        fx.note = { agg: "single value", error: "the request failed before producing output", file: "output went to a file", none: "empty result" }[RS.type];
+        if (RS.type === "agg") fx.lines.push({ aggregate: "value", value: +RS.value });
+        if (RS.type === "error") fx.lines.push({ error: RS.msg, detail: RS.where });
+        if (RS.type === "file") fx.lines.push({ written_to: RS.file, groups: RS.total });
+        if (RS.type === "none") fx.lines.push({ hits: [] });
+      }
+      fx.lines = fx.lines.map(function (o, i) { return { no: i + 1, tokens: J(o) }; });
+    }
+
+    var liveWord = s.offline ? "reconnecting" : (s.live ? "live" : "paused");
+    var newest = s.rows[0];
+    var liveNote = s.offline ? "" : (newest ? " · last request " + rel(nowSec(newest.t)) : "");
+
+    return {
+      themeClass: theme === "light" ? "t-light" : "t-dark", isDark: theme !== "light", isLight: theme === "light",
+      themeLabel: theme === "light" ? "Switch to dark theme" : "Switch to light theme",
+      toggleTheme: () => set({ theme: theme === "light" ? "dark" : "light" }),
+      live: s.live, liveWord: liveWord, liveNote: liveNote,
+      liveClass: "live" + (s.offline ? " down" : (s.live ? "" : " off")),
+      toggleLive: () => { if (s.offline) return; if (!s.live) set({ live: true, rows: s.pending.concat(s.rows), pending: [], freshId: s.pending[0] ? s.pending[0].id : s.freshId }); else set({ live: false }); },
+      offline: s.offline, reconnect: () => set({ offline: false, live: true }),
+      hasPending: s.pending.length > 0, pendingLabel: s.pending.length + " new request" + (s.pending.length > 1 ? "s" : ""),
+      showPending: () => set({ rows: s.pending.concat(s.rows), pending: [], freshId: s.pending[0].id }),
+      search: s.search, onSearch: (e) => set({ search: e.target.value }),
+      newQuery: () => set({ tab: "editor", query: "SELECT ", runErr: null }),
+
+      ranges: RANGES.map((r) => ({ label: r[0], on: s.range === r[0], cls: s.range === r[0] ? "on" : "", pick: () => set({ range: r[0] }) })),
+      kindFacets: facet("kinds", "kind", ["evaluate", "search", "similar"], (v) => ({ color: KIND_COLOR[v] })),
+      srcFacets: facet("srcs", "src", ["board", "claude-skill", "codex"], (v) => ({ agent: !!AGENTS[v] })),
+      corpusFacets: facet("corpora", "corpus", ["village", "wiki", "revisions"]),
+      statusFacets: facet("statuses", "status", ["ok", "capped", "empty", "error"], (v) => ({ color: STATUS_COLOR[v] })),
+      anyFilter: anyFilter, resetAll: () => set({ kinds: {}, srcs: {}, corpora: {}, statuses: {}, search: "", range: "24h" }),
+      chips: chips, hasChips: chips.length > 0,
+      countLabel: visible.length === inRange.length && !anyFilter ? visible.length + " requests" : visible.length + " of " + s.rows.length + " requests",
+      hasErrors: errors > 0 && !s.statuses.error, errorsLabel: errors + (errors > 1 ? " errors" : " error"),
+      onlyErrors: () => set({ statuses: { error: true } }),
+
+      days: days, listEmpty: visible.length === 0, emptyTitle: emptyTitle, emptyBody: emptyBody,
+      onListKey: (e) => {
+        if (e.key === "Enter" && selRow) { e.preventDefault(); set({ full: true, fview: null, fgroup: 0, fq: "", fagents: {} }); return; }
+        if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+        e.preventDefault();
+        var i = visible.findIndex(function (r) { return r.id === s.sel; });
+        var j = e.key === "ArrowDown" ? Math.min(visible.length - 1, i + 1) : Math.max(0, i - 1);
+        if (visible[j]) set({ sel: visible[j].id, tab: "details", shownGroups: 2 });
+      },
+
+      onDetails: s.tab === "details", onEditor: s.tab === "editor",
+      tabDetailsCls: "tab" + (s.tab === "details" ? " on" : ""), tabEditorCls: "tab" + (s.tab === "editor" ? " on" : ""),
+      showDetails: () => set({ tab: "details" }), showEditor: () => set({ tab: "editor" }),
+      showDetailPane: s.tab === "details" && !!selRow, showNoSel: s.tab === "details" && !selRow,
+      d: d, fx: fx, full: s.full && !!selRow,
+      openFull: () => set({ full: true, fview: null, fgroup: 0, fq: "", fagents: {} }),
+      closeFull: () => set({ full: false }),
+      fullRef: (el) => { this.fullEl = el; },
+      onFullKey: (e) => {
+        if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) { if (e.key === "Escape") e.target.blur(); return; }
+        if (e.key === "Escape") { e.preventDefault(); set({ full: false }); }
+        else if (e.key === "ArrowLeft" && !fx.noPrev) { e.preventDefault(); fx.prev(); }
+        else if (e.key === "ArrowRight" && !fx.noNext) { e.preventDefault(); fx.next(); }
+        else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && fx.isTimeline && fx.nav.length) { e.preventDefault(); var gi = Math.min(s.fgroup, fx.nav.length - 1); set({ fgroup: e.key === "ArrowDown" ? Math.min(fx.nav.length - 1, gi + 1) : Math.max(0, gi - 1) }); }
+      },
+      copyTitle: s.copied ? "Copied" : "Copy query",
+      copyQuery: () => { try { navigator.clipboard.writeText(selRow.q); } catch (e) {} set({ copied: true }); },
+      openInEditor: () => set({ tab: "editor", query: selRow.q, runCorpus: selRow.corpus, runErr: null }),
+      rerun: () => { this.setState({ tab: "editor", query: selRow.q, runCorpus: selRow.corpus, runErr: null }, () => this.run()); },
+      moreGroups: () => set({ shownGroups: s.shownGroups + 2 }),
+
+      query: s.query, queryTokens: lex(s.query),
+      onQuery: (e) => set({ query: e.target.value, runErr: null }),
+      onEditorKey: (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); this.run(); } },
+      editorCls: "editor" + (s.runErr ? " bad" : ""),
+      runError: !!s.runErr, errMsg: s.runErr ? s.runErr.msg : "", errPos: s.runErr ? s.runErr.pos : "",
+      runCorpus: s.runCorpus, pickRunCorpus: (e) => set({ runCorpus: e.target.value }),
+      max: s.max, onMax: (e) => set({ max: e.target.value }),
+      withEvents: s.withEvents, toggleEvents: (e) => set({ withEvents: e.target.checked }),
+      running: s.running, runLabel: s.running ? "Running…" : "Run", run: () => this.run(),
+      recent: s.rows.filter(function (r) { return r.src === "board"; }).slice(0, 5).map((r) => ({ hms: hmsOf(r.t), tokens: r.kind === "evaluate" ? lex(r.q.replace(/\s*\n\s*/g, " ")) : [{ t: r.q, c: "" }], load: () => set({ query: r.q, runCorpus: r.corpus, runErr: null }) }))
+    };
+  }
+}
+</script>
+</body>
+</html>

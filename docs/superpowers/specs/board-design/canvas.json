@@ -1,0 +1,31 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Main.dc.html": { "h": 900, "title": "Board — dark, live (interactive)", "w": 1440, "x": 0, "y": 0, "is_interactive": true },
+    "Light.dc.html": { "h": 900, "title": "Board — light (interactive)", "w": 1440, "x": 1520, "y": 0, "is_interactive": true },
+    "Output-timeline.dc.html": { "h": 900, "title": "Full view — timeline", "w": 1440, "x": 0, "y": 1400, "is_interactive": true },
+    "Output-table.dc.html": { "h": 900, "title": "Full view — table", "w": 1440, "x": 1520, "y": 1400, "is_interactive": true },
+    "Error-selected.dc.html": { "h": 900, "title": "State — failed request selected", "w": 1440, "x": 0, "y": 2720, "is_interactive": true },
+    "Editor-running.dc.html": { "h": 900, "title": "State — query running", "w": 1440, "x": 1520, "y": 2720, "is_interactive": true },
+    "Filtered-empty.dc.html": { "h": 900, "title": "State — filters match nothing", "w": 1440, "x": 0, "y": 3740, "is_interactive": true },
+    "Offline.dc.html": { "h": 900, "title": "State — journal stream lost", "w": 1440, "x": 1520, "y": 3740, "is_interactive": true },
+    "Empty.dc.html": { "h": 900, "title": "State — nothing asked yet", "w": 1440, "x": 0, "y": 4760, "is_interactive": true }
+  },
+  "createdOnFiles": { "at": "2026-09-22T15:40:00Z", "v": 1 },
+  "designSystems": [],
+  "launch": { "view": "focused", "file": "Main.dc.html" },
+  "notes": {
+    "n1": { "kind": "title1", "maxW": 2960, "text": "PrismQL board: what the server was asked, live", "w": 240, "x": 0, "y": -300 },
+    "n4": { "kind": "title1", "maxW": 2960, "text": "Full view of a request's output", "w": 240, "x": 0, "y": 1100 },
+    "n3": { "kind": "title1", "maxW": 2960, "text": "States", "w": 240, "x": 0, "y": 2420 },
+    "n2": {
+      "fill": "blue",
+      "text": "The real page is src/prismql/server/board/ (index.html, board.css, board.js) — plain HTML, no framework. Layout: filter rail (time range, kind, source, corpus, status, with counts) · journal grouped by day, each row with exact time, relative age, result and duration · inspector with the selected request or the editor. Full view opens from the inspector, a double-click on a row or Enter in the journal: Timeline / Table / Raw JSON, filter by text and agent, ←/→ between requests, Esc back. Themes are CSS variables on .t-dark / .t-light: port that block as-is. The other artboards are the same file with a different default scenario.",
+      "w": 360, "x": 3040, "y": 0
+    }
+  },
+  "order": ["Main.dc.html", "Light.dc.html", "Output-timeline.dc.html", "Output-table.dc.html", "Error-selected.dc.html", "Editor-running.dc.html", "Filtered-empty.dc.html", "Offline.dc.html", "Empty.dc.html"],
+  "pages": [],
+  "title": "PrismQL board"
+}
