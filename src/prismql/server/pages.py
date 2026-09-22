@@ -1,0 +1,84 @@
+"""A window of a stored result, shaped for the wire (graph #65).
+
+Positions map to ids and times through the backend's order axis;
+documents are fetched only when hydrating, projected to ``fields``.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+from .results import StoredResult
+
+
+def iso_micros(us: int | None) -> str | None:
+    if us is None:
+        return None
+    return datetime.fromtimestamp(us / 1_000_000, UTC).isoformat()
+
+
+def _times(backend: Any, positions: list[int], field: str) -> list[str | None]:
+    try:
+        raw = backend.timestamps_at(positions, field)
+    except KeyError:  # the corpus has no such timestamp field
+        return [None] * len(positions)
+    return [iso_micros(v) for v in raw]
+
+
+def page_payload(
+    result: StoredResult,
+    backend: Any,
+    *,
+    id_field: str,
+    time_field: str,
+    offset: int,
+    limit: int,
+    hydrate: bool,
+    fields: list[str] | None,
+) -> dict[str, Any]:
+    window = result.window(offset, limit)
+    flat = [p for positions, _ in window for p in positions]
+    ids = backend.ids_at(flat)
+    times = _times(backend, flat, time_field)
+    by_id: dict[Any, dict[str, Any]] = {}
+    if hydrate and ids:
+        for doc in backend.get_documents(list(dict.fromkeys(ids))):
+            if fields is not None:
+                doc = {k: doc[k] for k in [id_field, *fields] if k in doc}
+            by_id[doc.get(id_field)] = doc
+    payload: dict[str, Any] = {
+        "kind": result.kind,
+        "total": result.total,
+        "offset": offset,
+        "count": len(window),
+        "truncated": offset + len(window) < result.total,
+    }
+    items: list[dict[str, Any]] = []
+    cursor = 0
+    for positions, score in window:
+        n = len(positions)
+        span_ids, span_times = ids[cursor : cursor + n], times[cursor : cursor + n]
+        cursor += n
+        if result.kind == "hits":
+            item: dict[str, Any] = {
+                "id": span_ids[0],
+                "position": positions[0],
+                "score": round(score or 0.0, 4),
+                "time": span_times[0],
+            }
+            if hydrate and span_ids[0] in by_id:
+                item["event"] = by_id[span_ids[0]]
+        else:
+            item = {"ids": span_ids, "positions": positions, "times": span_times}
+            if hydrate:
+                item["events"] = [by_id[i] for i in span_ids if i in by_id]
+        items.append(item)
+    if result.kind == "hits":
+        payload["kept"] = len(result)
+        payload["hits"] = items
+    else:
+        payload["results"] = items
+        if result.labels is not None:
+            payload["labels"] = result.labels
+    return payload

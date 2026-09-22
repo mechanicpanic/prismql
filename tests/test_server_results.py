@@ -1,5 +1,7 @@
 """The server's result store: folded results under ids (graph #65)."""
 
+from prismql.backends.memory import MemoryBackend
+from prismql.server.pages import page_payload
 from prismql.server.results import ResultStore, StoredResult
 
 
@@ -36,3 +38,71 @@ def test_ids_are_unique_and_clear_forgets_everything() -> None:
     assert r1 != r2 and r1.startswith("r")
     store.clear()
     assert store.get(r1) is None and store.get(r2) is None
+
+
+DOCS = [
+    {"id": "a", "text": "one", "kind": "x", "timestamp": "2026-06-03T18:02:11Z"},
+    {"id": "b", "text": "two", "kind": "y", "timestamp": "2026-06-03T18:19:40Z"},
+    {"id": "c", "text": "three", "kind": "x", "timestamp": "2026-06-03T18:30:00Z"},
+]
+
+
+def _backend() -> MemoryBackend:
+    return MemoryBackend(DOCS, id_field="id", timestamp_fields=["timestamp"])
+
+
+def test_group_page_carries_positions_times_and_projected_events():
+    r = StoredResult.from_groups("groups", "c", [[0, 2], [1]])
+    p = page_payload(
+        r,
+        _backend(),
+        id_field="id",
+        time_field="timestamp",
+        offset=0,
+        limit=1,
+        hydrate=True,
+        fields=["text"],
+    )
+    assert p["total"] == 2 and p["count"] == 1 and p["truncated"] is True
+    g = p["results"][0]
+    assert g["ids"] == ["a", "c"] and g["positions"] == [0, 2]
+    assert g["times"] == [
+        "2026-06-03T18:02:11+00:00",
+        "2026-06-03T18:30:00+00:00",
+    ]
+    assert g["events"] == [{"id": "a", "text": "one"}, {"id": "c", "text": "three"}]
+
+
+def test_unhydrated_page_has_no_events_and_unknown_time_field_is_null():
+    r = StoredResult.from_groups("groups", "c", [[1]])
+    p = page_payload(
+        r,
+        _backend(),
+        id_field="id",
+        time_field="nope",
+        offset=0,
+        limit=10,
+        hydrate=False,
+        fields=None,
+    )
+    assert "events" not in p["results"][0]
+    assert p["results"][0]["times"] == [None] and p["truncated"] is False
+
+
+def test_hit_page_reports_kept_and_total():
+    r = StoredResult.from_hits("c", [(2, 0.9), (0, 0.4)], total=5)
+    p = page_payload(
+        r,
+        _backend(),
+        id_field="id",
+        time_field="timestamp",
+        offset=1,
+        limit=10,
+        hydrate=False,
+        fields=None,
+    )
+    assert p["kind"] == "hits" and p["kept"] == 2 and p["total"] == 5
+    assert p["hits"] == [
+        {"id": "a", "position": 0, "score": 0.4, "time": "2026-06-03T18:02:11+00:00"}
+    ]
+    assert p["truncated"] is True  # 3 more exist, though not kept
