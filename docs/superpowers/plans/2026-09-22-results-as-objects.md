@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - The engine is untouched: it already computes the whole result. Only the server's shaping changes.
-- `truncated` means one thing on every endpoint: **more exists beyond this page** (`offset + count < total`).
+- `truncated` means one thing on every endpoint: **paging further returns more** (`offset + count < kept`, where `kept` = stored items; for `/evaluate` `kept == total`). When scouting kept fewer than it found, `kept < total` says so; `truncated` never promises items paging cannot reach (a client looping `offset += count` while `truncated` must terminate).
 - `count` is the number of items in this response (unchanged meaning). `total` is the number found. Scouting adds `kept` (how many are stored, `min(total, scout_depth)`).
 - `max_results` (request and config) keeps its name and becomes the page size / the largest page. No rename: the demo, the MCP shim and the skill already send it.
 - Aggregate and grouped (`GROUP BY`) results are small by construction: they are not stored and carry no `result_id`.
@@ -277,7 +277,7 @@ def test_hit_page_reports_kept_and_total():
     assert p["hits"] == [
         {"id": "a", "position": 0, "score": 0.4, "time": "2026-06-03T18:02:11+00:00"}
     ]
-    assert p["truncated"] is True  # 3 more exist, though not kept
+    assert p["truncated"] is False  # 3 more were found but not kept: kept < total says so
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -342,7 +342,7 @@ def page_payload(
         "total": result.total,
         "offset": offset,
         "count": len(window),
-        "truncated": offset + len(window) < result.total,
+        "truncated": offset + len(window) < len(result),
     }
     items: list[dict[str, Any]] = []
     cursor = 0
@@ -726,7 +726,7 @@ git commit -m "Server: page any kept result by id, or stream it whole as JSONL"
 - Test: `tests/test_tantivy_backend.py`, `tests/test_semantic.py`, `tests/test_server_app.py`
 
 **Interfaces:**
-- Produces: `TantivyBackend.rank_counted(query: str, *, limit: int) -> tuple[list[tuple[MessageId, float]], int]` (hits, match count). `SemanticIndex.rank_counted(text: str, *, limit: int, threshold: float | None = None) -> tuple[list[tuple[MessageId, float]], int]` (hits, count of scores ≥ threshold, or all non-skipped rows when no threshold). Scout responses gain `total`, `kept`, `offset`, `result_id`, and per hit `position` and `time`. `truncated` = more exist beyond this page.
+- Produces: `TantivyBackend.rank_counted(query: str, *, limit: int) -> tuple[list[tuple[MessageId, float]], int]` (hits, match count). `SemanticIndex.rank_counted(text: str, *, limit: int, threshold: float | None = None) -> tuple[list[tuple[MessageId, float]], int]` (hits, count of scores ≥ threshold, or all non-skipped rows when no threshold). Scout responses gain `total`, `kept`, `offset`, `result_id`, and per hit `position` and `time`. `truncated` = paging further returns more (`offset + count < kept`).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -890,7 +890,7 @@ git commit -m "Corpora name their board fields; the MCP shim pages kept results"
 - [ ] **Step 1: Docs.** Run `grep -n "max_results\|truncated\|output=\"file\"\|output: \"file\"\|hydrate" docs/USER-GUIDE.md docs/AGENT-USE.md skills/prismql/SKILL.md README.md`. At each hit, describe the new contract in the file's own voice:
   - every non-aggregate result is kept and has a `result_id`;
   - `max_results` is the page size;
-  - `total` is what was found and `truncated` means more exists beyond this page;
+  - `total` is what was found, `kept` what is stored (scouting), and `truncated` means paging further returns more;
   - `GET /results/{id}` pages (`offset`, `limit`, `hydrate`, `fields`) and `GET /results/{id}.jsonl` streams;
   - scouting reports `total` and `kept` (`scout_depth`);
   - `[server] results_memory_mb`, `scout_depth`, `[corpora.X.board]`;
