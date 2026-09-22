@@ -41,6 +41,7 @@ class MemoryBackend(SearchBackend):
         config: BackendConfig | None = None,
         semantic_index: SemanticIndex | None = None,
         text_language: str = "english",
+        timestamp_fields: Sequence[str] | None = None,
     ) -> None:
         """
         Initialize the memory backend with documents.
@@ -53,6 +54,8 @@ class MemoryBackend(SearchBackend):
                 it, search_semantic() raises NotImplementedError
             text_language: Snowball stemmer language for ``search_stems``
                 (the default ``contains()`` mode); the same name tantivy uses
+            timestamp_fields: Fields parsed to UTC micros on the order axis
+                (``timestamps_at``); ``timestamp`` is always included
         """
         # A corpus may arrive as an ordered Arrow table (spec, layer 1).
         # Row order is load order; to_pylist() preserves it. (Zero-copy
@@ -136,14 +139,14 @@ class MemoryBackend(SearchBackend):
 
         # The ordinal axis: load order, ids as labels (spec 2026-09-18).
         # Built last so a duplicate id fails before any index is trusted.
-        # The engine's timestamp_field is threaded through in P3; until
-        # then the axis carries the conventional "timestamp" column.
+        self.timestamp_fields = list(
+            dict.fromkeys([*(timestamp_fields or []), "timestamp"])
+        )
         self.order = OrderIndex(
             ids=[doc[id_field] for doc in self.documents],
             timestamps={
-                "timestamp": [
-                    epoch_micros(doc.get("timestamp")) for doc in self.documents
-                ]
+                f: [epoch_micros(doc.get(f)) for doc in self.documents]
+                for f in self.timestamp_fields
             },
         )
 

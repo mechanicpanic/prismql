@@ -222,3 +222,49 @@ class TestEngineIntegration:
         # exercises the positional merge path on top of tantivy search
         result = engine.execute("SELECT contains(package), from(bob) INWINDOW 5")
         assert isinstance(result, list)
+
+
+class TestAxisFromDisk:
+    """An index opened from disk keeps the order axis (graph #39)."""
+
+    DOCS = [
+        {"id": "a", "time": "2026-01-01T00:00:00Z", "text": "one"},
+        {"id": "b", "time": "2026-01-01T00:00:05Z", "text": "two"},
+        {"id": "c", "time": "2026-01-01T00:00:30Z", "text": "three"},
+    ]
+
+    def test_reopened_index_has_positions_and_configured_times(self, tmp_path):
+        path = str(tmp_path / "idx")
+        TantivyBackend(self.DOCS, index_path=path, timestamp_fields=["time"])
+        reopened = TantivyBackend(index_path=path)
+        assert reopened.has_order_axis()
+        assert reopened.positions(["c", "a"]) == [2, 0]
+        assert reopened.ids_at([1]) == ["b"]
+        assert reopened.has_timestamp_field("time")
+        assert reopened.timestamps_at([0, 1], "time") == [
+            1767225600000000,
+            1767225605000000,
+        ]
+
+    def test_sequence_query_agrees_with_memory_after_reopen(self, tmp_path):
+        from prismql.backends.memory import MemoryBackend
+
+        path = str(tmp_path / "idx")
+        TantivyBackend(self.DOCS, index_path=path, timestamp_fields=["time"])
+        q = "SELECT field(text, one) FOLLOWED_BY field(text, two) DURING 10 seconds"
+        expected = PrismQLEngine(
+            MemoryBackend(self.DOCS, timestamp_fields=["time"]), timestamp_field="time"
+        ).execute(q)
+        reopened = PrismQLEngine(
+            TantivyBackend(index_path=path), timestamp_field="time"
+        )
+        assert reopened.execute(q) == expected == [["a", "b"]]
+
+    def test_index_without_sidecar_has_no_axis(self, tmp_path):
+        import os
+
+        path = str(tmp_path / "idx")
+        TantivyBackend(self.DOCS, index_path=path)
+        os.remove(tmp_path / "idx" / "order.parquet")
+        reopened = TantivyBackend(index_path=path)
+        assert not reopened.has_order_axis()

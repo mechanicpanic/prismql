@@ -335,8 +335,7 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         )
     if config.backend_type == "tantivy" and config.index_path:
         backend_config["index_path"] = config.index_path
-    if config.backend_type == "rust_memory":
-        backend_config["timestamp_fields"] = config.timestamp_fields
+    backend_config["timestamp_fields"] = config.timestamp_fields
 
     index = _semantic_index(
         config, backend_config.get("documents"), vectors, embedded_model, embedded_text

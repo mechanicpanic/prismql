@@ -6,6 +6,9 @@
 ### Changed (semantic index)
 - `SemanticIndex` runs on numpy when installed (one matrix product per query; 381k rows in milliseconds) and gains `rank(text, limit)`; the pure-Python path remains. `similar_to()` works on the tantivy backend (`semantic_index=`), and the server builds the index for tantivy corpora from `emb` or from the documents.
 
+### Changed (tantivy)
+- A tantivy index built with `index_path` writes its order axis beside the index (`order.parquet`: ids in load order, configured `timestamp_fields` as UTC microseconds) and reads it back when opened, so an index opened from disk supports sequence operators. Both backends carry every configured timestamp field on the axis, not only `timestamp`.
+
 ### Added (ingest toolkit)
 - `prismql ingest table SRC DST --id --time [--sort] [--keep] [--embed COL --model M]` writes the ordered Parquet stream the engine loads without config (`position`, `id`, `time` as UTC microseconds, kept fields, optional `emb` vectors); `prismql ingest claude-code DIR DST` turns a Claude Code project's transcripts, and `prismql ingest codex DIR DST` the Codex CLI rollouts, into one event per content block with the same columns (`kind`, `tool`, `error`, `session`, `model`, `text`). `--time-unit` states the unit of a numeric time column (otherwise classified per value by magnitude). New extra `[ingest]` for `--embed`. The server reads `emb` from such a Parquet file into the semantic index instead of encoding the corpus at start; the embedding model is taken from the file's metadata (a differing `[semantic].model` is an error).
 

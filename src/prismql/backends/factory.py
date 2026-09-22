@@ -126,6 +126,7 @@ class BackendFactory:
             id_field,
             semantic_index=config.get("semantic_index"),
             text_language=config.get("text_language") or "english",
+            timestamp_fields=config.get("timestamp_fields"),
         )
 
     @classmethod
@@ -174,6 +175,7 @@ class BackendFactory:
             text_fields=config.get("text_fields"),
             text_language=config.get("text_language") or "english",
             semantic_index=config.get("semantic_index"),
+            timestamp_fields=config.get("timestamp_fields"),
         )
 
     @classmethod

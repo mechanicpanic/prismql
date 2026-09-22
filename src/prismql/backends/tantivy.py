@@ -64,6 +64,7 @@ def _register_analyzers(index: Any, language: str) -> None:
     index.register_tokenizer(_STEM_TOKENIZER, stem.build())
 
 
+_ORDER_NAME = "order.parquet"  # the axis sidecar: id, <field>_us per position
 _META_NAME = "_prismql_meta.json"  # sidecar recording field roles for reopen
 _REGEX_SPECIAL = re.compile(r"([.^$*+?()\[\]{}|\\])")
 
@@ -78,6 +79,34 @@ def _quote(term: str) -> str:
     the field analyzer (lowercase + stem) is applied to it."""
     escaped = term.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
+
+
+def _write_order(index_path: Path, order: OrderIndex, fields: Sequence[str]) -> None:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    n = order.size()
+    positions = list(range(n))
+    columns: dict[str, Any] = {"id": order.ids_at(positions)}
+    for f in fields:
+        columns[f"{f}_us"] = pa.array(
+            order.timestamps_at(positions, f), type=pa.int64()
+        )
+    pq.write_table(pa.table(columns), index_path / _ORDER_NAME)
+
+
+def _read_order(index_path: Path) -> tuple[OrderIndex, list[str]] | None:
+    """The axis written by ``_write_order``; None for an index built before
+    the sidecar existed (then the backend has no axis, as before)."""
+    path = index_path / _ORDER_NAME
+    if not path.exists():
+        return None
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(path)
+    fields = [c[: -len("_us")] for c in table.column_names if c.endswith("_us")]
+    timestamps = {f: table.column(f"{f}_us").to_pylist() for f in fields}
+    return OrderIndex(ids=table.column("id").to_pylist(), timestamps=timestamps), fields
 
 
 class TantivyBackend(SearchBackend):
@@ -95,6 +124,7 @@ class TantivyBackend(SearchBackend):
         num_threads: int = 1,
         text_language: str = "english",
         semantic_index: Any | None = None,
+        timestamp_fields: Sequence[str] | None = None,
     ) -> None:
         if not _TANTIVY_AVAILABLE:
             raise ImportError(
@@ -107,6 +137,9 @@ class TantivyBackend(SearchBackend):
         # similar_to(): the vector index is independent of the text index
         # (built from documents or read from an ingested emb column).
         self.semantic_index = semantic_index
+        self.timestamp_fields = list(
+            dict.fromkeys([*(timestamp_fields or []), "timestamp"])
+        )
 
         if (
             index_path is not None
@@ -118,17 +151,19 @@ class TantivyBackend(SearchBackend):
             docs = list(documents or [])
             self._build(docs, text_fields, index_path, heap_size, num_threads)
             # The order axis (spec layer 2b): load order of the documents we
-            # were given. An index opened from disk carries no axis.
+            # were given, with the configured time fields as UTC micros.
+            with_id = [doc for doc in docs if self.id_field in doc]
             self.order = OrderIndex(
-                ids=[doc[self.id_field] for doc in docs if self.id_field in doc],
+                ids=[doc[self.id_field] for doc in with_id],
                 timestamps={
-                    "timestamp": [
-                        epoch_micros(doc.get("timestamp"))
-                        for doc in docs
-                        if self.id_field in doc
-                    ]
+                    f: [epoch_micros(doc.get(f)) for doc in with_id]
+                    for f in self.timestamp_fields
                 },
             )
+            if index_path is not None:
+                # The axis travels with the index as a sidecar table, so an
+                # index opened from disk keeps it (graph #39).
+                _write_order(Path(index_path), self.order, self.timestamp_fields)
 
         self._index.reload()
         self._searcher = self._index.searcher()
@@ -229,6 +264,9 @@ class TantivyBackend(SearchBackend):
         meta = json.loads((Path(index_path) / _META_NAME).read_text(encoding="utf-8"))
         self.text_language = meta.get("text_language", self.text_language)
         _register_analyzers(self._index, self.text_language)
+        order = _read_order(Path(index_path))
+        if order is not None:
+            self.order, self.timestamp_fields = order
         self.id_field = meta["id_field"]
         self._id_is_int = meta["id_is_int"]
         self._text_fields = set(meta["text_fields"])
