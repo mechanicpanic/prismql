@@ -31,6 +31,15 @@ def test_store_evicts_oldest_over_budget_but_keeps_the_newest() -> None:
     assert store.get(h) is huge and store.get(c) is None
 
 
+def test_from_groups_and_from_hits_carry_the_load_generation() -> None:
+    # positions are only valid for the load they were computed on
+    # (fix round 1, item 1): the store must remember which one that was.
+    g = StoredResult.from_groups("groups", "c", [[0]], load=3)
+    h = StoredResult.from_hits("c", [(0, 1.0)], total=1, load=5)
+    assert g.load == 3 and h.load == 5
+    assert StoredResult.from_groups("groups", "c", [[0]]).load == 0
+
+
 def test_ids_are_unique_and_clear_forgets_everything() -> None:
     store = ResultStore(budget_bytes=1 << 20)
     r1 = store.put(StoredResult.from_groups("groups", "c", [[1]]))

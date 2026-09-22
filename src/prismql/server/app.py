@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
@@ -108,6 +108,10 @@ class ServerState:
         self.scouts: dict[str, Any] = {}  # per-corpus ranked full-text index
         self.loaded_at: str | None = None
         self.results = ResultStore(config.results_memory_mb * 1024 * 1024)
+        # Bumped on every reload; stamped onto each stored result so a page
+        # computed on an earlier load can be told apart from the current one
+        # (fix round 1, #1 — positions are load-order, and load order moves).
+        self.generation = 0
         # The board's journal (graph #63): one summary per request, never the
         # results themselves. A ring in memory; JSONL beside the results when
         # file output is enabled, so the board survives a restart.
@@ -129,6 +133,7 @@ class ServerState:
             self.loaded_at = datetime.now(UTC).isoformat()
             # Positions are only valid for the load they were computed on.
             self.results.clear()
+            self.generation += 1
 
     def record(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Append one request summary to the journal and return it with its seq."""
@@ -225,16 +230,16 @@ def _write_hits_file(
     return {"count": len(rows), "path": str(path), "preview": preview}
 
 
-def _fold(result: Any) -> tuple[str, list[list[Any]], list[str] | None] | None:
+def _fold(
+    result: Any,
+) -> tuple[str, list[list[Any]], list[str | None] | None] | None:
     """(kind, id groups, labels) of a group-shaped result; None for the
     aggregate shapes, which are small and answered inline."""
     if isinstance(result, (AggregateResult, GroupedResult)):
         return None
     if isinstance(result, NamedQueryResult):
-        # pattern_names carries None for unnamed slots (types.py); the
-        # StoredResult/page_payload contract already treats labels as
-        # list[str] | None (graph #65).
-        return "named", result.to_list(), cast("list[str]", result.pattern_names)
+        # pattern_names carries None for unnamed slots (types.py).
+        return "named", result.to_list(), list(result.pattern_names)
     return "groups", list(result), None
 
 
@@ -388,6 +393,10 @@ def create_app(config: ServerConfig) -> FastAPI:
             else config.max_results
         )
         start = perf_counter()
+        # Read before engine_for, deliberately: a reload landing between this
+        # read and the query running only marks the result stale (Task 5
+        # serves "gone" on a load mismatch) — never wrong (fix round 1, #1).
+        load = state.generation
         try:
             engine, corpus_cfg, exec_lock = state.engine_for(req.corpus)
         except KeyError as e:
@@ -398,6 +407,14 @@ def create_app(config: ServerConfig) -> FastAPI:
                     "error": {"type": "runtime", "message": str(e.args[0])},
                 },
             )
+
+        def _runtime_error(message: str) -> JSONResponse:
+            _record_failure(req, request, "evaluate", "runtime", message, start)
+            return JSONResponse(
+                status_code=422,
+                content={"ok": False, "error": {"type": "runtime", "message": message}},
+            )
+
         with exec_lock:
             if req.dictionaries:
                 # Cheap: shares the loaded backend; only the dict mapping and
@@ -422,39 +439,22 @@ def create_app(config: ServerConfig) -> FastAPI:
             try:
                 result = engine.execute(req.query)
             except PrismQLSyntaxError as e:
+                syntax_pos = {
+                    "line": getattr(e, "line", None),
+                    "column": getattr(e, "column", None),
+                }
                 _record_failure(
-                    req,
-                    request,
-                    "evaluate",
-                    "syntax",
-                    str(e),
-                    start,
-                    {
-                        "line": getattr(e, "line", None),
-                        "column": getattr(e, "column", None),
-                    },
+                    req, request, "evaluate", "syntax", str(e), start, syntax_pos
                 )
                 return JSONResponse(
                     status_code=422,
                     content={
                         "ok": False,
-                        "error": {
-                            "type": "syntax",
-                            "message": str(e),
-                            "line": getattr(e, "line", None),
-                            "column": getattr(e, "column", None),
-                        },
+                        "error": {"type": "syntax", "message": str(e), **syntax_pos},
                     },
                 )
             except PrismQLRuntimeError as e:
-                _record_failure(req, request, "evaluate", "runtime", str(e), start)
-                return JSONResponse(
-                    status_code=422,
-                    content={
-                        "ok": False,
-                        "error": {"type": "runtime", "message": str(e)},
-                    },
-                )
+                return _runtime_error(str(e))
             full: dict[str, Any] = {}
             file_mode = req.output == "file" and not isinstance(
                 result, (AggregateResult, GroupedResult)
@@ -469,11 +469,16 @@ def create_app(config: ServerConfig) -> FastAPI:
                 payload = _small_payload(result)
             else:
                 kind, groups, labels = folded
+                try:
+                    positions = [backend.positions(g) for g in groups]
+                except PrismQLRuntimeError as e:
+                    return _runtime_error(str(e))
                 stored = StoredResult.from_groups(
                     kind,
                     req.corpus or config.default_corpus,
-                    [backend.positions(g) for g in groups],
+                    positions,
                     labels,
+                    load=load,
                 )
                 rid = state.results.put(stored)
                 page = partial(

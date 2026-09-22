@@ -21,8 +21,9 @@ class StoredResult:
     offsets: array[int]  # item i spans positions[offsets[i]:offsets[i + 1]]
     positions: array[int]
     scores: array[float] | None = None  # one per item, hits only
-    labels: list[str] | None = None
+    labels: list[str | None] | None = None
     total: int = 0  # found; exceeds len() when scouting kept only a depth
+    load: int = 0  # the corpus load generation these positions were computed on
 
     @classmethod
     def from_groups(
@@ -30,22 +31,27 @@ class StoredResult:
         kind: str,
         corpus: str,
         groups: list[list[int]],
-        labels: list[str] | None = None,
+        labels: list[str | None] | None = None,
+        load: int = 0,
     ) -> StoredResult:
         offsets, positions = array("q", [0]), array("q")
         for g in groups:
             positions.extend(g)
             offsets.append(len(positions))
-        return cls(kind, corpus, offsets, positions, None, labels, len(groups))
+        return cls(kind, corpus, offsets, positions, None, labels, len(groups), load)
 
     @classmethod
     def from_hits(
-        cls, corpus: str, hits: list[tuple[int, float]], total: int
+        cls,
+        corpus: str,
+        hits: list[tuple[int, float]],
+        total: int,
+        load: int = 0,
     ) -> StoredResult:
         offsets = array("q", range(len(hits) + 1))
         positions = array("q", (p for p, _ in hits))
         scores = array("d", (s for _, s in hits))
-        return cls("hits", corpus, offsets, positions, scores, None, total)
+        return cls("hits", corpus, offsets, positions, scores, None, total, load)
 
     def __len__(self) -> int:
         return len(self.offsets) - 1

@@ -1,6 +1,7 @@
 """Tests for the PrismQL HTTP server."""
 
 import json
+from typing import Never
 
 import pytest
 
@@ -701,3 +702,42 @@ def test_journal_links_the_result_and_records_syntax_positions(client):
     ok, bad = client.get("/activity").json()["entries"]
     assert ok["result_id"] and ok["total"] == 3 and ok["count"] == 1
     assert bad["error"]["line"] == 1 and bad["error"]["column"] is not None
+
+
+# --- fix round 1: reload race, positional-unsupported, label typing --------
+
+
+def test_stored_result_is_stamped_with_the_load_it_was_computed_on(tmp_path):
+    # create_app() itself calls state.reload() once to build the engines,
+    # so generation is already 1 by the time a client exists — assert
+    # relative to that baseline rather than a hardcoded 0 (fix round 1, #1).
+    c = _make_client(tmp_path, enable_reload=True)
+    state = c.app.state.prismql
+    gen_before = state.generation
+    body = c.post("/evaluate", json={"query": "SELECT from(tick_a)"}).json()
+    stored = state.results.get(body["result_id"])
+    assert stored is not None and stored.load == gen_before
+    c.post("/reload")
+    assert state.generation == gen_before + 1
+
+
+def test_positions_unsupported_is_a_teachable_422_not_a_500(tmp_path, monkeypatch):
+    from prismql.exceptions import PositionalUnsupportedError
+
+    c = _make_client(tmp_path)
+    state = c.app.state.prismql
+    backend = state.engines[state.config.default_corpus].search_backend
+
+    def boom(_ids: list[int]) -> Never:
+        raise PositionalUnsupportedError("no order axis here")
+
+    monkeypatch.setattr(backend, "positions", boom)
+    r = c.post("/evaluate", json={"query": "SELECT from(tick_a)"})
+    assert r.status_code == 422
+    body = r.json()
+    assert body["ok"] is False
+    assert body["error"]["type"] == "runtime"
+    assert "no order axis here" in body["error"]["message"]
+    entries = c.get("/activity").json()["entries"]
+    assert entries[-1]["ok"] is False
+    assert entries[-1]["error"]["type"] == "runtime"
