@@ -841,6 +841,9 @@ def create_app(config: ServerConfig) -> FastAPI:
         return {
             "corpora": config.corpus_names(),
             "default": config.default_corpus,
+            "board": {
+                name: config.corpus(name).board_fields for name in config.corpus_names()
+            },
         }
 
     @app.get("/reference")

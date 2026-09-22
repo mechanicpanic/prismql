@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from prismql.server.mcp import DEFAULT_URL, evaluate_via_http
+from prismql.server.mcp import DEFAULT_URL, evaluate_via_http, page_via_http
 
 
 def test_connection_error_is_structured_and_teachable():
@@ -30,7 +30,15 @@ def test_round_trip_against_app(tmp_path):
     from prismql.server.config import ServerConfig
 
     data = tmp_path / "d.jsonl"
-    data.write_text(json.dumps({"id": 1, "user": "a", "text": "hi", "timestamp": 1}))
+    data.write_text(
+        "\n".join(
+            json.dumps(d)
+            for d in [
+                {"id": 1, "user": "a", "text": "hi", "timestamp": 1},
+                {"id": 2, "user": "a", "text": "hi again", "timestamp": 2},
+            ]
+        )
+    )
     app = create_app(ServerConfig(backend_type="memory", data=str(data)))
     server = uvicorn.Server(
         uvicorn.Config(app, host="127.0.0.1", port=8929, log_level="error")
@@ -45,6 +53,16 @@ def test_round_trip_against_app(tmp_path):
     result = evaluate_via_http("SELECT from(a)", base_url="http://127.0.0.1:8929")
     assert result["ok"] is True
     assert result["results"][0]["ids"] == [1]
+
+    # the kept result pages without re-running the query
+    rid = result["result_id"]
+    page = page_via_http(rid, offset=1, limit=1, base_url="http://127.0.0.1:8929")
+    assert page["count"] == 1
+
+    # a bogus/stale result id comes back as the server's structured 404
+    gone = page_via_http("no-such-id", base_url="http://127.0.0.1:8929")
+    assert gone["ok"] is False
+    assert gone["error"]["type"] == "gone"
 
     # request-scoped dictionary overlay travels through the shim
     overlay = evaluate_via_http(
@@ -76,8 +94,9 @@ def test_server_object_registers_tool_and_resource():
 
     server = build_server()
     tools = asyncio.run(server.list_tools())
-    assert [t.name for t in tools] == ["evaluate"]
-    params = set(tools[0].input_schema["properties"])
+    assert {t.name for t in tools} == {"evaluate", "result_page"}
+    evaluate_tool = next(t for t in tools if t.name == "evaluate")
+    params = set(evaluate_tool.input_schema["properties"])
     assert {"query", "corpus", "dictionaries", "output"} <= params
     resources = asyncio.run(server.list_resources())
     assert [str(r.uri) for r in resources] == ["prismql://reference"]

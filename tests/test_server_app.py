@@ -434,6 +434,19 @@ def test_resolve_port_falls_back_to_config_when_unset():
     assert _resolve_port(cfg, None) == 8901
 
 
+def test_corpora_names_board_fields(tmp_path):
+    data = tmp_path / "e.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    from prismql.server.config import CorpusConfig
+
+    cfg = ServerConfig(
+        corpora={"v": CorpusConfig(data=str(data), board_fields={"actor": "user"})},
+        default_corpus="v",
+    )
+    body = TestClient(create_app(cfg)).get("/corpora").json()
+    assert body["board"] == {"v": {"actor": "user"}}
+
+
 class TestMultiCorpus:
     @pytest.fixture
     def client(self, tmp_path):
@@ -458,7 +471,11 @@ class TestMultiCorpus:
 
     def test_corpora_endpoint(self, client):
         body = client.get("/corpora").json()
-        assert body == {"corpora": ["chat", "events"], "default": "chat"}
+        assert body == {
+            "corpora": ["chat", "events"],
+            "default": "chat",
+            "board": {"chat": {}, "events": {}},
+        }
 
     def test_evaluate_picks_corpus(self, client):
         r = client.post(
