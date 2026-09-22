@@ -303,20 +303,11 @@ SELECT from(alice), from(bob), from(charlie) INWINDOW 8
 
 ```python
 from prismql import PrismQLEngine
-from prismql.backends import PostgresBackend
+from prismql.backends.tantivy import TantivyBackend
 
-# Connect to existing PostgreSQL database
-backend = PostgresBackend(
-    "postgresql://localhost/support_db",
-    config={
-        "table_name": "messages",
-        "field_mappings": {
-            "text": "message_content",
-            "user": "author",
-            "id": "msg_id"
-        }
-    }
-)
+# A persisted full-text index over the support corpus (documents carry
+# id, text, user, timestamp — rename columns with `prismql ingest table`)
+backend = TantivyBackend(documents, index_path="idx/support", timestamp_fields=["timestamp"])
 
 engine = PrismQLEngine(
     backend,
@@ -456,9 +447,9 @@ SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 1
 ### Pattern 1: Query Existing Database
 
 ```python
-# Zero data duplication - query in place
-backend = PostgresBackend("postgresql://localhost/db", config={...})
-engine = PrismQLEngine(backend)
+# A database is not a backend: make a table, ingest it, read the stream
+#   prismql ingest table export.parquet events.parquet --id id --time created
+engine = PrismQLEngine(TantivyBackend(load_table("events.parquet").to_pylist(), index_path="idx"))
 ```
 
 ### Pattern 2: Fast Analytics on Files

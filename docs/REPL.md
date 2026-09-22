@@ -158,25 +158,6 @@ uv run prismql --config myconfig.json
 }
 ```
 
-#### OpenSearch Backend
-
-```json
-{
-  "search_backend": {
-    "type": "opensearch",
-    "client": "<opensearch_client_object>",
-    "index_name": "conversations",
-    "field_mappings": {
-      "text": "message_text",
-      "user": "username",
-      "id": "message_id"
-    }
-  }
-}
-```
-
-**Note**: OpenSearch backend requires the client to be instantiated in Python code.
-
 #### User Dictionaries
 
 Define custom word lists for the `contains()` operator:

@@ -130,9 +130,9 @@ Cannot, on a default server:
   relevance, no top-k (ranking lives only in the two scouting endpoints
   above). `contains(x)` takes a **dictionary name**, never a literal word
   (`contains_phrase("…")` is the literal form);
-- use sequence operators on a backend with no order axis — OpenSearch
-  refuses them instead of guessing (a tantivy index built by this version
-  keeps its axis on disk).
+- use sequence operators on a backend with no order axis — a tantivy index
+  built before this version refuses them instead of guessing (rebuild it;
+  indexes built now keep their axis on disk).
 
 ## 6. The two limits to tell the agent about
 

@@ -426,7 +426,7 @@ def main() -> None:
         "--backend",
         type=str,
         default="memory",
-        choices=["memory", "opensearch", "elasticsearch"],
+        choices=["memory", "tantivy"],
         help="Backend type (default: memory)",
     )
     parser.add_argument(

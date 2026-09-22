@@ -190,7 +190,7 @@ def test_build_engine_requires_data():
 
 
 def test_build_engine_rejects_db_backends():
-    cfg = ServerConfig(backend_type="postgres", data="dsn://x")
+    cfg = ServerConfig(backend_type="sqlite", data="dsn://x")
     with pytest.raises(ValueError, match="library API"):
         build_engine(cfg)
 

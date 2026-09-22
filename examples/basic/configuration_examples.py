@@ -59,45 +59,6 @@ def example_memory_only():
     return engine
 
 
-def example_opensearch_production():
-    """Production OpenSearch configuration with custom mappings."""
-
-    # Note: This requires actual OpenSearch client
-    # from opensearchpy import OpenSearch
-    # client = OpenSearch([{"host": "your-cluster.com", "port": 443}])
-
-    config = {
-        "search_backend": {
-            "type": "opensearch",
-            "client": "your_opensearch_client",  # Replace with actual client
-            "index_name": "production_messages",
-            "field_mappings": {
-                # Map PrismQL fields to your index structure
-                "text": "message_body",
-                "user": "sender_id",
-                "id": "doc_id",
-            },
-            "search_settings": {
-                "default_operator": "AND",  # Stricter matching
-                "fuzziness": "AUTO",
-            },
-        },
-        "user_dictionaries": {
-            "support_keywords": ["help", "issue", "problem", "bug", "error"],
-            "product_names": ["product_a", "product_b", "premium_service"],
-            "urgency_indicators": ["urgent", "asap", "critical", "emergency"],
-        },
-    }
-
-    print("OpenSearch production configuration:")
-    print(f"  Index: {config['search_backend']['index_name']}")
-    print(f"  Field mappings: {config['search_backend']['field_mappings']}")
-
-    # Uncomment when you have a real client:
-    # engine = PrismQLEngine.from_config(config)
-    # return engine
-
-
 def example_spacy_nlp():
     """Configuration with spaCy NLP processing."""
 
@@ -196,7 +157,7 @@ def example_full_stack():
 
     config = {
         "search_backend": {
-            "type": "memory",  # Use opensearch in production
+            "type": "memory",  # tantivy with index_path for large corpora
             "documents": [
                 {
                     "id": 1,
@@ -316,9 +277,6 @@ def main():
 
     print("\n1. Memory-only configuration:")
     example_memory_only()
-
-    print("\n2. OpenSearch production setup:")
-    example_opensearch_production()
 
     print("\n3. spaCy NLP integration:")
     example_spacy_nlp()

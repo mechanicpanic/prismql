@@ -8,6 +8,7 @@ it describes. Agent memory points here; it does not duplicate this.*
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-22 | **Backends without an order axis removed** (owner's word, graph #53): OpenSearch/Elasticsearch, PostgreSQL, DuckDB and their extras, examples and tests are gone; three backends remain (memory, tantivy, rust_memory), all with the axis. A database feeds the engine through `prismql ingest`. | `src/prismql/backends/` |
 | 2026-09-22 | **Scouting in the server** (graph #58): `POST /search` (tantivy syntax, BM25, per-corpus index built lazily when the backend is memory) and `POST /similar` (cosine over the embedding index), both with `hydrate` and `output: "file"` like `/evaluate`. Ranking exists only here; predicates stay sets. Skill, AGENT-USE, README and USER-GUIDE say "scout, then query". | `src/prismql/server/app.py`, `TantivyBackend.rank`, `SemanticIndex.rank` |
 | 2026-09-22 | **Tantivy keeps its order axis on disk** (graph #39): the axis (ids in load order, configured time fields as UTC micros) is written next to the index as `order.parquet` and read back on open, so an index opened from disk answers sequence operators and starts without rebuilding; both backends now carry every configured `timestamp_fields` on the axis (before: only a literal `timestamp`). An index built before the sidecar has no axis, as before. | `src/prismql/backends/{tantivy,memory}.py` |
 | 2026-09-22 | **Semantic index on numpy; `similar_to` on tantivy.** `SemanticIndex` keeps an (n, d) float32 matrix when numpy is installed (`semantic` / `ingest` extras): Village-scale (381k × 384) builds from the `emb` column in 2 s and answers a threshold search in 17 ms, `rank(text, limit)` in 12 ms; the pure-Python path stays for installs without numpy and is tested to agree. `TantivyBackend` takes the same index (`semantic_index=`); the server builds it for tantivy corpora too, from `emb` or from the documents. | `src/prismql/backends/{semantic,tantivy}.py` |
@@ -34,6 +35,7 @@ it describes. Agent memory points here; it does not duplicate this.*
 - **Python floor is 3.12** (from 3.9): Polars needs ≥ 3.10, 3.9 is EOL; CI matrix 3.12/3.13; polars + pyarrow are core since P3 (`[plan]`/`[arrow]` empty aliases for one release). — 2026-09-19, 2026-09-22
 - `similar_to` threshold required, no default, no top_k; v2 (scores-first ranking algebra) is the paper contribution. — 2026-07-16
 - INWINDOW is UNORDERED by definition (language reference); kernels that enforce order are defects. — reaffirmed 2026-09-18
+- **No backend without an order axis**: OpenSearch, PostgreSQL, DuckDB removed; databases enter through layer 1 (`prismql ingest`). — 2026-09-22 (graph #53)
 - **Text matching is a corpus property, stem by default**; a backend refuses a mode it cannot honour, never substitutes (graph #59). — 2026-09-22
 
 ## Open
@@ -46,7 +48,6 @@ it describes. Agent memory points here; it does not duplicate this.*
 1. **P4 gates** — Chicago full-tuple equality on the tiers is in `tests/plan/test_chicago_tiers.py` (100k/1m via `PRISMQL_TIERS`; full tier on the owner's word); still to add: a positional benchmark query on the full tier, relabeled corpora (gapped numeric, non-lexical strings) on the tiers.
 2. **Start-up cost of the memory backend's text index** — 21 s of the 24 s Village start is `MemoryBackend.__init__` tokenizing every document for `contains()`; the Parquet read is 1 s. Options: build the token index lazily on the first text predicate, or persist it next to the stream. Measure before choosing.
 3. **Frame cost** — the per-link frame (`get_documents` of the participating ids per call) is the known cost of the bridge; measure on the full tier before optimizing (risk #14: 1m tier Q2 0.41 s vs the spike's 0.012 s direct).
-4. Remote backends (OpenSearch) need an order contract or stay set-only.
 5. Agent surface track; workbench M0–M3; mismatch diary Q04–Q18; `similar_to` v2.
 
 **Not decided / to verify**

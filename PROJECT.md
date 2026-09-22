@@ -33,7 +33,7 @@ swept.
 | # | Layer | Today | Target (spec 2026-09-18 rev. 2) |
 |---|---|---|---|
 | 1 | Storage / ingest | one flat JSON, re-indexed on every start; `load_table()` → ordered Arrow table (P1a) | corpus = **Arrow table**, `position` = row index; ingest = "anything → Arrow" (DuckDB/Polars for joins) |
-| 2 | Search backend ("give me the id set for a predicate") | memory, rust_memory, tantivy, opensearch, postgres, duckdb | 2a text search (tantivy) · 2b **order axis**: position / timestamp columns |
+| 2 | Search backend ("give me the id set for a predicate") | memory, tantivy (persisted, axis on disk), rust_memory (optional) — databases enter through layer 1, not as backends | 2a text search (tantivy) · 2b **order axis**: position / timestamp columns |
 | 3 | Language | parse → IR → executor → **one operator layer emitting a Polars plan** (P3, 2026-09-22): asof / offset equi-joins / anti-asof, bindings inside selection; results as a `(group, slot, position, id)` table | same; next: frame cost on the full tier, positional benchmark |
 | 4 | Server | FastAPI, multi-corpus from `prismql.toml`, locks, rate limit, gates | same |
 | 5 | Surfaces | demo page, REPL, MCP shim (`evaluate`) | skill + scriptable API with table results; workbench; thin MCP |

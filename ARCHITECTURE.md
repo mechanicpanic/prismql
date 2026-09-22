@@ -431,3 +431,6 @@ span, parent, depth, agent`. Then:
 - Obsidian: `~/Vaults/prismql` (symlink vault over all docs + agent memory).
 - Conventions for agents: `AGENTS.md`. State: `STATE.md`. Knowledge graph:
   Iskron realm `@aleph/prismql` (holon #1, kriya relay P1a → P2 → P3).
+
+---
+*Note (2026-09-22):* the OpenSearch, PostgreSQL and DuckDB backends described above were removed; the layer-2 list is memory, tantivy (axis kept on disk), rust_memory. DuckDB/Polars remain layer-1 tooling for making the table `prismql ingest` turns into the stream.

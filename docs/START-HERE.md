@@ -247,8 +247,8 @@ construction and the markers are gone, so they are now ordinary tests:
 enforced threshold. The live Railway deployment, the LLM evaluation, and
 anything at the full-corpus scale are outside it — `AGENTS.md` has a table
 naming, per claim, what it is checked against and who can observe it.
-OpenSearch and Elasticsearch refusing sequence operators is asserted in code
-only; there is no cluster in the gate.
+There is no remote backend any more (OpenSearch, PostgreSQL and DuckDB were
+removed: a database feeds the engine through `prismql ingest`).
 
 ## 4. The Chicago tiers
 
@@ -366,11 +366,10 @@ what moves):
    anyone optimizes it. The recorded risk: the 1m tier answers the
    correlated three-leg query in 0.41 s through the bridge against 0.012 s
    for the same plan run directly.
-3. **Order axis for remote and on-disk backends** — a tantivy index built
-   from documents carries an order axis, one opened from disk does not, and
-   OpenSearch has none at all. Today those backends refuse sequence
-   operators. Giving tantivy an axis from fast fields is the next step;
-   remote backends need an order contract or stay set-only.
+3. **Start-up cost of the memory backend** on large corpora (Village: 21 s
+   building the text index); tantivy with `index_path` keeps its axis on disk
+   and starts without a rebuild, so the question is whether memory should
+   build its text index lazily or large corpora should simply use tantivy.
 4. **The agent surface track**, the annotation workbench, the mismatch
    diary, and `similar_to` v2 (ranking, the second paper's contribution).
 

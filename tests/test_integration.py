@@ -82,44 +82,6 @@ class TestPrismQLEngineIntegration:
         assert len(results) == 1
         assert [2] in results
 
-    def test_from_config_opensearch_backend(self):
-        """Test engine creation with OpenSearch backend."""
-        mock_client = MagicMock()
-
-        # Mock search responses
-        mock_client.search.return_value = {
-            "hits": {
-                "hits": [
-                    {"_source": {"msg_id": "msg1"}},
-                    {"_source": {"msg_id": "msg3"}},
-                ]
-            }
-        }
-
-        config = {
-            "search_backend": {
-                "type": "opensearch",
-                "client": mock_client,
-                "index_name": "chat_messages",
-                "field_mappings": {"text": "content", "user": "author", "id": "msg_id"},
-            }
-        }
-
-        engine = PrismQLEngine.from_config(config)
-
-        # Test query execution
-        results = engine.execute("SELECT from(alice)")
-
-        # Verify OpenSearch was called
-        mock_client.search.assert_called()
-        call_args = mock_client.search.call_args[1]
-        assert call_args["index"] == "chat_messages"
-
-        # Verify results
-        assert len(results) == 2
-        assert ["msg1"] in results
-        assert ["msg3"] in results
-
     def test_from_config_spacy_backend(self):
         """Test engine creation with spaCy NLP backend."""
         # Mock spaCy model
@@ -155,60 +117,13 @@ class TestPrismQLEngineIntegration:
         assert engine.nlp_backend is not None
         assert hasattr(engine.nlp_backend, "extract_entities")
 
-    def test_from_config_full_stack(self):
-        """Test engine creation with all components."""
-        mock_client = MagicMock()
-        mock_nlp = MagicMock()
-
-        # Mock OpenSearch responses
-        mock_client.search.return_value = {
-            "hits": {"hits": [{"_source": {"id": 1}}, {"_source": {"id": 2}}]}
-        }
-
-        config = {
-            "search_backend": {
-                "type": "opensearch",
-                "client": mock_client,
-                "index_name": "messages",
-                "field_mappings": {"text": "content", "user": "author"},
-                "search_settings": {"fuzziness": "AUTO"},
-            },
-            "nlp_backend": {
-                "type": "spacy",
-                "nlp": mock_nlp,
-                "entity_mappings": {"PERSON": "PERSON", "GPE": "LOCATION"},
-            },
-            "precomputed_indexes": {
-                "questions": [2, 4],
-                "entities": {"PERSON": [1, 3], "LOCATION": [2, 5]},
-            },
-            "user_dictionaries": {
-                "sentiment": ["happy", "sad", "angry"],
-                "tech": ["python", "javascript"],
-            },
-            # OpenSearch does not stem through this backend: say so.
-            "text_match": "token",
-        }
-
-        engine = PrismQLEngine.from_config(config)
-
-        # Verify all components are configured
-        assert engine.search_backend is not None
-        assert engine.nlp_backend is not None
-        assert engine.precomputed_indexes is not None
-        assert engine.user_dictionaries is not None
-
-        # Test query execution
-        results = engine.execute("SELECT from(alice)")
-        assert len(results) == 2
-
     def test_get_example_configs(self):
         """Test getting example configurations."""
         examples = PrismQLEngine.get_example_configs()
 
         assert isinstance(examples, dict)
         assert "memory_only" in examples
-        assert "opensearch_spacy" in examples
+        assert "tantivy_spacy" in examples
 
         # Verify examples are valid
         for _name, config in examples.items():
@@ -230,22 +145,18 @@ class TestPrismQLEngineIntegration:
 
     def test_missing_dependency_error(self):
         """Test error handling for missing dependencies."""
-        config = {
-            "search_backend": {
-                "type": "opensearch",
-                "client": MagicMock(),
-                "index_name": "test",
-            }
-        }
+        config = {"search_backend": {"type": "tantivy", "documents": [{"id": 1}]}}
 
-        # Mock ImportError for OpenSearch backend
+        # Mock ImportError for the tantivy backend
         with (
             patch.object(
                 BackendFactory,
-                "_create_opensearch_backend",
-                side_effect=ImportError("OpenSearch backend is not available"),
+                "_create_tantivy_backend",
+                side_effect=ImportError(
+                    "Tantivy backend requires the 'tantivy' package"
+                ),
             ),
-            pytest.raises(ImportError, match="OpenSearch backend is not available"),
+            pytest.raises(ImportError, match="requires the 'tantivy' package"),
         ):
             PrismQLEngine.from_config(config)
 
@@ -278,71 +189,6 @@ class TestPrismQLEngineIntegration:
         # Original greeting query should now fail
         with pytest.raises(Exception):  # Would be PrismQLRuntimeError
             engine.execute("SELECT contains(greetings)")
-
-    def test_complex_query_with_multiple_backends(self):
-        """Test complex query using multiple backend features."""
-        mock_client = MagicMock()
-
-        # Mock different search responses for different queries
-        def mock_search(**kwargs: dict) -> dict:
-            query = kwargs.get("body", {}).get("query", {})
-
-            # Mock user search
-            if "term" in query and "author" in str(query):
-                return {
-                    "hits": {"hits": [{"_source": {"id": 1}}, {"_source": {"id": 3}}]}
-                }
-
-            # Mock text search
-            if "match" in query:
-                return {"hits": {"hits": [{"_source": {"id": 2}}]}}
-
-            return {"hits": {"hits": []}}
-
-        mock_client.search.side_effect = mock_search
-
-        config = {
-            "search_backend": {
-                "type": "opensearch",
-                "client": mock_client,
-                "index_name": "messages",
-                "field_mappings": {"user": "author"},
-            },
-            "precomputed_indexes": {
-                "questions": [2]  # Message 2 is a question
-            },
-        }
-
-        engine = PrismQLEngine.from_config(config)
-
-        # Test complex boolean query
-        results = engine.execute("SELECT from(alice) AND is_question()")
-
-        # Should find intersection of alice's messages and questions
-        # Based on our mocks: alice has [1, 3], questions are [2]
-        # Intersection should be empty
-        assert len(results) == 0
-
-    def test_error_propagation_from_backends(self):
-        """Test that backend errors are properly propagated."""
-        mock_client = MagicMock()
-        mock_client.search.side_effect = Exception("Connection timeout")
-
-        config = {
-            "search_backend": {
-                "type": "opensearch",
-                "client": mock_client,
-                "index_name": "test",
-            }
-        }
-
-        engine = PrismQLEngine.from_config(config)
-
-        # Should propagate the connection error
-        with pytest.raises(
-            Exception
-        ):  # Could be PrismQLRuntimeError wrapping the connection error
-            engine.execute("SELECT from(alice)")
 
     def test_config_modification_after_creation(self):
         """Test modifying configuration after engine creation."""

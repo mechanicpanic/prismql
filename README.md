@@ -51,8 +51,8 @@ uv sync --extra repl --extra highlighting --extra server   # REPL and HTTP serve
 Optional extras: `repl`, `highlighting`, `server` (the FastAPI HTTP
 server), `mcp` (the stdio MCP shim — a separate extra; without it
 `prismql-mcp` stops at `ModuleNotFoundError: No module named 'mcp'`),
-`tantivy` (real full-text search), `opensearch`, `elasticsearch`, `nlp`
-(spaCy), `semantic` (sentence-transformers). Python ≥ 3.12, no compiler and
+`tantivy` (real full-text search, persisted), `nlp` (spaCy), `semantic`
+(sentence-transformers), `ingest` (embeddings at ingest). Python ≥ 3.12, no compiler and
 no Rust toolchain needed.
 
 ## Try it on your own events
@@ -310,16 +310,17 @@ predicate*. Sequence and window operators need something else on top: an
 **order axis**, the column that says where an event sits in the stream.
 Stream order is load order; ids are labels, never coordinates.
 
-| backend | text search | order axis | sequence operators |
+| backend | text modes | order axis | sequence operators |
 |---|---|---|---|
-| `memory` | substring / token | yes | yes |
-| `rust_memory` | fast substring / token | yes | yes |
-| `tantivy`, built from documents | stemmed full-text | yes | yes |
-| `tantivy`, opened from a persisted index | stemmed full-text | no | **refused** |
-| `opensearch`, `elasticsearch` | the cluster's | no | **refused** |
+| `memory` | stem (default) / token / substring | yes | yes |
+| `tantivy`, built or opened from `index_path` | stem (default) / token; ranked scouting | yes (kept on disk) | yes |
+| `rust_memory` (optional crate) | token / substring | yes | yes |
 
-A backend without an order axis refuses those operators loudly — it never
-reconstructs order from id values. The backend raises
+That is the whole list. A database or a search cluster is not a backend:
+make a table out of it, `prismql ingest` it, and the engine reads the
+Arrow stream — the engine never joins and never reconstructs order from id
+values. A backend without an order axis (a tantivy index built before the
+axis sidecar existed) refuses sequence operators loudly. The backend raises
 `PositionalUnsupportedError`; `engine.execute()` wraps everything a query
 raises, so what reaches a caller of the public API is a
 `PrismQLRuntimeError` carrying the original as `__cause__` and as
@@ -328,17 +329,13 @@ raises, so what reaches a caller of the public API is a
 Boolean and set queries still run on all of them.
 
 ```python
-from opensearchpy import OpenSearch
 from prismql import PrismQLEngine
-from prismql.backends.opensearch import OpenSearchBackend
+from prismql.backends.tantivy import TantivyBackend
 
-client = OpenSearch(hosts=[{"host": "localhost", "port": 9200}])
-backend = OpenSearchBackend(client, {
-    "index_name": "chat-logs",
-    "field_mappings": {"text": "content", "user": "author"},
-})
-engine = PrismQLEngine(search_backend=backend)
+backend = TantivyBackend(documents, index_path="idx/chat", timestamp_fields=["time"])
+engine = PrismQLEngine(backend, timestamp_field="time")
 engine.execute("SELECT contains(errors) AND from(deploy-bot)")
+# next start: TantivyBackend(index_path="idx/chat") — no rebuild, axis included
 ```
 
 To write your own, implement four methods of `SearchBackend`:

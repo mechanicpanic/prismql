@@ -502,10 +502,11 @@ The REPL prefixes these with `Runtime Error: Error executing query:` or
    binds"*. Bind it first: `field(user,$u) FOLLOWED_BY field(user,!$u)`.
    On the GitHub `main` build (section 1) you get
    *"token recognition error at: '!'"* instead, for any use of `!$k`.
-5. **Some backends have no order axis, and say so.** `memory` and
-   `rust_memory` carry one. A tantivy index *opened from an existing
-   `index_path`* does not, nor does OpenSearch: filters still work, order
-   does not. *"TantivyBackend has no stream-order axis: positional
+5. **A backend without an order axis says so.** `memory`, `rust_memory` and
+   a tantivy index built by this version carry one (tantivy keeps it on disk
+   next to the index). A tantivy index built by an older version does not,
+   and is refused on open with rebuild instructions; filters would still
+   work, order would not. *"TantivyBackend has no stream-order axis: positional
    (INWINDOW, FOLLOWED_BY, ...) and temporal-sequence operators cannot run
    on it. Use a backend with an OrderIndex (memory, rust_memory) or load the
    corpus with a persisted position column."* For sequence questions use

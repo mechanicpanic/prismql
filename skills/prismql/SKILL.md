@@ -177,8 +177,8 @@ implementation over the ordered corpus:
   variables on one leg, or a variable that skips a leg, both work;
 - a subquery stage merges as one group per stage, the union's span counting
   toward the outer window;
-- backends with no order axis (OpenSearch; a tantivy index opened from
-  disk) refuse sequence operators instead of guessing.
+- a backend with no order axis (a tantivy index built before the axis
+  sidecar) refuses sequence operators instead of guessing.
 
 ## Pitfalls
 
@@ -269,8 +269,8 @@ EOF
 ```
 
 Backends: `MemoryBackend` (< ~100K rows), `TantivyBackend` (`[tantivy]`
-extra, real full-text), `DuckDBBackend` / `PostgresBackend` (data already
-there). Documents are dicts with `id`, `text` (for text predicates), `user`
+extra, real full-text, persisted with `index_path`). Data in a database
+becomes a corpus through `prismql ingest table`, not through a backend. Documents are dicts with `id`, `text` (for text predicates), `user`
 (for `from()`), `timestamp` (for `DURING`); other fields allowed and
 queryable with `field()`.
 

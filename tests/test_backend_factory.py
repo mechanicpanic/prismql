@@ -90,70 +90,6 @@ class TestBackendFactory:
         with pytest.raises(ValueError, match="Memory backend requires 'documents'"):
             BackendFactory.create_backends(config)
 
-    @patch("prismql.backends.opensearch.OpenSearchBackend")
-    def test_create_opensearch_backend(self, mock_opensearch_class):
-        """Test creating OpenSearch backend."""
-        mock_client = MagicMock()
-        mock_backend = MagicMock()
-        mock_opensearch_class.return_value = mock_backend
-
-        config = {
-            "search_backend": {
-                "type": "opensearch",
-                "client": mock_client,
-                "index_name": "test_index",
-                "field_mappings": {"text": "content"},
-                "search_settings": {"fuzziness": "AUTO"},
-            }
-        }
-
-        search_backend, _, _, _ = BackendFactory.create_backends(config)
-
-        # Verify OpenSearch backend was created with correct config
-        mock_opensearch_class.assert_called_once()
-        call_args = mock_opensearch_class.call_args
-
-        assert call_args[0][0] == mock_client  # First arg is client
-        backend_config = call_args[0][1]  # Second arg is config
-        assert backend_config["index_name"] == "test_index"
-        assert backend_config["field_mappings"] == {"text": "content"}
-        assert backend_config["search_settings"] == {"fuzziness": "AUTO"}
-
-        assert search_backend == mock_backend
-
-    def test_create_opensearch_backend_missing_client(self):
-        """Test OpenSearch backend creation fails without client."""
-        config = {"search_backend": {"type": "opensearch", "index_name": "test"}}
-
-        with pytest.raises(ValueError, match="OpenSearch backend requires 'client'"):
-            BackendFactory.create_backends(config)
-
-    def test_create_opensearch_backend_missing_index(self):
-        """Test OpenSearch backend creation fails without index name."""
-        config = {"search_backend": {"type": "opensearch", "client": MagicMock()}}
-
-        with pytest.raises(
-            ValueError, match="OpenSearch backend requires 'index_name'"
-        ):
-            BackendFactory.create_backends(config)
-
-    def test_create_elasticsearch_backend(self):
-        """Test creating Elasticsearch backend (alias for OpenSearch)."""
-        with patch("prismql.backends.opensearch.OpenSearchBackend") as mock_class:
-            mock_client = MagicMock()
-            config = {
-                "search_backend": {
-                    "type": "elasticsearch",
-                    "client": mock_client,
-                    "index_name": "test",
-                }
-            }
-
-            BackendFactory.create_backends(config)
-
-            # Should create OpenSearch backend for elasticsearch type too
-            mock_class.assert_called_once()
-
     def test_create_unknown_search_backend(self):
         """Test creating unknown search backend type."""
         config = {"search_backend": {"type": "unknown_type"}}
@@ -340,39 +276,29 @@ class TestBackendFactory:
 
         assert isinstance(examples, dict)
         assert "memory_only" in examples
-        assert "opensearch_spacy" in examples
-        assert "elasticsearch_precomputed" in examples
+        assert "tantivy_spacy" in examples
+        assert "memory_precomputed" in examples
 
         # Verify structure of memory example
         memory_config = examples["memory_only"]
         assert memory_config["search_backend"]["type"] == "memory"
         assert "documents" in memory_config["search_backend"]
 
-        # Verify structure of opensearch example
-        opensearch_config = examples["opensearch_spacy"]
-        assert opensearch_config["search_backend"]["type"] == "opensearch"
-        assert opensearch_config["nlp_backend"]["type"] == "spacy"
-        assert "user_dictionaries" in opensearch_config
+        # Verify structure of the tantivy example
+        tantivy_config = examples["tantivy_spacy"]
+        assert tantivy_config["search_backend"]["type"] == "tantivy"
+        assert tantivy_config["nlp_backend"]["type"] == "spacy"
+        assert "user_dictionaries" in tantivy_config
 
     def test_import_error_handling(self):
         """Test handling of missing dependencies."""
-        # Test with missing OpenSearch backend
         with patch.object(
             BackendFactory,
-            "_create_opensearch_backend",
-            side_effect=ImportError("OpenSearch backend is not available"),
+            "_create_tantivy_backend",
+            side_effect=ImportError("Tantivy backend requires the 'tantivy' package"),
         ):
-            config = {
-                "search_backend": {
-                    "type": "opensearch",
-                    "client": MagicMock(),
-                    "index_name": "test",
-                }
-            }
-
-            with pytest.raises(
-                ImportError, match="OpenSearch backend is not available"
-            ):
+            config = {"search_backend": {"type": "tantivy", "documents": [{"id": 1}]}}
+            with pytest.raises(ImportError, match="requires the 'tantivy' package"):
                 BackendFactory.create_backends(config)
 
     def test_minimal_config(self):

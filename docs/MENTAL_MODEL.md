@@ -126,7 +126,7 @@ position. The old audit defects A1–A10 and D2 stand as ordinary contract
 tests, not as caveats.
 
 What a query still cannot do: run sequence operators on a backend without
-an order axis (OpenSearch, a tantivy index opened from disk — a loud
+an order axis (a tantivy index built before the axis sidecar — a loud
 `PositionalUnsupportedError`, not a wrong answer); enumerate `{n,}` without
 a ceiling; put a variable on the excluded side of a negation; carry a
 variable across subquery stages. When the engine and `tests/plan` disagree,

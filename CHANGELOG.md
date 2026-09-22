@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Removed (breaking — backends)
+- The OpenSearch/Elasticsearch, PostgreSQL and DuckDB backends and their extras. None carried an order axis (so no sequence operators since P3) and two had no tests. A database or a search cluster is not a backend: make a table, `prismql ingest table` it, the engine reads the Arrow stream (graph #53). The remaining backends — memory, tantivy, rust_memory — all carry the axis.
+
 ### Changed (breaking — text matching)
 - `contains()` stems by default: single-word dictionary terms match whole words folded by a Snowball stemmer in the corpus's `text_language` (`english` unless set), on the memory and tantivy backends alike, so `fail` finds `failed` and `hi` no longer finds `this`. The old default, substring matching, is now an explicit choice (`text_match = "substring"` or `match = "substring"` on a dictionary), as is whole-token matching. A backend that cannot honour a mode refuses at load or at the first `contains()` instead of silently answering with another meaning (tantivy has no substring mode; the memory backend has all three). Phrases (multi-word terms) match plain adjacent tokens in order, unstemmed, on both backends. `snowballstemmer` is a core dependency.
 

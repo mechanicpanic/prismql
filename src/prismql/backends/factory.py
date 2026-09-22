@@ -15,13 +15,10 @@ class BackendFactory:
     Example configuration:
         config = {
             "search_backend": {
-                "type": "opensearch",
-                "client": opensearch_client,
-                "index_name": "messages",
-                "field_mappings": {
-                    "text": "content",
-                    "user": "author"
-                }
+                "type": "tantivy",
+                "documents": documents,
+                "index_path": "idx/messages",
+                "timestamp_fields": ["time"],
             },
             "nlp_backend": {
                 "type": "spacy",
@@ -99,12 +96,6 @@ class BackendFactory:
             return cls._create_rust_memory_backend(config)
         if backend_type == "tantivy":
             return cls._create_tantivy_backend(config)
-        if backend_type in ["opensearch", "elasticsearch"]:
-            return cls._create_opensearch_backend(config)
-        if backend_type in ["postgres", "postgresql"]:
-            return cls._create_postgres_backend(config)
-        if backend_type == "duckdb":
-            return cls._create_duckdb_backend(config)
         raise ValueError(f"Unknown search backend type: {backend_type}")
 
     @classmethod
@@ -177,142 +168,6 @@ class BackendFactory:
             semantic_index=config.get("semantic_index"),
             timestamp_fields=config.get("timestamp_fields"),
         )
-
-    @classmethod
-    def _create_opensearch_backend(cls, config: dict[str, Any]) -> SearchBackend:
-        """Create OpenSearch/Elasticsearch backend."""
-        try:
-            from .opensearch import OpenSearchBackend
-        except ImportError as e:
-            raise ImportError("OpenSearch backend is not available") from e
-
-        client = config.get("client")
-        if client is None:
-            raise ValueError("OpenSearch backend requires 'client' in configuration")
-
-        # Extract backend configuration
-        backend_config = {
-            "index_name": config.get("index_name"),
-            "field_mappings": config.get("field_mappings", {}),
-            "search_settings": config.get("search_settings", {}),
-        }
-
-        if not backend_config["index_name"]:
-            raise ValueError(
-                "OpenSearch backend requires 'index_name' in configuration"
-            )
-
-        return OpenSearchBackend(client, backend_config)
-
-    @classmethod
-    def _create_postgres_backend(cls, config: dict[str, Any]) -> SearchBackend:
-        """Create PostgreSQL backend."""
-        try:
-            from .postgres import PostgresBackend
-        except ImportError as e:
-            raise ImportError(
-                "PostgreSQL backend requires psycopg2. "
-                "Install it with: pip install psycopg2-binary"
-            ) from e
-
-        # Get connection (either object or string)
-        connection = config.get("connection")
-        if connection is None:
-            # Try building from individual parameters
-            conn_params = config.get("connection_params")
-            if conn_params:
-                # Build connection string
-                connection = (
-                    f"postgresql://{conn_params.get('user', 'postgres')}:"
-                    f"{conn_params.get('password', '')}@"
-                    f"{conn_params.get('host', 'localhost')}:"
-                    f"{conn_params.get('port', 5432)}/"
-                    f"{conn_params.get('database', 'postgres')}"
-                )
-            else:
-                raise ValueError(
-                    "Postgres backend requires 'connection' (connection object or "
-                    "string) or 'connection_params' (dict with host, database, etc.)"
-                )
-
-        # Extract backend configuration
-        backend_config = {
-            "table_name": config.get("table_name"),
-            "field_mappings": config.get("field_mappings", {}),
-            "text_search_config": config.get("text_search_config", "english"),
-            "use_fts": config.get("use_fts", True),
-        }
-
-        if not backend_config["table_name"]:
-            raise ValueError("Postgres backend requires 'table_name' in configuration")
-
-        autocommit = config.get("autocommit", True)
-        return PostgresBackend(connection, backend_config, autocommit)
-
-    @classmethod
-    def _create_duckdb_backend(cls, config: dict[str, Any]) -> SearchBackend:
-        """Create DuckDB backend."""
-        try:
-            from .duckdb import DuckDBBackend
-        except ImportError as e:
-            raise ImportError(
-                "DuckDB backend requires duckdb. Install it with: pip install duckdb"
-            ) from e
-
-        # Determine creation method
-        source_type = config.get("source_type", "database")
-
-        if source_type == "dataframe":
-            # Create from DataFrame
-            df = config.get("dataframe")
-            if df is None:
-                raise ValueError("DuckDB source_type='dataframe' requires 'dataframe'")
-            return DuckDBBackend.from_dataframe(
-                df,
-                table_name=config.get("table_name", "messages"),
-                id_field=config.get("id_field", "id"),
-                text_field=config.get("text_field", "text"),
-                user_field=config.get("user_field", "user"),
-            )
-
-        if source_type == "parquet":
-            # Create from Parquet file
-            parquet_path = config.get("parquet_path")
-            if not parquet_path:
-                raise ValueError("DuckDB source_type='parquet' requires 'parquet_path'")
-            return DuckDBBackend.from_parquet(
-                parquet_path,
-                table_name=config.get("table_name", "messages"),
-                id_field=config.get("id_field", "id"),
-                text_field=config.get("text_field", "text"),
-                user_field=config.get("user_field", "user"),
-            )
-
-        if source_type == "csv":
-            # Create from CSV file
-            csv_path = config.get("csv_path")
-            if not csv_path:
-                raise ValueError("DuckDB source_type='csv' requires 'csv_path'")
-            csv_kwargs = config.get("csv_kwargs", {})
-            return DuckDBBackend.from_csv(
-                csv_path,
-                table_name=config.get("table_name", "messages"),
-                id_field=config.get("id_field", "id"),
-                text_field=config.get("text_field", "text"),
-                user_field=config.get("user_field", "user"),
-                **csv_kwargs,
-            )
-
-        # Default: database (in-memory or persistent)
-        database = config.get("database", ":memory:")
-        table_name = config.get("table_name")
-        if not table_name:
-            raise ValueError("DuckDB backend requires 'table_name' in configuration")
-
-        field_mappings = config.get("field_mappings", {})
-        create_fts_index = config.get("create_fts_index", True)
-
-        return DuckDBBackend(database, table_name, field_mappings, create_fts_index)
 
     @classmethod
     def _create_nlp_backend(cls, config: dict[str, Any]) -> NLPBackend:
@@ -459,17 +314,15 @@ class BackendFactory:
                     "id_field": "id",
                 }
             },
-            "opensearch_spacy": {
+            "tantivy_spacy": {
                 "search_backend": {
-                    "type": "opensearch",
-                    "client": "your_opensearch_client",
-                    "index_name": "chat_messages",
-                    "field_mappings": {
-                        "text": "message_content",
-                        "user": "author_name",
-                        "id": "message_id",
-                    },
-                    "search_settings": {"default_operator": "OR", "fuzziness": "AUTO"},
+                    "type": "tantivy",
+                    "documents": [
+                        {"id": 1, "text": "Hello world", "user": "alice"},
+                        {"id": 2, "text": "How are you?", "user": "bob"},
+                    ],
+                    "index_path": "idx/chat_messages",
+                    "timestamp_fields": ["timestamp"],
                 },
                 "nlp_backend": {
                     "type": "spacy",
@@ -485,12 +338,13 @@ class BackendFactory:
                     "tech_terms": ["python", "javascript", "react", "django"],
                 },
             },
-            "elasticsearch_precomputed": {
+            "memory_precomputed": {
                 "search_backend": {
-                    "type": "elasticsearch",
-                    "client": "your_elasticsearch_client",
-                    "index_name": "messages",
-                    "field_mappings": {"text": "content", "user": "username"},
+                    "type": "memory",
+                    "documents": [
+                        {"id": "msg_1", "text": "Hello world", "user": "alice"},
+                        {"id": "msg_2", "text": "How are you?", "user": "bob"},
+                    ],
                 },
                 "precomputed_indexes": {
                     "entities": {
