@@ -52,7 +52,7 @@ def page_payload(
         "total": result.total,
         "offset": offset,
         "count": len(window),
-        "truncated": offset + len(window) < result.total,
+        "truncated": offset + len(window) < len(result),
     }
     items: list[dict[str, Any]] = []
     cursor = 0

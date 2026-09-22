@@ -105,4 +105,32 @@ def test_hit_page_reports_kept_and_total():
     assert p["hits"] == [
         {"id": "a", "position": 0, "score": 0.4, "time": "2026-06-03T18:02:11+00:00"}
     ]
-    assert p["truncated"] is True  # 3 more exist, though not kept
+    assert (
+        p["truncated"] is False
+    )  # 3 more were found but not kept: kept < total says so
+
+
+def test_hit_paging_terminates_once_all_kept_hits_are_seen() -> None:
+    r = StoredResult.from_hits("c", [(2, 0.9), (0, 0.4)], total=5)
+    offset = 0
+    seen = 0
+    truncated = True
+    for _ in range(5):  # guard: a non-terminating loop would hang, not just fail
+        p = page_payload(
+            r,
+            _backend(),
+            id_field="id",
+            time_field="timestamp",
+            offset=offset,
+            limit=1,
+            hydrate=False,
+            fields=None,
+        )
+        seen += p["count"]
+        truncated = p["truncated"]
+        offset += p["count"]
+        if not truncated:
+            break
+    assert seen == 2
+    assert truncated is False
+    assert p["kept"] == 2 and p["total"] == 5
