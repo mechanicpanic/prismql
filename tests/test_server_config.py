@@ -211,10 +211,11 @@ def test_text_match_config(tmp_path):
     assert engine.execute("SELECT contains(labour)") == []
 
 
-def test_text_match_defaults_to_substring(tmp_path):
+def test_text_match_defaults_to_stem(tmp_path):
     cfg_file = tmp_path / "min.toml"
     cfg_file.write_text('[backend]\ntype = "memory"\ndata = "d.json"\n')
-    assert load_config(cfg_file).text_match == "substring"
+    cfg = load_config(cfg_file)
+    assert (cfg.text_match, cfg.text_language) == ("stem", "english")
 
 
 class TestNamedCorpora:

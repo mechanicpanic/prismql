@@ -186,6 +186,8 @@ class TestPrismQLEngineIntegration:
                 "sentiment": ["happy", "sad", "angry"],
                 "tech": ["python", "javascript"],
             },
+            # OpenSearch does not stem through this backend: say so.
+            "text_match": "token",
         }
 
         engine = PrismQLEngine.from_config(config)

@@ -437,6 +437,15 @@ vocabulary, and putting it in one named place means you can revise the
 question by revising the list instead of rewriting queries. For a single
 literal string use `contains_phrase("exact phrase")`.
 
+Single words match **stemmed whole words** by default: `removed` finds
+"removed", "remove", "removing", and `hi` does not find "this". The stemmer's
+language is the corpus's `text_language` (`english` unless you set it;
+`german`, `russian`, … work the same way on both backends). Two other modes
+exist and are chosen explicitly, per corpus (`text_match`) or per dictionary
+(`match`): `token` (whole words, no stemming) and `substring` (`ERR` finds
+`ERR_TIMEOUT`, and `hi` finds `this` — right for logs and identifiers, wrong
+for prose). Multi-word entries always match as a phrase, in that order.
+
 Text matching here has no ranking and no scores: a set of events in, a set
 of events out. (With the `semantic` extra installed and a model configured,
 `similar_to("...", 0.7)` adds an embedding-threshold predicate — still a

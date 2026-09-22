@@ -59,30 +59,38 @@ class TestContract:
 class TestStemmedSearch:
     def test_stemming_hits_inflections(self, backend):
         # "run" matches running (1, 4) and runs (2)
-        assert backend.search_text(["run"]) == {1, 2, 4}
+        assert backend.search_stems(["run"]) == {1, 2, 4}
 
     def test_query_inflection_also_stems(self, backend):
         # querying "running" also stems to "run"
-        assert backend.search_text(["running"]) == {1, 2, 4}
+        assert backend.search_stems(["running"]) == {1, 2, 4}
 
     def test_not_substring(self, backend):
         # substring would match "run" inside nothing here, but crucially
         # "instal" must NOT match "installing"/"installs" as a substring;
         # only the stemmed token "instal" (the stem of install) matches.
-        assert backend.search_text(["cat"]) == {1}  # stem of cats
-        assert backend.search_text(["par"]) == set()  # 'par' is not a token in 'park'
+        assert backend.search_stems(["cat"]) == {1}  # stem of cats
+        assert backend.search_stems(["par"]) == set()  # 'par' is not a token in 'park'
 
     def test_or_operator(self, backend):
-        assert backend.search_text(["cat", "dog"], operator="OR") == {1, 2}
+        assert backend.search_stems(["cat", "dog"], operator="OR") == {1, 2}
 
     def test_and_operator(self, backend):
-        assert backend.search_text(["run", "cat"], operator="AND") == {1}
+        assert backend.search_stems(["run", "cat"], operator="AND") == {1}
 
-    def test_search_tokens_equals_search_text(self, backend):
-        assert backend.search_tokens(["run"]) == backend.search_text(["run"])
+    def test_search_tokens_does_not_stem(self, backend):
+        # The plain-token twin field: only the literal word.
+        assert backend.search_tokens(["running"]) < backend.search_stems(["running"])
+        assert backend.search_tokens(["run"]) == backend.search_stems(["run"]) & (
+            backend.search_tokens(["run"])
+        )
+
+    def test_substring_is_refused(self, backend):
+        with pytest.raises(NotImplementedError, match="substring"):
+            backend.search_text(["run"])
 
     def test_empty_terms(self, backend):
-        assert backend.search_text([]) == set()
+        assert backend.search_stems([]) == set()
 
 
 class TestPhrase:
@@ -125,7 +133,7 @@ class TestStringIds:
             ]
         )
         assert b.get_all_document_ids() == {"msg-a", "msg-b"}
-        assert b.search_text(["world"]) == {"msg-a", "msg-b"}
+        assert b.search_stems(["world"]) == {"msg-a", "msg-b"}
         assert b.get_documents(["msg-a"]) == [{"id": "msg-a", "text": "hello world"}]
 
 
@@ -134,11 +142,11 @@ class TestEdgeCases:
         b = TantivyBackend([])
         assert b.get_total_documents() == 0
         assert b.get_all_document_ids() == set()
-        assert b.search_text(["anything"]) == set()
+        assert b.search_stems(["anything"]) == set()
 
     def test_unicode(self):
         b = TantivyBackend([{"id": 1, "text": "café crème brûlée"}])
-        assert b.search_text(["café"]) == {1}
+        assert b.search_stems(["café"]) == {1}
 
 
 class TestPersistence:
@@ -150,7 +158,7 @@ class TestPersistence:
         # reopen with NO documents: must read the persisted index, not rebuild
         reopened = TantivyBackend(index_path=path)
         assert reopened.get_total_documents() == 5
-        assert reopened.search_text(["run"]) == {1, 2, 4}
+        assert reopened.search_stems(["run"]) == {1, 2, 4}
         assert reopened.search_by_field("user", "alice") == {1, 3}
         assert reopened.get_documents([3])[0]["text"] == "installing the package failed"
 

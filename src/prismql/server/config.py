@@ -41,7 +41,8 @@ class CorpusConfig:
     id_field: str = "id"
     timestamp_fields: list[str] = field(default_factory=lambda: ["timestamp"])
     timestamp_field: str = "timestamp"
-    text_match: str = "substring"
+    text_match: str = "stem"
+    text_language: str = "english"
     quantifier_ceiling: int | None = None
     dictionaries: dict[str, Any] = field(default_factory=dict)
     # [corpora.<name>.semantic]: embedding model backing similar_to()
@@ -63,7 +64,8 @@ class ServerConfig:
     id_field: str = "id"
     timestamp_fields: list[str] = field(default_factory=lambda: ["timestamp"])
     timestamp_field: str = "timestamp"
-    text_match: str = "substring"
+    text_match: str = "stem"
+    text_language: str = "english"
     quantifier_ceiling: int | None = None
     results_dir: str | None = None
     static_dir: str | None = None
@@ -100,6 +102,7 @@ class ServerConfig:
                 timestamp_fields=self.timestamp_fields,
                 timestamp_field=self.timestamp_field,
                 text_match=self.text_match,
+                text_language=self.text_language,
                 quantifier_ceiling=self.quantifier_ceiling,
                 dictionaries=self.dictionaries,
                 semantic_model=self.semantic_model,
@@ -155,7 +158,8 @@ def load_config(path: str | Path) -> ServerConfig:
             id_field=section.get("id_field", "id"),
             timestamp_fields=list(section.get("timestamp_fields", ["timestamp"])),
             timestamp_field=section.get("timestamp_field", "timestamp"),
-            text_match=section.get("text_match", "substring"),
+            text_match=section.get("text_match", "stem"),
+            text_language=section.get("text_language", "english"),
             quantifier_ceiling=section.get("quantifier_ceiling"),
             dictionaries=dict(section.get("dictionaries", {})),
             semantic_model=semantic_section.get("model"),
@@ -186,7 +190,8 @@ def load_config(path: str | Path) -> ServerConfig:
         id_field=backend.get("id_field", "id"),
         timestamp_fields=list(backend.get("timestamp_fields", ["timestamp"])),
         timestamp_field=engine.get("timestamp_field", "timestamp"),
-        text_match=engine.get("text_match", "substring"),
+        text_match=engine.get("text_match", "stem"),
+        text_language=engine.get("text_language", "english"),
         quantifier_ceiling=engine.get("quantifier_ceiling"),
         results_dir=results_dir,
         static_dir=static_dir,
@@ -310,6 +315,7 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
     backend_config: dict[str, Any] = {
         "type": config.backend_type,
         "id_field": config.id_field,
+        "text_language": config.text_language,
     }
     opening_existing = bool(
         config.backend_type == "tantivy"
@@ -397,6 +403,7 @@ def compute_schema(
         "id_field": config.id_field,
         "timestamp_field": config.timestamp_field,
         "text_match": config.text_match,
+        "text_language": config.text_language,
         "quantifier_ceiling": config.quantifier_ceiling,
         "fields": fields,
         "dictionaries": {

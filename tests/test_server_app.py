@@ -267,7 +267,8 @@ def test_schema_endpoint(client):
     assert body["documents"] == 4
     assert body["id_field"] == "id"
     assert body["timestamp_field"] == "timestamp"
-    assert body["text_match"] == "substring"
+    assert body["text_match"] == "stem"
+    assert body["text_language"] == "english"
     # field inventory with coverage, inferred type, low-cardinality examples
     fields = body["fields"]
     assert fields["user"]["coverage"] == 1.0

@@ -360,7 +360,11 @@ sits; leave them alone and sequence operators will refuse loudly.
 Dictionaries are named term lists resolved by `contains(name)`. They live in
 `prismql.toml` under `[dictionaries]`, are added at runtime with
 `engine.add_dictionary(name, terms)`, or ride along with a single server
-request.
+request. Single words match stemmed whole words by default (`fail` finds
+`failed`; the stemmer's language is `text_language`, `english` unless set);
+`match = "token"` or `"substring"` per dictionary, or `text_match` per corpus,
+choose otherwise, and a backend that cannot honour the mode refuses instead of
+answering differently.
 
 Entity predicates — `mentions_org()`, `mentions_date()`, `mentions_place()`,
 `mentions_time()`, `contains_link()`, `has_feature(f)` — need features

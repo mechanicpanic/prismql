@@ -102,7 +102,7 @@ timestamp_fields = ["time"]     # parsed on load
 timestamp_field = "time"        # the axis DURING measures on
 
 [dictionaries]
-failures = ["failed", "error", "timeout"]
+failures = ["failed", "error", "timeout"]   # stemmed whole words: "fail" ~ "failed"
 ```
 
 ```bash

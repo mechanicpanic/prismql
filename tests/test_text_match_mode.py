@@ -1,10 +1,10 @@
-"""Tests for the engine-level text_match mode (substring vs token).
+"""Tests for the engine-level text_match mode (stem / token / substring).
 
-contains() historically does substring matching ("hi" matches "this") — an
-accident of the Python reference implementation; the Lucene-era original
-matched whole tokens. The text_match knob makes the semantics explicit and
-configurable per engine/corpus. Default stays "substring" until the
-fulltext-plugin decision lands.
+contains() stems by default (graph #59): whole words, fail/failed/failing
+are one, and "hi" no longer matches "this". Substring matching — the old
+default, an accident of the Python reference implementation — remains an
+explicit choice (logs, morphology without a stemmer), as does whole-token
+matching. A backend that cannot honour a mode refuses; it never substitutes.
 """
 
 import pytest
@@ -25,11 +25,45 @@ def make_engine(**kwargs: str):
     return PrismQLEngine(MemoryBackend(DOCS), user_dictionaries=DICTS, **kwargs)
 
 
-def test_substring_is_default():
+def test_stem_is_default():
     engine = make_engine()
+    # stem semantics: whole words, "work" ~ "working", "hi" is not "this"
+    assert engine.execute("SELECT contains(greet)") == [[1]]
+    assert engine.execute("SELECT contains(labour)") == [[3]]
+
+
+def test_substring_is_explicit():
+    engine = make_engine(text_match="substring")
     # substring semantics: "hi" matches "this", "work" matches "working"
     assert engine.execute("SELECT contains(greet)") == [[1], [2]]
     assert engine.execute("SELECT contains(labour)") == [[3]]
+
+
+def test_backend_that_cannot_stem_is_refused_not_substituted():
+    from prismql.backends.rust_memory import RustMemoryBackend
+
+    pytest.importorskip("prismql_rust")
+    with pytest.raises(ValueError, match="cannot match 'stem'"):
+        PrismQLEngine(RustMemoryBackend(DOCS), user_dictionaries=DICTS)
+
+
+def test_request_dictionary_on_unsupported_mode_is_a_loud_runtime_error():
+    from prismql.exceptions import PrismQLRuntimeError
+
+    class NoStem(MemoryBackend):
+        def supports_match(self, mode: str) -> bool:
+            return mode != "stem"
+
+        def search_stems(
+            self, terms: list[str], field: str = "text", operator: str = "OR"
+        ) -> set:
+            raise NotImplementedError("no stems here")
+
+    engine = PrismQLEngine(NoStem(DOCS))  # no dictionaries: construction is fine
+    engine.user_dictionaries["greet"] = ["hi"]
+    engine.visitor.user_dictionaries = engine.user_dictionaries
+    with pytest.raises(PrismQLRuntimeError, match="no stems here"):
+        engine.execute("SELECT contains(greet)")
 
 
 def test_token_mode():

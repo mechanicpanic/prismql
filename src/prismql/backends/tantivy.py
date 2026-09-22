@@ -42,8 +42,28 @@ except ImportError:  # pragma: no cover - exercised only without the extra
     _TANTIVY_AVAILABLE = False
 
 _DOC_FIELD = "_doc"  # stored JSON of the original document (for get_documents)
-_STEM_TOKENIZER = "en_stem"  # built-in: lowercase + English (Snowball) stemmer
+_STEM_TOKENIZER = "prismql_stem"  # simple + lowercase + Snowball(text_language)
+_PLAIN_ANALYZER = "prismql_token"  # simple + lowercase, no stemming
 _RAW_TOKENIZER = "raw"  # whole value as a single token (exact field match)
+_PLAIN_SUFFIX = "__tok"  # twin of every text field, indexed without stemming
+
+
+def _register_analyzers(index: Any, language: str) -> None:
+    """Both analyzers a text field needs: stemmed (default contains()) and
+    plain tokens (``match = "token"`` / phrases); same Snowball language
+    name as the memory backend (graph #59)."""
+    base = tantivy.TextAnalyzerBuilder(tantivy.Tokenizer.simple()).filter(
+        tantivy.Filter.lowercase()
+    )
+    index.register_tokenizer(_PLAIN_ANALYZER, base.build())
+    stem = (
+        tantivy.TextAnalyzerBuilder(tantivy.Tokenizer.simple())
+        .filter(tantivy.Filter.lowercase())
+        .filter(tantivy.Filter.stemmer(language))
+    )
+    index.register_tokenizer(_STEM_TOKENIZER, stem.build())
+
+
 _META_NAME = "_prismql_meta.json"  # sidecar recording field roles for reopen
 _REGEX_SPECIAL = re.compile(r"([.^$*+?()\[\]{}|\\])")
 
@@ -73,6 +93,7 @@ class TantivyBackend(SearchBackend):
         text_fields: Sequence[str] | None = None,
         heap_size: int = 50_000_000,
         num_threads: int = 1,
+        text_language: str = "english",
     ) -> None:
         if not _TANTIVY_AVAILABLE:
             raise ImportError(
@@ -81,6 +102,7 @@ class TantivyBackend(SearchBackend):
             )
         self.id_field = id_field
         self.config = config or DEFAULT_CONFIG
+        self.text_language = text_language
 
         if (
             index_path is not None
@@ -148,6 +170,9 @@ class TantivyBackend(SearchBackend):
             sb.add_text_field(self.id_field, stored=True, tokenizer_name=_RAW_TOKENIZER)
         for f in sorted(text_set):
             sb.add_text_field(f, stored=False, tokenizer_name=_STEM_TOKENIZER)
+            sb.add_text_field(
+                f + _PLAIN_SUFFIX, stored=False, tokenizer_name=_PLAIN_ANALYZER
+            )
         for f in meta:
             sb.add_text_field(f, stored=False, tokenizer_name=_RAW_TOKENIZER)
         sb.add_json_field(_DOC_FIELD, stored=True)
@@ -158,6 +183,7 @@ class TantivyBackend(SearchBackend):
             self._index = tantivy.Index(schema, path=str(index_path))
         else:
             self._index = tantivy.Index(schema)
+        _register_analyzers(self._index, self.text_language)
 
         writer = self._index.writer(heap_size=heap_size, num_threads=num_threads)
         for doc in documents:
@@ -172,6 +198,7 @@ class TantivyBackend(SearchBackend):
             for f in text_set:
                 if f in doc and doc[f] is not None:
                     td.add_text(f, str(doc[f]))
+                    td.add_text(f + _PLAIN_SUFFIX, str(doc[f]))
             for f in self._meta_fields:
                 if f in doc and doc[f] is not None:
                     td.add_text(f, str(doc[f]).lower())
@@ -187,6 +214,7 @@ class TantivyBackend(SearchBackend):
                         "id_is_int": self._id_is_int,
                         "text_fields": sorted(self._text_fields),
                         "meta_fields": sorted(self._meta_fields),
+                        "text_language": self.text_language,
                     }
                 ),
                 encoding="utf-8",
@@ -195,6 +223,8 @@ class TantivyBackend(SearchBackend):
     def _open_existing(self, index_path: str) -> None:
         self._index = tantivy.Index.open(str(index_path))
         meta = json.loads((Path(index_path) / _META_NAME).read_text(encoding="utf-8"))
+        self.text_language = meta.get("text_language", self.text_language)
+        _register_analyzers(self._index, self.text_language)
         self.id_field = meta["id_field"]
         self._id_is_int = meta["id_is_int"]
         self._text_fields = set(meta["text_fields"])
@@ -219,24 +249,20 @@ class TantivyBackend(SearchBackend):
         return self._index.parse_query(_quote(term), [field])
 
     # --------------------------------------------------------- search methods
-    def search_text(
-        self, terms: Sequence[str], field: str = "text", operator: str = "OR"
+    def _terms(
+        self, terms: Sequence[str], field: str, operator: str, suffix: str
     ) -> set[MessageId]:
-        """Stemmed token search. NOTE: not substring — "run" matches "running",
-        but "un" does not match "run"."""
         if not terms:
             return set()
         per_term: list[set[MessageId]] = []
         for term in terms:
             if field in self._text_fields:
-                q = self._analyzed(field, term)
+                q = self._analyzed(field + suffix, term)
                 per_term.append(self._ids_for(q) if q is not None else set())
             elif field in self._meta_fields or field == self.id_field:
                 per_term.append(self.search_by_field(field, term, exact=True))
             else:
                 per_term.append(set())
-        if not per_term:
-            return set()
         if operator.upper() == "AND":
             result = per_term[0]
             for s in per_term[1:]:
@@ -244,18 +270,36 @@ class TantivyBackend(SearchBackend):
             return result
         return set().union(*per_term)
 
+    def search_text(
+        self, terms: Sequence[str], field: str = "text", operator: str = "OR"
+    ) -> set[MessageId]:
+        """Substring matching has no backing in an inverted index: refuse
+        (the engine checks ``supports_match`` first; graph #59)."""
+        raise NotImplementedError(
+            "TantivyBackend cannot match substrings; use text_match 'stem' or 'token'"
+        )
+
+    def search_stems(
+        self, terms: Sequence[str], field: str = "text", operator: str = "OR"
+    ) -> set[MessageId]:
+        """Whole-word search on stemmed tokens ("run" matches "running")."""
+        return self._terms(terms, field, operator, "")
+
     def search_tokens(
         self, terms: Sequence[str], field: str = "text", operator: str = "OR"
     ) -> set[MessageId]:
-        """On tantivy this coincides with :meth:`search_text` — both match
-        analyzed (stemmed) tokens against the inverted index."""
-        return self.search_text(terms, field, operator)
+        """Whole-word search on plain lowercase tokens (no stemming)."""
+        return self._terms(terms, field, operator, _PLAIN_SUFFIX)
+
+    def supports_match(self, mode: str) -> bool:
+        return mode in ("stem", "token")
 
     def search_phrase(self, phrase: str, field: str = "text") -> set[MessageId]:
-        """Native analyzed phrase search (terms must be adjacent, in order)."""
+        """Native phrase search on plain tokens (adjacent, in order, not
+        stemmed — the same meaning as the memory backend's n-gram phrases)."""
         if field not in self._text_fields:
             return set()
-        q = self._analyzed(field, phrase)
+        q = self._analyzed(field + _PLAIN_SUFFIX, phrase)
         return self._ids_for(q) if q is not None else set()
 
     def search_by_field(

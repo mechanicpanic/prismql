@@ -30,7 +30,7 @@ from .config import (
 
 class DictSpec(BaseModel):
     terms: list[str]
-    match: Literal["substring", "token"] | None = None
+    match: Literal["stem", "token", "substring"] | None = None
 
 
 class EvaluateRequest(BaseModel):

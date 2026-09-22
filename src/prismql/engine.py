@@ -17,6 +17,8 @@ from .ir.executor import IRExecutor
 from .ir.lower import lower_query
 from .types import NamedQueryResult, QueryResult
 
+MATCH_MODES = ("stem", "token", "substring")
+
 
 def normalize_dictionaries(
     raw: Mapping[str, Any] | None,
@@ -36,10 +38,10 @@ def normalize_dictionaries(
             terms_map[name] = [str(t) for t in value.get("terms", [])]
             mode = value.get("match")
             if mode is not None:
-                if mode not in ("substring", "token"):
+                if mode not in MATCH_MODES:
                     raise ValueError(
-                        f"Dictionary {name!r}: match must be 'substring' or "
-                        f"'token', got {mode!r}"
+                        f"Dictionary {name!r}: match must be one of "
+                        f"{MATCH_MODES}, got {mode!r}"
                     )
                 modes[name] = mode
         else:
@@ -97,7 +99,7 @@ class PrismQLEngine:
         user_dictionaries: Mapping[str, Any] | None = None,
         precomputed_indexes: PrecomputedIndexes | None = None,
         timestamp_field: str = "timestamp",
-        text_match: str = "substring",
+        text_match: str = "stem",
         use_ir: bool = True,
         quantifier_ceiling: int | None = None,
     ) -> None:
@@ -170,11 +172,18 @@ class PrismQLEngine:
         self.precomputed_indexes = precomputed_indexes or PrecomputedIndexes()
         self.timestamp_field = timestamp_field
 
-        if text_match not in ("substring", "token"):
+        if text_match not in MATCH_MODES:
             raise ValueError(
-                f"text_match must be 'substring' or 'token', got {text_match!r}"
+                f"text_match must be one of {MATCH_MODES}, got {text_match!r}"
             )
         self.text_match = text_match
+        # Refuse, never substitute: a backend that cannot honour the mode a
+        # dictionary will be matched with is an error at construction, not a
+        # different answer at query time (graph #59).
+        if self.user_dictionaries:
+            self._check_match_support(text_match)
+            for name, mode in self.dictionary_modes.items():
+                self._check_match_support(mode, dictionary=name)
         if quantifier_ceiling is not None and quantifier_ceiling < 1:
             raise ValueError("quantifier_ceiling must be >= 1")
         self.quantifier_ceiling = quantifier_ceiling
@@ -194,6 +203,16 @@ class PrismQLEngine:
             dictionary_modes=self.dictionary_modes,
             quantifier_ceiling=quantifier_ceiling,
         )
+
+    def _check_match_support(self, mode: str, dictionary: str | None = None) -> None:
+        supports = getattr(self.search_backend, "supports_match", None)
+        if supports is not None and not supports(mode):
+            where = f"dictionary {dictionary!r}" if dictionary else "text_match"
+            raise ValueError(
+                f"{type(self.search_backend).__name__} cannot match {mode!r} "
+                f"({where}); choose a mode this backend supports "
+                "(tantivy: stem, token; memory: stem, token, substring)"
+            )
 
     @staticmethod
     def _resolve_dialect(query: str, dialect: str) -> str:
@@ -306,11 +325,12 @@ class PrismQLEngine:
             words: List of words in the dictionary. Multi-word entries are
                 always phrase-matched.
             match: Optional matching mode for single-word entries
-                ("substring" or "token"); defaults to the engine's
+                ("stem", "token" or "substring"); defaults to the engine's
                 text_match setting.
         """
-        if match is not None and match not in ("substring", "token"):
-            raise ValueError(f"match must be 'substring' or 'token', got {match!r}")
+        if match is not None and match not in MATCH_MODES:
+            raise ValueError(f"match must be one of {MATCH_MODES}, got {match!r}")
+        self._check_match_support(match or self.text_match, dictionary=name)
         self.user_dictionaries[name] = list(words)
         if match is not None:
             self.dictionary_modes[name] = match
@@ -372,6 +392,7 @@ class PrismQLEngine:
             search_backend=search_backend,
             nlp_backend=nlp_backend,
             user_dictionaries=user_dictionaries,
+            text_match=config.get("text_match", "stem"),
             precomputed_indexes=precomputed_indexes,
         )
 

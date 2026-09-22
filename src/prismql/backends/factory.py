@@ -122,7 +122,10 @@ class BackendFactory:
             raise ValueError("Memory backend requires 'documents' in configuration")
 
         return MemoryBackend(
-            documents, id_field, semantic_index=config.get("semantic_index")
+            documents,
+            id_field,
+            semantic_index=config.get("semantic_index"),
+            text_language=config.get("text_language") or "english",
         )
 
     @classmethod
@@ -169,6 +172,7 @@ class BackendFactory:
             id_field=config.get("id_field", "id"),
             index_path=index_path,
             text_fields=config.get("text_fields"),
+            text_language=config.get("text_language") or "english",
         )
 
     @classmethod

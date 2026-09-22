@@ -13,6 +13,19 @@ from .order import OrderIndex, epoch_micros
 from .semantic import SemanticIndex
 
 
+def _stemmer(language: str) -> Any:
+    """A Snowball stemmer; the language name is the one tantivy takes too."""
+    import snowballstemmer
+
+    try:
+        return snowballstemmer.stemmer(language)
+    except KeyError as e:
+        raise ValueError(
+            f"unknown text_language {language!r}; Snowball knows "
+            f"{', '.join(snowballstemmer.algorithms())}"
+        ) from e
+
+
 class MemoryBackend(SearchBackend):
     """
     In-memory search backend for testing and small datasets.
@@ -27,6 +40,7 @@ class MemoryBackend(SearchBackend):
         id_field: str = "id",
         config: BackendConfig | None = None,
         semantic_index: SemanticIndex | None = None,
+        text_language: str = "english",
     ) -> None:
         """
         Initialize the memory backend with documents.
@@ -37,6 +51,8 @@ class MemoryBackend(SearchBackend):
             config: Backend configuration (n-grams, tokenization, etc.)
             semantic_index: Embedding index backing similar_to(); without
                 it, search_semantic() raises NotImplementedError
+            text_language: Snowball stemmer language for ``search_stems``
+                (the default ``contains()`` mode); the same name tantivy uses
         """
         # A corpus may arrive as an ordered Arrow table (spec, layer 1).
         # Row order is load order; to_pylist() preserves it. (Zero-copy
@@ -47,6 +63,8 @@ class MemoryBackend(SearchBackend):
         self.id_field = id_field
         self.config = config or DEFAULT_CONFIG
         self.semantic_index = semantic_index
+        self.text_language = text_language
+        self._stemmer = _stemmer(text_language)
         self.config.validate()
 
         # Resolve tokenizer once
@@ -104,6 +122,17 @@ class MemoryBackend(SearchBackend):
         # Build n-gram indexes with frequency filtering
         if self.config.enable_ngrams:
             self._build_ngram_indexes(doc_tokens)
+
+        # Stem the vocabulary once (unique tokens), not every occurrence:
+        # the stem index is the token index folded by stem.
+        self._stem_index: dict[str, set[MessageId]] = {}
+        for token, ids in self._text_index.items():
+            stem = self._stemmer.stemWord(token)
+            bucket = self._stem_index.get(stem)
+            if bucket is None:
+                self._stem_index[stem] = set(ids)
+            else:
+                bucket |= ids
 
         # The ordinal axis: load order, ids as labels (spec 2026-09-18).
         # Built last so a duplicate id fails before any index is trusted.
@@ -271,6 +300,29 @@ class MemoryBackend(SearchBackend):
         """Get IDs of messages that contain questions."""
         return set(self._question_ids)
 
+    def search_stems(
+        self,
+        terms: Sequence[str],
+        field: str = "text",  # noqa: ARG002 - the stem index covers the text fields
+        operator: str = "OR",
+    ) -> set[MessageId]:
+        """Whole-word match on stems: the query term is stemmed the same way."""
+        if not terms:
+            return set()
+        sets = [
+            set(self._stem_index.get(self._stemmer.stemWord(t.lower()), ()))
+            for t in terms
+        ]
+        if operator == "AND":
+            out = sets[0]
+            for s in sets[1:]:
+                out = out & s
+            return out
+        return set().union(*sets)
+
+    def supports_match(self, mode: str) -> bool:
+        return mode in ("stem", "token", "substring")
+
     def search_phrase(self, phrase: str, field: str = "text") -> set[MessageId]:
         """
         Search for documents containing a specific phrase.
@@ -339,16 +391,21 @@ class MemoryBackend(SearchBackend):
         return self.semantic_index.search(text, threshold=threshold)
 
     def _search_phrase_substring(self, phrase: str, field: str) -> set[MessageId]:
-        """Fallback phrase search using substring matching."""
-        phrase_lower = phrase.lower()
-        matching_ids: set[MessageId] = set()
-
-        if field in self._field_indexes:
-            for value, doc_ids in self._field_indexes[field].items():
-                if phrase_lower in value:
-                    matching_ids.update(doc_ids)
-
-        return matching_ids
+        """Phrase = the phrase's tokens adjacent and in order in the text —
+        the same meaning as tantivy's phrase query, so "margin call" does not
+        match "margin calls" on one backend and not the other."""
+        wanted = self._tokenize(phrase.lower())
+        if not wanted or field not in self._field_indexes:
+            return set()
+        n = len(wanted)
+        out: set[MessageId] = set()
+        for value, ids in self._field_indexes[field].items():
+            tokens = self._tokenize(value)
+            for k in range(len(tokens) - n + 1):
+                if tokens[k : k + n] == wanted:
+                    out |= ids
+                    break
+        return out
 
     def _build_ngram_indexes(self, doc_tokens: dict[MessageId, list[str]]) -> None:
         """

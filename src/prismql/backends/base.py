@@ -59,6 +59,24 @@ class SearchBackend(ABC):
         # Default fallback: use word-based search
         return self.search_text(terms, field, operator)
 
+    def search_stems(
+        self, terms: Sequence[str], field: str = "text", operator: str = "OR"
+    ) -> set[MessageId]:
+        """Whole-word search on stemmed tokens (fail/failed/failing are one).
+
+        Optional: a backend that cannot stem leaves this raising, and
+        ``supports_match("stem")`` false, so the engine refuses instead of
+        substituting another meaning (graph #59).
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not stem; set text_match to "
+            "'token' or 'substring' for this backend"
+        )
+
+    def supports_match(self, mode: str) -> bool:
+        """Which single-word match modes this backend can honour."""
+        return mode in ("substring", "token")
+
     def search_phrase(self, phrase: str, field: str = "text") -> set[MessageId]:
         """
         Search for messages containing a specific phrase.

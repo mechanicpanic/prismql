@@ -52,7 +52,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         user_dictionaries: Mapping[str, Sequence[str]] | None = None,
         precomputed_indexes: PrecomputedIndexes | None = None,
         timestamp_field: str = "timestamp",
-        text_match: str = "substring",
+        text_match: str = "stem",
         dictionary_modes: Mapping[str, str] | None = None,
         quantifier_ceiling: int | None = None,
     ) -> None:
@@ -1030,14 +1030,20 @@ class PrismQLVisitor(BasePrismQLVisitor):
         for phrase in phrases:
             results |= self.search_backend.search_phrase(phrase, field="text")
         if singles:
-            if mode == "token":
-                results |= self.search_backend.search_tokens(
-                    singles, field="text", operator="OR"
-                )
-            else:
-                results |= self.search_backend.search_text(
-                    singles, field="text", operator="OR"
-                )
+            search = {
+                "stem": self.search_backend.search_stems,
+                "token": self.search_backend.search_tokens,
+                "substring": self.search_backend.search_text,
+            }[mode]
+            try:
+                results |= search(singles, field="text", operator="OR")
+            except NotImplementedError as e:
+                # Refuse, never substitute (graph #59): request-scoped
+                # dictionaries reach here without the engine's construction check.
+                raise PrismQLRuntimeError(
+                    f"contains({dict_name}): {e} — set the dictionary's match or "
+                    "the corpus text_match to a mode this backend supports"
+                ) from e
         return results
 
     def _get_questions(self) -> set[MessageId]:

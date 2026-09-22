@@ -55,11 +55,15 @@ other predicate. Requires a backend with a semantic index; without one the
 query fails loudly rather than returning empty results.
 
 **Text-matching semantics**: `contains()` routes each dictionary term by its
-shape: multi-word terms always phrase-match (order-sensitive); single-word
-terms match as substrings by default ("work" matches "working"), or as whole
-tokens when the dictionary is configured with `match = "token"`.
-`contains_tokens()` always matches whole tokens; `contains_phrase()` matches
-one exact phrase.
+shape: multi-word terms always phrase-match (order-sensitive, plain tokens);
+single-word terms match by the corpus's `text_match` mode — `stem` by default
+(whole words folded by a Snowball stemmer in the corpus's `text_language`:
+"fail" matches "failed" and "failing", "hi" does not match "this"), `token`
+(whole words, no stemming) or `substring` ("work" matches "working", "hi"
+matches "this"; for logs), also settable per dictionary with `match = "…"`.
+A backend that cannot honour a mode refuses rather than substituting
+(tantivy has no substring mode). `contains_tokens()` always matches whole
+tokens; `contains_phrase()` matches one exact phrase.
 
 ### 2. Boolean Operators
 

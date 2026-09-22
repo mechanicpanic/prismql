@@ -25,6 +25,9 @@ dependencies = [
     # sequence/window query needs both, so they are core, not an extra.
     "polars>=1.44,<2",
     "pyarrow>=15",
+    # contains() stems by default (Snowball, per-corpus language); memory and
+    # tantivy share one algorithm so one query means one set on both.
+    "snowballstemmer>=2.2",
 ]
 
 [project.optional-dependencies]
@@ -36,10 +39,12 @@ nlp = [
 ]
 semantic = [
     "sentence-transformers>=2.2",
+    "numpy>=1.24",
 ]
 # `prismql ingest --embed`: the same model stack, named for what it does.
 ingest = [
     "sentence-transformers>=2.2",
+    "numpy>=1.24",
 ]
 # Kept as empty aliases for one release: both are core since P3.
 arrow = []
@@ -224,6 +229,7 @@ module = [
     "tantivy.*",
     "sentence_transformers",
     "sentence_transformers.*",
+    "snowballstemmer",
     "polars",
     "polars.*",
     "prompt_toolkit",

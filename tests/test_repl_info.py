@@ -55,7 +55,7 @@ def test_show_schema_prints_fields_and_dictionaries(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "Corpus: 4 documents" in out
     assert "id_field: id" in out
-    assert "text_match: substring" in out
+    assert "text_match: stem" in out
     assert "user" in out
     assert "tick_a, tick_b" in out  # categorical examples
     assert "spikes (1 term)" in out
@@ -79,7 +79,7 @@ def test_server_config_synthesized_without_one(capsys):
         user_dictionaries={"spikes": ["spike"], "calms": ["calm"]},
     )
     assert repl.server_config.id_field == "id"
-    assert repl.server_config.text_match == "substring"
+    assert repl.server_config.text_match == "stem"
     repl.show_schema()
     out = capsys.readouterr().out
     assert "Corpus: 4 documents" in out
