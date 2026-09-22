@@ -146,10 +146,10 @@ reading — the reasoning is sound, only the "today" is stale.
   both dialects); and self-test answer 1 says D2 "is why it is being
   replaced". Everything else on the page is current, including the twelve
   shapes.
-- **`QUICKSTART.md`, `QUICK_REFERENCE.md` and `ROADMAP.md`** at the repo
-  root predate all of this. `QUICKSTART.md` still hardcodes a home directory
-  that does not exist; `QUICK_REFERENCE.md` says so itself in its first
-  line. Treat them as history, not instructions.
+- **`docs/legacy/`** holds what predates all of this — `QUICKSTART.md`,
+  `QUICK_REFERENCE.md`, `ROADMAP.md`, `MIGRATION_GUIDE.md`, `PUBLISHING.md`,
+  `WHY_NOT_SQL.md`, the July review and the semantic-join brief. History,
+  not instructions; its own `README.md` says what each was.
 
 ### The rest of the root, and what it is for
 
@@ -163,10 +163,7 @@ question comes up:
 | `docs/CHICAGO_BENCHMARK.md` | the cross-engine comparison. Its timing column predates the operator layer and names a Rust execution path that no longer exists |
 | `docs/REPL.md`, `docs/SYNTAX_HIGHLIGHTING.md` | the two surfaces in detail |
 | `docs/MENTAL_MODEL.ru.md` | the Russian mental model, kept in step with the English one |
-| `WHY_NOT_SQL.md` | the pitch — what the language buys over a `WHERE` clause. Marketing register, accurate content |
-| `MIGRATION_GUIDE.md` | the deprecated legacy predicate spellings (`hasdate()` → `mentions_date()`) and what replaces them |
-| `PUBLISHING.md` | a draft procedure for publishing to PyPI. Nothing has been published; how the project reaches people who cannot clone it is still the owner's open decision (graph #49 for the agent pack, graph #50 for the human path) |
-| `REVIEW-2026-07-12.md` | a multi-agent review of the July work, 19 defects, all remediated. Kept as the record of what that round found |
+| `docs/legacy/` | the pre-P1 documents, the July 2026 review and the semantic-join brief — see its `README.md`. How the project reaches people who cannot clone it is still the owner's open decision (graph #49 for the agent pack, graph #50 for the human path) |
 
 ## 3. What the tests prove
 

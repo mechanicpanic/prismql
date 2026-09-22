@@ -24,9 +24,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DOC_FILES = [
     "src/prismql/LANGUAGE_REFERENCE.md",
-    "QUICK_REFERENCE.md",
+    "docs/legacy/QUICK_REFERENCE.md",
     "README.md",
-    "WHY_NOT_SQL.md",
+    "docs/legacy/WHY_NOT_SQL.md",
     "docs/REPL.md",
     "docs/SYNTAX_HIGHLIGHTING.md",
     "skills/prismql/LANGUAGE_REFERENCE.md",
