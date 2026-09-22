@@ -27,7 +27,9 @@ and may be strings.
 ```toml
 [server]
 port = 8901
-max_results = 50
+max_results = 50             # page size for a match response
+# results_memory_mb = 256    # kept results, in-memory budget; oldest evicted first
+# scout_depth = 1000         # best hits /search and /similar keep
 
 [backend]
 type = "memory"              # under ~100K rows; "tantivy" for real full-text
@@ -115,12 +117,18 @@ Can:
   `POST /similar` (ranked nearest events by embedding, when the corpus has
   one) show what is where before it writes a query — with `hydrate: false`
   for ids and scores only, or `output: "file"` to keep the hits out of its
-  context entirely.
+  context entirely (scouting to a file writes up to `scout_depth` hits; the
+  request's own `limit` no longer narrows that file);
+- page past the cap without re-running anything: a match response (not an
+  aggregate or `GROUP BY` answer — those carry no id) is kept server-side
+  under a `result_id`; `GET /results/{result_id}?offset=…&limit=…` fetches
+  more of it, `GET /results/{result_id}.jsonl` streams all of it.
 
 The request body is `query` plus, all optional, `max_results`, `hydrate`
-(ids without events when `false`), `dictionaries`, `output`, `corpus` and
-`label`. `skills/prismql/SKILL.md` says what each one does; the agent does
-not have to guess them from the examples.
+(ids without events when `false`), `fields` (project hydrated events down
+to these plus the id), `dictionaries`, `output`, `corpus` and `label`.
+`skills/prismql/SKILL.md` says what each one does; the agent does not have
+to guess them from the examples.
 
 Cannot, on a default server:
 
@@ -136,23 +144,42 @@ Cannot, on a default server:
 
 ## 6. The two limits to tell the agent about
 
-**The inline cap.** `[server] max_results` (default 50) caps the groups in
-a response. `count` is the number of groups *in this response*, not the
-total, and a larger `max_results` in the request is clamped down to the
-configured value without saying so. `"truncated": true` is the only signal
-that more existed:
+**The inline cap — now a page, not a wall.** `[server] max_results`
+(default 50) is the size of one *page* of a match response; `count` is how
+many groups this page carries, `total` is how many the query found, and
+`"truncated": true` means paging further returns more (a larger
+`max_results` in the request is clamped down to the configured value
+without saying so). The agent does not need to shrink its query to see the
+rest — it pages the kept result by the `result_id` the response carries:
 
 ```console
 $ curl -s -X POST localhost:8901/evaluate -H 'Content-Type: application/json' \
     -d '{"query": "SELECT field(kind, save)", "max_results": 2, "hydrate": false}'
-{"kind":"groups","count":2,"truncated":true,"results":[{"ids":["e1"]},{"ids":["e12"]}], …}
+{"kind":"groups","count":2,"total":8,"truncated":true,"result_id":"r1","results":[{"ids":["e1"]},{"ids":["e12"]}], …}
+
+$ curl -s "localhost:8901/results/r1?offset=2&limit=2"
+{"ok":true,"result_id":"r1","kind":"groups","total":8,"offset":2,"count":2,"truncated":true,"results":[…]}
 
 $ curl -s -X POST localhost:8901/evaluate -H 'Content-Type: application/json' \
     -d '{"query": "SELECT field(kind, save) AGGREGATE count()"}'
 {"kind":"aggregate","function":"count","field":null,"value":8, …}
 ```
 
-Eight, not two. **`AGGREGATE count()` is the only honest total.**
+`/search` and `/similar` are paged the same way, but their `total` can run
+ahead of what the server kept: it holds only the best `[server]
+scout_depth` hits (default 1000) and reports that count as `kept` — more
+matched than were kept when `kept < total`, and `truncated` turns false
+once the agent has paged through `kept`.
+
+A kept result lives in memory only: it does not survive `/reload` or a
+restart, and the oldest are dropped first once `[server] results_memory_mb`
+fills up. Either way a stale id comes back `{"ok":false,"error":{"type":
+"gone",...}}` — tell the agent to run the query again, not to treat it as
+a bug.
+
+**`AGGREGATE count()` is still the only honest total** for the number
+itself — reading `total` off a match response works too, but an aggregate
+is the one shape built to answer "how many" and nothing else.
 
 **File output is off.** To enumerate more groups than the cap, the agent
 asks for `"output": "file"`, and on a default server gets:

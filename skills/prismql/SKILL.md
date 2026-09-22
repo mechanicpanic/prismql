@@ -64,7 +64,9 @@ after query`), not the missing keyword.
 
 Other endpoints: `GET /reference` (the full language doc), `GET /corpora`
 (named corpora; pass `"corpus": "<name>"` in the request to pick one),
-`POST /reload` (off unless the server enables it).
+`GET /results/{result_id}` / `GET /results/{result_id}.jsonl` (page or
+stream a kept match or scout result), `POST /reload` (off unless the
+server enables it).
 
 **Scout before you query.** Two endpoints answer "what is where" with
 ranked hits — outside the language, which never ranks:
@@ -78,30 +80,49 @@ ranked hits — outside the language, which never ranks:
   `threshold`.
 
 Both take `corpus`, `hydrate` (`false` = ids and scores only, no events)
-and `output: "file"` (all hits to a JSONL file, a five-row preview back),
-exactly like `/evaluate`. Send `X-PrismQL-Client: <your name>` on every
+and `output: "file"` (all hits to a JSONL file, a five-row preview back —
+up to `scout_depth` hits; your request's own `limit` does not narrow that
+file), exactly like `/evaluate`. Send `X-PrismQL-Client: <your name>` on every
 request: the server keeps a journal of requests (`GET /activity`) and shows
 it to the person on `/board/` — with your name, they can follow what you
 asked and open any of it themselves — use them to read a few hits, learn the words
 people actually wrote, then put those words in a dictionary and ask the
-real question with `/evaluate`. Hits are `{"id", "score"[, "event"]}`.
+real question with `/evaluate`. Hits are `{"id", "score"[, "event"]}`, kept
+server-side under a `result_id` exactly like a match result — page them the
+same way.
 
-### Three things about the server that will bite you
+### Four things about the server that will bite you
 
-1. **The group cap.** `count` in a response is the number of groups *in
-   that response*, capped by the server's `max_results` (default 50); a
-   larger `max_results` in your request is silently clamped down to it.
-   `"truncated": true` is the only signal that more existed. For a real
-   total append `AGGREGATE count()` — it counts every group, uncapped.
-2. **Enumerating past the cap needs permission.** `"output": "file"`
-   writes every group as JSONL server-side and returns `{count, path,
-   preview}`; on a server without `[server] enable_file_output = true` it
-   answers 403. Do not work around it by paging — use `AGGREGATE count()`
-   or a narrower query, or ask the person to enable it.
+1. **A match or scout result is kept, not just returned — page it, don't
+   re-run it.** Anything with a `result_id` (everything except an aggregate
+   or `GROUP BY` answer, which stay small and inline with no id) is held on
+   the server in memory. `count` is how many items *this response* carries,
+   `max_results` is the page size, `total` is how many the query found, and
+   `"truncated": true` means paging further returns more. Fetch the rest
+   with `GET /results/{result_id}?offset=…&limit=…&hydrate=…&fields=…` (the
+   MCP shim's `result_page(result_id, offset, limit)` does the same), or
+   stream every kept item at once with `GET /results/{result_id}.jsonl`.
+   Scouting keeps only its best `scout_depth` hits and reports that as
+   `kept` — `total` can exceed `kept`, and then `truncated` turns false at
+   `kept`, not `total`. A stale id (server restarted, `/reload` ran, or the
+   result aged out of the memory budget) comes back as a 404 with
+   `error.type == "gone"` — run the query again, do not retry the page.
+   For a real total regardless of paging, `AGGREGATE count()` still counts
+   every group, uncapped.
+2. **Enumerating past the cap in one shot needs permission.** `"output":
+   "file"` writes every kept group (or up to `scout_depth` hits for
+   scouting) as JSONL server-side and returns `{count, path, preview}`; on a
+   server without `[server] enable_file_output = true` it answers 403. For
+   a match result, paging by `result_id` works either way and needs no
+   permission — use it instead of asking to enable file output.
 3. **Dictionaries are per-request.** Add `"dictionaries": {"name":
    ["term", …]}` to the body to define or override term lists for that
    query only. Iterate there; ask for stable ones to be persisted into the
    server's `prismql.toml`.
+4. **Kept results do not survive a reload or a restart.** They live only in
+   memory, on the load they were computed on; the person restarting the
+   server or reloading corpora mid-conversation means your next page comes
+   back `gone` — that is expected, not a bug to report.
 
 ## Starting a server yourself
 

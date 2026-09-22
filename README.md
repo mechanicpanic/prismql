@@ -150,8 +150,10 @@ timestamp field, limits:
 ```toml
 [server]
 port = 8901
-max_results = 50            # cap on groups per response
+max_results = 50            # page size for a match or scout response
 enable_reload = false       # POST /reload answers 403 while this is false
+results_memory_mb = 256     # kept results, in-memory budget; oldest evicted first
+scout_depth = 1000          # best hits /search and /similar keep
 
 [backend]
 type = "memory"             # .json / .jsonl / .csv / .parquet
@@ -176,8 +178,10 @@ A request may carry a `dictionaries` overlay — term lists merged over the
 config ones for that query only — so an agent can iterate on the semantic
 layer without touching server state. `GET /schema` describes the loaded
 corpus (fields, coverage, example values) and is the thing to read before
-writing queries against an unfamiliar corpus. The server caps groups per
-response; `AGGREGATE count()` counts every group, uncapped.
+writing queries against an unfamiliar corpus. Beyond one page, a match or
+scout result is kept server-side under a `result_id` and paged with `GET
+/results/{result_id}` (or streamed whole with the `.jsonl` form) instead of
+re-run; `AGGREGATE count()` still counts every group, uncapped.
 
 MCP-native agents get a single `evaluate()` tool through a stdio shim:
 

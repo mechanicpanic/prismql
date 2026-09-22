@@ -405,7 +405,7 @@ curl -s localhost:8901/health
 
 curl -s -X POST localhost:8901/evaluate -H 'Content-Type: application/json' \
   -d '{"query":"SELECT field(kind, delete) FOLLOWED_BY field(kind, save) DURING 10 minutes","max_results":5}'
-# {"kind":"groups","count":2,"truncated":false,"results":[{"ids":["e2","e3"],"events":[{...full records...}]}, ...]}
+# {"kind":"groups","count":2,"total":2,"truncated":false,"result_id":"r1","results":[{"ids":["e2","e3"],"positions":[1,2],"times":[...],"events":[{...full records...}]}, ...]}
 ```
 
 `GET /schema` is `\schema` as JSON. A bad query comes back as a 422 whose
@@ -415,18 +415,38 @@ rather than as an empty list. `AGGREGATE count()` answers as
 can also pass word lists per request — `"dictionaries": {"undo": ["restored","back"]}` — which
 is the fast way to try a vocabulary before writing it into the config.
 
+**A match result is kept, not just returned.** Anything that is not an
+aggregate or `GROUP BY` answer — those stay small and inline, no id — is
+held on the server under the `result_id` you see above, in memory only.
+`max_results` is the size of that first page; `count` is how many groups
+this response carries, `total` is how many the query found, and
+`truncated` means paging further would return more. Fetch the rest with
+`GET /results/r1?offset=5&limit=5` (same `hydrate` and `fields` knobs as
+`/evaluate`), or stream every kept group at once with `GET
+/results/r1.jsonl`. Kept results do not survive `/reload` or a restart,
+and the oldest are dropped first once `[server] results_memory_mb`
+(default 256 MB) fills up; either way a stale id comes back as
+`{"ok":false,"error":{"type":"gone","message":"...run the query again"}}`
+— not silently empty.
+
 `/board/` on the same server is the board: a live feed of everything the
 server was asked — by you, by a script, by an agent — with the query
 highlighted and the outcome beside it, an editor to re-run or change any of
 it, and the results of your own runs. It stores summaries, not results, so
-nothing on it gets large.
+nothing on it gets large. It reads an event's `kind` and `actor` from the
+fields you name under `[corpora.<name>.board]` in the config (`[board]` on
+a single-corpus file); `GET /corpora` echoes that mapping back.
 
 Two more endpoints are for looking around, not for asking: `POST /search`
 with `{"query": "restored OR \"put back\""}` returns the best-matching
 events ranked (full-text, tantivy syntax), and `POST /similar` with
 `{"text": "someone undid a deletion"}` returns the nearest events by
-embedding when the corpus carries one. Read a few hits, learn the words,
-put them in a dictionary, then ask the real question with `/evaluate`.
+embedding when the corpus carries one. Both keep their best `[server]
+scout_depth` hits (default 1000) and page the same way as `/evaluate` —
+their `total` can run ahead of what got kept, which the response reports
+as `kept`; `truncated` turns false once you have paged through `kept`, not
+`total`. Read a few hits, learn the words, put them in a dictionary, then
+ask the real question with `/evaluate`.
 
 If you want an agent to drive this, hand it the folder `skills/prismql/`
 from a clone: it is self-contained (how to call the server, the language
