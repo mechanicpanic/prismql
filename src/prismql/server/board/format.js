@@ -11,6 +11,8 @@
   }
   function escapeRe(x) { return x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
   function hasFlags(o) { return !!o && Object.keys(o).length > 0; }
+  // A bare "*" would match everything; drop empty-after-star terms.
+  function isBlankTerm(t) { return !t || (t.slice(-1) === "*" && t.slice(0, -1) === ""); }
   function isIp(who) { if (typeof who !== "string") return false;
     return IPV4_RE.test(who) || (who.indexOf(":") >= 0 && /^[0-9a-fA-F:]+$/.test(who));
   }
@@ -43,11 +45,11 @@
     return Math.floor(sec / 86400) + " d";
   }
   function rel(sec) { return sec < 10 ? "just now" : unitDur(sec) + " ago"; }
-  function dur(ms) {
-    if (ms < 1) return "<1 ms";
-    if (ms < 1000) return Math.round(ms) + " ms";
-    if (ms >= 10000) return Math.round(ms / 1000) + " s";
-    var s = (ms / 1000).toFixed(1);
+  function dur(ms) { if (typeof ms !== "number" || Number.isNaN(ms)) return "—";
+    if (ms >= 0 && ms < 1) return "<1 ms";
+    var r = Math.round(ms); if (r < 1000) return r + " ms";
+    if (r >= 10000) return Math.round(r / 1000) + " s";
+    var s = (r / 1000).toFixed(1);
     return s === "10.0" ? "10 s" : s + " s";
   }
   function hms(iso) { var d = new Date(iso);
@@ -60,7 +62,7 @@
     var sub = DOW[d.getDay()] + " " + d.getDate() + " " + MON[d.getMonth()];
     return { key: k, label: label, sub: sub };
   }
-  // Unordered INWINDOW: Δpos/Δt are signed here, never clamped (fix round 1).
+  // Unordered INWINDOW: Δpos/Δt are signed here, never clamped (graph @aleph/prismql, node #76).
   function gapLabel(prevPos, pos, prevTime, time) { var label = "";
     if (prevPos != null && pos != null) {
       var dp = Math.abs(pos - prevPos);
@@ -81,7 +83,7 @@
   }
   function isAgent(who) { return typeof who === "string" && who !== "board" && !isIp(who); }
   function highlightParts(text, terms) {
-    var clean = (terms || []).filter(function (t) { return t; });
+    var clean = (terms || []).filter(function (t) { return !isBlankTerm(t); });
     if (text === "" || !clean.length) return [{ t: text, m: false }];
     var pattern = clean.map(function (t) {
       return t.slice(-1) === "*" ? escapeRe(t.slice(0, -1)) + "\\w*" : escapeRe(t);
@@ -107,7 +109,7 @@
       var tok = raw.replace(/^[()+-]+/, "").replace(/[()+-]+$/, "");
       if (!tok) return;
       var ci = tok.indexOf(":"), after = ci >= 0 ? tok.slice(ci + 1) : tok;
-      if (after) terms.push(after);
+      if (!isBlankTerm(after)) terms.push(after);
     });
     return terms;
   }
@@ -139,12 +141,10 @@
     });
     return out;
   }
-  var api = {
-    status: status, resultLabel: resultLabel, rel: rel, dur: dur, hms: hms,
-    dayLabel: dayLabel, gapLabel: gapLabel, span: span, isAgent: isAgent,
+  var api = { status: status, resultLabel: resultLabel, rel: rel, dur: dur,
+    hms: hms, dayLabel: dayLabel, gapLabel: gapLabel, span: span, isAgent: isAgent,
     highlightParts: highlightParts, searchTerms: searchTerms, matches: matches,
-    facetCounts: facetCounts,
-  };
+    facetCounts: facetCounts };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLFormat = api;
 })(typeof window !== "undefined" ? window : globalThis);

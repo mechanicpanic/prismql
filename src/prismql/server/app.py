@@ -263,9 +263,8 @@ def _small_payload(result: Any) -> dict[str, Any]:
 def _journal_count(payload: dict[str, Any]) -> Any:
     """The journal's ``count``: a number or ``null``, never the GROUP BY
     groups dict itself. A "grouped" payload's ``to_dict()`` has no
-    "count" key, only "groups" (group key -> list of message groups); the
-    fallback below used to repeat that dict verbatim (fix round 1, graph
-    @aleph/prismql)."""
+    "count" key, only "groups" (group key -> list of message groups)
+    (graph @aleph/prismql, node #76)."""
     count = payload.get("count", payload.get("groups"))
     if payload.get("kind") == "grouped" and isinstance(count, dict | list):
         return len(count)

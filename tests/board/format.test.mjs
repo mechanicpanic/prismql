@@ -91,7 +91,6 @@ test("resultLabel: aggregate", () => {
   );
 });
 
-// fix round 1: an aggregate over GROUP BY has no single value.
 test("resultLabel: aggregate with a null value (GROUP BY) reads 'per group'", () => {
   assert.equal(
     F.resultLabel({ ok: true, result: "aggregate", value: null }),
@@ -99,7 +98,7 @@ test("resultLabel: aggregate with a null value (GROUP BY) reads 'per group'", ()
   );
 });
 
-// fix round 1: "grouped" is the small non-list GROUP BY journal shape.
+// "grouped" is the small non-list GROUP BY journal shape.
 test("resultLabel: grouped with a numeric count", () => {
   assert.equal(F.resultLabel({ ok: true, result: "grouped", count: 5 }), "5 groups");
 });
@@ -131,7 +130,7 @@ test("resultLabel: runtime error and rate limited", () => {
   );
 });
 
-// fix round 1: resultLabel always returns a string, even with no error.type.
+// resultLabel always returns a string, even with no error.type.
 test("resultLabel: failure with no error.type reads 'error'", () => {
   assert.equal(F.resultLabel({ ok: false }), "error");
   assert.equal(F.resultLabel({ ok: false, error: {} }), "error");
@@ -150,7 +149,7 @@ test("resultLabel: file output adds arrow", () => {
   );
 });
 
-// --- gapLabel (fix round 1: unordered INWINDOW groups are not clamped) ---
+// --- gapLabel: unordered INWINDOW groups are not clamped ---
 
 test("gapLabel: forward gap, positions and times", () => {
   assert.deepEqual(
@@ -207,10 +206,11 @@ test("rel boundaries", () => {
   assert.equal(F.rel(86400), "1 d ago");
 });
 
-// --- dur (fix round 1: rounding, sub-ms, and the 9999ms boundary) ---
+// --- dur: rounding, sub-ms, and the 9999ms boundary ---
 
 test("dur: sub-millisecond", () => {
   assert.equal(F.dur(0.43), "<1 ms");
+  assert.equal(F.dur(0), "<1 ms");
 });
 
 test("dur: rounds whole milliseconds", () => {
@@ -228,6 +228,17 @@ test("dur: 9999ms reads 10 s, not 10.0 s", () => {
 
 test("dur: whole seconds at and above 10000ms", () => {
   assert.equal(F.dur(30000), "30 s");
+});
+
+// the ms/s split tests the ROUNDED value, not the raw one.
+test("dur: rounding across the 1000ms boundary reads seconds, not 1000 ms", () => {
+  assert.equal(F.dur(999.6), "1.0 s");
+});
+
+// a missing elapsed_ms must not read "NaN s" or "<1 ms".
+test("dur: a missing duration reads an em dash", () => {
+  assert.equal(F.dur(undefined), "—");
+  assert.equal(F.dur(null), "—");
 });
 
 // --- hms / dayLabel (timezone-independent: derive expectations from Date accessors) ---
@@ -266,7 +277,7 @@ test("dayLabel: older day uses weekday", () => {
   assert.equal(F.dayLabel(iso, nowMs).label, DOW[d.getDay()]);
 });
 
-// --- span (fix round 1: drop nulls, max-min, not last-first) ---
+// --- span: drop nulls, max-min, not last-first ---
 
 test("span: last minus first when ascending", () => {
   const times = [
@@ -301,7 +312,6 @@ test("isAgent classification", () => {
   assert.equal(F.isAgent("codex"), true);
 });
 
-// fix round 1: a non-string who is never an agent.
 test("isAgent: non-string input is false", () => {
   assert.equal(F.isAgent(null), false);
   assert.equal(F.isAgent(undefined), false);
@@ -330,7 +340,7 @@ test("highlightParts: escapes regex metacharacters", () => {
   assert.deepEqual(matched, ["$5.00"]);
 });
 
-// fix round 1: empty terms are ignored, not turned into a broken regex.
+// empty terms are ignored, not turned into a broken regex.
 test("highlightParts: ignores empty terms", () => {
   const parts = F.highlightParts("hello world", ["", "world", ""]);
   const matched = parts.filter((p) => p.m).map((p) => p.t);
@@ -343,17 +353,24 @@ test("highlightParts: all-empty terms pass through like no terms", () => {
   ]);
 });
 
-// fix round 1: empty text passes through like the no-terms path.
+// empty text passes through like the no-terms path.
 test("highlightParts: empty text", () => {
   assert.deepEqual(F.highlightParts("", ["term"]), [{ t: "", m: false }]);
   assert.deepEqual(F.highlightParts("", []), [{ t: "", m: false }]);
 });
 
-// fix round 1: a trailing "*" is a prefix match, not a literal asterisk.
+// a trailing "*" is a prefix match, not a literal asterisk.
 test("highlightParts: a trailing * matches as a word-continuation prefix", () => {
   const parts = F.highlightParts("passing the password test", ["pass*"]);
   const matched = parts.filter((p) => p.m).map((p) => p.t);
   assert.deepEqual(matched, ["passing", "password"]);
+});
+
+// a bare "*" would match everything; drop it rather than highlight all text.
+test("highlightParts: a bare * term is dropped, not treated as match-all", () => {
+  assert.deepEqual(F.highlightParts("hello world", ["*"]), [
+    { t: "hello world", m: false },
+  ]);
 });
 
 // --- searchTerms ---
@@ -365,7 +382,6 @@ test("searchTerms: quoted phrases, bare words, dropped operators and field prefi
   );
 });
 
-// fix round 1: strip leading/trailing ( ) + - wrapping from bare tokens.
 test("searchTerms: strips wrapping parens and +/-", () => {
   assert.deepEqual(F.searchTerms("(hello) -world +required"), [
     "hello",
@@ -374,24 +390,28 @@ test("searchTerms: strips wrapping parens and +/-", () => {
   ]);
 });
 
-// fix round 1: a trailing * survives as a prefix term.
 test("searchTerms: keeps a trailing * as a prefix term", () => {
   assert.deepEqual(F.searchTerms("pass* filter"), ["pass*", "filter"]);
 });
 
-// fix round 1: the token right after NOT is skipped, not kept as a term.
 test("searchTerms: skips the token right after NOT", () => {
   assert.deepEqual(F.searchTerms("red NOT blue OR green"), ["red", "green"]);
 });
 
-// fix round 1: field:"phrase" resolves to the phrase, not a leftover token.
+// field:"phrase" resolves to the phrase, not a leftover token.
 test('searchTerms: field:"phrase" resolves to the phrase', () => {
   assert.deepEqual(F.searchTerms('field:"phrase" bare'), ["phrase", "bare"]);
 });
 
-// fix round 1: tokens that strip down to nothing are dropped, not kept blank.
 test("searchTerms: drops terms that strip down to empty", () => {
   assert.deepEqual(F.searchTerms("() -- +"), []);
+});
+
+// a bare "*" would match every term (highlightParts treats it as match-all);
+// drop it, same as any term that is empty once its trailing * is removed.
+test("searchTerms: drops a bare * (match-everything)", () => {
+  assert.deepEqual(F.searchTerms("*"), []);
+  assert.deepEqual(F.searchTerms("* filter"), ["filter"]);
 });
 
 // --- matches / facetCounts ---
@@ -469,7 +489,7 @@ test("facetCounts excludes its own key", () => {
   assert.deepEqual(counts, { evaluate: 1, search: 2 });
 });
 
-// --- lexJson (split out to the sibling lexjson.js, fix round 1) ---
+// --- lexJson: now the sibling lexjson.js's PrismQLLexJson ---
 
 test("lexJson: tokenizes a small object", () => {
   const toks = Lex.lexJson('{"a":1,"b":"x"}');

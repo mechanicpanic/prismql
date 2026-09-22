@@ -54,9 +54,10 @@ def test_evaluate_no_hydrate(client):
 
 
 def test_group_by_journal_count_is_a_number_not_the_groups_dict(client):
-    # fix round 1: a plain GROUP BY (no AGGREGATE) folds to a GroupedResult,
-    # whose to_dict() has no "count" key, only "groups" (a dict) — the
-    # journal must never repeat that dict as if it were a count.
+    # a plain GROUP BY (no AGGREGATE) folds to a GroupedResult, whose
+    # to_dict() has no "count" key, only "groups" (a dict) — the journal
+    # must never repeat that dict as if it were a count
+    # (graph @aleph/prismql, node #76).
     r = client.post(
         "/evaluate",
         json={"query": "SELECT from(tick_a) OR from(tick_b) GROUP BY user"},
