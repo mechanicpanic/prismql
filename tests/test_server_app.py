@@ -840,6 +840,24 @@ def test_activity_stream_replays_and_ends_with_keepalive(client):
     assert "event: seq" in text and '"query": "SELECT from(tick_a)"' in text
 
 
+def test_activity_carries_a_boot_id_distinct_per_process(client, tmp_path):
+    body = client.get("/activity").json()
+    assert isinstance(body["boot"], str) and body["boot"]
+
+    data = tmp_path / "events2.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    other = TestClient(create_app(ServerConfig(backend_type="memory", data=str(data))))
+    assert other.get("/activity").json()["boot"] != body["boot"]
+
+
+def test_activity_stream_handshake_carries_seq_and_boot(client):
+    with client.stream("GET", "/activity/stream?ttl=0.2") as r:
+        text = "".join(r.iter_text())
+    handshake = text.split("event: seq\ndata: ", 1)[1].split("\n\n", 1)[0]
+    parsed = json.loads(handshake)
+    assert parsed["seq"] == 0 and isinstance(parsed["boot"], str) and parsed["boot"]
+
+
 def test_board_page_and_lexer_are_served_from_the_package(client):
     page = client.get("/board/")
     assert page.status_code == 200 and 'id="journal"' in page.text

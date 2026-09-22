@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import secrets
 import threading
 from collections import deque
 from datetime import UTC, datetime
@@ -122,6 +123,10 @@ class ServerState:
         self.activity: deque[dict[str, Any]] = deque(maxlen=config.activity_max)
         self.activity_seq = 0
         self.activity_lock = threading.Lock()
+        # One id per process (graph @aleph/prismql, node #76): the board's
+        # stream uses it to tell a restarted server (seq counter reset to 0)
+        # apart from its own process just catching up.
+        self.boot = secrets.token_hex(4)
 
     def reload(self) -> None:
         # Build outside the lock (slow); swap under it (fast). In-flight
@@ -880,7 +885,12 @@ def create_app(config: ServerConfig) -> FastAPI:
     def activity(since: int = 0, limit: int = 200) -> Any:
         """The board's journal: request summaries newer than ``since`` (seq)."""
         rows = state.activity_since(since, max(1, min(limit, config.activity_max)))
-        return {"ok": True, "seq": state.activity_seq, "entries": rows}
+        return {
+            "ok": True,
+            "seq": state.activity_seq,
+            "boot": state.boot,
+            "entries": rows,
+        }
 
     def _gone(rid: str) -> JSONResponse:
         return _error(
@@ -992,7 +1002,8 @@ def create_app(config: ServerConfig) -> FastAPI:
         async def events() -> Any:
             last = since
             deadline = perf_counter() + ttl if ttl else None
-            yield f"event: seq\ndata: {state.activity_seq}\n\n"
+            handshake = json.dumps({"seq": state.activity_seq, "boot": state.boot})
+            yield f"event: seq\ndata: {handshake}\n\n"
             while deadline is None or perf_counter() < deadline:
                 rows = state.activity_since(last, 0)
                 for row in rows:
