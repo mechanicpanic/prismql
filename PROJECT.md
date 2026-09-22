@@ -61,3 +61,19 @@ Rust) retire after P3 and survive as semantics and benchmark baselines.
 (kernels, retiring) · `~/Projects/research/prismql-research` (benchmarks,
 paper, eval, diary, spike) · Obsidian `~/Vaults/prismql` · Iskron realm
 `@aleph/prismql`.
+
+## Reading order for the implementation (P3, 2026-09-22)
+
+| # | Read | What it gives |
+|---|---|---|
+| 1 | `docs/MENTAL_MODEL.md` (+ `.ru.md`) | what the language promises, twelve shapes, self-test |
+| 2 | `docs/superpowers/specs/2026-09-18-ordinal-axis-design.md` | why a plan, audit A1–A10, review amendments |
+| 3 | `src/prismql/backends/order.py` | the order axis: `OrderIndex`, positions, epoch microseconds |
+| 4 | `src/prismql/plan/frames.py` | the per-query frame: only the participating rows |
+| 5 | `src/prismql/plan/primitives.py` | asof and bucket joins, `extend_link`, `cooccur`, `quantify`, group-level links |
+| 6 | `src/prismql/plan/operators.py` | `Leg`, `_v_` bindings, key vs eligible |
+| 7 | `src/prismql/plan/bridge.py` | executor state → operator layer → id groups |
+| 8 | `src/prismql/ir/nodes.py` → `ir/lower.py` → `dialects/pipe.py` | two dialects, one IR |
+| 9 | `src/prismql/ir/executor.py`, `src/prismql/visitors/query_visitor.py` | both paths: `execute_body`, `execute_restriction`, the four shared helpers |
+| 10 | `tests/plan/`, `tests/test_p3_review_regressions.py`, `tests/test_ordinal_axis_contract.py` | what is proven and by which oracle |
+| 11 | `docs/superpowers/plans/2026-09-21-ordinal-axis-p3-operator-layer.md` | how it went, task by task |
