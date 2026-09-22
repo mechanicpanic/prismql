@@ -123,6 +123,24 @@ def test_evaluate_named(client):
     assert body["results"][0]["ids"] == [1]
 
 
+def test_named_slot_labels_stay_in_pattern_order_across_groups(client):
+    # 3 groups from 2 named slots: pattern_names is one list of slot
+    # names shared by every group, not one label per group (types.py).
+    r = client.post(
+        "/evaluate",
+        json={
+            "query": 'SELECT from(tick_a) AS "a", from(tick_b) AS "b" INWINDOW 20',
+            "hydrate": False,
+        },
+    )
+    body = r.json()
+    assert body["kind"] == "named"
+    assert body["count"] == 3
+    assert body["labels"] == ["a", "b"]
+    page = client.get(f"/results/{body['result_id']}?hydrate=false").json()
+    assert page["labels"] == ["a", "b"]
+
+
 def test_evaluate_truncation_and_clamp(client):
     # 3 tick_a messages as single-element groups; request cap of 2
     r = client.post(

@@ -487,7 +487,10 @@ def create_app(config: ServerConfig) -> FastAPI:
                     return _runtime_error(str(e))
                 # kept groups come in stream order, by each group's first
                 # slot; sorted is stable so ties keep the engine's order
-                # (graph @aleph/prismql, node #73).
+                # (graph @aleph/prismql, node #73). ``labels`` is
+                # ``pattern_names``: one list of slot names shared by every
+                # group, not one label per group — it is never reordered
+                # (fix round 1, graph @aleph/prismql, node #73).
                 order = sorted(
                     range(len(groups)),
                     key=lambda i: positions[i][0] if positions[i] else -1,
@@ -496,7 +499,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                     kind,
                     req.corpus or config.default_corpus,
                     [positions[i] for i in order],
-                    labels if labels is None else [labels[i] for i in order],
+                    labels,
                     load=load,
                 )
                 rid = state.results.put(stored)
