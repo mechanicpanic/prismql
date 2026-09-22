@@ -75,6 +75,30 @@ test("signatureOf changes across a midnight rollover even though the row stays v
   assert.notEqual(sigBefore, sigAfter, "the day label rolled from Today to Yesterday — tick must catch it");
 });
 
+test("fix round 2, #3: an entry a facet filter already hides still changes the tick signature when it ages out of range", () => {
+  const J = freshJournal();
+  const t0 = Date.parse("2026-09-23T12:00:00.000Z");
+  // A "search" row while the kind facet only wants "evaluate" — it was
+  // never in the visible set to begin with.
+  const hidden = { seq: 1, ts: new Date(t0 - 10 * 60 * 1000).toISOString(), kind: "search", ok: true, result: "hits", count: 1, total: 1 };
+  const state = {
+    entries: [hidden],
+    filters: { range: "15m", search: "", kinds: { evaluate: true }, srcs: {}, corpora: {}, statuses: {} },
+  };
+  const later = t0 + 10 * 60 * 1000; // 20 min old now, past the 15m range
+
+  assert.equal(J._visibleEntries(state, t0).length, 0, "already hidden by the kind facet");
+  const oldSigNow = J._signatureOf(J._visibleEntries(state, t0), t0);
+  const oldSigLater = J._signatureOf(J._visibleEntries(state, later), later);
+  assert.equal(oldSigNow, oldSigLater, "visibleEntries alone can't see it leave — this is why the rail's counts went stale");
+
+  assert.equal(J._inRangeEntries(state, t0).length, 1, "range+search only, the kind facet doesn't apply here");
+  assert.equal(J._inRangeEntries(state, later).length, 0);
+  const sigNow = J._signatureOf(J._inRangeEntries(state, t0), t0);
+  const sigLater = J._signatureOf(J._inRangeEntries(state, later), later);
+  assert.notEqual(sigNow, sigLater, "the in-range signature (what tick() now uses) must still catch it");
+});
+
 test("signatureOf is stable when nothing relevant changed (a few seconds later)", () => {
   const J = freshJournal();
   const t0 = Date.parse("2026-09-23T12:00:00.000Z");

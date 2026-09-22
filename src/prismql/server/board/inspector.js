@@ -14,25 +14,6 @@
   var IF = window.PrismQLInspectorFormat;
   var UI = window.PrismQLInspectorUI;
 
-  // state.corpora is null until /corpora resolves — groups/hits (via
-  // inspector-fetch.js's boardFieldsFor) block fetching pages until then,
-  // rather than guess an empty board-field set (fix round 1, #3). A
-  // failed attempt sets corporaFailed and keeps retrying every render.
-  var corporaFetching = false;
-  function ensureCorpora(state) {
-    if (state.corpora || corporaFetching) return;
-    corporaFetching = true;
-    window.PrismQLApi.corpora().then(function (data) {
-      state.corpora = data;
-      corporaFetching = false;
-      if (window.PrismQLBoard) window.PrismQLBoard.render();
-    }).catch(function () {
-      corporaFetching = false;
-      state.corporaFailed = true;
-      if (window.PrismQLBoard) window.PrismQLBoard.render();
-    });
-  }
-
   function wireTabs(actions) {
     var d = document.getElementById("tab-details");
     var e = document.getElementById("tab-editor");
@@ -114,7 +95,7 @@
 
   function render(state, actions, nowMs) {
     nowMs = nowMs || Date.now();
-    ensureCorpora(state);
+    if (window.PrismQLInspectorCorpora) window.PrismQLInspectorCorpora.ensure(state);
     wireTabs(actions);
     updateTabs(state);
     var pane = document.getElementById("inspector-pane");

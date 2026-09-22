@@ -16,9 +16,21 @@
     var ef = window.PrismQLBoardUtil.effFilters(state);
     return state.entries.filter(function (e) { return F.matches(e, ef, nowMs); });
   }
-  function signatureOf(visible, nowMs) {
+  // Range+search only, no facet filters — the set every facet count and
+  // the "X of Y requests" total are really drawn from (facetCounts skips
+  // only its OWN facet, never range/search). tick()'s signature is built
+  // from THIS, not visibleEntries: an entry a facet filter already hid
+  // still ages out of range and must still change the rail's counts (fix
+  // round 2, #3).
+  function inRangeEntries(state, nowMs) {
     var F = window.PrismQLFormat;
-    return visible.map(function (e) { return e.seq + ":" + F.dayLabel(e.ts, nowMs).label; }).join(",");
+    var ef = window.PrismQLBoardUtil.effFilters(state);
+    var rangeOnly = { range: ef.range, search: ef.search, kinds: {}, srcs: {}, corpora: {}, statuses: {} };
+    return state.entries.filter(function (e) { return F.matches(e, rangeOnly, nowMs); });
+  }
+  function signatureOf(entries, nowMs) {
+    var F = window.PrismQLFormat;
+    return entries.map(function (e) { return e.seq + ":" + F.dayLabel(e.ts, nowMs).label; }).join(",");
   }
 
   var lastSignature = null;
@@ -86,11 +98,10 @@
 
   function render(state, actions, nowMsOverride) {
     var F = window.PrismQLFormat;
-    var U = window.PrismQLBoardUtil;
     var nowMs = nowMsOverride || Date.now();
-    var ef = U.effFilters(state);
     var visible = visibleEntries(state, nowMs);
-    lastSignature = signatureOf(visible, nowMs);
+    var inRange = inRangeEntries(state, nowMs);
+    lastSignature = signatureOf(inRange, nowMs);
 
     if (window.PrismQLRail) window.PrismQLRail.render(state, actions, nowMs);
 
@@ -98,8 +109,6 @@
     renderChips(chips);
     var anyFilter = chips.length > 0 || state.filters.range !== "24h";
 
-    var inRangeEf = { range: ef.range, search: ef.search, kinds: {}, srcs: {}, corpora: {}, statuses: {} };
-    var inRange = state.entries.filter(function (e) { return F.matches(e, inRangeEf, nowMs); });
     document.getElementById("journal-count").textContent =
       (visible.length === inRange.length && !anyFilter)
         ? visible.length + " requests"
@@ -119,8 +128,7 @@
   // "Yesterday") → the top-level PrismQLBoard.render(nowMs), so every
   // panel gets fresh counts, not just the journal.
   function tick(state, actions, nowMs) {
-    var visible = visibleEntries(state, nowMs);
-    var sig = signatureOf(visible, nowMs);
+    var sig = signatureOf(inRangeEntries(state, nowMs), nowMs);
     if (sig === lastSignature) {
       if (window.PrismQLJournalList) window.PrismQLJournalList.tick(nowMs);
       return;
@@ -129,7 +137,10 @@
     else render(state, actions, nowMs);
   }
 
-  var api = { render: render, tick: tick, _visibleEntries: visibleEntries, _signatureOf: signatureOf };
+  var api = {
+    render: render, tick: tick, _visibleEntries: visibleEntries,
+    _inRangeEntries: inRangeEntries, _signatureOf: signatureOf,
+  };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLJournal = api;
 })(typeof window !== "undefined" ? window : globalThis);

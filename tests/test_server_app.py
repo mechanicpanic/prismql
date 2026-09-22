@@ -873,6 +873,7 @@ def test_board_page_and_lexer_are_served_from_the_package(client):
         "journal.js",
         "inspector.js",
         "inspector-format.js",
+        "inspector-corpora.js",
         "inspector-page-logic.js",
         "inspector-ui.js",
         "inspector-fetch.js",

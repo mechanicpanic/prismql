@@ -105,6 +105,33 @@ test("connect: state.seq is the max of since and the last delivered row's seq, n
 
 // --- #3: reset clears selection state too ---
 
+test("fix round 2, #5: a boot-mismatch reset clears the page cache and re-asks /corpora", async () => {
+  const api = fakeApi({ entries: [entry(1)] });
+  const fetchCalls = [];
+  const corporaCalls = [];
+  globalThis.window = {
+    PrismQLApi: api, PrismQLBoardUtil: BoardUtil,
+    PrismQLInspectorFetch: { clearCache: () => fetchCalls.push(1) },
+    PrismQLInspectorCorpora: { reset: (s) => corporaCalls.push(s) },
+  };
+  const stream = freshStream();
+  const state = freshState();
+
+  let renders = 0;
+  await new Promise((resolve) => {
+    stream.connect(state, () => { renders++; if (renders === 1) resolve(); });
+  });
+  await flush();
+
+  const firstStreamCall = api.streamCalls[0];
+  firstStreamCall.onState("reset", "boot-2");
+  await flush();
+
+  assert.equal(fetchCalls.length, 1, "the stale page cache must not survive a restarted server");
+  assert.equal(corporaCalls.length, 1, "corpora is reset so the next render re-fetches it");
+  assert.equal(corporaCalls[0], state, "reset() was called with the live state object");
+});
+
 test("a boot-mismatch reset clears sel, full, freshSeq and pending, then backfills again", async () => {
   const api = fakeApi({ entries: [entry(1)] });
   setWindow(api);

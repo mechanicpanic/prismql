@@ -1,7 +1,6 @@
 // PrismQLApi: the board's only path to the server (graph @aleph/prismql,
-// node #63). Every call goes through here — no other file touches fetch or
-// EventSource directly. Endpoints: GET /activity, GET /activity/stream (SSE),
-// GET /results/{rid}, GET /results/{rid}.jsonl, GET /corpora, POST /evaluate.
+// node #63) — no other file touches fetch or EventSource. Endpoints:
+// /activity(+/stream SSE), /results/{rid}(+.jsonl), /corpora, POST /evaluate.
 (function (root) {
   "use strict";
 
@@ -113,11 +112,14 @@
 
   async function corpora() {
     const r = await fetch("/corpora");
-    try {
-      return await r.json();
-    } catch (e) {
+    let body = null;
+    try { body = await r.json(); } catch (e) { /* body stays null */ }
+    // A non-2xx (a proxy's 502) or a 2xx body missing its own "corpora"
+    // list both reject — never mistaken for real data (fix round 2, #1).
+    if (!r.ok || !body || !Array.isArray(body.corpora)) {
       throw new Error("corpora: bad response (" + r.status + ")");
     }
+    return body;
   }
 
   async function evaluate(body) {
@@ -136,12 +138,8 @@
   }
 
   const api = {
-    activity: activity,
-    stream: stream,
-    page: page,
-    jsonlUrl: jsonlUrl,
-    corpora: corpora,
-    evaluate: evaluate,
+    activity: activity, stream: stream, page: page,
+    jsonlUrl: jsonlUrl, corpora: corpora, evaluate: evaluate,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLApi = api;
