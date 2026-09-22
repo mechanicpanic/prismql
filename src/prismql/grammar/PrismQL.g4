@@ -272,7 +272,7 @@ FLOAT   : DIGIT+ '.' DIGIT+;
 INTEGER : DIGIT+;
 STRING  : (LETTER | DIGIT)+;
 QUOTED_STRING : '"' (~["])* '"' | '\'' (~['])* '\'';
-VARIABLE : '$' (LETTER | DIGIT)+;
+VARIABLE : '!'? '$' (LETTER | DIGIT)+;   // !$k = unequal to the bound $k
 WILDCARD : '*';
 
 // Whitespace (skip)

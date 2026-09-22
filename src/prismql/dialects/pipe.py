@@ -99,7 +99,7 @@ _TOKEN_RE = re.compile(
   | (?P<FLOAT>\d+\.\d+)
   | (?P<TIME>\d+\s*(?:seconds?|minutes?|hours?|days?|weeks?|[smhdw])\b)
   | (?P<INT>\d+)
-  | (?P<VARIABLE>\$[A-Za-z_][A-Za-z0-9_]*)
+  | (?P<VARIABLE>!?\$[A-Za-z_][A-Za-z0-9_]*)
   | (?P<STAR>\*)
   | (?P<NAME>[A-Za-z_][A-Za-z0-9_]*)
     """,
@@ -485,6 +485,8 @@ class _PipeParser:
             return Wildcard()
         if tok.kind == "VARIABLE":
             self.next()
+            if tok.text.startswith("!"):
+                return Variable(tok.text[2:], negated=True)
             return Variable(tok.text[1:])
         if tok.kind in ("NAME", "INT"):
             self.next()

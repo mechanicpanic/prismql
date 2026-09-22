@@ -32,6 +32,14 @@ def lower_classic(query: str):
 EQUIVALENT = [
     ("from(alice)", "SELECT from(alice)"),
     (
+        "from($u) ~> from(!$u) |> within(3)",
+        "SELECT from($u) FOLLOWED_BY from(!$u) INWINDOW 3",
+    ),
+    (
+        "field(page,$p) and field(label,!$a) |> within(2)",
+        "SELECT field(page,$p) AND field(label,!$a) INWINDOW 2",
+    ),
+    (
         "from(alice) and contains(greet) |> within(10)",
         "SELECT from(alice) AND contains(greet) INWINDOW 10",
     ),

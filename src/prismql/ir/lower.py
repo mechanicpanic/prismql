@@ -66,6 +66,8 @@ from .nodes import (
 def _term(text: str) -> Term:
     if text == "*":
         return Wildcard()
+    if text.startswith("!$"):
+        return Variable(text[2:], negated=True)
     if text.startswith("$"):
         return Variable(text[1:])
     return Literal(text)
@@ -148,6 +150,8 @@ def lower_condition(  # noqa: C901 - one branch per condition alternative
                 )
         if raw_value == "*":
             return FieldMatch(fname, Wildcard(), exact=exact)
+        if raw_value.startswith("!$"):
+            return FieldMatch(fname, Variable(raw_value[2:], negated=True), exact=exact)
         if raw_value.startswith("$"):
             return FieldMatch(fname, Variable(raw_value[1:]), exact=exact)
         return FieldMatch(fname, Literal(_strip_quotes(raw_value)), exact=exact)

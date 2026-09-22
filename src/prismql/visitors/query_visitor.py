@@ -486,6 +486,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                                         variable_name=constraint.variable_name,
                                         field_name=constraint.field_name,
                                         position=self.current_restriction_position,
+                                        negated=constraint.negated,
                                     )
                                 )
 
@@ -767,14 +768,16 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 return self.search_backend.get_all_document_ids(limit=total_docs)
 
             # Check if this is a variable
-            if username.startswith("$"):
-                var_name = username[1:]  # Remove $ prefix
+            if username.lstrip("!").startswith("$"):
+                negated = username.startswith("!")
+                var_name = username.lstrip("!")[1:]  # Remove !/$ prefix
                 # Record variable constraint
                 self.variable_constraints.append(
                     VariableConstraint(
                         variable_name=var_name,
                         field_name="user",
                         position=self.current_restriction_position,
+                        negated=negated,
                     )
                 )
                 # Return all messages (variable will be validated later)
@@ -851,12 +854,13 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 return self.search_backend.get_all_document_ids(limit=total_docs)
 
             # Variable - same-value constraint on this field
-            if raw_value.startswith("$"):
+            if raw_value.lstrip("!").startswith("$"):
                 self.variable_constraints.append(
                     VariableConstraint(
-                        variable_name=raw_value[1:],
+                        variable_name=raw_value.lstrip("!")[1:],
                         field_name=fname,
                         position=self.current_restriction_position,
+                        negated=raw_value.startswith("!"),
                     )
                 )
                 total_docs = self.search_backend.get_total_documents()
@@ -902,14 +906,16 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 return self.search_backend.get_all_document_ids(limit=total_docs)
 
             # Check if this is a variable
-            if username.startswith("$"):
-                var_name = username[1:]  # Remove $ prefix
+            if username.lstrip("!").startswith("$"):
+                negated = username.startswith("!")
+                var_name = username.lstrip("!")[1:]  # Remove !/$ prefix
                 # Record variable constraint
                 self.variable_constraints.append(
                     VariableConstraint(
                         variable_name=var_name,
                         field_name="user",
                         position=self.current_restriction_position,
+                        negated=negated,
                     )
                 )
                 # Return all messages (variable will be validated later)

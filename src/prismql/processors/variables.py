@@ -11,7 +11,13 @@ class VariableConstraint:
     - These must have the same value
     """
 
-    def __init__(self, variable_name: str, field_name: str, position: int) -> None:
+    def __init__(
+        self,
+        variable_name: str,
+        field_name: str,
+        position: int,
+        negated: bool = False,
+    ) -> None:
         """
         Initialize variable constraint.
 
@@ -23,6 +29,7 @@ class VariableConstraint:
         self.variable_name = variable_name
         self.field_name = field_name
         self.position = position
+        self.negated = negated  # !$k: unequal to the bound value
 
     def __repr__(self) -> str:
         return (

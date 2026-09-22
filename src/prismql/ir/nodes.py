@@ -76,9 +76,11 @@ class Literal:
 
 @dataclass(frozen=True)
 class Variable:
-    """A ``$name`` pattern variable (stored without the ``$``)."""
+    """A ``$name`` pattern variable (stored without the ``$``); ``negated``
+    is ``!$name`` — unequal to the value an earlier leg bound."""
 
     name: str
+    negated: bool = False
 
 
 @dataclass(frozen=True)

@@ -262,6 +262,58 @@ class QueryValidator:
             code="OPEN_QUANTIFIER",
         )
 
+    def _check_negated_variables(self, row: Any, issues: list[ValidationIssue]) -> None:
+        """``!$k`` needs an earlier leg or member that binds ``$k``."""
+        from .ir import nodes as ir
+
+        def walk(expr: Any, bound: set[str]) -> None:
+            if isinstance(expr, ir.SequenceLink):
+                walk(expr.lhs, bound)
+                walk(expr.rhs, bound)
+                return
+            if isinstance(expr, (ir.And, ir.Or)):
+                walk(expr.left, bound)
+                walk(expr.right, bound)
+                return
+            if isinstance(expr, ir.Not):
+                walk(expr.operand, bound)
+                return
+            value = getattr(expr, "value", None)
+            if isinstance(value, ir.Variable):
+                if value.negated:
+                    if value.name not in bound:
+                        issues.append(self._unbound_negated(value.name))
+                else:
+                    bound.add(value.name)
+
+        bound: set[str] = set()
+        for item in row.items:
+            walk(item.expr, bound)
+
+    def _unbound_negated(self, name: str) -> ValidationIssue:
+        return ValidationIssue(
+            level=ValidationLevel.ERROR,
+            message=f"!${name} refers to a variable no earlier leg binds",
+            suggestion=(
+                f"Bind ${name} on an earlier leg or member; !${name} then means "
+                "'a different one'"
+            ),
+            code="UNBOUND_NEGATED_VARIABLE",
+        )
+
+    def _check_negated_variables_text(self, query: str) -> list[ValidationIssue]:
+        """Regex counterpart for the classic dialect."""
+        import re
+
+        bare = re.sub(r"\"[^\"]*\"|'[^']*'", "", query)
+        issues: list[ValidationIssue] = []
+        for m in re.finditer(r"!\$(\w+)", bare):
+            if not re.search(
+                r"(?<!!)\$" + re.escape(m.group(1)) + r"\b", bare[: m.start()]
+            ):
+                issues.append(self._unbound_negated(m.group(1)))
+        return issues
+
     def _check_open_quantifiers(self, query: str) -> list[ValidationIssue]:
         """Regex counterpart of the IR-walk open-range check (graph #46)."""
         import re
@@ -308,6 +360,7 @@ class QueryValidator:
         # multi-item rows with a body window (review 2026-07-12, #43).
         self._check_ir_window(q.positional_window, issues)
         if isinstance(q.source, ir.RestrictionsRow):
+            self._check_negated_variables(q.source, issues)
             for item in q.source.items:
                 if (
                     item.max_count is None
@@ -539,6 +592,7 @@ class QueryValidator:
         # Check similar_to() thresholds (parity with the IR-walk check)
         issues.extend(self._check_similar_thresholds(query))
         issues.extend(self._check_open_quantifiers(query))
+        issues.extend(self._check_negated_variables_text(query))
 
         # Check for undefined custom features
         feature_pattern = r"(\w+)\(\)"

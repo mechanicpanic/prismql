@@ -37,7 +37,16 @@ Constraint = Any  # processors.variables.VariableConstraint (variable_name, fiel
 def leg(ids: Iterable[MessageId], constraints: Sequence[Constraint] = ()) -> Leg:
     return Leg(
         frozenset(ids),
-        equal=tuple((c.variable_name, c.field_name) for c in constraints),
+        equal=tuple(
+            (c.variable_name, c.field_name)
+            for c in constraints
+            if not getattr(c, "negated", False)
+        ),
+        unequal=tuple(
+            (c.variable_name, c.field_name)
+            for c in constraints
+            if getattr(c, "negated", False)
+        ),
     )
 
 

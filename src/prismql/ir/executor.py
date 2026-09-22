@@ -372,6 +372,7 @@ class IRExecutor(PrismQLVisitor):
                                         variable_name=constraint.variable_name,
                                         field_name=constraint.field_name,
                                         position=self.current_restriction_position,
+                                        negated=constraint.negated,
                                     )
                                 )
                         self.current_restriction_position += 1
@@ -518,6 +519,7 @@ class IRExecutor(PrismQLVisitor):
                         variable_name=cond.value.name,
                         field_name=cond.field_name,
                         position=self.current_restriction_position,
+                        negated=cond.value.negated,
                     )
                 )
                 return self._all_documents()

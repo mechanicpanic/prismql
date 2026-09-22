@@ -186,7 +186,12 @@ Match messages with the same field value:
 ```prismql
 SELECT from($user), from($user) INWINDOW 5                    -- Same user twice
 SELECT from($speaker) FOLLOWED_BY from($speaker) INWINDOW 2  -- User followed by themselves
+SELECT from($u) FOLLOWED_BY from(!$u) INWINDOW 3            -- ... followed by a DIFFERENT user
 ```
+
+`!$k` is "unequal to the value an earlier leg bound to `$k`": the nearest
+candidate is chosen among those that differ (`UNBOUND_NEGATED_VARIABLE` if
+nothing bound `$k` before it).
 
 **Variable names**: `$user`, `$speaker`, `$person`, `$author` (any identifier starting with `$`)
 
