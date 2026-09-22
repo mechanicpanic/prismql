@@ -1,9 +1,27 @@
 // PrismQLJournal: the journal head (count, "N errors" pill) and chips
 // (graph @aleph/prismql, node #63). The list itself is drawn by the sibling
 // module PrismQLJournalList, the rail by PrismQLRail — split to stay under
-// the 150-line budget; board.js only ever calls PrismQLJournal.render.
+// the 150-line budget; board.js only ever calls PrismQLJournal.render and
+// PrismQLJournal.tick.
 (function (root) {
   "use strict";
+
+  // What tick() compares between two 5 s beats: which seqs are visible AND
+  // what day label each carries — a range boundary or a midnight rollover
+  // changes this signature with the entries themselves untouched (fix
+  // round 2, #2). Exported (prefixed _) so tests/board can pin it without
+  // a DOM.
+  function visibleEntries(state, nowMs) {
+    var F = window.PrismQLFormat;
+    var ef = window.PrismQLBoardUtil.effFilters(state);
+    return state.entries.filter(function (e) { return F.matches(e, ef, nowMs); });
+  }
+  function signatureOf(visible, nowMs) {
+    var F = window.PrismQLFormat;
+    return visible.map(function (e) { return e.seq + ":" + F.dayLabel(e.ts, nowMs).label; }).join(",");
+  }
+
+  var lastSignature = null;
 
   function buildChips(state, actions) {
     var chips = [];
@@ -25,23 +43,32 @@
     return chips;
   }
 
+  // A rebuilt chip is a new DOM node — refocus by group+text, the same
+  // by-key pattern as the rail's facets (fix round 2, #3).
   function renderChips(chips) {
     var mk = window.PrismQLBoardUtil.mk;
     var el = document.getElementById("journal-chips");
+    var active = document.activeElement;
+    var refocus = (active && el.contains(active)) ? active.dataset.chipKey : null;
     el.innerHTML = "";
     el.hidden = chips.length === 0;
+    var again = null;
     chips.forEach(function (c) {
+      var key = c.group + ":" + c.text;
       var chip = mk("span", "chip");
       chip.appendChild(mk("b", null, c.group));
       chip.appendChild(document.createTextNode(c.text));
       var btn = mk("button");
       btn.type = "button";
+      btn.dataset.chipKey = key;
       btn.setAttribute("aria-label", c.aria);
       btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg>';
       btn.addEventListener("click", c.remove);
+      if (key === refocus) again = btn;
       chip.appendChild(btn);
       el.appendChild(chip);
     });
+    if (again) again.focus({ preventScroll: true });
   }
 
   function renderErrPill(errors, state, actions) {
@@ -57,12 +84,13 @@
     el.appendChild(pill);
   }
 
-  function render(state, actions) {
+  function render(state, actions, nowMsOverride) {
     var F = window.PrismQLFormat;
     var U = window.PrismQLBoardUtil;
-    var nowMs = Date.now();
+    var nowMs = nowMsOverride || Date.now();
     var ef = U.effFilters(state);
-    var visible = state.entries.filter(function (e) { return F.matches(e, ef, nowMs); });
+    var visible = visibleEntries(state, nowMs);
+    lastSignature = signatureOf(visible, nowMs);
 
     if (window.PrismQLRail) window.PrismQLRail.render(state, actions);
 
@@ -83,7 +111,18 @@
     if (window.PrismQLJournalList) window.PrismQLJournalList.render(state, actions, visible, nowMs, anyFilter);
   }
 
-  var api = { render: render };
+  // The 5 s beat: re-derive what should be visible right now. Unchanged
+  // (same seqs, same day labels) → just patch ".rel" text, no rebuild, no
+  // focus loss. Changed (a row aged out of the range, or "Today" rolled to
+  // "Yesterday") → a full render(), which restores focus itself.
+  function tick(state, actions, nowMs) {
+    var visible = visibleEntries(state, nowMs);
+    var sig = signatureOf(visible, nowMs);
+    if (sig !== lastSignature) { render(state, actions, nowMs); return; }
+    if (window.PrismQLJournalList) window.PrismQLJournalList.tick(nowMs);
+  }
+
+  var api = { render: render, tick: tick, _visibleEntries: visibleEntries, _signatureOf: signatureOf };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLJournal = api;
 })(typeof window !== "undefined" ? window : globalThis);

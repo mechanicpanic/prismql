@@ -26,15 +26,21 @@
   function renderRanges(state, actions) {
     var U = window.PrismQLBoardUtil;
     var el = document.getElementById("rail-range");
+    var active = document.activeElement;
+    var refocus = (active && el.contains(active)) ? active.dataset.range : null;
     el.innerHTML = "";
+    var again = null;
     U.RANGES.forEach(function (r) {
       var on = state.filters.range === r[0];
       var btn = U.mk("button", on ? "on" : "", r[0]);
       btn.type = "button";
+      btn.dataset.range = r[0];
       btn.setAttribute("aria-pressed", String(on));
       btn.addEventListener("click", function () { actions.setFilter("range", r[0]); });
+      if (r[0] === refocus) again = btn;
       el.appendChild(btn);
     });
+    if (again) again.focus({ preventScroll: true });
   }
 
   // A rebuilt checkbox is a new DOM node — the browser drops focus to
@@ -89,12 +95,14 @@
     renderFacetGroup("rail-status", "statuses", STATUS_VALUES, nowMs, state, actions, { color: STATUS_COLOR, round: true });
 
     var resetEl = document.getElementById("rail-reset");
+    var resetHadFocus = resetEl.contains(document.activeElement);
     resetEl.innerHTML = "";
     if (anyFilter(state)) {
       var btn = window.PrismQLBoardUtil.mk("button", "reset", "Reset all filters");
       btn.type = "button";
       btn.addEventListener("click", function () { actions.resetFilters(); });
       resetEl.appendChild(btn);
+      if (resetHadFocus) btn.focus({ preventScroll: true });
     }
   }
 

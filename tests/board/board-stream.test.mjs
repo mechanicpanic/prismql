@@ -4,16 +4,24 @@
 // generation token so a superseded attempt is a no-op, the previous stream
 // handle closed before a new one opens, a successful backfill clears
 // pending) against a fake PrismQLApi — no real network, no real timers.
+// Fix round 2, #1: toggleLive/showPending/onEntry's pending push all go
+// through PrismQLBoardUtil.cap — the real module (pure, no DOM), required
+// alongside the fake PrismQLApi.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const MODPATH = require.resolve("../../src/prismql/server/board/board-stream.js");
+const BoardUtil = require("../../src/prismql/server/board/board-util.js");
 
 function freshStream() {
   delete require.cache[MODPATH];
   return require(MODPATH);
+}
+
+function setWindow(api) {
+  globalThis.window = { PrismQLApi: api, PrismQLBoardUtil: BoardUtil };
 }
 
 function freshState(overrides) {
@@ -66,7 +74,7 @@ function fakeApi(opts) {
 
 test("connect: backfills with one activity(0, 1000) call, never a paging loop", async (t) => {
   const api = fakeApi({ entries: [entry(1), entry(2)] });
-  globalThis.window = { PrismQLApi: api };
+  setWindow(api);
   const stream = freshStream();
   const state = freshState();
 
@@ -85,7 +93,7 @@ test("connect: state.seq is the max of since and the last delivered row's seq, n
   const api = fakeApi({
     activityImpl: async () => ({ ok: true, seq: 999, boot: "boot-1", entries: [entry(1), entry(2)] }),
   });
-  globalThis.window = { PrismQLApi: api };
+  setWindow(api);
   const stream = freshStream();
   const state = freshState();
 
@@ -99,7 +107,7 @@ test("connect: state.seq is the max of since and the last delivered row's seq, n
 
 test("a boot-mismatch reset clears sel, full, freshSeq and pending, then backfills again", async () => {
   const api = fakeApi({ entries: [entry(1)] });
-  globalThis.window = { PrismQLApi: api };
+  setWindow(api);
   const stream = freshStream();
   const state = freshState({ sel: 1, full: 1, freshSeq: 1, pending: [entry(2)] });
 
@@ -136,7 +144,7 @@ test("reconnect() cancels a pending 4s retry timer instead of layering a second 
       return { ok: true, seq: 0, boot: "boot-1", entries: [entry(1)] };
     },
   });
-  globalThis.window = { PrismQLApi: api };
+  setWindow(api);
   const stream = freshStream();
   const state = freshState();
   const render = () => {};
@@ -170,7 +178,7 @@ test("connect: a stale (superseded) backfill never applies its result", async ()
       return { ok: true, seq: 0, boot: "boot-1", entries: [entry(2), entry(3)] };
     },
   });
-  globalThis.window = { PrismQLApi: api };
+  setWindow(api);
   const stream = freshStream();
   const state = freshState();
   const renders = [];
@@ -190,7 +198,7 @@ test("connect: a stale (superseded) backfill never applies its result", async ()
 
 test("connect: closes the previous stream handle before opening a new one", async () => {
   const api = fakeApi({ entries: [entry(1)] });
-  globalThis.window = { PrismQLApi: api };
+  setWindow(api);
   const stream = freshStream();
   const state = freshState();
 
@@ -206,7 +214,7 @@ test("connect: closes the previous stream handle before opening a new one", asyn
 
 test("a successful full backfill replaces entries and clears pending", async () => {
   const api = fakeApi({ entries: [entry(1), entry(2)] });
-  globalThis.window = { PrismQLApi: api };
+  setWindow(api);
   const stream = freshStream();
   const state = freshState({ entries: [entry(99)], pending: [entry(100), entry(101)] });
 
@@ -223,7 +231,7 @@ test("connect: caps state.entries at 1000, newest kept", async () => {
   const many = [];
   for (let i = 1; i <= 1200; i++) many.push(entry(i));
   const api = fakeApi({ entries: many });
-  globalThis.window = { PrismQLApi: api };
+  setWindow(api);
   const stream = freshStream();
   const state = freshState();
 
@@ -233,4 +241,82 @@ test("connect: caps state.entries at 1000, newest kept", async () => {
   assert.equal(state.entries.length, 1000);
   assert.equal(state.entries[0].seq, 1200, "newest first");
   assert.equal(state.entries[999].seq, 201, "oldest beyond the cap dropped");
+});
+
+// --- fix round 2, #1: the cap holds at every merge site, not just backfill ---
+
+test("toggleLive (resume): merges pending into entries under the 1000 cap", () => {
+  const entries = [];
+  for (let i = 1; i <= 900; i++) entries.push(entry(i)); // newest-first: 900..1
+  entries.reverse();
+  const pending = [];
+  for (let i = 901; i <= 1200; i++) pending.push(entry(i)); // newest-first: 1200..901
+  pending.reverse();
+  setWindow(fakeApi({ entries: [] }));
+  const stream = freshStream();
+  const state = freshState({ entries, pending, live: false });
+
+  let rendered = 0;
+  stream.toggleLive(state, () => { rendered++; });
+
+  assert.equal(rendered, 1);
+  assert.equal(state.live, true);
+  assert.deepEqual(state.pending, []);
+  assert.equal(state.entries.length, 1000, "resume must not bypass the cap");
+  assert.equal(state.entries[0].seq, 1200, "newest (from pending) first");
+  assert.equal(state.entries[999].seq, 201, "oldest beyond the cap dropped");
+});
+
+test("toggleLive: pausing (live -> paused) touches neither array", () => {
+  setWindow(fakeApi({ entries: [] }));
+  const stream = freshStream();
+  const state = freshState({ entries: [entry(1)], pending: [], live: true });
+  stream.toggleLive(state, () => {});
+  assert.equal(state.live, false);
+  assert.deepEqual(state.entries.map((e) => e.seq), [1]);
+});
+
+test("toggleLive: a no-op while down (never resumes into a dead connection)", () => {
+  setWindow(fakeApi({ entries: [] }));
+  const stream = freshStream();
+  const state = freshState({ live: false, down: true, pending: [entry(1)] });
+  let rendered = 0;
+  stream.toggleLive(state, () => { rendered++; });
+  assert.equal(state.live, false);
+  assert.equal(rendered, 0);
+});
+
+test("showPending: merges pending into entries under the 1000 cap", () => {
+  const entries = [];
+  for (let i = 1; i <= 900; i++) entries.push(entry(i));
+  entries.reverse();
+  const pending = [];
+  for (let i = 901; i <= 1200; i++) pending.push(entry(i));
+  pending.reverse();
+  setWindow(fakeApi({ entries: [] }));
+  const stream = freshStream();
+  const state = freshState({ entries, pending, live: false });
+
+  stream.showPending(state, () => {});
+
+  assert.deepEqual(state.pending, []);
+  assert.equal(state.entries.length, 1000, "showPending must not bypass the cap");
+  assert.equal(state.entries[0].seq, 1200);
+  assert.equal(state.entries[999].seq, 201);
+});
+
+test("onEntry caps pending at 1000 while paused (it grows unbounded otherwise)", async () => {
+  const api = fakeApi({ entries: [] });
+  setWindow(api);
+  const stream = freshStream();
+  const state = freshState({ live: false });
+
+  await new Promise((resolve) => { stream.connect(state, () => resolve()); });
+  await flush();
+  const onEntry = api.streamCalls[0].onEntry;
+  for (let i = 1; i <= 1200; i++) onEntry(entry(i));
+
+  assert.equal(state.pending.length, 1000);
+  assert.equal(state.pending[0].seq, 1200, "newest first");
+  assert.equal(state.pending[999].seq, 201);
 });

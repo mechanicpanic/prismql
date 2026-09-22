@@ -1,7 +1,9 @@
 // PrismQL board — entry point: theme, the state every view module reads,
 // the actions object they call, and topbar wiring (graph @aleph/prismql,
 // node #63 — later tasks attach more actions via window.PrismQLBoard.actions
-// rather than growing this file, #10). Live connection: board-stream.js.
+// rather than growing this file, #10). Live connection and the live/pause
+// actions live in board-stream.js (fix round 2, #1 — one place applies the
+// entries/pending cap).
 (function () {
   "use strict";
   var THEME_KEY = "prismql-board-theme";
@@ -27,14 +29,17 @@
     full: null,
   };
 
-  // " · last request <rel>", canvas :257/:857-863 — never while reconnecting.
+  // "last request <rel>" — the "·" is its own aria-hidden span (index.html)
+  // so flex gap does the spacing, never a leading space a rebuild can
+  // collapse (fix round 2, #4). Never shown while reconnecting.
   function updateLiveNote(nowMs) {
     var note = document.getElementById("live-note");
+    var sep = document.getElementById("live-sep");
     if (!note) return;
     var newest = state.entries[0];
-    if (state.down || !newest) { note.textContent = ""; return; }
-    var sec = Math.max(0, Math.round((nowMs - new Date(newest.ts).getTime()) / 1000));
-    note.textContent = " · last request " + window.PrismQLFormat.rel(sec);
+    var show = !state.down && !!newest;
+    setHidden(sep, !show);
+    note.textContent = show ? "last request " + window.PrismQLFormat.rel(Math.max(0, Math.round((nowMs - new Date(newest.ts).getTime()) / 1000))) : "";
   }
 
   function updateTopbar() {
@@ -42,6 +47,12 @@
     if (btn) {
       btn.className = "live" + (state.down ? " down" : state.live ? "" : " off");
       btn.setAttribute("aria-pressed", String(state.live));
+      // Both children are aria-hidden, so this is the button's whole
+      // accessible name — it must describe the click, not repeat the dot's
+      // label, and must not drift with the note every 5 s (fix round 2, #4).
+      var label = state.down ? "Reconnecting to the live journal" : state.live ? "Pause the live journal" : "Resume the live journal";
+      btn.setAttribute("aria-label", label);
+      btn.setAttribute("title", label);
     }
     var word = document.getElementById("live-word");
     if (word) word.textContent = state.down ? "reconnecting" : state.live ? "live" : "paused";
@@ -73,24 +84,8 @@
       state.filters = { range: "24h", search: "", kinds: {}, srcs: {}, corpora: {}, statuses: {} };
       render();
     },
-    toggleLive: function () {
-      if (state.down) return;
-      if (!state.live) {
-        state.entries = state.pending.concat(state.entries);
-        state.freshSeq = state.pending.length ? state.pending[0].seq : state.freshSeq;
-        state.pending = [];
-        state.live = true;
-      } else {
-        state.live = false;
-      }
-      render();
-    },
-    showPending: function () {
-      state.entries = state.pending.concat(state.entries);
-      state.freshSeq = state.pending.length ? state.pending[0].seq : null;
-      state.pending = [];
-      render();
-    },
+    toggleLive: function () { window.PrismQLBoardStream.toggleLive(state, render); },
+    showPending: function () { window.PrismQLBoardStream.showPending(state, render); },
     setTab: function (tab) { state.tab = tab; render(); },
     reconnect: function () { window.PrismQLBoardStream.reconnect(state, render); },
     openInEditor: function () {},
@@ -135,10 +130,12 @@
     var newQuery = document.getElementById("new-query");
     if (newQuery) newQuery.addEventListener("click", function () { actions.newQuery(); });
     render();
-    // Relative times + the live note only — a rebuild drops focus (#2).
+    // PrismQLJournal.tick() re-checks the range filter/day labels itself
+    // and only falls back to a cheap ".rel" patch when nothing else moved
+    // (fix round 2, #2) — never a bare rebuild, which drops focus (#2).
     setInterval(function () {
       var nowMs = Date.now();
-      if (window.PrismQLJournalList) window.PrismQLJournalList.tick(nowMs);
+      if (window.PrismQLJournal && window.PrismQLJournal.tick) window.PrismQLJournal.tick(state, actions, nowMs);
       updateLiveNote(nowMs);
     }, 5000);
   }
