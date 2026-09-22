@@ -171,8 +171,16 @@ class SemanticIndex:
     ) -> list[tuple[MessageId, float]]:
         """The ``limit`` best ids with their cosine, best first — scouting,
         never the algebra: predicates return sets (graph #58)."""
+        return self.rank_counted(text, limit=limit, threshold=threshold)[0]
+
+    def rank_counted(
+        self, text: str, *, limit: int, threshold: float | None = None
+    ) -> tuple[list[tuple[MessageId, float]], int]:
+        """Like :meth:`rank`, plus the true count of matches: rows scoring
+        >= ``threshold``, or every indexed row when no threshold is given
+        (scouting keeps only a depth, graph #65)."""
         if not self._ids or limit <= 0:
-            return []
+            return [], 0
         scores = self._scores(text)
         if self._matrix is not None:
             import numpy as np
@@ -182,11 +190,17 @@ class SemanticIndex:
             top = np.argpartition(-arr, k - 1)[:k]
             order = top[np.argsort(-arr[top], kind="stable")]
             pairs = [(self._ids[i], float(arr[i])) for i in order]
+            total = int((arr >= threshold).sum()) if threshold is not None else len(arr)
         else:
             order_list = sorted(range(len(scores)), key=lambda i: (-scores[i], i))[
                 :limit
             ]
             pairs = [(self._ids[i], float(scores[i])) for i in order_list]
+            total = (
+                sum(1 for s in scores if s >= threshold)
+                if threshold is not None
+                else len(scores)
+            )
         if threshold is not None:
             pairs = [(i, s) for i, s in pairs if s >= threshold]
-        return pairs
+        return pairs, total

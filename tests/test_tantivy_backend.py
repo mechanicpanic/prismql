@@ -282,3 +282,9 @@ def test_index_from_an_older_layout_is_refused_on_open(tmp_path):
     meta_path.write_text(_json.dumps(meta))
     with pytest.raises(ValueError, match="rebuild it"):
         TantivyBackend(index_path=str(path))
+
+
+def test_rank_counted_reports_every_match_beyond_the_limit(backend):
+    hits, total = backend.rank_counted("package", limit=1)
+    assert len(hits) == 1 and hits[0][0] in (3, 5) and total == 2
+    assert backend.rank_counted("package", limit=0) == ([], 0)

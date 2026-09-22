@@ -530,7 +530,14 @@ def test_search_ranks_hits_on_a_memory_corpus(client):
     assert body["hits"][0]["score"] >= body["hits"][1]["score"]
     assert "event" in body["hits"][0]  # hydrated by default
     r = client.post("/search", json={"query": "spike", "hydrate": False})
-    assert r.json()["hits"] == [{"id": 1, "score": r.json()["hits"][0]["score"]}]
+    hits = r.json()["hits"]
+    assert len(hits) == 1
+    hit = hits[0]
+    assert hit["id"] == 1
+    assert isinstance(hit["score"], float)
+    assert hit["position"] == 0  # doc id 1 is loaded first
+    assert "time" in hit
+    assert "event" not in hit
 
 
 def test_search_syntax_error_is_422(client):
@@ -607,6 +614,17 @@ def test_scouting_limits_are_capped_by_the_server(tmp_path):
     assert body["count"] == 1 and body["truncated"] is True
     body = client.post("/search", json={"query": "spike", "limit": 1}).json()
     assert body["truncated"] is False
+
+
+def test_scouting_keeps_hits_and_pages_them(client):
+    pytest.importorskip("tantivy")
+    body = client.post(
+        "/search", json={"query": "spike OR reversal", "limit": 1, "hydrate": False}
+    ).json()
+    assert body["count"] == 1 and body["total"] == 2 and body["kept"] == 2
+    assert body["truncated"] is True and body["hits"][0]["position"] in (0, 1)
+    more = client.get(f"/results/{body['result_id']}?offset=1&hydrate=false").json()
+    assert more["count"] == 1 and more["hits"][0]["id"] in (1, 2)
 
 
 # --- the board: a journal of every request, live (graph #63)

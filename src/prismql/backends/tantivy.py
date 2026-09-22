@@ -352,18 +352,28 @@ class TantivyBackend(SearchBackend):
         """Ranked hits for a query in tantivy's own syntax (AND/OR/NOT,
         "quoted phrases", field:term, prefix*) over the stemmed text fields —
         scouting, outside the algebra (graph #58). BM25 scores, best first."""
+        return self.rank_counted(query, limit=limit)[0]
+
+    def rank_counted(
+        self, query: str, *, limit: int
+    ) -> tuple[list[tuple[MessageId, float]], int]:
+        """Like :meth:`rank`, plus the true count of matches (which can
+        exceed ``limit``: scouting keeps only a depth, graph #65)."""
         if limit <= 0 or self._searcher.num_docs == 0:
-            return []
+            return [], 0
         fields = sorted(self._text_fields)
         parsed = self._index.parse_query(query, fields)
-        result = self._searcher.search(parsed, limit)
-        return [
+        result = self._searcher.search(parsed, limit, count=True)
+        hits = [
             (
                 self._coerce_id(self._searcher.doc(addr).get_first(self.id_field)),
                 float(score),
             )
             for score, addr in result.hits
         ]
+        # the installed tantivy .pyi stub predates `count=True` and only
+        # declares `.hits`; `.count` exists at runtime (tantivy 0.26.2).
+        return hits, cast(Any, result).count
 
     def search_semantic(self, text: str, *, threshold: float) -> set[MessageId]:
         if self.semantic_index is None:

@@ -248,6 +248,14 @@ class TestRankAndPaths:
         assert ranked[2][1] == pytest.approx(0.7071, abs=1e-3)
         assert index.rank("oil", limit=3, threshold=0.9) == ranked[:2]
 
+    def test_rank_counted_counts_everything_over_the_threshold(self):
+        index = SemanticIndex(FakeEmbedder(), DOCS)
+        hits, total = index.rank_counted("oil", limit=1, threshold=0.7)
+        assert len(hits) == 1 and hits[0][0] in (1, 4) and total == 3
+        _, everything = index.rank_counted("oil", limit=1)
+        assert everything == 5  # no threshold: every indexed row counts
+        assert index.rank("oil", limit=3) == index.rank_counted("oil", limit=3)[0]
+
     def test_numpy_and_python_paths_agree(self):
         pytest.importorskip(
             "numpy"
@@ -256,17 +264,20 @@ class TestRankAndPaths:
         fast = (
             index.search("oil panic", threshold=0.5),
             index.rank("oil panic", limit=5),
+            index.rank_counted("oil panic", limit=2, threshold=0.5)[1],
         )
         index._vectors = index._matrix.tolist()
         index._matrix = None  # force the pure-Python path
         slow = (
             index.search("oil panic", threshold=0.5),
             index.rank("oil panic", limit=5),
+            index.rank_counted("oil panic", limit=2, threshold=0.5)[1],
         )
         assert fast[0] == slow[0]
         assert [i for i, _ in fast[1]] == [i for i, _ in slow[1]]
         for (_, a), (_, b) in zip(fast[1], slow[1], strict=True):
             assert a == pytest.approx(b, abs=1e-5)
+        assert fast[2] == slow[2]
 
 
 class TestSemanticOnTantivy:

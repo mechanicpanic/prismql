@@ -195,19 +195,6 @@ class ServerState:
         return scout
 
 
-def _hits_payload(
-    hits: list[tuple[Any, float]], backend: Any, id_field: str, hydrate: bool
-) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = [{"id": i, "score": round(s, 4)} for i, s in hits]
-    if hydrate and rows:
-        fetched = backend.get_documents([i for i, _ in hits])
-        by_id = {doc.get(id_field): doc for doc in fetched}
-        for row in rows:
-            if row["id"] in by_id:
-                row["event"] = by_id[row["id"]]
-    return rows
-
-
 def _write_hits_file(
     rows: list[dict[str, Any]], slug: str, config: ServerConfig
 ) -> dict[str, Any]:
@@ -567,6 +554,8 @@ def create_app(config: ServerConfig) -> FastAPI:
                 "truncated": payload.get("truncated", False),
                 "output": req.output,
                 "path": payload.get("path"),
+                "result_id": payload.get("result_id"),
+                "total": payload.get("total"),
                 "elapsed_ms": payload["elapsed_ms"],
             }
         )
@@ -590,26 +579,47 @@ def create_app(config: ServerConfig) -> FastAPI:
             )
         return None
 
-    def _scout_limit(req: Any) -> tuple[int, bool]:
-        """The request's limit under the server's cap for its output mode,
-        and whether the cap bit — hits are hydrated, so the cap is applied
-        before anything is materialized."""
-        cap = (
-            config.file_output_max_groups
-            if req.output == "file"
-            else config.max_results
-        )
-        return min(req.limit, cap), req.limit > cap
-
     def _scout_response(
-        rows: list[dict[str, Any]], req: Any, key: str, start: float, truncated: bool
+        stored: StoredResult,
+        rid: str,
+        backend: Any,
+        corpus_cfg: CorpusConfig,
+        req: Any,
+        key: str,
+        start: float,
     ) -> dict[str, Any]:
-        payload: dict[str, Any]
+        """The kept hits, shaped for the wire: a page for inline output, a
+        JSONL file plus a summary for ``output == "file"`` (graph #65)."""
+        hydrate = config.hydrate if req.hydrate is None else req.hydrate
         if req.output == "file":
+            page = page_payload(
+                stored,
+                backend,
+                id_field=corpus_cfg.id_field,
+                time_field=corpus_cfg.timestamp_field,
+                offset=0,
+                limit=config.file_output_max_groups,
+                hydrate=hydrate,
+                fields=None,
+            )
+            rows = page["hits"]
             payload = _write_hits_file(rows, _result_slug(key, req.label), config)
+            # Honest flag: the file holds every KEPT hit, but scouting keeps
+            # only a depth — fewer than were found is still possible.
+            payload["truncated"] = len(rows) < stored.total
+            payload["total"] = stored.total
         else:
-            payload = {"count": len(rows), "hits": rows}
-        payload["truncated"] = truncated
+            payload = page_payload(
+                stored,
+                backend,
+                id_field=corpus_cfg.id_field,
+                time_field=corpus_cfg.timestamp_field,
+                offset=0,
+                limit=min(req.limit, config.max_results),
+                hydrate=hydrate,
+                fields=None,
+            )
+        payload["result_id"] = rid
         payload["ok"] = True
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
         return payload
@@ -621,6 +631,10 @@ def create_app(config: ServerConfig) -> FastAPI:
         if early is not None:
             return early
         start = perf_counter()
+        # Read before engine_for/scout_for, deliberately — same reasoning as
+        # /evaluate (fix round 1, #1): a reload landing in between only marks
+        # the stored result stale, never wrong.
+        load = state.generation
         try:
             engine, corpus_cfg, _lock = state.engine_for(req.corpus)
             scout = state.scout_for(req.corpus)
@@ -628,15 +642,23 @@ def create_app(config: ServerConfig) -> FastAPI:
             return _error(422, "runtime", str(e.args[0]))
         except ImportError as e:
             return _error(501, "runtime", f"{e} — scouting needs the tantivy extra")
-        hydrate = config.hydrate if req.hydrate is None else req.hydrate
-        limit, capped = _scout_limit(req)
         try:
-            hits = scout.rank(req.query, limit=limit)
+            hits, total = scout.rank_counted(req.query, limit=config.scout_depth)
         except ValueError as e:
             _record_failure(req, request, "search", "syntax", str(e), start)
             return _error(422, "syntax", f"search query: {e}")
-        rows = _hits_payload(hits, engine.search_backend, corpus_cfg.id_field, hydrate)
-        payload = _scout_response(rows, req, "search " + req.query, start, capped)
+        backend = engine.search_backend
+        positions = backend.positions([i for i, _ in hits])
+        stored = StoredResult.from_hits(
+            req.corpus or config.default_corpus,
+            list(zip(positions, (s for _, s in hits), strict=True)),
+            total,
+            load=load,
+        )
+        rid = state.results.put(stored)
+        payload = _scout_response(
+            stored, rid, backend, corpus_cfg, req, "search " + req.query, start
+        )
         payload["query"] = req.query
         _record_scout(req, request, "search", payload)
         return payload
@@ -648,6 +670,7 @@ def create_app(config: ServerConfig) -> FastAPI:
         if early is not None:
             return early
         start = perf_counter()
+        load = state.generation  # see /search: read before engine_for
         try:
             engine, corpus_cfg, _lock = state.engine_for(req.corpus)
         except KeyError as e:
@@ -660,11 +683,21 @@ def create_app(config: ServerConfig) -> FastAPI:
             )
             _record_failure(req, request, "similar", "runtime", message, start)
             return _error(422, "runtime", message)
-        hydrate = config.hydrate if req.hydrate is None else req.hydrate
-        limit, capped = _scout_limit(req)
-        hits = index.rank(req.text, limit=limit, threshold=req.threshold)
-        rows = _hits_payload(hits, engine.search_backend, corpus_cfg.id_field, hydrate)
-        payload = _scout_response(rows, req, "similar " + req.text, start, capped)
+        hits, total = index.rank_counted(
+            req.text, limit=config.scout_depth, threshold=req.threshold
+        )
+        backend = engine.search_backend
+        positions = backend.positions([i for i, _ in hits])
+        stored = StoredResult.from_hits(
+            req.corpus or config.default_corpus,
+            list(zip(positions, (s for _, s in hits), strict=True)),
+            total,
+            load=load,
+        )
+        rid = state.results.put(stored)
+        payload = _scout_response(
+            stored, rid, backend, corpus_cfg, req, "similar " + req.text, start
+        )
         payload["text"] = req.text
         _record_scout(req, request, "similar", payload)
         return payload
