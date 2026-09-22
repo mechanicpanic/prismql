@@ -181,16 +181,20 @@ def link_groups(corpus, left: result, right: result, *, axis, window, forward) -
 
 **Files:** delete `processors/window.py`, `processors/variables.py`; in `query_visitor.py` delete the builders listed in *File Structure*; in `backends/memory.py`, `backends/base.py`, `backends/rust_memory.py` delete `merge_within_time_window`, `filter_by_time_window`, the positional/temporal kernel entry points; `backends/factory.py` drops the kernel capability handshake; `tests/test_rust_memory_backend.py` shrinks to search-only or is deleted with the backend.
 
-- [ ] **Step 1:** `grep -rn "RUST_.*AVAILABLE\|_temporal_link_kernel\|merge_within_time_window\|filter_by_time_window\|VariableValidator\|WindowProcessor\|_merge_queries\|_merge_subqueries_positional" src tests` — the deletion list **and** the call-site list: every caller must already resolve to the operator layer (unordered subquery merge → `merge_groups`, negative continuations → `negative_chain_groups`), or the task stops (revision 2, item 3).
-- [ ] **Step 2:** delete; `make check` green; `uv run python -c "import prismql_rust"` absent → suite identical (Task 7 is the proof that Rust is off the operator path).
-- [ ] **Step 3:** decision recorded in the graph on #41 (Rust contour): kept as search-only or retired — by what the tests said.
-- [ ] **Step 4:** commit `Delete the legacy merge builders, the variable validator and the Rust operator kernels`.
+- [x] **Step 1:** `grep -rn "RUST_.*AVAILABLE\|_temporal_link_kernel\|merge_within_time_window\|filter_by_time_window\|VariableValidator\|WindowProcessor\|_merge_queries\|_merge_subqueries_positional" src tests` — the deletion list **and** the call-site list: every caller must already resolve to the operator layer (unordered subquery merge → `merge_groups`, negative continuations → `negative_chain_groups`), or the task stops (revision 2, item 3).
+- [x] **Step 2:** delete; `make check` green; `uv run python -c "import prismql_rust"` absent → suite identical (Task 7 is the proof that Rust is off the operator path).
+- [x] **Step 3:** decision recorded in the graph on #41 (Rust contour): kept as search-only or retired — by what the tests said.
+- [x] **Step 4:** commit `Delete the legacy merge builders, the variable validator and the Rust operator kernels`.
 
 ## Task 8: `!$k` on the surface
 
 **Files:** `src/prismql/grammar/PrismQL.g4` (variable token accepts a leading `!`), `./scripts/generate_parser.sh`, `src/prismql/ir/nodes.py` (`Variable(name, negated: bool = False)`), `src/prismql/ir/lower.py`, `src/prismql/dialects/pipe.py` (`_TOKEN_RE`, `parse_condition`), `src/prismql/ir/executor.py` (`Leg.unequal`), `validator.py` (`!$k` must be bound by an earlier leg; rejected on a negative link's rhs like `$k`), tests `tests/test_pipe_dialect.py` (IR equality pair), `tests/test_operator_layer_e2e.py` (`from($u) FOLLOWED_BY from(!$u) INWINDOW 3` on the A10 fixture → `[[2, 4]]`).
 
-- [ ] **Step 1:** failing IR-equality + e2e tests. **Step 2:** FAIL. **Step 3:** implement; `eligible` gets `!=` for `unequal`. **Step 4:** `make check`. **Step 5:** both references, same commit: `Open !$k in both dialects`.
+- [x] **Step 1:** failing IR-equality + e2e tests. **Step 2:** FAIL. **Step 3:** implement; `eligible` gets `!=` for `unequal`. **Step 4:** `make check`. **Step 5:** both references, same commit: `Open !$k in both dialects`.
+
+> **Task 7 executed 2026-09-22.** Call-site grep first; the trailing `DURING` on chains became `run_body_span` through the bridge; deleted: pair builders and extenders (positional and temporal), negative helpers, partition-key pushdown, `_positional_universe`, `_generate_all_combinations`, `window.py`, `histogram_window.py`, `VariableValidator`, the memory/Rust `merge_within_time_window` / `filter_by_time_window`, the Rust temporal link kernels and their handshake. `RustMemoryBackend` stays search-only (graph #51). Suite identical without the crate. CI had been OOM-killed before this: quantified copies enumerated k! orderings — now combinations (ascending positions per copy) and impossible sizes short-circuit; suite 30 s → 6 s.
+>
+> **Task 8 executed 2026-09-22.** `VARIABLE : '!'? '$' …` in the grammar (lexer regenerated), `!?\$` in the pipe tokenizer, `Variable(negated=)`, `VariableConstraint(negated=)`, bridge legs split into equal/unequal; validator `UNBOUND_NEGATED_VARIABLE` (IR walk + classic regex); both references; tests on both dialects and paths.
 
 ## Task 9: gates, docs, graph
 
