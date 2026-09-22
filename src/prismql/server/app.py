@@ -260,6 +260,18 @@ def _small_payload(result: Any) -> dict[str, Any]:
     return {"kind": "grouped", **result.to_dict()}
 
 
+def _journal_count(payload: dict[str, Any]) -> Any:
+    """The journal's ``count``: a number or ``null``, never the GROUP BY
+    groups dict itself. A "grouped" payload's ``to_dict()`` has no
+    "count" key, only "groups" (group key -> list of message groups); the
+    fallback below used to repeat that dict verbatim (fix round 1, graph
+    @aleph/prismql)."""
+    count = payload.get("count", payload.get("groups"))
+    if payload.get("kind") == "grouped" and isinstance(count, dict | list):
+        return len(count)
+    return count
+
+
 def _write_results_file(
     full_payload: dict[str, Any], req: EvaluateRequest, config: ServerConfig
 ) -> dict[str, Any]:
@@ -539,7 +551,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                 "dictionaries": sorted(req.dictionaries) if req.dictionaries else [],
                 "ok": True,
                 "result": payload.get("kind"),
-                "count": payload.get("count", payload.get("groups")),
+                "count": _journal_count(payload),
                 "value": payload.get("value"),
                 "truncated": payload.get("truncated", False),
                 "output": req.output,

@@ -53,6 +53,24 @@ def test_evaluate_no_hydrate(client):
     assert "events" not in r.json()["results"][0]
 
 
+def test_group_by_journal_count_is_a_number_not_the_groups_dict(client):
+    # fix round 1: a plain GROUP BY (no AGGREGATE) folds to a GroupedResult,
+    # whose to_dict() has no "count" key, only "groups" (a dict) — the
+    # journal must never repeat that dict as if it were a count.
+    r = client.post(
+        "/evaluate",
+        json={"query": "SELECT from(tick_a) OR from(tick_b) GROUP BY user"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["kind"] == "grouped"
+    assert isinstance(body["groups"], dict)
+    entry = client.get("/activity").json()["entries"][-1]
+    assert entry["result"] == "grouped"
+    assert entry["count"] == len(body["groups"])
+    assert isinstance(entry["count"], int)
+
+
 def test_evaluate_sequential_chain(client):
     r = client.post(
         "/evaluate",
