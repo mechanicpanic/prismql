@@ -2,7 +2,10 @@
 Template for application-specific PrismQL skills.
 Fill every {{placeholder}}, delete instructional comments, save as
 .claude/skills/prismql-{{dataset_slug}}/SKILL.md in the target project,
-and copy LANGUAGE_REFERENCE.md into the same directory.
+and copy LANGUAGE_REFERENCE.md into the same directory. Use cp -L: in the
+source repo it is a symlink pointing above the skill folder, and a copy
+that keeps the link (macOS cp -R, GNU cp -r and -R alike) points at
+nothing from the new location.
 -->
 ---
 name: prismql-{{dataset_slug}}
@@ -22,14 +25,60 @@ or per-link windows; the final link must always have one.
 
 | PrismQL field | Source column | Notes |
 |---|---|---|
-| `id` | {{col}} | {{sequential int? assigned via enumerate()?}} |
-| `text` | {{col(s)}} | {{e.g. headline + body concatenated}} |
+| `id` | {{col}} | {{unique label; strings fine. Stream order is load order, not id order}} |
+| `text` | {{col(s)}} | {{e.g. headline + body concatenated; only this field is text-indexed}} |
 | `user` | {{col}} | {{what from() means here: ticker? author? service?}} |
 | `timestamp` | {{col}} | {{unit; what DURING means here}} |
 
 Data lives at: `{{path_or_table}}` ({{format}}, ~{{N}} records).
 
-## Loader (verified)
+## How to run a query
+
+<!-- Keep ONE of the two blocks below — whichever this project actually
+uses — and delete the other. If the project runs a server, that is the
+better default: warm engine, no per-query load cost, hydrated results. -->
+
+**Server** (preferred), on port {{port}} — say the port here explicitly,
+it is the one thing a fresh agent cannot find out for itself.
+`curl -s localhost:{{port}}/health` to check it is up, `GET /schema` for
+the live field list, then:
+
+```bash
+curl -s -X POST localhost:{{port}}/evaluate -H 'Content-Type: application/json' \
+  -d '{"query": "{{example_query}}"}'
+```
+
+Body fields besides `query`: `max_results`, `hydrate` (`false` → ids only),
+`dictionaries`, `output`, `corpus`, `label`.
+
+```toml
+# {{path}}/prismql.toml — the server's whole state
+[server]
+port = {{port}}
+
+[backend]
+type = "{{backend}}"
+data = "{{data_path}}"
+timestamp_fields = ["{{ts_col}}"]     # parsed on load
+
+[engine]
+timestamp_field = "{{ts_col}}"        # the axis DURING measures on
+{{quantifier_ceiling = N — only if this dataset needs open ranges; see quirks}}
+
+[dictionaries]
+{{name}} = [{{terms}}]
+```
+
+Both timestamp keys are needed: without `[engine].timestamp_field` a
+`DURING` query returns an empty result rather than an error. `GET /schema`
+is the check — its `timestamp_field` must name a field listed in the same
+response's `fields` block (the unset default is `timestamp`). Iterate on
+term lists in-band with `"dictionaries": {"{{name}}": ["term", …]}` in the
+request body (that query only), then persist the stable ones here.
+`max_results` caps the groups in a response — use `AGGREGATE count()` for a
+total.
+
+**Inline Python** (no server):
 
 ```python
 {{Complete, runnable loader: read files → docs list → backend → engine,
@@ -37,22 +86,9 @@ including the full user_dictionaries dict inline. Must run as-is with
 `uv run python`. Backend choice: {{backend}} because {{reason}}.}}
 ```
 
-<!-- Alternative to the inline loader: if this project runs prismql-server,
-replace the loader with a prismql.toml (backend, data path, dictionaries)
-and query via `curl -X POST localhost:{{port}}/evaluate`. Same dictionaries,
-warm engine, no per-query load cost. Iterate on dictionaries via the
-request-scoped overlay — `"dictionaries": {"name": ["term", …]}` in the
-request body (that query only; persist stable ones into prismql.toml).
-For batch/mining queries add `"output": "file"` — all groups go to a JSONL
-file server-side, the response is just {count, path, preview}.
-NOTE: `GET /schema` self-describes the corpus (fields, coverage, example
-values, dictionaries) — the field-mapping table below can be generated
-from it rather than hand-written, and agents should prefer /schema as the
-live source of truth. -->
-
 ## Dictionaries
 
-<!-- The semantic layer. Keep definitions IN the loader above; list meanings here. -->
+<!-- The semantic layer. Keep definitions IN the config/loader above; list meanings here. -->
 
 | Dictionary | Meaning | Sample terms |
 |---|---|---|
@@ -61,7 +97,11 @@ live source of truth. -->
 ## Verified example queries
 
 <!-- Paste REAL output from smoke tests. At least: one filter, one INWINDOW,
-     one FOLLOWED_BY. Add the dataset's signature pattern if it has one. -->
+     one FOLLOWED_BY. Add the dataset's signature pattern if it has one —
+     a same-entity pattern is usually the one worth showing, and a variable
+     binds the value slot of field() as well as from():
+     field(kind, delete) AND field(page, $p) FOLLOWED_BY
+     field(kind, save) AND field(page, $p) DURING 10 minutes. -->
 
 ```python
 engine.execute('{{filter_query}}')
@@ -78,4 +118,7 @@ engine.execute('{{followed_by_query}}')
 
 - {{e.g. "ids restart per conversation — INWINDOW never crosses conversations"}}
 - {{e.g. "timestamps are seconds; DURING 1 hour ≈ 40 records at peak volume"}}
+- {{If any useful query needs an open range like `{2,}`: it is rejected
+  (OPEN_QUANTIFIER) unless quantifier_ceiling is set — say what it is set
+  to and why, or write bounded `{2,m}` in the examples.}}
 - {{anything that surprised you during smoke-testing}}

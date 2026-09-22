@@ -264,6 +264,10 @@ class PrismQLEngine:
         except PrismQLSyntaxError:
             # Re-raise syntax errors as-is
             raise
+        except PrismQLRuntimeError:
+            # Already ours (incl. PositionalUnsupportedError): the type is the
+            # contract a caller catches — never wrap it into the base class.
+            raise
         except Exception as e:
             # Wrap other exceptions
             raise PrismQLRuntimeError(

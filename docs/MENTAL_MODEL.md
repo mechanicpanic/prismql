@@ -3,6 +3,8 @@
 Not a reference. The references (`LANGUAGE_REFERENCE.md`, `PIPE_REFERENCE.md`)
 list everything; this page is what to hold in your head so you never need
 to look most of it up. Read once, then do the self-test at the end.
+Have a file of events and no PrismQL yet? Start with `USER-GUIDE.md` —
+install, config, first query — and come back here.
 
 ## 1. The one idea
 
@@ -73,7 +75,7 @@ from($u) AND is_question() FOLLOWED_BY from($u) AND contains(thanks) INWINDOW 5
 "a user asks, and *that same user* thanks within 5." Bind on the first leg
 that names it; every later leg naming `$u` must match. Several variables run
 side by side (`field(page,$p) AND from($u)`). `!$u` is "a *different* one"
-(engine primitive exists; surface syntax arrives with P3).
+(both dialects; the validator rejects it when nothing bound `$u` earlier).
 
 Two rules that keep variables honest: the equality is decided **while
 choosing the nearest candidate**, not after (otherwise a stranger in between
@@ -115,18 +117,21 @@ the events. Each of those is one token here. (Zhu, Huang & Chaudhuri, PVLDB
 16(5) 2023, reached the same place from the other side: pattern queries over
 history are joins; PrismQL just never bolts an automaton on afterwards.)
 
-## 7. What is true and what is still a lie today
+## 7. What holds, and where the guarantees end
 
-True by the language, and by the plan layer (`prismql.plan`): stream order =
-load order; `INWINDOW` unordered; slots in axis order; equalities inside
-selection; ranges enumerated; strict `>` on time, ties broken by position.
+Since the operator layer (P3, 2026-09-22) the engine *is* the plan: stream
+order = load order; `INWINDOW` unordered; slots in axis order; equalities
+inside selection; ranges enumerated; strict `>` on time, ties broken by
+position. The old audit defects A1–A10 and D2 stand as ordinary contract
+tests, not as caveats.
 
-Still wrong in the *engine* until P3 lands (pinned as `xfail(strict)`,
-listed in `STATE.md`): positional distance is id arithmetic on the Rust path
-(A2); comma lists demand restriction order (D2); a group may reuse a message
-across mixed axes (A7); ranges run as their minimum (A8); groups print in id
-order (A9); two variables on a leg, or a variable skipping a leg, lose the
-group (A10). When the engine and the plan disagree, the plan is right.
+What a query still cannot do: run sequence operators on a backend without
+an order axis (OpenSearch, a tantivy index opened from disk — a loud
+`PositionalUnsupportedError`, not a wrong answer); enumerate `{n,}` without
+a ceiling; put a variable on the excluded side of a negation; carry a
+variable across subquery stages. When the engine and `tests/plan` disagree,
+the tests win — and that disagreement is a bug to pin, not a caveat to
+learn.
 
 ## 8. Twelve shapes to recognise on sight
 

@@ -2,7 +2,7 @@
 
 *The one place project state lives. Updated in the same commit as the change
 it describes. Agent memory points here; it does not duplicate this.*
-*Last update: 2026-09-19 (P2 task 2).*
+*Last update: 2026-09-22 (P3 complete; documentation packs).*
 
 ## Shipped (newest first)
 

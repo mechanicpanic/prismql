@@ -1,5 +1,7 @@
 # PrismQL — architecture, explained
 
+> **As of 2026-09-22 the operator layer (P3) has shipped.** Sections that describe the executor "today" (the two owners of merge semantics, Rust kernels on the query path, the migration timeline) describe the pre-P3 state; `PROJECT.md` and `STATE.md` are current.
+
 *The long read: **what the pieces are and why they are shaped this way**.
 It does not track progress. One-page digest: `PROJECT.md`; current status:
 `STATE.md`; the language: `LANGUAGE_REFERENCE.md` / `PIPE_REFERENCE.md`;

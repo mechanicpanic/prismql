@@ -1,73 +1,59 @@
-# PrismQL - Pattern Recognition in Sequential Messages Query Language
+# PrismQL — pattern retrieval in ordered event data
 
-PrismQL is a domain-specific language for pattern matching and retrieval in conversational data. It's designed to work with any search backend, making it perfect for analyzing chat logs, support conversations, or any sequential message data.
+PrismQL is a declarative language for finding **temporal and sequential
+patterns** in ordered events — chat logs, agent traces, transactions, crime
+records. You name a shape in the stream; it returns every instance of that
+shape as the events themselves, grouped, never a summary.
 
 <p align="center">
   <img src="docs/assets/repl.svg" alt="PrismQL REPL running a cross-corpus lead-lag query: news mentioning sanctions FOLLOWED_BY panic on a retail feed DURING 4 hours" width="780">
 </p>
 
-## Features
+```prismql
+SELECT field(type, ROBBERY) AND field(cell, $c)
+       FOLLOWED_BY field(type, BATTERY) AND field(cell, $c) DURING 30 minutes
+```
+```
+field(type, ROBBERY) and field(cell, $c) ~>(30m) field(type, BATTERY) and field(cell, $c)
+```
 
-- **Search Backend Agnostic**: Works with OpenSearch, Elasticsearch, or any custom search engine
-- **Advanced Pattern Matching**: Find complex patterns across message sequences
-- **Window-based Grouping**: Group related messages within time/distance windows
-- **NLP Integration**: Optional NLP backend for entity recognition and linguistic analysis
-- **User Dictionaries**: Define custom word lists for domain-specific searches
-- **Boolean Logic**: Combine conditions with AND, OR, NOT operators
+Two surface dialects — classic `SELECT` and a pipe dialect — lower to one
+intermediate representation and run through one operator layer, so the same
+query means the same thing however it is written.
 
-## For collaborators (start here)
+What the language gives you that a `WHERE` clause does not: ordered
+sequences (`FOLLOWED_BY`, `PRECEDED_BY` and their negations, matched
+*nearest-first*), unordered co-occurrence (`INWINDOW`), windows on either
+axis — positions (`INWINDOW 5`) or wall clock (`DURING 30 minutes`) —
+pattern variables (`$c`: the same value across legs; `!$c`: a different
+one), quantifiers, and subqueries whose groups are themselves operands.
 
-The repository is private; you need an invitation, then:
+## Install
+
+PrismQL is **not on PyPI**; `pip install prismql` does not work yet. The
+repository is private, so both routes below need access to it. Straight from
+git, no clone and no virtualenv — this puts `prismql` and `prismql-server`
+on your PATH (add `mcp` to the extras if you also want a working
+`prismql-mcp`):
+
+```bash
+uv tool install "prismql[repl,server] @ git+ssh://git@github.com/mechanicpanic/prismql"
+```
+
+Or from a clone, if you want the examples and the references at hand:
 
 ```bash
 git clone git@github.com:mechanicpanic/prismql.git && cd prismql
-uv sync --extra server --extra repl --extra highlighting
-make check-fast          # ~1,200 tests, under 10 s; the xfails are known defects, pinned on purpose
+uv sync                    # engine only — polars and pyarrow are core, not extras
+uv sync --extra repl --extra highlighting --extra server   # REPL and HTTP server
 ```
 
-What to read, in order: `PROJECT.md` (one page), `STATE.md` (what is shipped,
-decided and open; the **audit findings A1–A10** there are the results you
-must not trust yet), `ARCHITECTURE.md` when you need the long version,
-`LANGUAGE_REFERENCE.md` / `PIPE_REFERENCE.md` for the two dialects.
-
-To query your own data, see "Try it on your own events" below. To let an
-agent query it, run the server and hand the agent the folder
-`skills/prismql/` — it is a self-contained skill (how to call the server,
-the language reference, the pitfalls, what is known-wrong today). No MCP,
-no Python on the agent's side, only `curl`.
-
-The sequence primitives that will replace the current engine live in
-`src/prismql/plan/` (Polars) and are usable from Python today — see
-`tests/plan/` for how each one is called. Where the engine and the plan
-disagree, the plan is right (`STATE.md`, A10).
-
-## Installation
-
-PrismQL is not on PyPI yet. From a clone:
-
-```bash
-git clone https://github.com/mechanicpanic/prismql && cd prismql
-uv sync --extra repl --extra highlighting   # the REPL; the Polars plan layer is core
-uv run prismql --config prismql.toml                     # see "Try it on your own events"
-```
-
-Once released:
-
-```bash
-pip install prismql
-
-# With OpenSearch support
-pip install prismql[opensearch]
-
-# With Elasticsearch support
-pip install prismql[elasticsearch]
-
-# With NLP support (spaCy)
-pip install prismql[nlp]
-
-# All extras
-pip install prismql[all]
-```
+Optional extras: `repl`, `highlighting`, `server` (the FastAPI HTTP
+server), `mcp` (the stdio MCP shim — a separate extra; without it
+`prismql-mcp` stops at `ModuleNotFoundError: No module named 'mcp'`),
+`tantivy` (real full-text search), `opensearch`, `elasticsearch`, `nlp`
+(spaCy), `semantic` (sentence-transformers). Python ≥ 3.12, no compiler and
+no Rust toolchain needed.
 
 ## Try it on your own events
 
@@ -95,382 +81,323 @@ timestamp_field = "time"      # the axis DURING measures on
 $ uv run prismql --config prismql.toml
 prismql[0]> SELECT field(kind, delete) AND field(page, $p) FOLLOWED_BY field(kind, save) AND field(page, $p) DURING 10 minutes
 Found 1 result(s):
+
   Group 1:
-    [e2] ...
-    [e3] ...
-prismql[1]> \schema        # fields, coverage, examples
+    [e2] ?:
+    [e3] ?:
+
+(Query executed in 0.123s)
+prismql[1]> \schema        # fields, coverage, example values
 prismql[2]> \quit
 ```
 
-Both `timestamp_*` keys are needed today: without `[engine].timestamp_field`
-a `DURING` query returns nothing rather than an error.
+The answer is the group of ids. What follows each id is the REPL's one-line
+preview, `user: text` — these events have neither field, so it prints `?:`
+and nothing after it. Give your events a `user` and a `text` field and the
+preview fills in; the match itself does not change.
 
-## Server & agent integration
+Both `timestamp_*` keys are needed: without `[engine].timestamp_field` a
+`DURING` query returns nothing rather than an error.
 
-Run PrismQL as a local HTTP server (agents and tools query it instead of
-embedding Python):
+## Where to go next
+
+- **Query your own data, step by step** —
+  [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md): install, the config file, what
+  your event file must look like, the first queries and the errors you will
+  hit.
+- **Learn the language** — [`docs/MENTAL_MODEL.md`](docs/MENTAL_MODEL.md):
+  two axes, three levels, twelve shapes to recognise on sight, with a
+  self-test. One sitting. Exhaustive references: `LANGUAGE_REFERENCE.md`
+  (classic) and `PIPE_REFERENCE.md` (pipe).
+- **Let an agent query your data** —
+  [`docs/AGENT-USE.md`](docs/AGENT-USE.md): start a server on your events and
+  hand the agent the folder `skills/prismql/` — the language reference, how
+  to call the server, and the mistakes agents actually make. `curl` against
+  the server is the path it leads with, and it needs no MCP; the skill also
+  documents a Python fallback for when no server is running. Copy that
+  folder with symlinks resolved — `cp -RL skills/prismql <dest>` — because
+  its `LANGUAGE_REFERENCE.md` is a symlink into the package and a plain
+  `cp -R` leaves the copy dangling.
+- **Work on the repository** — [`docs/START-HERE.md`](docs/START-HERE.md):
+  the reading path, the gates, what the tests prove, how state is recorded.
+
+## Server and agent integration
 
 ```bash
-pip install prismql[server]
-prismql-server --config prismql.toml    # POST /evaluate, GET /reference
+uv sync --extra server
+uv run prismql-server --config prismql.toml     # POST /evaluate, GET /schema, GET /reference
 ```
 
-MCP-native agents get a single `evaluate()` tool via the stdio shim:
-
-```bash
-pip install prismql[server,mcp]
-prismql-mcp    # finds the server via PRISMQL_SERVER_URL (default :8901)
-```
-
-`prismql.toml` holds all state — backend type, data file, dictionaries,
-timestamp field:
+`prismql.toml` holds all the state — backend type, data file, dictionaries,
+timestamp field, limits:
 
 ```toml
 [server]
 port = 8901
+max_results = 50            # cap on groups per response
+enable_reload = false       # POST /reload answers 403 while this is false
 
 [backend]
-type = "rust_memory"        # or: memory
-data = "events.jsonl"       # .json / .jsonl / .csv / .parquet
+type = "memory"             # .json / .jsonl / .csv / .parquet
+data = "events.jsonl"
+timestamp_fields = ["timestamp"]   # parsed on load
+
+[engine]
+timestamp_field = "timestamp"      # the axis DURING measures on
+quantifier_ceiling = 10            # closes open ranges like {2,}
 
 [dictionaries]
 spikes = ["spike", "surge"]
 ```
 
+Which section a key belongs to is load-bearing: the loader reads
+`[backend]`, the engine reads `[engine]`, the HTTP layer reads `[server]`.
+A key in the wrong section is ignored, not rejected.
+
 `POST /evaluate` returns hydrated event groups; query errors come back as
-structured 422s with messages designed for agent self-correction. Requests
-may carry a `dictionaries` overlay — term lists merged over the config
-dictionaries for that query only — so agents can iterate on the semantic
-layer without touching server state.
+structured 422s whose messages are written for an agent to self-correct.
+A request may carry a `dictionaries` overlay — term lists merged over the
+config ones for that query only — so an agent can iterate on the semantic
+layer without touching server state. `GET /schema` describes the loaded
+corpus (fields, coverage, example values) and is the thing to read before
+writing queries against an unfamiliar corpus. The server caps groups per
+response; `AGGREGATE count()` counts every group, uncapped.
+
+MCP-native agents get a single `evaluate()` tool through a stdio shim:
+
+```bash
+uv sync --extra server --extra mcp
+uv run prismql-mcp        # finds the server via PRISMQL_SERVER_URL (default :8901)
+```
 
 <p align="center">
   <img src="docs/assets/server.svg" alt="prismql-server answering POST /evaluate with hydrated event groups" width="780">
 </p>
 
-## Quick Start
+## From Python
 
 ```python
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 
-# Sample conversation data
 messages = [
-    {"id": 1, "text": "Hello, I need help with my order", "user": "customer1"},
-    {"id": 2, "text": "Sure, what's your order number?", "user": "support"},
-    {"id": 3, "text": "It's ORDER-12345", "user": "customer1"},
-    {"id": 4, "text": "Let me check that for you", "user": "support"},
-    {"id": 5, "text": "Can you tell me the status?", "user": "customer1"},
+    {"id": 1, "text": "my build is broken",        "user": "customer"},
+    {"id": 2, "text": "can you help?",             "user": "customer"},
+    {"id": 3, "text": "sure, what does the log say", "user": "support"},
+    {"id": 4, "text": "try a clean reinstall",     "user": "support"},
+    {"id": 5, "text": "that fixed it, thanks",     "user": "customer"},
 ]
 
-# Create in-memory backend for testing
-backend = MemoryBackend(messages)
+engine = PrismQLEngine(search_backend=MemoryBackend(messages))
+engine.add_dictionary("problem", ["broken"])
+engine.add_dictionary("fix", ["reinstall"])
 
-# Initialize PrismQL engine
-engine = PrismQLEngine(search_backend=backend)
+engine.execute("SELECT is_question()")
+# [[2]]
 
-# Find all questions in the conversation (fluent syntax!)
-results = engine.execute("SELECT is_question()")
-print(results)  # [[2], [5]]
+engine.execute("SELECT from(customer) AND is_question()")
+# [[2]]
 
-# Find messages from customer1 that contain questions
-results = engine.execute("SELECT from(customer1) AND is_question()")
-print(results)  # [[5]]
+# unordered: a question and a support message within 2 positions of each other
+engine.execute("SELECT is_question(), from(support) INWINDOW 2")
+# [[2, 3], [2, 4]]
 
-# Find question-answer pairs within 2 messages of each other
-results = engine.execute("SELECT is_question(), from(support) INWINDOW 2")
-print(results)  # [[2, 4]]
+# ordered: the problem, then the fix, within 5 positions
+engine.execute("SELECT contains(problem) FOLLOWED_BY contains(fix) INWINDOW 5")
+# [[1, 4]]
+
+# the same query in the pipe dialect
+engine.execute("contains(problem) ~> contains(fix) |> within(5)")
+# [[1, 4]]
+
+# the same user asks and is later heard from again
+engine.execute("SELECT from($u) AND is_question() FOLLOWED_BY from($u) INWINDOW 4")
+# [[2, 5]]
+
+# how many, uncapped
+engine.execute("SELECT contains(problem) FOLLOWED_BY contains(fix) INWINDOW 5 AGGREGATE count()")
+# AggregateResult(value=1)
 ```
 
-## How fast is it?
+Results are lists of groups of message ids, in axis order within a group.
+
+## How fast is it
 
 The VLDB 2023 row-pattern-recognition flagship query (robbery → battery →
-vehicle theft, co-located, within 30 minutes) over the full City of
-Chicago crime corpus — 8.5M events, 25 years: **PrismQL answers in ~5
-seconds**, in exact match-count agreement with the optimized SQL
-formulation, while the naive SQL join does not finish in 90 minutes. The
-full comparison against DuckDB, SQLite, Flink MATCH_RECOGNIZE, and
-Elastic EQL is in [docs/CHICAGO_BENCHMARK.md](docs/CHICAGO_BENCHMARK.md).
+motor vehicle theft, co-located, within 30 minutes) over the full City of
+Chicago crime corpus — 8.47M events, 25 years — returns **372 matches**, in
+exact agreement with the optimized SQL formulation, while the naive SQL join
+does not finish in 90 minutes. The comparison against DuckDB, SQLite, Flink
+`MATCH_RECOGNIZE`, ClickHouse and Elastic EQL is in
+[docs/CHICAGO_BENCHMARK.md](docs/CHICAGO_BENCHMARK.md) — note that its
+timing column was measured before the operator layer landed and still names
+a Rust execution path that no longer exists.
 
-## Query Language Syntax
+Measured on the current engine, on a laptop: the same three-leg correlated
+chain over the 1M-row tier of that corpus answers in **under half a second**
+— 0.58 s on the first call, 0.42 s warm — for 28 matches, after a 5 s load.
 
-### Basic Structure
+## Query language, in brief
+
 ```
-SELECT <conditions> [INWINDOW <window_size>]
-```
-
-### Conditions
-
-**New Fluent Syntax (Recommended):**
-- **contains(dict_name)** - Messages containing words from a dictionary
-- **from(username)** - Messages from specific user
-- **mentions_user(username)** - Messages mentioning a user
-- **is_question()** - Messages containing questions
-- **mentions_date()** - Messages containing dates
-- **mentions_time()** - Messages containing times
-- **mentions_place()** - Messages containing locations
-- **mentions_org()** - Messages containing organizations
-- **contains_link()** - Messages containing URLs
-
-**Note**: Legacy syntax (`byuser()`, `haswordofdict()`, `hasquestion()`) is deprecated. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
-
-### Boolean Operators
-
-```prismql
--- AND operator (fluent syntax)
-SELECT from(alice) AND is_question()
-
--- OR operator
-SELECT from(alice) OR from(bob)
-
--- NOT operator
-SELECT NOT from(bot)
-
--- Complex combinations
-SELECT (from(alice) OR from(bob)) AND is_question()
+SELECT <conditions> [<sequence operators>] [INWINDOW n | DURING n unit]
+       [AGGREGATE …] [GROUP BY …] [ORDER BY …] [LIMIT n]
 ```
 
-### Window Constraints
+**Predicates** name a set of events: `field(name, value)`, `from(user)`,
+`contains(dict_name)`, `contains_phrase("…")`, `is_question()`,
+`mentions_user(name)`, `mentions_date()`, `mentions_time()`,
+`mentions_place()`, `mentions_org()`, `contains_link()`, `has_feature(f)`,
+`similar_to("text", 0.7)`.
 
-The `INWINDOW` clause groups messages that appear within N positions of each other:
+A bare name in `from(…)` or `contains(…)` must not collide with a grammar
+keyword, and the time-unit abbreviations `s m h d w` are keywords:
+`contains(h)` is a syntax error, `contains(hits)` is fine. There is no
+quoting escape in that position — rename the dictionary, or reach the same
+events through `field(user, "h")`, whose *value* does accept quotes.
 
-```prismql
--- Find questions followed by answers within 5 messages (fluent syntax)
-SELECT is_question(), contains(answers) INWINDOW 5
-```
+**Booleans** compose sets, and only sets: `AND`, `OR`, `NOT`. An `AND`
+between two already-grouped results is an error by design.
 
-### Multiple Restrictions
+**Operators** turn sets into groups:
 
-Comma-separated restrictions find combinations:
+| | classic | pipe |
+|---|---|---|
+| near each other, any order | `A, B INWINDOW 5` | `A + B \|> within(5)` |
+| then | `A FOLLOWED_BY B INWINDOW 5` | `A ~> B \|> within(5)` |
+| before | `B PRECEDED_BY A INWINDOW 3` | `B <~ A \|> within(3)` |
+| never followed by | `A NOT_FOLLOWED_BY B DURING 1 day` | `A !~> B \|> during(1d)` |
+| on the clock | `A FOLLOWED_BY B DURING 10 minutes` | `A ~> B \|> during(10m)` |
+| repeated | `A{3} INWINDOW 10` | `A{3} \|> within(10)` |
+| staged | `(SELECT A, B INWINDOW 3) FOLLOWED_BY (SELECT C) INWINDOW 8` | `[A + B \|> within(3)] ~>(8) [C]` |
+| how many | `… AGGREGATE count()` | `… \|> count()` |
 
-```prismql
--- Find customer question + support response + resolution (fluent syntax)
-SELECT from(customer) AND is_question(),
-       from(support),
-       contains(resolved)
-       INWINDOW 10
-```
+Three rules that catch everyone once: `INWINDOW` is **unordered** by
+definition; the **last link of a chain must carry a window**, and one
+trailing window distributes to every windowless link; `{n,}` has no upper
+bound to enumerate to, so it is rejected unless you write `{n,m}` or set a
+ceiling — `[engine] quantifier_ceiling` in `prismql.toml`, or
+`PrismQLEngine(quantifier_ceiling=…)` from Python.
 
-### Subqueries
+**Pattern variables** hold an entity fixed across legs: `field(cell, $c)` on
+two legs means "the same cell"; `field(cell, !$c)` means "a different one".
+The equality is decided while choosing the nearest candidate, not after it,
+so a stranger in between does not lose you the group.
 
-Parentheses create subqueries that are evaluated independently:
+Full grammar, every clause and every error message: `LANGUAGE_REFERENCE.md`
+(classic) and `PIPE_REFERENCE.md` (pipe). Only the classic reference is
+shipped inside the package, so `GET /reference` and the MCP
+`prismql://reference` resource serve that one; read the pipe reference from
+the repository.
 
-```prismql
--- Complex multi-stage pattern (fluent syntax)
-SELECT
-  (SELECT from(customer), contains(problem) INWINDOW 3);
-  (SELECT from(support), contains(solution) INWINDOW 5)
-  INWINDOW 20
-```
+## Backends, and which ones can do sequences
 
-## Using Custom Backends
+"Backend" here means only the search layer — *give me the id set for this
+predicate*. Sequence and window operators need something else on top: an
+**order axis**, the column that says where an event sits in the stream.
+Stream order is load order; ids are labels, never coordinates.
 
-### OpenSearch Backend
+| backend | text search | order axis | sequence operators |
+|---|---|---|---|
+| `memory` | substring / token | yes | yes |
+| `rust_memory` | fast substring / token | yes | yes |
+| `tantivy`, built from documents | stemmed full-text | yes | yes |
+| `tantivy`, opened from a persisted index | stemmed full-text | no | **refused** |
+| `opensearch`, `elasticsearch` | the cluster's | no | **refused** |
+
+A backend without an order axis refuses those operators loudly — it never
+reconstructs order from id values. The backend raises
+`PositionalUnsupportedError`; `engine.execute()` wraps everything a query
+raises, so what reaches a caller of the public API is a
+`PrismQLRuntimeError` carrying the original as `__cause__` and as
+`details["cause_type"]`. Catch `PrismQLRuntimeError` — an
+`except PositionalUnsupportedError` around `engine.execute()` does not fire.
+Boolean and set queries still run on all of them.
 
 ```python
 from opensearchpy import OpenSearch
 from prismql import PrismQLEngine
 from prismql.backends.opensearch import OpenSearchBackend
 
-# Connect to OpenSearch
-client = OpenSearch(
-    hosts=[{"host": "localhost", "port": 9200}],
-    http_compress=True,
-)
-
-# Create backend
-backend = OpenSearchBackend(client, index_name="chat-logs")
-
-# Create engine
+client = OpenSearch(hosts=[{"host": "localhost", "port": 9200}])
+backend = OpenSearchBackend(client, {
+    "index_name": "chat-logs",
+    "field_mappings": {"text": "content", "user": "author"},
+})
 engine = PrismQLEngine(search_backend=backend)
-
-# Execute queries
-results = engine.execute("SELECT contains(errors) INWINDOW 50")
+engine.execute("SELECT contains(errors) AND from(deploy-bot)")
 ```
 
-### Creating Custom Backends
-
-Implement the `SearchBackend` interface:
+To write your own, implement four methods of `SearchBackend`:
 
 ```python
+from collections.abc import Sequence
 from prismql.backends.base import SearchBackend
-from typing import Set
+from prismql.types import MessageId
 
-class MyCustomBackend(SearchBackend):
-    def search_text(self, terms, field="text", operator="OR") -> Set[int]:
-        # Your implementation
-        pass
-
-    def search_by_field(self, field, value, exact=True) -> Set[int]:
-        # Your implementation
-        pass
-
-    def get_total_documents(self) -> int:
-        # Your implementation
-        pass
-
-    def get_all_document_ids(self, limit=None) -> Set[int]:
-        # Your implementation
-        pass
+class MyBackend(SearchBackend):
+    def search_text(self, terms: Sequence[str], field: str = "text",
+                    operator: str = "OR") -> set[MessageId]: ...
+    def search_by_field(self, field: str, value: str,
+                        exact: bool = True) -> set[MessageId]: ...
+    def get_total_documents(self) -> int: ...
+    def get_all_document_ids(self, limit: int | None = None) -> set[MessageId]: ...
 ```
 
-## User Dictionaries
+Override `has_order_axis()` and the `positions` / `sorted_positions` /
+`ids_at` / `timestamps_at` group if your store can answer where an event
+sits; leave them alone and sequence operators will refuse loudly.
 
-Define custom word lists for domain-specific searches:
+## Dictionaries and precomputed features
 
-```python
-# Add dictionaries
-engine.add_dictionary("tech_terms", ["API", "backend", "frontend", "database"])
-engine.add_dictionary("problems", ["error", "broken", "failed", "issue"])
+Dictionaries are named term lists resolved by `contains(name)`. They live in
+`prismql.toml` under `[dictionaries]`, are added at runtime with
+`engine.add_dictionary(name, terms)`, or ride along with a single server
+request.
 
-# Use in queries
-results = engine.execute("""
-    SELECT contains(problems), contains(tech_terms) INWINDOW 10
-""")
-
-# List all dictionaries
-all_dicts = engine.get_dictionaries()
-```
-
-## NLP Integration
-
-For advanced linguistic analysis, add an NLP backend:
-
-```python
-from prismql.backends.spacy import SpacyNLPBackend
-
-# Initialize spaCy backend
-nlp_backend = SpacyNLPBackend(model="en_core_web_sm")
-
-# Create engine with NLP support
-engine = PrismQLEngine(
-    search_backend=backend,
-    nlp_backend=nlp_backend
-)
-
-# Now you can use NER-based conditions
-results = engine.execute("""
-    SELECT hasdate(), hasorganization() INWINDOW 5
-""")
-```
-
-## Precomputed Indexes
-
-For better performance on large datasets, precompute NLP features:
+Entity predicates — `mentions_org()`, `mentions_date()`, `mentions_place()`,
+`mentions_time()`, `contains_link()`, `has_feature(f)` — need features
+computed somewhere first; without an index behind them they raise a
+teachable error naming the missing label rather than quietly returning
+nothing. (`is_question()` is the exception: it works out of the box.) The
+engine does not care where the features came from — spaCy, an LLM, human
+annotation, your own rules — only which messages have which:
 
 ```python
 from prismql.backends.base import PrecomputedIndexes
 
-# Create indexes during data ingestion
 indexes = PrecomputedIndexes(
-    entities={
-        "DATE": {1, 5, 12},      # Message IDs containing dates
-        "ORG": {3, 7, 15},       # Message IDs containing organizations
-    },
-    questions={2, 5, 9, 14},     # Message IDs containing questions
+    entities={"DATE": {1, 5, 12}, "ORG": {3, 7, 15}},
+    questions={2, 5, 9, 14},
+    custom_features={"escalation": {4, 11}},   # queried with has_feature(escalation)
 )
-
-# Use precomputed indexes
-engine = PrismQLEngine(
-    search_backend=backend,
-    precomputed_indexes=indexes
-)
-```
-
-## Advanced Examples
-
-### Customer Support Analysis
-```python
-# Find escalation patterns
-escalation_query = """
-SELECT
-  (SELECT from(customer) AND contains(complaint_words) INWINDOW 3);
-  (SELECT from(customer) AND contains(frustration_words));
-  (SELECT from(support) AND contains(escalation_words))
-  INWINDOW 20
-"""
-
-# Find successful resolutions
-resolution_query = """
-SELECT
-  contains(problem_words),
-  from(support) AND contains(solution_words),
-  from(customer) AND contains(satisfaction_words)
-  INWINDOW 30
-"""
-```
-
-### Security Analysis
-```python
-# Find potential security discussions
-security_query = """
-SELECT
-  contains(security_terms) AND (contains_link() OR contains(credentials)),
-  is_question()
-  INWINDOW 10
-"""
+engine = PrismQLEngine(search_backend=backend, precomputed_indexes=indexes)
 ```
 
 ## Development
 
-### Setup
 ```bash
-# Install with uv (recommended)
-uv sync --dev
-
-# Or with pip
-pip install -e .[dev]
+uv sync --extra server --extra repl --extra highlighting --extra tantivy --extra mcp
+make check            # the whole gate: ruff format, ruff check, mypy, pytest
+make check-fast       # the same, skipping the tests marked slow
+make format           # ruff format + ruff check --fix
 ```
 
-### Running Tests
-```bash
-# With uv
-uv run pytest
+CI runs `make check` on Python 3.12 and 3.13. Everything else a contributor
+needs — the reading path, what the ~1,400 tests actually prove, the oracles
+behind the operator layer, the conventions — is in
+[`docs/START-HERE.md`](docs/START-HERE.md) and `AGENTS.md`.
 
-# With pip
-pytest
+## Status
 
-# Run with coverage
-uv run pytest --cov=prismql
-```
-
-### Code Formatting and Linting
-```bash
-# Format code with ruff
-uv run ruff format .
-
-# Check and fix linting issues
-uv run ruff check . --fix
-
-# Run both before committing
-uv run ruff format . && uv run ruff check . --fix
-```
-
-### Building Documentation
-```bash
-# Install docs dependencies
-pip install -e .[docs]
-
-# Build docs
-cd docs && make html
-```
-
-## Related Repositories
-
-- **[prismql-research](../prismql-research)** - Research, experiments, and benchmarks for PrismQL
-  - LLM query generation experiments
-  - Performance benchmarks
-  - Training data for LoRA fine-tuning
-  - Research applications and use cases
-  - Academic papers and implementation notes
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+`0.1.0`, unreleased and not published anywhere. The engine is complete for
+the operators documented above and every one of them runs through a single
+operator layer over a Polars plan (`src/prismql/plan/`); the class of bug
+this project treats as a release blocker — a query that runs without error
+and returns a wrong or empty answer — is pinned by contract tests.
+`STATE.md` is the current state of everything: shipped, decided, open.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-PrismQL is inspired by the query language from the Chat Corpora Annotator project and uses ANTLR4 for parsing.
+MIT — see `LICENSE`. PrismQL descends from the query language of the Chat
+Corpora Annotator project and uses ANTLR4 for parsing the classic dialect.
