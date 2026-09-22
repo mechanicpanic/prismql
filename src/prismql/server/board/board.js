@@ -1,7 +1,9 @@
-// PrismQL board — entry point. For Task 3 this only sets the theme (dark by
-// default, remembered in localStorage) and its toggle's icon/label; the
-// journal/editor/inspector wiring lands in later tasks (graph
-// @aleph/prismql, node #63).
+// PrismQL board — entry point. Sets the theme (dark by default, remembered
+// in localStorage) and its toggle's icon/label, and keeps the journal's
+// stream connected across a server restart by carrying the boot id from
+// activity() into stream() (graph @aleph/prismql, node #76). Rendering the
+// entries themselves — the journal list, the rail, the inspector — is a
+// later task; journal.js is still a no-op stub.
 (function () {
   "use strict";
   const KEY = "prismql-board-theme";
@@ -25,9 +27,10 @@
   }
 
   function setHidden(el, hidden) {
-    // el.hidden = ... does not reliably reflect onto the "hidden" content
-    // attribute for inline <svg> children in every engine — set the
-    // attribute directly so the board.css `[hidden]` rule always applies.
+    // SVGElement has no "hidden" IDL attribute at all — only HTMLElement
+    // does — so el.hidden = ... is a silent no-op on these inline <svg>
+    // icons. Toggle the content attribute directly; board.css's own
+    // author `[hidden]` rule (not the UA default) is what hides them.
     if (!el) return;
     if (hidden) el.setAttribute("hidden", "");
     else el.removeAttribute("hidden");
@@ -65,9 +68,39 @@
     }
   }
 
+  // ------------------------------------------------------------- stream
+  function startJournalStream() {
+    if (!window.PrismQLApi) return;
+    let boot = null;
+
+    function backfillAndConnect() {
+      window.PrismQLApi
+        .activity(0)
+        .then(function (body) {
+          boot = body.boot;
+          window.PrismQLApi.stream(
+            body.seq || 0,
+            function () {}, // entries render in a later task
+            function (state) {
+              if (state === "reset") backfillAndConnect();
+            },
+            boot
+          );
+        })
+        .catch(function () {
+          // Not reachable yet — nothing to connect to until it is; a later
+          // task may surface this. stream()'s own retry loop is what
+          // handles a connection that opens and then drops.
+        });
+    }
+
+    backfillAndConnect();
+  }
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
     init();
   }
+  startJournalStream();
 })();

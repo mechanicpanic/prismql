@@ -14,26 +14,39 @@
     }
   }
 
-  function stream(since, onEntry, onState) {
+  function stream(since, onEntry, onState, knownBoot) {
     let es = null;
     let lastSeq = since || 0;
+    let boot = knownBoot || null;
     let closed = false;
     let retryTimer = null;
 
     function open() {
       if (closed) return;
+      // Per-attempt: readyState can't tell a refused connection from a
+      // clean close (Chrome reports CONNECTING for both) — whether the
+      // seq handshake ever arrived on THIS attempt can.
+      let opened = false;
       es = new EventSource("/activity/stream?since=" + lastSeq);
       es.addEventListener("seq", function (m) {
-        const serverSeq = Number(m.data);
-        if (!Number.isNaN(serverSeq) && serverSeq < lastSeq) {
-          // The server's own counter is behind what we last saw — it
-          // restarted. Rebase on its count and tell the caller to clear
-          // and backfill rather than stay deaf waiting for seq > lastSeq.
-          lastSeq = serverSeq;
-          if (onState) onState("reset");
-        } else if (!Number.isNaN(serverSeq)) {
-          lastSeq = Math.max(lastSeq, serverSeq);
+        opened = true;
+        let data;
+        try {
+          data = JSON.parse(m.data);
+        } catch (e) {
+          return;
         }
+        if (boot && data.boot && data.boot !== boot) {
+          // The server's process changed under us — its counter and this
+          // connection's "since" filter both reset. Stop; the caller
+          // clears, backfills from 0 and reopens with the new boot.
+          if (es) es.close();
+          es = null;
+          closed = true;
+          if (onState) onState("reset", data.boot);
+          return;
+        }
+        boot = data.boot;
         if (onState) onState("live");
       });
       es.onmessage = function (m) {
@@ -43,25 +56,21 @@
         } catch (e) {
           return;
         }
+        // Only a delivered row advances lastSeq, never the handshake.
         if (typeof entry.seq === "number") lastSeq = Math.max(lastSeq, entry.seq);
         if (onEntry) onEntry(entry);
       };
       es.onerror = function () {
-        // Once a connection has opened, EventSource sets readyState back to
-        // CONNECTING (and retries on its own) for ANY interruption — the
-        // server's own clean end-of-stream (our ttl idle close) included.
-        // CLOSED here means the browser gave up — a genuine fatal error
-        // (e.g. the initial handshake failed) — and is the only case that
-        // should flash "down" and back off (graph @aleph/prismql, node #76).
-        const fatal = es && es.readyState === EventSource.CLOSED;
+        // Always close ourselves — never let the browser's own auto-retry
+        // run, it can't tell a clean close from a real failure either.
         if (es) es.close();
         es = null;
         if (closed) return;
-        if (fatal) {
-          if (onState) onState("down");
-          retryTimer = setTimeout(open, 4000);
+        if (opened) {
+          open(); // reached the handshake, then ended cleanly — retry now
         } else {
-          open();
+          if (onState) onState("down"); // never opened — back off, steady
+          retryTimer = setTimeout(open, 4000);
         }
       };
     }
