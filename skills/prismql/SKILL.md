@@ -114,6 +114,16 @@ uv run --extra server prismql-server --config prismql.toml
 `DURING` query returns an empty result, not an error. Stream order is the
 file order; ids are labels and may be strings.
 
+A table in the wrong order or shape, or a harness log folder, becomes that
+file through `prismql ingest`: `prismql ingest table SRC DST.parquet --id COL
+--time COL [--sort COL] [--keep a,b] [--embed text --model M]`;
+`prismql ingest claude-code ~/.claude/projects/<project> DST.parquet` and
+`prismql ingest codex ~/.codex/sessions DST.parquet` give one event per
+prompt / thought / tool call / tool result (`kind`, `tool`, `error`,
+`session`, `model`, `text`). Point `data` at the Parquet, `time` is the
+timestamp field. With `--embed`, `similar_to()` works without any
+`[semantic]` config: the file carries the vectors and the model name.
+
 Keep `--extra server` on `uv run` too: `uv run` re-syncs the environment to
 the project defaults first, and a bare `uv run prismql-server` in a fresh
 clone drops FastAPI and fails with `ModuleNotFoundError`.
