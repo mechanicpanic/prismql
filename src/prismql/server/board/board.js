@@ -2,8 +2,7 @@
 // the actions object they call, and topbar wiring (graph @aleph/prismql,
 // node #63 — later tasks attach more actions via window.PrismQLBoard.actions
 // rather than growing this file, #10). Live connection and the live/pause
-// actions live in board-stream.js (fix round 2, #1 — one place applies the
-// entries/pending cap).
+// actions live in board-stream.js (fix round 2, #1 — one cap site).
 (function () {
   "use strict";
   var THEME_KEY = "prismql-board-theme";
@@ -25,12 +24,11 @@
     entries: [], seq: 0, boot: null, live: true, pending: [], down: false, freshSeq: null,
     filters: { range: "24h", search: "", kinds: {}, srcs: {}, corpora: {}, statuses: {} },
     sel: null, tab: "details", theme: readTheme(),
-    corpora: { corpora: [], default: null, board: {} },
+    corpora: null, corporaFailed: false, // null = not loaded yet (fix round 1, #3)
     full: null,
   };
 
-  // "·" is its own aria-hidden span (index.html), so flex gap spaces it
-  // (fix round 2, #4). Never shown while reconnecting.
+  // "·" is its own aria-hidden span, flex gap spaces it (fix round 2, #4).
   function updateLiveNote(nowMs) {
     var note = document.getElementById("live-note");
     var sep = document.getElementById("live-sep");
@@ -61,8 +59,7 @@
     if (search && search.value !== state.filters.search) search.value = state.filters.search;
   }
 
-  // nowMs threads to every panel (rail's counts, the inspector's "received"
-  // time) so a beat and a user-triggered render never disagree on "now".
+  // nowMs threads to every panel so a beat and a triggered render agree.
   function render(nowMs) {
     nowMs = nowMs || Date.now();
     updateTopbar(nowMs);
@@ -133,13 +130,16 @@
     var newQuery = document.getElementById("new-query");
     if (newQuery) newQuery.addEventListener("click", function () { actions.newQuery(); });
     render();
-    // journal.tick() re-checks the range/day signature (fix round 2, #2)
-    // and, when unchanged, still routes through render() so every panel
-    // reads nowMs (carry-over, graph @aleph/prismql #63).
+    // journal.tick(): changed signature → a full render(); unchanged →
+    // only a .rel patch, never a rebuild (fix round 1, #1 — a rebuild
+    // every 5 s drops focus/selection). Live note + inspector "when" are
+    // their own cheap patches, outside journal.js.
     setInterval(function () {
       var nowMs = Date.now();
       if (window.PrismQLJournal && window.PrismQLJournal.tick) window.PrismQLJournal.tick(state, actions, nowMs);
       else render(nowMs);
+      updateLiveNote(nowMs);
+      if (window.PrismQLInspector && window.PrismQLInspector.tick) window.PrismQLInspector.tick(nowMs);
     }, 5000);
   }
 

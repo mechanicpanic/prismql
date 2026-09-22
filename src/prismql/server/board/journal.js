@@ -113,19 +113,20 @@
 
   // The 5 s beat: re-derive what should be visible right now. Unchanged
   // (same seqs, same day labels) → just patch ".rel" text, no rebuild, no
-  // focus loss. Changed (a row aged out of the range, or "Today" rolled to
-  // "Yesterday") → a full render(), which restores focus itself.
+  // focus or selection loss (fix round 1, #1 — board.js's own interval
+  // patches the live note and the inspector's "when" the same cheap way).
+  // Changed (a row aged out of the range, or "Today" rolled to
+  // "Yesterday") → the top-level PrismQLBoard.render(nowMs), so every
+  // panel gets fresh counts, not just the journal.
   function tick(state, actions, nowMs) {
     var visible = visibleEntries(state, nowMs);
     var sig = signatureOf(visible, nowMs);
-    if (sig !== lastSignature) { render(state, actions, nowMs); return; }
-    // Nothing moved in the journal itself, but other panels still read
-    // nowMs (the inspector's "received" time, rail's range-relevant
-    // counts) — the cheap path must still reach them, so it routes through
-    // the top-level dispatcher rather than only patching the journal list
-    // (carry-over from Task 4's review, graph @aleph/prismql #63).
+    if (sig === lastSignature) {
+      if (window.PrismQLJournalList) window.PrismQLJournalList.tick(nowMs);
+      return;
+    }
     if (window.PrismQLBoard) window.PrismQLBoard.render(nowMs);
-    else if (window.PrismQLJournalList) window.PrismQLJournalList.tick(nowMs);
+    else render(state, actions, nowMs);
   }
 
   var api = { render: render, tick: tick, _visibleEntries: visibleEntries, _signatureOf: signatureOf };

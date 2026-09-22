@@ -50,6 +50,9 @@
     if (kind === "reset") {
       state.entries = []; state.pending = []; state.seq = 0; state.boot = bootId;
       state.sel = null; state.full = null; state.freshSeq = null;
+      // A restarted server's result store is empty too — every cached
+      // page is stale (fix round 1, #3).
+      if (window.PrismQLInspectorFetch) window.PrismQLInspectorFetch.clearCache();
       connect(state, render);
     } else if (kind === "down") {
       if (!state.down) { state.down = true; render(); }

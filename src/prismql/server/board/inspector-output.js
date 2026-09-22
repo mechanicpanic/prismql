@@ -1,12 +1,15 @@
 // PrismQLInspectorOutput: the inspector's "output" section — the `.sect`
 // header (title, note, full-view button) plus the type-specific body
-// (graph @aleph/prismql, node #63; task-5 brief). Groups/named and hits
-// need a paged fetch and live in inspector-groups.js/inspector-hits.js;
-// everything else here is derived straight from the journal entry.
+// (graph @aleph/prismql, node #63; task-5 brief, fix round 1). Groups/
+// named and hits need a paged fetch and live in inspector-groups.js/
+// inspector-hits.js; everything else here is derived straight from the
+// journal entry.
 (function (root) {
   "use strict";
   var mk = window.PrismQLBoardUtil.mk;
   var IF = window.PrismQLInspectorFormat;
+  var UI = window.PrismQLInspectorUI;
+  var PL = window.PrismQLInspectorPageLogic;
 
   var TITLE = {
     error: "Error", file: "Output", aggregate: "Value",
@@ -49,10 +52,7 @@
 
   function renderEmpty() {
     var body = document.createElement("div");
-    var empty = mk("div", "empty"); empty.style.padding = "24px";
-    empty.appendChild(mk("strong", null, "No matches"));
-    empty.appendChild(mk("span", null, "The request ran cleanly and found nothing."));
-    body.appendChild(empty);
+    body.appendChild(UI.emptyBlock("No matches", "The request ran cleanly and found nothing.", { compact: true }));
     return { note: "", body: body };
   }
 
@@ -64,22 +64,25 @@
     btn.type = "button";
     btn.setAttribute("aria-label", "Open output full screen");
     btn.title = "Full view";
-    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"></path></svg>';
+    btn.innerHTML = UI.ICON_FULL;
     btn.addEventListener("click", function () { actions.openFull(entry.seq); });
     el.appendChild(btn);
     return el;
   }
 
+  function bodyFor(kind, entry, state, actions) {
+    if (kind === "groups") return window.PrismQLInspectorGroups.render(entry, state, actions);
+    if (kind === "hits") return window.PrismQLInspectorHits.render(entry, state, actions);
+    if (kind === "aggregate") return big(PL.aggregateValueText(entry.value));
+    if (kind === "grouped") return big(typeof entry.count === "number" ? String(entry.count) : "—", "groups");
+    if (kind === "file") return renderFile(entry);
+    if (kind === "error") return renderError(entry);
+    return renderEmpty();
+  }
+
   function render(wrap, entry, state, actions) {
     var kind = IF.outputKind(entry);
-    var result;
-    if (kind === "groups") result = window.PrismQLInspectorGroups.render(entry, state, actions);
-    else if (kind === "hits") result = window.PrismQLInspectorHits.render(entry, state, actions);
-    else if (kind === "aggregate") result = big(entry.value != null ? String(entry.value) : "—");
-    else if (kind === "grouped") result = big(typeof entry.count === "number" ? String(entry.count) : "—", "groups");
-    else if (kind === "file") result = renderFile(entry);
-    else if (kind === "error") result = renderError(entry);
-    else result = renderEmpty();
+    var result = bodyFor(kind, entry, state, actions);
     wrap.appendChild(buildSect(TITLE[kind] || "Result", result.note, entry, actions));
     wrap.appendChild(result.body);
   }
