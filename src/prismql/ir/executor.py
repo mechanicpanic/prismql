@@ -393,9 +393,10 @@ class IRExecutor(PrismQLVisitor):
 
         n_before_lhs = len(self.variable_constraints)
         lhs = self.execute_restriction(expr.lhs)
+        n_before_rhs = len(self.variable_constraints)
         if not self._seq_leg_constraints:
             self._seq_leg_constraints = [list(self.variable_constraints[n_before_lhs:])]
-        n_before_rhs = len(self.variable_constraints)
+        lhs_leg = list(self.variable_constraints[n_before_lhs:n_before_rhs])
         rhs = self.execute_bool(expr.rhs)
         rhs_leg = list(self.variable_constraints[n_before_rhs:])
         window = expr.window
@@ -408,17 +409,21 @@ class IRExecutor(PrismQLVisitor):
 
         if expr.op == "FOLLOWED_BY":
             self._seq_leg_constraints.append(rhs_leg)
-            return self._apply_sequential_link(lhs, rhs, window, "FOLLOWED_BY")
+            return self._apply_sequential_link(
+                lhs, rhs, window, "FOLLOWED_BY", lhs_leg, rhs_leg
+            )
         if expr.op == "PRECEDED_BY":
             self._seq_leg_constraints.insert(0, rhs_leg)
-            return self._apply_sequential_link(lhs, rhs, window, "PRECEDED_BY")
+            return self._apply_sequential_link(
+                lhs, rhs, window, "PRECEDED_BY", lhs_leg, rhs_leg
+            )
         if rhs_leg:
             raise PrismQLRuntimeError(
                 "Pattern variables are not supported on the right-hand side "
                 "of NOT_FOLLOWED_BY/NOT_PRECEDED_BY — the excluded message "
                 "is not part of the result group. Use a concrete condition."
             )
-        return self._apply_negative_link(lhs, rhs, window, expr.op)
+        return self._apply_negative_link(lhs, rhs, window, expr.op, lhs_leg)
 
     def execute_bool(
         self, expr: Expr

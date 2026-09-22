@@ -315,6 +315,27 @@ def _cooccur_constraints(
     return None, (pl.all_horizontal(conds) if conds else None), first_leg
 
 
+def single_row(frame: Any, leg: Leg) -> Any:
+    """One restriction on its own: every match is a group of one. A variable
+    named twice on the leg holds the row's fields equal; ``!$k`` has nothing
+    earlier to differ from and is an error."""
+    pl = _pl()
+    if leg.unequal:
+        v = leg.unequal[0][0]
+        raise PrismQLRuntimeError(f"!${v} refers to a variable no earlier leg binds")
+    rows = leg_frame(frame, leg.ids)
+    for cond in _self_consistency("", leg):
+        rows = rows.filter(cond)
+    rows = rows.sort("position").with_row_index("group")
+    res = rows.select(
+        pl.col("group").cast(pl.UInt32),
+        pl.lit(0, dtype=pl.UInt32).alias("slot"),
+        "position",
+        "id",
+    )
+    return _attach_bindings(res, frame, 0, leg.equal)
+
+
 def _empty(frame: Any) -> Any:
     pl = _pl()
     return frame.filter(pl.lit(False)).select(

@@ -15,7 +15,7 @@ from datetime import timedelta
 from itertools import product
 from typing import Any
 
-from ..types import MessageId
+from ..types import Chain, MessageId
 from . import _pl
 from .frames import query_frame
 from .operators import (
@@ -64,13 +64,13 @@ def _frame(backend: Any, ids: Iterable[MessageId], legs: Sequence[Leg], ts: str)
     return query_frame(backend, ids, fields=fields, timestamp_field=ts)
 
 
-def _result_from_groups(
-    frame: Any, id_groups: Sequence[Sequence[MessageId]], axis_col: str
-) -> Any:
-    """Id groups -> a result frame; slots follow (axis, position), never the
-    order the groups arrived in (the engine sorted them by id — A9)."""
+def _result_from_groups(frame: Any, id_groups: Sequence[Sequence[MessageId]]) -> Any:
+    """Id groups -> a result frame. Slots are the groups' own order: a chain
+    is chronological by its links (a later link on another axis must not
+    re-sort it — the anchor is the chain's last slot, not the latest
+    timestamp), and a stage result is already in its axis order."""
     pl = _pl()
-    rows = [(g, m) for g, grp in enumerate(id_groups) for m in grp]
+    rows = [(g, i, m) for g, grp in enumerate(id_groups) for i, m in enumerate(grp)]
     if not rows:
         return frame.filter(pl.lit(False)).select(
             pl.lit(0, dtype=pl.UInt32).alias("group"),
@@ -79,18 +79,15 @@ def _result_from_groups(
             "id",
         )
     df = pl.DataFrame(
-        {"group": [g for g, _ in rows], "id": [m for _, m in rows]},
-        schema_overrides={"group": pl.UInt32},
+        {
+            "group": [g for g, _, _ in rows],
+            "slot": [i for _, i, _ in rows],
+            "id": [m for _, _, m in rows],
+        },
+        schema_overrides={"group": pl.UInt32, "slot": pl.UInt32},
     ).lazy()
-    df = df.join(
-        frame.select("id", "position", pl.col(axis_col).alias("_ax")),
-        on="id",
-        how="left",
-    )
-    df = df.sort(["group", "_ax", "position"]).with_columns(
-        pl.int_range(pl.len()).over("group").cast(pl.UInt32).alias("slot")
-    )
-    return df.select("group", "slot", "position", "id")
+    df = df.join(frame.select("id", "position"), on="id", how="left")
+    return df.select("group", "slot", "position", "id").sort(["group", "slot"])
 
 
 def _attach_leg_bindings(result: Any, frame: Any, legs: Sequence[Leg]) -> Any:
@@ -114,52 +111,41 @@ def run_link(
     ts: str,
     lhs: set[MessageId] | list[list[MessageId]],
     rhs: set[MessageId],
-    buckets: Sequence[Sequence[Constraint]],
+    lhs_legs: Sequence[Sequence[Constraint]],
+    rhs_leg: Sequence[Constraint],
     window: Any,
     forward: bool,
-) -> list[list[MessageId]]:
-    """One positive link. ``buckets`` are the chain's per-leg constraints in
-    chronological order (the visitor appends forward legs and prepends
-    backward legs): for an lhs of k slots the rhs is bucket k (forward) or
-    bucket ``last - k`` (backward), and the lhs slots are the buckets before
-    / after it."""
+) -> Chain:
+    """One positive link. ``lhs_legs`` are the constraints of the lhs slots
+    in chronological order (one bucket for a set lhs); ``rhs_leg`` those of
+    the new slot. Returns a Chain whose ``legs`` follow the new slot order."""
     w = window_of(window)
-    k = 1 if isinstance(lhs, set) else (len(lhs[0]) if lhs else 1)
-    n = len(buckets)
-    if forward:
-        lhs_b = list(buckets[:k]) + [[]] * max(0, k - len(buckets[:k]))
-        rhs_b = buckets[k] if k < n else []
-    else:
-        r = n - 1 - k
-        rhs_b = buckets[r] if 0 <= r < n else []
-        lhs_b = list(buckets[r + 1 : r + 1 + k]) if r >= -1 else [[]] * k
-        lhs_b += [[]] * max(0, k - len(lhs_b))
-    rhs_leg = leg(rhs, rhs_b)
+    rhs_l = leg(rhs, rhs_leg)
     if isinstance(lhs, set):
-        lhs_leg = leg(lhs, lhs_b[0] if lhs_b else ())
-        frame = _frame(backend, lhs | rhs, [lhs_leg, rhs_leg], ts)
-        return groups(
-            link(
-                frame,
-                None,
-                lhs_leg,
-                rhs_leg,
-                window=w,
-                forward=forward,
-                timestamp_field=ts,
-            )
+        lhs_l = leg(lhs, lhs_legs[0] if lhs_legs else ())
+        frame = _frame(backend, lhs | rhs, [lhs_l, rhs_l], ts)
+        res = link(
+            frame, None, lhs_l, rhs_l, window=w, forward=forward, timestamp_field=ts
         )
+        out_legs = (
+            [list(lhs_legs[0] if lhs_legs else []), list(rhs_leg)]
+            if forward
+            else [list(rhs_leg), list(lhs_legs[0] if lhs_legs else [])]
+        )
+        return Chain(groups(res), out_legs)
     if not lhs:
-        return []
-    lhs_legs = [leg((), b) for b in lhs_b]
+        return Chain([], [])
+    lhs_ls = [leg((), b) for b in lhs_legs]
     members = {m for g in lhs for m in g}
-    frame = _frame(backend, members | rhs, [*lhs_legs, rhs_leg], ts)
-    seqs = _attach_leg_bindings(
-        _result_from_groups(frame, lhs, _axis_col(w, ts)), frame, lhs_legs
+    frame = _frame(backend, members | rhs, [*lhs_ls, rhs_l], ts)
+    seqs = _attach_leg_bindings(_result_from_groups(frame, lhs), frame, lhs_ls)
+    res = link(frame, seqs, None, rhs_l, window=w, forward=forward, timestamp_field=ts)
+    out_legs = (
+        [list(b) for b in lhs_legs] + [list(rhs_leg)]
+        if forward
+        else [list(rhs_leg)] + [list(b) for b in lhs_legs]
     )
-    return groups(
-        link(frame, seqs, None, rhs_leg, window=w, forward=forward, timestamp_field=ts)
-    )
+    return Chain(groups(res), out_legs)
 
 
 def run_negative_link(
@@ -182,6 +168,46 @@ def run_negative_link(
 
 
 # ------------------------------------------------------------ comma rows
+
+
+def _dedupe(id_groups: list[list[MessageId]]) -> list[list[MessageId]]:
+    """Two assignments with different bindings but the same members are one
+    answer once the bindings are projected away."""
+    seen: set[tuple[MessageId, ...]] = set()
+    out: list[list[MessageId]] = []
+    for g in id_groups:
+        key = tuple(sorted(g, key=str))
+        if key not in seen:
+            seen.add(key)
+            out.append(g)
+    return out
+
+
+def run_single(
+    backend: Any,
+    ts: str,
+    ids: Sequence[MessageId],
+    constraints: Sequence[Constraint],
+    window: Any,
+) -> list[list[MessageId]]:
+    """A lone restriction: one group per match, in the order given (the
+    executor sorts a set by id, a negative link hands its own order). Same-row
+    equalities (``field(user,$u) AND field(kind,$u)``) filter it; an unbound
+    ``!$k`` is an error; a temporal window rejects rows without a timestamp
+    (and needs the axis)."""
+    from .operators import single_row
+
+    lg = leg(ids, constraints)
+    if not lg.equal and not lg.unequal and not isinstance(window_of(window), tuple):
+        return [[m] for m in ids]
+    frame = _frame(backend, ids, [lg], ts)
+    res = single_row(frame, lg)
+    w = window_of(window)
+    if isinstance(w, tuple):
+        from .operators import body_span
+
+        res = body_span(frame, res, window=w, timestamp_field=ts)
+    return groups(res)
 
 
 def run_cooccur(
@@ -207,7 +233,7 @@ def run_cooccur(
         )
     if ranges is None or all(lo == hi for lo, hi in ranges):
         frame = _frame(backend, {m for lg in legs for m in lg.ids}, legs, ts)
-        return groups(cooccur_row(frame, legs, window=w, timestamp_field=ts))
+        return _dedupe(groups(cooccur_row(frame, legs, window=w, timestamp_field=ts)))
     # Expand ranges: each original item i contributed ranges[i][0] copies to
     # ``legs`` in order; try every size in [min, max] per item.
     items: list[tuple[Leg, int, int]] = []
@@ -242,12 +268,10 @@ def _stages(
     backend: Any,
     ts: str,
     stage_groups: Sequence[Sequence[Sequence[MessageId]]],
-    w: Window,
 ) -> tuple[Any, list[Any]]:
     members = {m for st in stage_groups for g in st for m in g}
     frame = _frame(backend, members, [], ts)
-    ax = _axis_col(w, ts)
-    return frame, [_result_from_groups(frame, st, ax) for st in stage_groups]
+    return frame, [_result_from_groups(frame, st) for st in stage_groups]
 
 
 def run_chain_groups(
@@ -260,7 +284,7 @@ def run_chain_groups(
     negative: bool = False,
 ) -> list[list[MessageId]]:
     w = window_of(window)
-    frame, (lf, rf) = _stages(backend, ts, [left, right], w)
+    frame, (lf, rf) = _stages(backend, ts, [left, right])
     if negative:
         return groups(
             negative_chain_groups(
@@ -279,7 +303,7 @@ def run_merge_groups(
     window: Any,
 ) -> list[list[MessageId]]:
     w = window_of(window)
-    frame, frames = _stages(backend, ts, stages, w)
+    frame, frames = _stages(backend, ts, stages)
     return groups(merge_groups(frame, frames, window=w, timestamp_field=ts))
 
 
@@ -301,5 +325,5 @@ def run_body_span(
     if not members:
         return []
     frame = _frame(backend, members, [], ts)
-    res = _result_from_groups(frame, id_groups, _axis_col(w, ts))
+    res = _result_from_groups(frame, id_groups)
     return groups(body_span(frame, res, window=w, timestamp_field=ts))

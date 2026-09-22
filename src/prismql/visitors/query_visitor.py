@@ -18,10 +18,12 @@ from ..plan.bridge import (
     run_link,
     run_merge_groups,
     run_negative_link,
+    run_single,
 )
 from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..processors.variables import VariableConstraint
 from ..types import (
+    Chain,
     MessageGroup,
     MessageId,
     NamedQueryResult,
@@ -528,11 +530,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         n_before_lhs = len(self.variable_constraints)
         lhs = self.visitRestriction(ctx.restriction())
+        n_before_rhs = len(self.variable_constraints)
         if not self._seq_leg_constraints:
             # Innermost leg of the chain: the lhs visit above fell through to
             # the boolean layer, so everything it recorded is one leg bucket.
             self._seq_leg_constraints = [list(self.variable_constraints[n_before_lhs:])]
-        n_before_rhs = len(self.variable_constraints)
+        lhs_leg = list(self.variable_constraints[n_before_lhs:n_before_rhs])
         rhs = self.visitBool_restriction(ctx.bool_restriction())
         rhs_leg = list(self.variable_constraints[n_before_rhs:])
         window = self._extract_window_constraint(ctx)
@@ -552,10 +555,14 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # these buckets once the chain is complete.
         if ctx.FollowedBy():
             self._seq_leg_constraints.append(rhs_leg)
-            return self._apply_sequential_link(lhs, rhs, window, "FOLLOWED_BY")
+            return self._apply_sequential_link(
+                lhs, rhs, window, "FOLLOWED_BY", lhs_leg, rhs_leg
+            )
         if ctx.PrecededBy():
             self._seq_leg_constraints.insert(0, rhs_leg)
-            return self._apply_sequential_link(lhs, rhs, window, "PRECEDED_BY")
+            return self._apply_sequential_link(
+                lhs, rhs, window, "PRECEDED_BY", lhs_leg, rhs_leg
+            )
         if rhs_leg:
             # The excluded message never appears in the result group, so a
             # variable on it has nothing to bind to.
@@ -574,14 +581,20 @@ class PrismQLVisitor(BasePrismQLVisitor):
         rhs: set[MessageId],
         window: WindowConstraint | None,
         operator: str,
+        lhs_leg: list[Any] | None = None,
+        rhs_leg: list[Any] | None = None,
     ) -> list[MessageGroup] | PartialSequence:
         """Evaluate one FOLLOWED_BY/PRECEDED_BY link, chaining through lhs."""
         # No window: defer — an enclosing link's trailing window evaluates us.
         if window is None:
-            return PartialSequence(lhs, rhs, operator)
-
+            partial = PartialSequence(lhs, rhs, operator)
+            partial.lhs_leg = list(lhs_leg or [])
+            partial.rhs_leg = list(rhs_leg or [])
+            return partial
         evaluated = self._evaluate_partial_sequence(lhs, window)
-        return self._apply_link_evaluated(evaluated, rhs, window, operator)
+        return self._apply_link_evaluated(
+            evaluated, rhs, window, operator, lhs_leg or [], rhs_leg or []
+        )
 
     def _apply_link_evaluated(
         self,
@@ -589,16 +602,22 @@ class PrismQLVisitor(BasePrismQLVisitor):
         rhs: set[MessageId],
         window: WindowConstraint,
         operator: str,
+        lhs_leg: list[Any],
+        rhs_leg: list[Any],
     ) -> list[MessageGroup]:
         """One positive link through the operator layer (graph #8): the
         nearest eligible rhs per lhs slot, variables held inside candidate
-        selection, positional or temporal by the window's kind."""
+        selection, positional or temporal by the window's kind. The legs of
+        an evaluated chain ride on it (``Chain.legs``); a set lhs brings its
+        own bucket."""
+        lhs_legs = lhs.legs if isinstance(lhs, Chain) else [lhs_leg]
         return run_link(
             self.search_backend,
             self.timestamp_field,
             lhs,
             rhs,
-            self._seq_leg_constraints,
+            lhs_legs,
+            rhs_leg,
             window,
             operator == "FOLLOWED_BY",
         )
@@ -609,6 +628,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         rhs: set[MessageId],
         window: WindowConstraint | None,
         operator: str,
+        lhs_leg: list[Any] | None = None,
     ) -> set[MessageId] | list[MessageGroup]:
         """Evaluate one NOT_FOLLOWED_BY/NOT_PRECEDED_BY link."""
         forward = operator == "NOT_FOLLOWED_BY"
@@ -624,9 +644,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 f"{operator} cannot be chained with other sequential operators"
             )
 
-        lhs_constraints = (
-            self._seq_leg_constraints[0] if self._seq_leg_constraints else []
-        )
+        lhs_constraints = list(lhs_leg or [])
         kept = run_negative_link(
             self.search_backend,
             self.timestamp_field,
@@ -1144,13 +1162,26 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if len(groups) == 1 and all(
             lo == hi == 1 for lo, hi in self._restriction_ranges
         ):
-            # A lone restriction has nothing to relate: one group per match,
-            # and no order axis is needed (set-only queries run on any backend).
-            return [[m] for m in groups[0]]
+            # A lone restriction: one group per match. Same-row variable
+            # constraints, an unbound !$k and a temporal window still apply
+            # (run_single); a plain set on a plain window needs no axis.
+            return run_single(
+                self.search_backend,
+                self.timestamp_field,
+                list(groups[0]),
+                self._constraints_by_restriction(1)[0],
+                window,
+            )
         sets = [set(g) for g in groups]
         ranges = self._restriction_ranges if len(self._restriction_ranges) else None
         if ranges is not None and sum(lo for lo, _ in ranges) != len(sets):
-            ranges = None  # sequential items expanded differently; no ranges
+            # A chain inside a comma row expanded into several groups, and the
+            # old merge treated each as a required leg — a silent-wrong shape.
+            raise PrismQLRuntimeError(
+                "A FOLLOWED_BY/PRECEDED_BY chain cannot be combined with other "
+                "comma-separated restrictions: run the chain as its own query, or "
+                "use subquery stages — (SELECT chain ...) ; (SELECT ...) INWINDOW n."
+            )
         return run_cooccur(
             self.search_backend,
             self.timestamp_field,
@@ -1235,13 +1266,20 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         if partial.operator in ("FOLLOWED_BY", "PRECEDED_BY"):
             result = self._apply_sequential_link(
-                partial.lhs, rhs, window, partial.operator
+                partial.lhs,
+                rhs,
+                window,
+                partial.operator,
+                partial.lhs_leg,
+                partial.rhs_leg,
             )
             # window is non-None here, so the link is always fully evaluated
             assert not isinstance(result, PartialSequence)
             return result
         if partial.operator in ("NOT_FOLLOWED_BY", "NOT_PRECEDED_BY"):
-            return self._apply_negative_link(partial.lhs, rhs, window, partial.operator)
+            return self._apply_negative_link(
+                partial.lhs, rhs, window, partial.operator, partial.lhs_leg
+            )
 
         raise ValueError(f"Unknown sequential operator: {partial.operator}")
 
@@ -1638,6 +1676,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _close_quantifier(self, min_count: int, max_count: int | None) -> int:
         """{n,} -> {n,ceiling}; no ceiling -> a teachable error (graph #46)."""
+        if min_count < 1:
+            raise PrismQLRuntimeError(
+                f"{{{min_count},{'' if max_count is None else max_count}}} — a quantifier "
+                "minimum must be at least 1 (an optional member is not a group member)."
+            )
         if max_count is not None:
             return max_count
         if self.quantifier_ceiling is None:

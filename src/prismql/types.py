@@ -60,6 +60,12 @@ class PartialSequence:
         self.lhs = lhs
         self.rhs = rhs
         self.operator = operator
+        # The variable constraints of the two operands at the moment the
+        # link was written (chronological legs are derived from these when
+        # the deferred link is finally evaluated — never from a global
+        # bucket list, which a later PRECEDED_BY would have shifted).
+        self.lhs_leg: list[Any] = []
+        self.rhs_leg: list[Any] = []
 
     def __repr__(self) -> str:
         """String representation."""
@@ -157,3 +163,18 @@ class NamedQueryResult:
             Plain QueryResult (list of message groups)
         """
         return self.results
+
+
+class Chain(list[MessageGroup]):
+    """A chain result: id groups whose slots are chronological, plus the
+    variable constraints of each slot (``legs``, aligned with the slots)."""
+
+    legs: list[list[Any]]
+
+    def __init__(
+        self,
+        groups: list[MessageGroup] | None = None,
+        legs: list[list[Any]] | None = None,
+    ) -> None:
+        super().__init__(groups or [])
+        self.legs = legs or []
