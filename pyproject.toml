@@ -60,12 +60,7 @@ server = [
 mcp = [
     "mcp>=2.0",
 ]
-demo = [
-    "streamlit>=1.28.0",
-    "pandas>=1.5.0",
-    "pygments>=2.0.0",
-]
-all = ["prismql[nlp,semantic,ingest,arrow,plan,repl,highlighting,demo,server,mcp]"]
+all = ["prismql[nlp,semantic,ingest,arrow,plan,repl,highlighting,server,mcp]"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",

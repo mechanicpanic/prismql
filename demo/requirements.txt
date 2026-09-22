@@ -1,5 +1,0 @@
-# Requirements for PrismQL Streamlit Demo
-streamlit>=1.28.0
-antlr4-python3-runtime==4.13.1
-pandas>=1.5.0
-pygments>=2.0.0

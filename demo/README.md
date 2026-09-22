@@ -59,10 +59,3 @@ railway domain            # generates a *.up.railway.app URL
 For a custom domain: Railway dashboard → Settings → Domains → add the
 domain, then at the DNS host add a CNAME record:
 `<sub>.domain -> <target>.up.railway.app`.
-
-## Streamlit demo
-
-`demo/app.py` (Streamlit) still works for local, offline exploration — see
-inline `streamlit run demo/app.py` usage. It predates the web demo above and
-uses an older example dataset/syntax; the FastAPI + static frontend demo is
-the one that gets deployed.
