@@ -403,8 +403,13 @@ Press Ctrl+D or type \\quit to exit.
 
 
 def main() -> None:
-    """Main entry point for REPL."""
+    """Main entry point for REPL (and ``prismql ingest …``)."""
     import argparse
+
+    if sys.argv[1:2] == ["ingest"]:
+        from .ingest.cli import run
+
+        sys.exit(run(sys.argv[2:]))
 
     from .backends.factory import BackendFactory
 

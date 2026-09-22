@@ -37,6 +37,10 @@ nlp = [
 semantic = [
     "sentence-transformers>=2.2",
 ]
+# `prismql ingest --embed`: the same model stack, named for what it does.
+ingest = [
+    "sentence-transformers>=2.2",
+]
 # Kept as empty aliases for one release: both are core since P3.
 arrow = []
 plan = []
@@ -58,7 +62,7 @@ demo = [
     "pandas>=1.5.0",
     "pygments>=2.0.0",
 ]
-all = ["prismql[opensearch,elasticsearch,nlp,semantic,arrow,plan,repl,highlighting,demo,server,mcp]"]
+all = ["prismql[opensearch,elasticsearch,nlp,semantic,ingest,arrow,plan,repl,highlighting,demo,server,mcp]"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
