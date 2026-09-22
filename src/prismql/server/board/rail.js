@@ -86,8 +86,12 @@
       Object.keys(f.corpora).length > 0 || Object.keys(f.statuses).length > 0;
   }
 
-  function render(state, actions) {
-    var nowMs = Date.now();
+  // nowMs is passed by the caller (journal.js) so a periodic beat and a
+  // user-triggered render never disagree on "now" — computing our own
+  // Date.now() here let facet counts go stale between the two (carry-over
+  // from Task 4's review, graph @aleph/prismql #63).
+  function render(state, actions, nowMs) {
+    nowMs = nowMs || Date.now();
     renderRanges(state, actions);
     renderFacetGroup("rail-kind", "kinds", KIND_VALUES, nowMs, state, actions, { color: KIND_COLOR });
     renderFacetGroup("rail-source", "srcs", distinct(state.entries, "who"), nowMs, state, actions, { agent: true });

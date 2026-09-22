@@ -92,7 +92,7 @@
     var visible = visibleEntries(state, nowMs);
     lastSignature = signatureOf(visible, nowMs);
 
-    if (window.PrismQLRail) window.PrismQLRail.render(state, actions);
+    if (window.PrismQLRail) window.PrismQLRail.render(state, actions, nowMs);
 
     var chips = buildChips(state, actions);
     renderChips(chips);
@@ -119,7 +119,13 @@
     var visible = visibleEntries(state, nowMs);
     var sig = signatureOf(visible, nowMs);
     if (sig !== lastSignature) { render(state, actions, nowMs); return; }
-    if (window.PrismQLJournalList) window.PrismQLJournalList.tick(nowMs);
+    // Nothing moved in the journal itself, but other panels still read
+    // nowMs (the inspector's "received" time, rail's range-relevant
+    // counts) — the cheap path must still reach them, so it routes through
+    // the top-level dispatcher rather than only patching the journal list
+    // (carry-over from Task 4's review, graph @aleph/prismql #63).
+    if (window.PrismQLBoard) window.PrismQLBoard.render(nowMs);
+    else if (window.PrismQLJournalList) window.PrismQLJournalList.tick(nowMs);
   }
 
   var api = { render: render, tick: tick, _visibleEntries: visibleEntries, _signatureOf: signatureOf };
