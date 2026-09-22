@@ -146,7 +146,7 @@ def test_canonical_names_in_the_source_are_dropped_not_collided():
     assert again.get_column("id").to_list() == [1]
 
 
-def test_embed_gives_null_vectors_to_rows_without_text(monkeypatch):
+def test_embed_gives_zero_vectors_to_rows_without_text(monkeypatch):
     from prismql.backends import semantic as semantic_module
     from prismql.ingest.core import embed
 
@@ -161,7 +161,40 @@ def test_embed_gives_null_vectors_to_rows_without_text(monkeypatch):
     df = pl.DataFrame({"id": [1, 2, 3, 4], "text": ["oil", None, "", "  "]})
     out = embed(df, text="text", model="fake")
     vectors = out.get_column("emb").to_list()
-    assert vectors[0] is not None and vectors[1:] == [None, None, None]
+    assert vectors[0] == pytest.approx([0.3162, 0.9487], abs=1e-3)  # unit length
+    assert vectors[1:] == [[0.0, 0.0]] * 3
+
+
+def test_embedded_stream_round_trips_through_parquet_with_textless_rows(
+    tmp_path, monkeypatch
+):
+    """A null inside a fixed-size Array column does not survive Parquet
+    (pyarrow: "Expected all lists to be of size=d but index i had size=0");
+    textless rows carry zero vectors and the server skips them."""
+    from prismql.backends import semantic as semantic_module
+    from prismql.ingest.core import embed
+    from prismql.server.config import load_corpus
+
+    class Fake:
+        def __init__(self, name: str) -> None:
+            pass
+
+        def encode(self, texts: list[str]) -> list[list[float]]:
+            return [[1.0, float(len(t))] for t in texts]
+
+    monkeypatch.setattr(semantic_module, "SentenceTransformerEmbedder", Fake)
+    df = normalize(
+        pl.DataFrame({"i": [1, 2, 3], "t": [1, 2, 3], "text": ["oil", None, ""]}),
+        id_col="i",
+        time_col="t",
+    )
+    path = write(
+        embed(df, text="text", model="fake"), tmp_path / "e.parquet", embed_model="fake"
+    )
+    docs, vectors, model, _ = load_corpus(path)
+    assert model == "fake" and [d["id"] for d in docs] == [1, 2, 3]
+    index = semantic_module.SemanticIndex.from_vectors(Fake("fake"), [1, 2, 3], vectors)
+    assert len(index) == 1
 
 
 def test_server_rejects_a_parquet_whose_position_is_not_the_row_order(tmp_path):

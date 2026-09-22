@@ -161,9 +161,11 @@ def embed(
 ) -> pl.DataFrame:
     """Add ``emb``: unit-normalized float32 vectors of ``text``.
 
-    A row whose text is null or blank gets a null vector: it is not indexed,
-    exactly as ``SemanticIndex`` skips such documents when it encodes them
-    itself — the two paths must give ``similar_to()`` the same set.
+    A row whose text is null or blank gets an all-zero vector: it is not
+    indexed (``SemanticIndex.from_vectors`` skips zero vectors), exactly as
+    ``SemanticIndex`` skips such documents when it encodes them itself — the
+    two paths must give ``similar_to()`` the same set. Zero, not null: a
+    null inside a fixed-size Array column does not survive Parquet.
     """
     from ..backends.semantic import SentenceTransformerEmbedder, _normalize
 
@@ -180,7 +182,8 @@ def embed(
         )
     width = len(encoded[0]) if encoded else 0
     it = iter(encoded)
-    vectors = [next(it) if ok else None for ok in has_text]
+    zero = [0.0] * width
+    vectors = [next(it) if ok else zero for ok in has_text]
     col = pl.Series("emb", vectors, dtype=pl.List(pl.Float32))
     if width:
         col = col.cast(pl.Array(pl.Float32, width))
