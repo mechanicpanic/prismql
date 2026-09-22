@@ -382,6 +382,39 @@ def test_reload_is_rate_limited_when_enabled(tmp_path):
     assert c.post("/reload").status_code == 429
 
 
+def test_results_page_is_rate_limited(tmp_path):
+    # /results/{id} skipped _rate_limited entirely (fix round 2, #2): apply
+    # the same check the other endpoints use.
+    c = _make_client(tmp_path, rate_limit_per_minute=2)
+    rid = c.post("/evaluate", json={"query": "SELECT from(tick_a)"}).json()["result_id"]
+    assert c.get(f"/results/{rid}").status_code == 200  # 2nd request: within budget
+    assert c.get(f"/results/{rid}").status_code == 429  # 3rd: over budget
+
+
+def test_results_jsonl_is_rate_limited(tmp_path):
+    c = _make_client(tmp_path, rate_limit_per_minute=2)
+    rid = c.post("/evaluate", json={"query": "SELECT from(tick_a)"}).json()["result_id"]
+    assert c.get(f"/results/{rid}.jsonl").status_code == 200
+    assert c.get(f"/results/{rid}.jsonl").status_code == 429
+
+
+def test_result_ids_do_not_collide_across_restarted_processes(tmp_path):
+    # ResultStore numbers ids from 1 in every process; without an opaque
+    # per-result suffix a fresh process's first put would collide with an
+    # id held from before a restart (fix round 2, #1).
+    c1 = _make_client(tmp_path)
+    rid1 = c1.post("/evaluate", json={"query": "SELECT from(tick_a)"}).json()[
+        "result_id"
+    ]
+    c2 = _make_client(tmp_path)  # a fresh ResultStore, counter reset too
+    rid2 = c2.post("/evaluate", json={"query": "SELECT from(tick_a)"}).json()[
+        "result_id"
+    ]
+    assert rid1 != rid2
+    r = c2.get(f"/results/{rid1}")
+    assert r.status_code == 404 and r.json()["error"]["type"] == "gone"
+
+
 def test_request_dictionaries_term_cap(tmp_path):
     c = _make_client(tmp_path, max_request_dictionary_terms=3)
     r = c.post(
@@ -579,11 +612,34 @@ def test_search_output_file(tmp_path):
     )
     body = r.json()
     assert body["count"] == 2 and "hits" not in body
+    assert body["total"] == 2 and body["truncated"] is False
     from pathlib import Path
 
     lines = Path(body["path"]).read_text(encoding="utf-8").splitlines()
     assert len(lines) == 2 and json.loads(lines[0])["event"]["text"]
     assert body["preview"][0]["snippet"]
+
+
+def test_search_output_file_truncated_means_the_file_lacks_a_kept_hit(tmp_path):
+    # scout_depth caps what scouting KEEPS below what it FOUND (2 hits,
+    # kept 1). The file holds every kept hit, so truncated must say so
+    # against `len(stored)`, not `total` (fix round 2, #3): the old formula
+    # (`len(rows) < total`) falsely called the file truncated even though
+    # it holds everything scouting kept.
+    pytest.importorskip("tantivy")
+    data = tmp_path / "events.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    cfg = ServerConfig(
+        backend_type="memory",
+        data=str(data),
+        enable_file_output=True,
+        results_dir=str(tmp_path / "out"),
+        scout_depth=1,
+    )
+    client = TestClient(create_app(cfg))
+    r = client.post("/search", json={"query": "spike OR calm", "output": "file"})
+    body = r.json()
+    assert body["count"] == 1 and body["total"] == 2 and body["truncated"] is False
 
 
 def test_similar_without_an_index_is_422(client):
@@ -863,6 +919,19 @@ def test_results_stream_whole_as_jsonl(client):
     assert [x["ids"] for x in lines] == [[1], [2], [4]]
 
 
+def test_results_jsonl_reports_total_lines_in_a_header(client):
+    # X-PrismQL-Total: the number of lines the stream will carry, so a
+    # client can check completeness without buffering the whole thing
+    # first (fix round 2, #4).
+    rid = client.post(
+        "/evaluate", json={"query": "SELECT from(tick_a)", "max_results": 1}
+    ).json()["result_id"]
+    r = client.get(f"/results/{rid}.jsonl?hydrate=false")
+    assert r.status_code == 200
+    lines = r.text.splitlines()
+    assert r.headers["X-PrismQL-Total"] == str(len(lines))
+
+
 def test_unknown_or_reloaded_results_are_gone(tmp_path):
     c = _make_client(tmp_path, enable_reload=True)
     rid = c.post("/evaluate", json={"query": "SELECT from(tick_a)"}).json()["result_id"]
@@ -870,7 +939,8 @@ def test_unknown_or_reloaded_results_are_gone(tmp_path):
     c.post("/reload")
     r = c.get(f"/results/{rid}")
     assert r.status_code == 404 and r.json()["error"]["type"] == "gone"
-    assert c.get("/results/r999.jsonl").status_code == 404
+    # well-formed but unknown — means "unknown id", not "malformed"
+    assert c.get("/results/r999999-00000000.jsonl").status_code == 404
 
 
 def test_results_page_refuses_a_result_raced_by_a_concurrent_reload(tmp_path):

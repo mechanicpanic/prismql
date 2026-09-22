@@ -13,11 +13,13 @@ from typing import Any
 from ..reference import load_reference
 
 DEFAULT_URL = "http://127.0.0.1:8901"
-# What evaluate() actually hands back as a page-able id ("r<N>"); anything
-# else must not reach the URL path unquoted — a dotted/query-bearing id can
-# hit a different route (e.g. /results/{id}.jsonl) or drop offset/limit
-# silently instead of erroring.
-_RESULT_ID_RE = re.compile(r"^r\d+$")
+# What evaluate() actually hands back as a page-able id ("r<N>-<8 lowercase
+# hex>", graph @aleph/prismql, node #65); anything else must not reach the
+# URL path unquoted — a dotted/query-bearing id can hit a different route
+# (e.g. /results/{id}.jsonl) or drop offset/limit silently instead of
+# erroring. ASCII digits and fullmatch (not match + "$"): "$" alone accepts
+# a trailing newline, and \d in a str pattern matches Unicode digits too.
+_RESULT_ID_RE = re.compile(r"r[0-9]+-[0-9a-f]{8}")
 
 _TOOL_DESCRIPTION = """\
 Run a PrismQL query against the configured event corpus.
@@ -125,13 +127,13 @@ def page_via_http(
     result_id: str, offset: int = 0, limit: int = 20, base_url: str | None = None
 ) -> dict[str, Any]:
     """GET one page of a kept result; structured errors, never raises."""
-    if not _RESULT_ID_RE.match(result_id):
+    if not _RESULT_ID_RE.fullmatch(result_id):
         return {
             "ok": False,
             "error": {
                 "type": "bad_request",
                 "message": (
-                    "result_id must look like 'r<N>' (as returned by "
+                    "result_id must look like 'r<N>-<hex>' (as returned by "
                     f"evaluate); got {result_id!r}"
                 ),
             },

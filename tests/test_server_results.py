@@ -1,5 +1,7 @@
 """The server's result store: folded results under ids (graph #65)."""
 
+import re
+
 from prismql.backends.memory import MemoryBackend
 from prismql.server.pages import page_payload
 from prismql.server.results import ResultStore, StoredResult
@@ -47,6 +49,19 @@ def test_ids_are_unique_and_clear_forgets_everything() -> None:
     assert r1 != r2 and r1.startswith("r")
     store.clear()
     assert store.get(r1) is None and store.get(r2) is None
+
+
+def test_ids_carry_an_opaque_hex_suffix_that_differs_across_puts() -> None:
+    # The counter alone repeats from 1 in every process (fix round 2, #1):
+    # after a restart an id held from before it would page a DIFFERENT
+    # query's result with ok:true. The hex half is drawn fresh per result —
+    # practically never repeats across processes and is not guessable.
+    store = ResultStore(budget_bytes=1 << 20)
+    r1 = store.put(StoredResult.from_groups("groups", "c", [[1]]))
+    r2 = store.put(StoredResult.from_groups("groups", "c", [[2]]))
+    assert re.fullmatch(r"r\d+-[0-9a-f]{8}", r1)
+    assert re.fullmatch(r"r\d+-[0-9a-f]{8}", r2)
+    assert r1.split("-", 1)[1] != r2.split("-", 1)[1]
 
 
 DOCS = [

@@ -634,9 +634,13 @@ def create_app(config: ServerConfig) -> FastAPI:
         if req.output == "file":
             rows = page["hits"]
             payload = _write_hits_file(rows, _result_slug(key, req.label), config)
-            # Honest flag: the file holds every KEPT hit, but scouting keeps
-            # only a depth — fewer than were found is still possible.
-            payload["truncated"] = len(rows) < stored.total
+            # Honest flag: the file's own cap (`limit` above) is what can
+            # make it short, not scouting's depth cap — that one is already
+            # visible as `total` vs. `len(stored)` (fix round 2, #3: the old
+            # `len(rows) < stored.total` falsely called the file truncated
+            # whenever scout_depth had capped what was found, even though
+            # the file holds every hit that was kept).
+            payload["truncated"] = len(rows) < len(stored)
             payload["total"] = stored.total
         else:
             payload = page
@@ -894,8 +898,13 @@ def create_app(config: ServerConfig) -> FastAPI:
     # Declared before /results/{rid}: otherwise {rid} swallows "r3.jsonl".
     @app.get("/results/{rid}.jsonl")
     def result_jsonl(
-        rid: str, hydrate: bool | None = None, fields: str | None = None
+        rid: str,
+        request: Request,
+        hydrate: bool | None = None,
+        fields: str | None = None,
     ) -> Any:
+        if _rate_limited(_client_ip(request)):
+            return _rate_limit_response()
         kept = _kept(rid)
         if isinstance(kept, JSONResponse):
             return kept
@@ -916,16 +925,26 @@ def create_app(config: ServerConfig) -> FastAPI:
                 for item in page.get("results") or page.get("hits") or []:
                     yield json.dumps(item, ensure_ascii=False, default=str) + "\n"
 
-        return StreamingResponse(lines(), media_type="application/x-ndjson")
+        return StreamingResponse(
+            lines(),
+            media_type="application/x-ndjson",
+            # The number of lines the stream will carry, so a client can
+            # tell a short read from a complete one without buffering the
+            # whole thing first (graph @aleph/prismql, node #65).
+            headers={"X-PrismQL-Total": str(len(stored))},
+        )
 
     @app.get("/results/{rid}")
     def result_page(
         rid: str,
+        request: Request,
         offset: int = 0,
         limit: int = 20,
         hydrate: bool | None = None,
         fields: str | None = None,
     ) -> Any:
+        if _rate_limited(_client_ip(request)):
+            return _rate_limit_response()
         kept = _kept(rid)
         if isinstance(kept, JSONResponse):
             return kept

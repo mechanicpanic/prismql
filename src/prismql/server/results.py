@@ -7,6 +7,7 @@ results go first, their journal summaries stay.
 
 from __future__ import annotations
 
+import secrets
 import threading
 from array import array
 from collections import OrderedDict
@@ -85,7 +86,12 @@ class ResultStore:
 
     def put(self, result: StoredResult) -> str:
         with self._lock:
-            rid = f"r{next(self._ids)}"
+            # The counter alone repeats from 1 in every process (fix round
+            # 2, #1): after a restart it would page a DIFFERENT query's
+            # result with ok:true. The hex half is drawn fresh per result,
+            # making a cross-process collision practically impossible and
+            # the id unguessable (graph @aleph/prismql, node #65).
+            rid = f"r{next(self._ids)}-{secrets.token_hex(4)}"
             self._items[rid] = result
             self._bytes += result.nbytes
             while self._bytes > self.budget and len(self._items) > 1:

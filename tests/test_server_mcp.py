@@ -21,7 +21,18 @@ def test_default_url():
     assert DEFAULT_URL == "http://127.0.0.1:8901"
 
 
-@pytest.mark.parametrize("bad_id", ["r1.jsonl", "r1#x", "r1?x=", "../activity"])
+@pytest.mark.parametrize(
+    "bad_id",
+    [
+        "r1.jsonl",
+        "r1#x",
+        "r1?x=",
+        "../activity",
+        "r1",  # old bare-counter format no longer accepted (fix round 2, #1)
+        "r1\n",  # closes the "$ accepts a trailing newline" gap
+        "r1-XYZ",  # right shape, non-hex/short suffix
+    ],
+)
 def test_page_via_http_rejects_malformed_result_ids(bad_id):
     # no server listening anywhere reachable — the check must precede the
     # call, or these would either 404 the wrong route, mis-parse the query
@@ -29,7 +40,7 @@ def test_page_via_http_rejects_malformed_result_ids(bad_id):
     result = page_via_http(bad_id, base_url="http://127.0.0.1:9")
     assert result["ok"] is False
     assert result["error"]["type"] == "bad_request"
-    assert bad_id in result["error"]["message"]
+    assert repr(bad_id) in result["error"]["message"]
 
 
 def test_call_never_raises_on_a_non_json_success_body(monkeypatch):
@@ -98,7 +109,7 @@ def test_round_trip_against_app(tmp_path):
     # a well-formed but stale/unknown result id comes back as the server's
     # structured 404 — validation only rejects malformed ids, not unknown
     # ones (those still need the server's own "gone" answer)
-    gone = page_via_http("r999999", base_url="http://127.0.0.1:8929")
+    gone = page_via_http("r999999-00000000", base_url="http://127.0.0.1:8929")
     assert gone["ok"] is False
     assert gone["error"]["type"] == "gone"
 
