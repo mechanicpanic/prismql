@@ -333,7 +333,7 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         backend_config["timestamp_fields"] = config.timestamp_fields
 
     index = _semantic_index(
-        config, backend_config["documents"], vectors, embedded_model, embedded_text
+        config, backend_config.get("documents"), vectors, embedded_model, embedded_text
     )
     if index is not None:
         backend_config["semantic_index"] = index
