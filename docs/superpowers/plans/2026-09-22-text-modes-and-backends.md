@@ -36,3 +36,6 @@
 `POST /search` (`query` in tantivy syntax, `limit`, `corpus`, `hydrate`, `output`) and `POST /similar` (`text`, `limit`, `threshold?`, …); hits `[{id, score[, event]}]`; file mode writes JSONL + preview; scout index per corpus built lazily (tantivy backend reused when present). Skill and AGENT-USE: "scout, then query". Tests in `tests/test_server_app.py`.
 
 ### Task 6: Codex adversarial review of the whole series; fix; STATE/CHANGELOG; graph reconcile (#59, #39, #58, #31).
+
+---
+*Execution note:* tasks 1–5 executed in this order on 2026-09-22 (commits c9e8bc5, 3e00117, d29c790, 7c59d80); task 6 Codex adversarial review found three defects (tokenizers diverged between backends, scouting limits uncapped, pre-layout tantivy indexes failing mid-query), fixed in 349ae82 with regressions. Tantivy's axis travels as an `order.parquet` sidecar rather than fast fields (the Python binding exposes no columnar read); the plan's wording is superseded by the code.
