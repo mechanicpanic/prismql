@@ -192,6 +192,15 @@ def load_config(path: str | Path) -> ServerConfig:
 
     semantic = raw.get("semantic", {})
 
+    results_memory_mb = int(server.get("results_memory_mb", 256))
+    if results_memory_mb < 1:
+        raise ValueError(
+            f"[server].results_memory_mb must be >= 1; got {results_memory_mb}"
+        )
+    scout_depth = int(server.get("scout_depth", 1000))
+    if scout_depth < 1:
+        raise ValueError(f"[server].scout_depth must be >= 1; got {scout_depth}")
+
     return ServerConfig(
         host=server.get("host", "127.0.0.1"),
         port=server.get("port", 8901),
@@ -214,8 +223,8 @@ def load_config(path: str | Path) -> ServerConfig:
         file_output_max_groups=server.get("file_output_max_groups", 100_000),
         max_request_dictionary_terms=server.get("max_request_dictionary_terms", 2000),
         activity_max=int(server.get("activity_max", 500)),
-        results_memory_mb=int(server.get("results_memory_mb", 256)),
-        scout_depth=int(server.get("scout_depth", 1000)),
+        results_memory_mb=results_memory_mb,
+        scout_depth=scout_depth,
         dictionaries=dictionaries,
         corpora=corpora,
         default_corpus=default_corpus,

@@ -105,12 +105,16 @@ class ServerState:
         self.lock = threading.Lock()
         self.engines: dict[str, Any] = {}
         self.exec_locks: dict[str, threading.Lock] = {}
-        self.scouts: dict[str, Any] = {}  # per-corpus ranked full-text index
+        # per-corpus ranked full-text index, keyed with the engine it was
+        # built from: reuse only when that engine is still the current one
+        # (graph @aleph/prismql, node #65).
+        self.scouts: dict[str, tuple[Any, Any]] = {}
         self.loaded_at: str | None = None
         self.results = ResultStore(config.results_memory_mb * 1024 * 1024)
         # Bumped on every reload; stamped onto each stored result so a page
         # computed on an earlier load can be told apart from the current one
-        # (fix round 1, #1 — positions are load-order, and load order moves).
+        # (graph @aleph/prismql, node #65 — positions are load-order, and
+        # load order moves).
         self.generation = 0
         # The board's journal (graph #63): one summary per request, never the
         # results themselves. A ring in memory; JSONL beside the results when
@@ -170,28 +174,48 @@ class ServerState:
                 self.exec_locks[resolved],
             )
 
-    def scout_for(self, name: str | None) -> Any:
+    def scout_for(
+        self,
+        name: str | None,
+        engine: Any,
+        corpus_cfg: CorpusConfig,
+        exec_lock: threading.Lock,
+    ) -> Any:
         """The corpus's ranked full-text index: its own tantivy backend when
         it has one, otherwise an in-process tantivy index built once from
-        the documents on first use (graph #58)."""
-        engine, corpus_cfg, exec_lock = self.engine_for(name)
+        the documents on first use (graph #58).
+
+        Takes the ``(engine, corpus_cfg, exec_lock)`` tuple the caller
+        already resolved via ``engine_for`` — it never re-resolves the
+        corpus itself. A reload landing between the caller's ``engine_for``
+        and this call would otherwise let a scout be built from the NEW
+        engine's documents while the caller ranks against the OLD one, or
+        cache a scout under a name a later reload has already moved past
+        (graph @aleph/prismql, node #65).
+        """
         resolved = name or self.config.default_corpus
         backend = engine.search_backend
         if getattr(backend, "rank", None) is not None:
             return backend
         with exec_lock:
-            scout = self.scouts.get(resolved)
-            if scout is None:
-                from ..backends.tantivy import TantivyBackend
+            cached = self.scouts.get(resolved)
+            if cached is not None and cached[0] is engine:
+                return cached[1]
+            from ..backends.tantivy import TantivyBackend
 
-                ids = backend.get_all_document_ids()
-                docs = backend.get_documents(sorted(ids, key=str))
-                scout = TantivyBackend(
-                    docs,
-                    id_field=corpus_cfg.id_field,
-                    text_language=corpus_cfg.text_language,
-                )
-                self.scouts[resolved] = scout
+            ids = backend.get_all_document_ids()
+            docs = backend.get_documents(sorted(ids, key=str))
+            scout = TantivyBackend(
+                docs,
+                id_field=corpus_cfg.id_field,
+                text_language=corpus_cfg.text_language,
+            )
+        with self.lock:
+            # Only cache under a name that still points at this engine —
+            # a reload that landed while the scout was building must not
+            # let its result be adopted as current.
+            if self.engines.get(resolved) is engine:
+                self.scouts[resolved] = (engine, scout)
         return scout
 
 
@@ -382,7 +406,8 @@ def create_app(config: ServerConfig) -> FastAPI:
         start = perf_counter()
         # Read before engine_for, deliberately: a reload landing between this
         # read and the query running only marks the result stale (Task 5
-        # serves "gone" on a load mismatch) — never wrong (fix round 1, #1).
+        # serves "gone" on a load mismatch) — never wrong (graph
+        # @aleph/prismql, node #65).
         load = state.generation
         try:
             engine, corpus_cfg, exec_lock = state.engine_for(req.corpus)
@@ -591,17 +616,22 @@ def create_app(config: ServerConfig) -> FastAPI:
         """The kept hits, shaped for the wire: a page for inline output, a
         JSONL file plus a summary for ``output == "file"`` (graph #65)."""
         hydrate = config.hydrate if req.hydrate is None else req.hydrate
+        limit = (
+            config.file_output_max_groups
+            if req.output == "file"
+            else min(req.limit, config.max_results)
+        )
+        page = page_payload(
+            stored,
+            backend,
+            id_field=corpus_cfg.id_field,
+            time_field=corpus_cfg.timestamp_field,
+            offset=0,
+            limit=limit,
+            hydrate=hydrate,
+            fields=None,
+        )
         if req.output == "file":
-            page = page_payload(
-                stored,
-                backend,
-                id_field=corpus_cfg.id_field,
-                time_field=corpus_cfg.timestamp_field,
-                offset=0,
-                limit=config.file_output_max_groups,
-                hydrate=hydrate,
-                fields=None,
-            )
             rows = page["hits"]
             payload = _write_hits_file(rows, _result_slug(key, req.label), config)
             # Honest flag: the file holds every KEPT hit, but scouting keeps
@@ -609,20 +639,51 @@ def create_app(config: ServerConfig) -> FastAPI:
             payload["truncated"] = len(rows) < stored.total
             payload["total"] = stored.total
         else:
-            payload = page_payload(
-                stored,
-                backend,
-                id_field=corpus_cfg.id_field,
-                time_field=corpus_cfg.timestamp_field,
-                offset=0,
-                limit=min(req.limit, config.max_results),
-                hydrate=hydrate,
-                fields=None,
-            )
+            payload = page
         payload["result_id"] = rid
         payload["ok"] = True
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
         return payload
+
+    def _scout_store(
+        req: Any,
+        request: Request,
+        kind: str,
+        hits: list[tuple[Any, float]],
+        total: int,
+        engine: Any,
+        corpus_cfg: CorpusConfig,
+        load: int,
+        key: str,
+        start: float,
+    ) -> dict[str, Any] | JSONResponse:
+        """positions -> ``StoredResult.from_hits`` -> ``state.results.put`` ->
+        ``_scout_response``: shared by /search and /similar (graph
+        @aleph/prismql, node #65). A hit id the corpus backend no longer
+        knows — the scout or embedding index has drifted from the loaded
+        corpus — surfaces as a runtime 422, never an unhandled 500."""
+        backend = engine.search_backend
+        try:
+            positions = backend.positions([i for i, _ in hits])
+        except (KeyError, PrismQLRuntimeError) as e:
+            message = (
+                str(e)
+                if isinstance(e, PrismQLRuntimeError)
+                else (
+                    f"scout hit id {e.args[0]!r} is not in the corpus — the "
+                    "embedding index or scout does not match the loaded corpus"
+                )
+            )
+            _record_failure(req, request, kind, "runtime", message, start)
+            return _error(422, "runtime", message)
+        stored = StoredResult.from_hits(
+            req.corpus or config.default_corpus,
+            list(zip(positions, (s for _, s in hits), strict=True)),
+            total,
+            load=load,
+        )
+        rid = state.results.put(stored)
+        return _scout_response(stored, rid, backend, corpus_cfg, req, key, start)
 
     @app.post("/search")
     def search(req: SearchRequest, request: Request) -> Any:
@@ -632,12 +693,12 @@ def create_app(config: ServerConfig) -> FastAPI:
             return early
         start = perf_counter()
         # Read before engine_for/scout_for, deliberately — same reasoning as
-        # /evaluate (fix round 1, #1): a reload landing in between only marks
-        # the stored result stale, never wrong.
+        # /evaluate (graph @aleph/prismql, node #65): a reload landing in
+        # between only marks the stored result stale, never wrong.
         load = state.generation
         try:
-            engine, corpus_cfg, _lock = state.engine_for(req.corpus)
-            scout = state.scout_for(req.corpus)
+            engine, corpus_cfg, exec_lock = state.engine_for(req.corpus)
+            scout = state.scout_for(req.corpus, engine, corpus_cfg, exec_lock)
         except KeyError as e:
             return _error(422, "runtime", str(e.args[0]))
         except ImportError as e:
@@ -647,21 +708,23 @@ def create_app(config: ServerConfig) -> FastAPI:
         except ValueError as e:
             _record_failure(req, request, "search", "syntax", str(e), start)
             return _error(422, "syntax", f"search query: {e}")
-        backend = engine.search_backend
-        positions = backend.positions([i for i, _ in hits])
-        stored = StoredResult.from_hits(
-            req.corpus or config.default_corpus,
-            list(zip(positions, (s for _, s in hits), strict=True)),
+        result = _scout_store(
+            req,
+            request,
+            "search",
+            hits,
             total,
-            load=load,
+            engine,
+            corpus_cfg,
+            load,
+            "search " + req.query,
+            start,
         )
-        rid = state.results.put(stored)
-        payload = _scout_response(
-            stored, rid, backend, corpus_cfg, req, "search " + req.query, start
-        )
-        payload["query"] = req.query
-        _record_scout(req, request, "search", payload)
-        return payload
+        if isinstance(result, JSONResponse):
+            return result
+        result["query"] = req.query
+        _record_scout(req, request, "search", result)
+        return result
 
     @app.post("/similar")
     def similar(req: SimilarRequest, request: Request) -> Any:
@@ -686,21 +749,23 @@ def create_app(config: ServerConfig) -> FastAPI:
         hits, total = index.rank_counted(
             req.text, limit=config.scout_depth, threshold=req.threshold
         )
-        backend = engine.search_backend
-        positions = backend.positions([i for i, _ in hits])
-        stored = StoredResult.from_hits(
-            req.corpus or config.default_corpus,
-            list(zip(positions, (s for _, s in hits), strict=True)),
+        result = _scout_store(
+            req,
+            request,
+            "similar",
+            hits,
             total,
-            load=load,
+            engine,
+            corpus_cfg,
+            load,
+            "similar " + req.text,
+            start,
         )
-        rid = state.results.put(stored)
-        payload = _scout_response(
-            stored, rid, backend, corpus_cfg, req, "similar " + req.text, start
-        )
-        payload["text"] = req.text
-        _record_scout(req, request, "similar", payload)
-        return payload
+        if isinstance(result, JSONResponse):
+            return result
+        result["text"] = req.text
+        _record_scout(req, request, "similar", result)
+        return result
 
     def _error(status: int, kind: str, message: str) -> JSONResponse:
         return JSONResponse(
@@ -810,8 +875,8 @@ def create_app(config: ServerConfig) -> FastAPI:
         ``state.generation``: a reload landing in between bumps generation
         and swaps engines together under ``state.lock``, so unequal reads
         mean the fetched engine no longer matches ``stored.load`` and old
-        positions must not be mapped through its new order axis (review
-        2026-09-22, fix round 1, #1)."""
+        positions must not be mapped through its new order axis (graph
+        @aleph/prismql, node #65)."""
         stored = state.results.get(rid)
         if stored is None or stored.load != state.generation:
             return _gone(rid)

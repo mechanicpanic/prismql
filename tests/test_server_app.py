@@ -596,6 +596,8 @@ def test_similar_ranks_by_cosine(tmp_path, monkeypatch):
     body = r.json()
     assert body["ok"] and [h["id"] for h in body["hits"]][0] == 1
     assert body["hits"][0]["score"] > body["hits"][1]["score"]
+    assert body["total"] == len(DOCS) and body["kept"] == len(DOCS)
+    assert body["result_id"].startswith("r")
     r = client.post(
         "/similar", json={"text": "spike", "threshold": 0.99, "hydrate": False}
     )
@@ -625,6 +627,7 @@ def test_scouting_keeps_hits_and_pages_them(client):
     assert body["truncated"] is True and body["hits"][0]["position"] in (0, 1)
     more = client.get(f"/results/{body['result_id']}?offset=1&hydrate=false").json()
     assert more["count"] == 1 and more["hits"][0]["id"] in (1, 2)
+    assert more["hits"][0]["id"] != body["hits"][0]["id"]
 
 
 # --- the board: a journal of every request, live (graph #63)
@@ -759,6 +762,57 @@ def test_positions_unsupported_is_a_teachable_422_not_a_500(tmp_path, monkeypatc
     entries = c.get("/activity").json()["entries"]
     assert entries[-1]["ok"] is False
     assert entries[-1]["error"]["type"] == "runtime"
+
+
+def test_search_hit_id_mismatch_is_a_teachable_422_not_a_500(client, monkeypatch):
+    # A scout hit id the corpus backend no longer knows (embedding index or
+    # scout out of step with the loaded corpus) must surface as a runtime
+    # 422, not an unhandled KeyError (graph @aleph/prismql, node #65).
+    pytest.importorskip("tantivy")
+    state = client.app.state.prismql
+    backend = state.engines[state.config.default_corpus].search_backend
+
+    def boom(_ids: list[int]) -> Never:
+        raise KeyError(999)
+
+    monkeypatch.setattr(backend, "positions", boom)
+    r = client.post("/search", json={"query": "spike"})
+    assert r.status_code == 422
+    body = r.json()
+    assert body["ok"] is False
+    assert body["error"]["type"] == "runtime"
+    assert "999" in body["error"]["message"]
+    entries = client.get("/activity").json()["entries"]
+    assert entries[-1]["ok"] is False
+    assert entries[-1]["error"]["type"] == "runtime"
+
+
+def test_search_finds_new_documents_after_a_reload(tmp_path):
+    # The scout cache must not survive under a stale key: a cached scout
+    # built before a reload must not go on serving after the corpus
+    # underneath it changed (graph @aleph/prismql, node #65).
+    pytest.importorskip("tantivy")
+    c = _make_client(tmp_path, enable_reload=True)
+    first = c.post("/search", json={"query": "spike"}).json()
+    assert first["count"] == 1  # scout built and cached here
+    docs = [
+        *DOCS,
+        {"id": 99, "user": "tick_c", "text": "zephyrwomble", "timestamp": 1030},
+    ]
+    (tmp_path / "events.jsonl").write_text("\n".join(json.dumps(d) for d in docs))
+    c.post("/reload")
+    body = c.post("/search", json={"query": "zephyrwomble"}).json()
+    assert body["count"] == 1 and body["hits"][0]["id"] == 99
+
+
+def test_scout_for_does_not_cache_a_scout_built_from_a_stale_engine(tmp_path):
+    pytest.importorskip("tantivy")
+    c = _make_client(tmp_path, enable_reload=True)
+    state = c.app.state.prismql
+    old_engine, old_cfg, old_lock = state.engine_for(None)
+    c.post("/reload")
+    state.scout_for(None, old_engine, old_cfg, old_lock)
+    assert state.config.default_corpus not in state.scouts
 
 
 # --- GET /results/{id} and /results/{id}.jsonl (task 5, graph #65) ---------

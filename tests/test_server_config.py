@@ -94,6 +94,23 @@ def test_load_config_rejects_unknown_default_corpus(tmp_path):
         load_config(cfg_file)
 
 
+def test_load_config_rejects_non_positive_scout_depth_and_results_memory(tmp_path):
+    bad_depth = tmp_path / "depth.toml"
+    bad_depth.write_text(
+        '[backend]\ntype = "memory"\ndata = "d.json"\n\n[server]\nscout_depth = 0\n'
+    )
+    with pytest.raises(ValueError, match="scout_depth"):
+        load_config(bad_depth)
+
+    bad_memory = tmp_path / "memory.toml"
+    bad_memory.write_text(
+        '[backend]\ntype = "memory"\ndata = "d.json"\n\n'
+        "[server]\nresults_memory_mb = 0\n"
+    )
+    with pytest.raises(ValueError, match="results_memory_mb"):
+        load_config(bad_memory)
+
+
 def test_load_config_semantic_flat(tmp_path):
     cfg_file = tmp_path / "c.toml"
     cfg_file.write_text(
