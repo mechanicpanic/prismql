@@ -48,6 +48,9 @@ class CorpusConfig:
     # [corpora.<name>.semantic]: embedding model backing similar_to()
     semantic_model: str | None = None
     semantic_text_field: str = "text"
+    # [corpora.<name>.board]: which fields the board shows as an event's
+    # kind and actor; the text field is always shown (graph #63).
+    board_fields: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -80,6 +83,10 @@ class ServerConfig:
     # Cap on total terms in a request-scoped dictionary overlay.
     max_request_dictionary_terms: int = 2000
     activity_max: int = 500  # the board's journal ring (graph #63)
+    # Folded results kept for paging (graph #65): a byte budget, oldest
+    # evicted first; scouting keeps its best `scout_depth` hits.
+    results_memory_mb: int = 256
+    scout_depth: int = 1000
     # A value is either a plain term list or {"terms": [...],
     # "match": "substring"|"token"} (single-word mode; multi-word terms
     # always phrase-match). TOML long form: [dictionaries.<name>] tables.
@@ -89,6 +96,9 @@ class ServerConfig:
     # [semantic]: embedding model backing similar_to() (flat/legacy form)
     semantic_model: str | None = None
     semantic_text_field: str = "text"
+    # [board]: which fields the board shows as an event's kind and actor
+    # (flat/legacy form; see CorpusConfig.board_fields, graph #63).
+    board_fields: dict[str, str] = field(default_factory=dict)
 
     def corpus(self, name: str) -> CorpusConfig:
         """The named corpus; the flat legacy fields serve the default name."""
@@ -108,6 +118,7 @@ class ServerConfig:
                 dictionaries=self.dictionaries,
                 semantic_model=self.semantic_model,
                 semantic_text_field=self.semantic_text_field,
+                board_fields=self.board_fields,
             )
         raise KeyError(
             f"Unknown corpus {name!r}; available: {sorted(self.corpus_names())}"
@@ -165,6 +176,7 @@ def load_config(path: str | Path) -> ServerConfig:
             dictionaries=dict(section.get("dictionaries", {})),
             semantic_model=semantic_section.get("model"),
             semantic_text_field=semantic_section.get("text_field", "text"),
+            board_fields=dict(section.get("board", {})),
         )
 
     default_corpus = server.get(
@@ -202,11 +214,14 @@ def load_config(path: str | Path) -> ServerConfig:
         file_output_max_groups=server.get("file_output_max_groups", 100_000),
         max_request_dictionary_terms=server.get("max_request_dictionary_terms", 2000),
         activity_max=int(server.get("activity_max", 500)),
+        results_memory_mb=int(server.get("results_memory_mb", 256)),
+        scout_depth=int(server.get("scout_depth", 1000)),
         dictionaries=dictionaries,
         corpora=corpora,
         default_corpus=default_corpus,
         semantic_model=semantic.get("model"),
         semantic_text_field=semantic.get("text_field", "text"),
+        board_fields=dict(raw.get("board", {})),
     )
 
 

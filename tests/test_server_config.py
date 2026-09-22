@@ -270,3 +270,27 @@ class TestNamedCorpora:
         config = load_config(tmp_path / "prismql.toml")
         engine = build_engine(config.corpus("chat"))
         assert engine.execute("from(x)") == [[1]]
+
+
+def test_results_budget_scout_depth_and_board_fields(tmp_path):
+    cfg_path = tmp_path / "prismql.toml"
+    data = tmp_path / "e.jsonl"
+    data.write_text('{"id": 1, "text": "x"}\n')
+    cfg_path.write_text(
+        f"""
+[server]
+results_memory_mb = 64
+scout_depth = 300
+
+[corpora.village]
+type = "memory"
+data = "{data}"
+
+[corpora.village.board]
+kind = "kind"
+actor = "agent_id"
+"""
+    )
+    cfg = load_config(cfg_path)
+    assert cfg.results_memory_mb == 64 and cfg.scout_depth == 300
+    assert cfg.corpus("village").board_fields == {"kind": "kind", "actor": "agent_id"}
