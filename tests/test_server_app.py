@@ -592,3 +592,17 @@ def test_similar_ranks_by_cosine(tmp_path, monkeypatch):
         "/similar", json={"text": "spike", "threshold": 0.99, "hydrate": False}
     )
     assert [h["id"] for h in r.json()["hits"]] == [1]
+
+
+def test_scouting_limits_are_capped_by_the_server(tmp_path):
+    pytest.importorskip("tantivy")
+    data = tmp_path / "events.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    cfg = ServerConfig(backend_type="memory", data=str(data), max_results=1)
+    client = TestClient(create_app(cfg))
+    body = client.post(
+        "/search", json={"query": "spike OR reversal", "limit": 500}
+    ).json()
+    assert body["count"] == 1 and body["truncated"] is True
+    body = client.post("/search", json={"query": "spike", "limit": 1}).json()
+    assert body["truncated"] is False

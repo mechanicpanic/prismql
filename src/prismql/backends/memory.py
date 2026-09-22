@@ -1,4 +1,14 @@
-"""In-memory backend implementation for PrismQL."""
+"""In-memory backend: documents as dicts, indexes built in Python at load.
+
+The reference backend: every capability, no persistence. Text matching
+follows the corpus's ``text_match`` mode (graph #59) — ``stem`` (default;
+the vocabulary is stemmed once), ``token`` and ``substring`` — and phrases
+are plain adjacent tokens. The order axis is the load order with the
+configured time fields. ``similar_to`` needs a ``SemanticIndex``. Building
+the text indexes is the whole start-up cost on large corpora (Village:
+~20 s for 381k messages); for those, tantivy with ``index_path`` starts
+from disk.
+"""
 
 from __future__ import annotations
 

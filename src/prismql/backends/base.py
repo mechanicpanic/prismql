@@ -45,8 +45,9 @@ class SearchBackend(ABC):
         - Programming terms: C++, C#, F#
         - Contractions: don't, isn't
 
-        This is optional - backends can implement if they support token-based
-        indexing. By default, falls back to search_text().
+        Optional: a backend without a token index inherits this fallback to
+        ``search_text``; ``supports_match("token")`` says whether the mode is
+        honoured, and the engine refuses a mode a backend cannot honour.
 
         Args:
             terms: List of tokens to search for

@@ -1,4 +1,12 @@
-"""Rust-based in-memory backend with 10-100x performance improvements."""
+"""Rust-accelerated in-memory backend — search only.
+
+Optional: needs the ``prismql_rust`` crate (installed by hand; not a declared
+dependency). Text search, field search and the order axis come from Rust;
+the sequence operators run in the Polars operator layer like everywhere
+else (the crate's operator kernels are no longer called, graph #51). Text
+modes: ``token`` and ``substring`` — no stemmer, so a corpus in the default
+``stem`` mode refuses this backend for dictionaries (graph #59).
+"""
 
 from __future__ import annotations
 

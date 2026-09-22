@@ -30,6 +30,12 @@ def tokenize_words(text: str) -> list[str]:
     return [w.lower() for w in re.findall(r"\w+", text)]
 
 
+# The same token shapes, as one line for engines with a plain regex
+# tokenizer (tantivy's ``Tokenizer.regex``): both backends must cut text
+# identically or one dictionary means two sets (graph #59). Kept in step
+# with the verbose pattern below by ``tests/test_text_mode_parity.py``.
+UNICODE_WORD_SHAPES = r"https?://\S+|\w+@\w+(?:\.\w+)+|\w[+#]+|\w+(?:'\w+)*|\w+"
+
 # Unicode-aware tokenizer pattern
 # Preserves: emails, URLs, programming terms (C++, C#), contractions
 _UNICODE_TOKEN_PATTERN = re.compile(

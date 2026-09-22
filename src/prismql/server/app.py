@@ -466,14 +466,26 @@ def create_app(config: ServerConfig) -> FastAPI:
             )
         return None
 
+    def _scout_limit(req: Any) -> tuple[int, bool]:
+        """The request's limit under the server's cap for its output mode,
+        and whether the cap bit — hits are hydrated, so the cap is applied
+        before anything is materialized."""
+        cap = (
+            config.file_output_max_groups
+            if req.output == "file"
+            else config.max_results
+        )
+        return min(req.limit, cap), req.limit > cap
+
     def _scout_response(
-        rows: list[dict[str, Any]], req: Any, key: str, start: float
+        rows: list[dict[str, Any]], req: Any, key: str, start: float, truncated: bool
     ) -> dict[str, Any]:
         payload: dict[str, Any]
         if req.output == "file":
             payload = _write_hits_file(rows, _result_slug(key, req.label), config)
         else:
             payload = {"count": len(rows), "hits": rows}
+        payload["truncated"] = truncated
         payload["ok"] = True
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
         return payload
@@ -493,12 +505,13 @@ def create_app(config: ServerConfig) -> FastAPI:
         except ImportError as e:
             return _error(501, "runtime", f"{e} — scouting needs the tantivy extra")
         hydrate = config.hydrate if req.hydrate is None else req.hydrate
+        limit, capped = _scout_limit(req)
         try:
-            hits = scout.rank(req.query, limit=req.limit)
+            hits = scout.rank(req.query, limit=limit)
         except ValueError as e:
             return _error(422, "syntax", f"search query: {e}")
         rows = _hits_payload(hits, engine.search_backend, corpus_cfg.id_field, hydrate)
-        payload = _scout_response(rows, req, "search " + req.query, start)
+        payload = _scout_response(rows, req, "search " + req.query, start, capped)
         payload["query"] = req.query
         return payload
 
@@ -522,9 +535,10 @@ def create_app(config: ServerConfig) -> FastAPI:
                 "`prismql ingest … --embed text` or configure [semantic].model",
             )
         hydrate = config.hydrate if req.hydrate is None else req.hydrate
-        hits = index.rank(req.text, limit=req.limit, threshold=req.threshold)
+        limit, capped = _scout_limit(req)
+        hits = index.rank(req.text, limit=limit, threshold=req.threshold)
         rows = _hits_payload(hits, engine.search_backend, corpus_cfg.id_field, hydrate)
-        payload = _scout_response(rows, req, "similar " + req.text, start)
+        payload = _scout_response(rows, req, "similar " + req.text, start, capped)
         payload["text"] = req.text
         return payload
 

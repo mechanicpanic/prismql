@@ -268,3 +268,17 @@ class TestAxisFromDisk:
         os.remove(tmp_path / "idx" / "order.parquet")
         reopened = TantivyBackend(index_path=path)
         assert not reopened.has_order_axis()
+
+
+def test_index_from_an_older_layout_is_refused_on_open(tmp_path):
+    import json as _json
+
+    docs = [{"id": 1, "text": "run"}]
+    path = tmp_path / "idx"
+    TantivyBackend(docs, index_path=str(path))
+    meta_path = path / "_prismql_meta.json"
+    meta = _json.loads(meta_path.read_text())
+    meta.pop("schema_version")  # what an index built before this layout carries
+    meta_path.write_text(_json.dumps(meta))
+    with pytest.raises(ValueError, match="rebuild it"):
+        TantivyBackend(index_path=str(path))

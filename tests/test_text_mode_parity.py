@@ -67,3 +67,40 @@ def test_german_sets_agree():
 def test_unknown_language_is_refused_at_load():
     with pytest.raises(ValueError, match="unknown text_language"):
         MemoryBackend(EN, text_language="klingon")
+
+
+TRICKY = [
+    {"id": 1, "text": "Check user@example.com for C++ docs!"},
+    {"id": 2, "text": "Don't use http://bad-site.com, use C instead"},
+    {"id": 3, "text": "the user emailed; C# and F# are fine"},
+    {"id": 4, "text": "example.com is not an email"},
+]
+TRICKY_DICTS = {
+    "cpp": {"terms": ["C++"], "match": "token"},
+    "c_only": {"terms": ["C"], "match": "token"},
+    "user": ["user"],
+    "mail": {"terms": ["user@example.com"], "match": "token"},
+    "dont": {"terms": ["don't"], "match": "token"},
+}
+
+
+@pytest.mark.parametrize("mode", ["stem", "token"])
+def test_tokenization_agrees_on_programming_terms_emails_and_contractions(mode):
+    mem = _sets(MemoryBackend(TRICKY), TRICKY_DICTS, text_match=mode)
+    tan = _sets(TantivyBackend(TRICKY), TRICKY_DICTS, text_match=mode)
+    assert mem == tan
+    assert mem["cpp"] == [[1]]
+    assert mem["c_only"] == [[2]]
+    assert mem["mail"] == [[1]]
+    assert mem["user"] == [[3]]  # "user@example.com" is one token, not "user"
+
+
+def test_the_one_line_regex_is_the_verbose_pattern():
+    import re
+
+    from prismql.tokenizers import UNICODE_WORD_SHAPES, tokenize_unicode
+
+    one_line = re.compile(UNICODE_WORD_SHAPES, re.IGNORECASE)
+    for doc in TRICKY + EN + DE:
+        text = doc["text"]
+        assert [t.lower() for t in one_line.findall(text)] == tokenize_unicode(text)

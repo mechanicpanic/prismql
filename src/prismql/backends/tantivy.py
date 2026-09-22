@@ -1,23 +1,22 @@
-"""Tantivy-backed search backend: an inverted index with stemming.
+"""Tantivy-backed search backend: an inverted index with stemming, on disk.
 
-Unlike :class:`MemoryBackend` (which defaults to *substring* matching and
-rebuilds a pure-Python index every run), this backend uses the tantivy search
-engine and therefore has deliberately different — and, for real text, better —
-semantics:
+Text matching follows the corpus's ``text_match`` mode like every backend
+(graph #59): ``stem`` (the default; Snowball in ``text_language``) and
+``token`` are served from two indexed twins of every text field, phrases
+are plain adjacent tokens, and ``substring`` is refused — an inverted index
+has no backing for it. The memory backend gives the same sets in the modes
+both support (``tests/test_text_mode_parity.py``).
 
-- **Text search is stemmed token matching.** ``contains("running")`` also
-  matches "run"/"runs" (Lucene-style fulltext), *not* substring. This is the
-  honest fulltext behaviour and gives stemming for free.
-- **Phrase search is native** (tantivy phrase queries) — no n-gram precompute.
-- **The index can be persisted on disk.** Pass ``index_path=`` and a later
-  process opens it instead of rebuilding (the "no 40-second rebuild" win).
+- **Persisted on disk.** Pass ``index_path=`` and a later process opens the
+  index instead of rebuilding; the order axis travels with it as the
+  ``order.parquet`` sidecar (ids in load order, configured time fields as
+  UTC micros), so sequence operators work on a reopened index (graph #39).
+- **Ranked search for scouting** (``rank``): tantivy query syntax with BM25,
+  outside the language's set algebra (graph #58).
+- **``similar_to``** through the same ``SemanticIndex`` the memory backend
+  takes (``semantic_index=``).
 
-Because the semantics differ from ``MemoryBackend``, this backend is tested
-against its *own* expectations (``tests/test_tantivy_backend.py``), not blind
-parity with the substring backend.
-
-Numeric ids round-trip as real ``int``s so the ``prismql-rust`` window/sequence
-merge fast paths (gated on all-int ids) still fire on top of tantivy search.
+Numeric ids round-trip as real ``int``s.
 """
 
 from __future__ import annotations
@@ -29,6 +28,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from ..config import DEFAULT_CONFIG, BackendConfig
+from ..tokenizers import UNICODE_WORD_SHAPES
 from ..types import Document, MessageId
 from .base import SearchBackend
 from .order import OrderIndex, epoch_micros
@@ -52,12 +52,13 @@ def _register_analyzers(index: Any, language: str) -> None:
     """Both analyzers a text field needs: stemmed (default contains()) and
     plain tokens (``match = "token"`` / phrases); same Snowball language
     name as the memory backend (graph #59)."""
-    base = tantivy.TextAnalyzerBuilder(tantivy.Tokenizer.simple()).filter(
-        tantivy.Filter.lowercase()
-    )
+    # The memory backend's token shapes (C++, e-mails, URLs, contractions):
+    # the same regex, so both backends cut text identically.
+    tokenizer = tantivy.Tokenizer.regex(UNICODE_WORD_SHAPES)
+    base = tantivy.TextAnalyzerBuilder(tokenizer).filter(tantivy.Filter.lowercase())
     index.register_tokenizer(_PLAIN_ANALYZER, base.build())
     stem = (
-        tantivy.TextAnalyzerBuilder(tantivy.Tokenizer.simple())
+        tantivy.TextAnalyzerBuilder(tokenizer)
         .filter(tantivy.Filter.lowercase())
         .filter(tantivy.Filter.stemmer(language))
     )
@@ -66,6 +67,9 @@ def _register_analyzers(index: Any, language: str) -> None:
 
 _ORDER_NAME = "order.parquet"  # the axis sidecar: id, <field>_us per position
 _META_NAME = "_prismql_meta.json"  # sidecar recording field roles for reopen
+# Bumped when the index layout changes; an index from an older layout is
+# refused on open with rebuild instructions rather than failing mid-query.
+_SCHEMA_VERSION = 2  # 2: stemmed + plain twins per text field, order sidecar
 _REGEX_SPECIAL = re.compile(r"([.^$*+?()\[\]{}|\\])")
 
 
@@ -254,14 +258,22 @@ class TantivyBackend(SearchBackend):
                         "text_fields": sorted(self._text_fields),
                         "meta_fields": sorted(self._meta_fields),
                         "text_language": self.text_language,
+                        "schema_version": _SCHEMA_VERSION,
                     }
                 ),
                 encoding="utf-8",
             )
 
     def _open_existing(self, index_path: str) -> None:
-        self._index = tantivy.Index.open(str(index_path))
         meta = json.loads((Path(index_path) / _META_NAME).read_text(encoding="utf-8"))
+        if meta.get("schema_version") != _SCHEMA_VERSION:
+            raise ValueError(
+                f"{index_path}: tantivy index layout "
+                f"{meta.get('schema_version', 1)} is older than this prismql "
+                f"({_SCHEMA_VERSION}); rebuild it from the documents (delete the "
+                "folder and start with [backend].data set)"
+            )
+        self._index = tantivy.Index.open(str(index_path))
         self.text_language = meta.get("text_language", self.text_language)
         _register_analyzers(self._index, self.text_language)
         order = _read_order(Path(index_path))
