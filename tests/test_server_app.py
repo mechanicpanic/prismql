@@ -673,3 +673,31 @@ def test_board_page_and_lexer_are_served_from_the_package(client):
     assert page.status_code == 200 and "PrismQL board" in page.text
     lexer = client.get("/board/prismql-lexer.js")
     assert lexer.status_code == 200 and "PrismQLLexer" in lexer.text
+
+
+# --- results as objects (graph #65)
+
+
+def test_evaluate_reports_total_and_a_result_id(client):
+    body = client.post(
+        "/evaluate", json={"query": "SELECT from(tick_a)", "max_results": 2}
+    ).json()
+    assert body["count"] == 2 and body["total"] == 3 and body["truncated"] is True
+    assert body["result_id"].startswith("r") and body["offset"] == 0
+    g = body["results"][0]
+    assert g["positions"] == [0] and len(g["times"]) == 1
+
+
+def test_aggregates_are_not_stored(client):
+    body = client.post(
+        "/evaluate", json={"query": "SELECT from(tick_a) AGGREGATE count()"}
+    ).json()
+    assert "result_id" not in body
+
+
+def test_journal_links_the_result_and_records_syntax_positions(client):
+    client.post("/evaluate", json={"query": "SELECT from(tick_a)", "max_results": 1})
+    client.post("/evaluate", json={"query": "SELECT from("})
+    ok, bad = client.get("/activity").json()["entries"]
+    assert ok["result_id"] and ok["total"] == 3 and ok["count"] == 1
+    assert bad["error"]["line"] == 1 and bad["error"]["column"] is not None

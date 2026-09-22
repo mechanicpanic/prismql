@@ -8,9 +8,10 @@ import re
 import threading
 from collections import deque
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
@@ -27,6 +28,8 @@ from .config import (
     compute_schema,
     load_config,
 )
+from .pages import page_payload
+from .results import ResultStore, StoredResult
 
 
 class DictSpec(BaseModel):
@@ -61,6 +64,8 @@ class EvaluateRequest(BaseModel):
     query: str
     max_results: int | None = Field(default=None, ge=1)
     hydrate: bool | None = None
+    # hydrate only these event fields (plus the id); None = all
+    fields: list[str] | None = None
     # Request-scoped dictionary overlay: merged over the config dictionaries
     # for this request only (request wins on name collision). Dictionaries
     # are resolved at query time, so no index rebuild is involved. A value
@@ -102,6 +107,7 @@ class ServerState:
         self.exec_locks: dict[str, threading.Lock] = {}
         self.scouts: dict[str, Any] = {}  # per-corpus ranked full-text index
         self.loaded_at: str | None = None
+        self.results = ResultStore(config.results_memory_mb * 1024 * 1024)
         # The board's journal (graph #63): one summary per request, never the
         # results themselves. A ring in memory; JSONL beside the results when
         # file output is enabled, so the board survives a restart.
@@ -121,6 +127,8 @@ class ServerState:
             self.exec_locks = {name: threading.Lock() for name in engines}
             self.scouts = {}
             self.loaded_at = datetime.now(UTC).isoformat()
+            # Positions are only valid for the load they were computed on.
+            self.results.clear()
 
     def record(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Append one request summary to the journal and return it with its seq."""
@@ -217,42 +225,23 @@ def _write_hits_file(
     return {"count": len(rows), "path": str(path), "preview": preview}
 
 
-def result_to_payload(
-    result: Any, engine: Any, id_field: str, hydrate: bool, max_results: int
-) -> dict[str, Any]:
-    """Normalize the engine's four result shapes into the wire format."""
+def _fold(result: Any) -> tuple[str, list[list[Any]], list[str] | None] | None:
+    """(kind, id groups, labels) of a group-shaped result; None for the
+    aggregate shapes, which are small and answered inline."""
+    if isinstance(result, (AggregateResult, GroupedResult)):
+        return None
+    if isinstance(result, NamedQueryResult):
+        # pattern_names carries None for unnamed slots (types.py); the
+        # StoredResult/page_payload contract already treats labels as
+        # list[str] | None (graph #65).
+        return "named", result.to_list(), cast("list[str]", result.pattern_names)
+    return "groups", list(result), None
+
+
+def _small_payload(result: Any) -> dict[str, Any]:
     if isinstance(result, AggregateResult):
         return {"kind": "aggregate", **result.to_dict()}
-    if isinstance(result, GroupedResult):
-        return {"kind": "grouped", **result.to_dict()}
-
-    labels = None
-    if isinstance(result, NamedQueryResult):
-        labels = list(result.pattern_names)
-        groups = result.to_list()
-        kind = "named"
-    else:
-        groups = result
-        kind = "groups"
-
-    truncated = len(groups) > max_results
-    groups = groups[:max_results]
-    payload: dict[str, Any] = {
-        "kind": kind,
-        "count": len(groups),
-        "truncated": truncated,
-        "results": [{"ids": list(g)} for g in groups],
-    }
-    if labels is not None:
-        payload["labels"] = labels
-
-    if hydrate and groups:
-        unique_ids = list(dict.fromkeys(mid for g in groups for mid in g))
-        fetched = engine.search_backend.get_documents(unique_ids)
-        by_id = {doc.get(id_field): doc for doc in fetched}
-        for entry in payload["results"]:
-            entry["events"] = [by_id[mid] for mid in entry["ids"] if mid in by_id]
-    return payload
+    return {"kind": "grouped", **result.to_dict()}
 
 
 def _write_results_file(
@@ -433,7 +422,18 @@ def create_app(config: ServerConfig) -> FastAPI:
             try:
                 result = engine.execute(req.query)
             except PrismQLSyntaxError as e:
-                _record_failure(req, request, "evaluate", "syntax", str(e), start)
+                _record_failure(
+                    req,
+                    request,
+                    "evaluate",
+                    "syntax",
+                    str(e),
+                    start,
+                    {
+                        "line": getattr(e, "line", None),
+                        "column": getattr(e, "column", None),
+                    },
+                )
                 return JSONResponse(
                     status_code=422,
                     content={
@@ -459,25 +459,46 @@ def create_app(config: ServerConfig) -> FastAPI:
             file_mode = req.output == "file" and not isinstance(
                 result, (AggregateResult, GroupedResult)
             )
-            if file_mode:
-                # Capped (was 2**31): a broad query against a large corpus
-                # must not fill the container disk in one request.
-                full = result_to_payload(
-                    result,
-                    engine,
-                    corpus_cfg.id_field,
-                    hydrate,
-                    max_results=config.file_output_max_groups,
-                )
-            else:
+            backend = engine.search_backend
+            folded = _fold(result)
+            rid: str | None = None
+            stored: StoredResult | None = None
+            if folded is None:
                 # Aggregates/grouped results are small by construction —
-                # file mode falls through to the normal inline response.
-                payload = result_to_payload(
-                    result, engine, corpus_cfg.id_field, hydrate, max_results
+                # answered inline, never stored, never file mode.
+                payload = _small_payload(result)
+            else:
+                kind, groups, labels = folded
+                stored = StoredResult.from_groups(
+                    kind,
+                    req.corpus or config.default_corpus,
+                    [backend.positions(g) for g in groups],
+                    labels,
                 )
+                rid = state.results.put(stored)
+                page = partial(
+                    page_payload,
+                    stored,
+                    backend,
+                    id_field=corpus_cfg.id_field,
+                    time_field=corpus_cfg.timestamp_field,
+                    offset=0,
+                    hydrate=hydrate,
+                    fields=req.fields,
+                )
+                if file_mode:
+                    # Capped (was 2**31): a broad query against a large
+                    # corpus must not fill the container disk in one request.
+                    full = page(limit=config.file_output_max_groups)
+                else:
+                    payload = page(limit=max_results)
+                    payload["result_id"] = rid
         if file_mode:
             # Disk I/O happens outside the execution lock.
             payload = _write_results_file(full, req, config)
+            payload["result_id"] = rid
+            assert stored is not None
+            payload["total"] = stored.total
         payload["ok"] = True
         payload["query"] = req.query
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
@@ -496,13 +517,21 @@ def create_app(config: ServerConfig) -> FastAPI:
                 "truncated": payload.get("truncated", False),
                 "output": req.output,
                 "path": payload.get("path"),
+                "result_id": payload.get("result_id"),
+                "total": payload.get("total"),
                 "elapsed_ms": payload["elapsed_ms"],
             }
         )
         return payload
 
     def _record_failure(
-        req: Any, request: Request, kind: str, etype: str, message: str, start: float
+        req: Any,
+        request: Request,
+        kind: str,
+        etype: str,
+        message: str,
+        start: float,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         state.record(
             {
@@ -512,7 +541,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                 "query": getattr(req, "query", None) or getattr(req, "text", None),
                 "label": req.label,
                 "ok": False,
-                "error": {"type": etype, "message": message[:500]},
+                "error": {"type": etype, "message": message[:500], **(extra or {})},
                 "elapsed_ms": round((perf_counter() - start) * 1000, 2),
             }
         )
