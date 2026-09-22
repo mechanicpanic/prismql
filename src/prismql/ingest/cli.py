@@ -26,6 +26,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--id", help="id column (table)")
     parser.add_argument("--time", help="timestamp column (table)")
     parser.add_argument("--sort", help="column to order the stream by (table)")
+    parser.add_argument(
+        "--time-unit",
+        choices=("s", "ms", "us", "ns"),
+        help="unit of a numeric time column (default: guessed per value)",
+    )
     parser.add_argument("--keep", help="comma-separated extra columns to keep (table)")
     parser.add_argument("--embed", metavar="COL", help="text column to embed into emb")
     parser.add_argument(
@@ -47,6 +52,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             id_col=args.id,
             time_col=args.time,
             sort=args.sort,
+            time_unit=args.time_unit,
             keep=[c for c in (args.keep or "").split(",") if c] or None,
         )
     elif args.source == "claude-code":

@@ -226,6 +226,15 @@ def load_corpus(
     if "emb" in table.column_names:
         vectors = table.column("emb").to_pylist()
         table = table.drop_columns(["emb"])
+    if "position" in table.column_names and table.column(
+        "position"
+    ).to_pylist() != list(range(table.num_rows)):
+        # Same rule as load_table: the axis is row order, a stale or
+        # concatenated position column must not pass as the stream order.
+        raise ValueError(
+            f"{p}: 'position' column must equal the row index (load order); "
+            "re-run prismql ingest on the source"
+        )
     return (
         table.to_pylist(),
         vectors,
@@ -323,40 +332,11 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
     if config.backend_type == "rust_memory":
         backend_config["timestamp_fields"] = config.timestamp_fields
 
-    semantic_model = config.semantic_model or embedded_model
-    if semantic_model:
-        # Fail loudly: a configured model on a backend that can't carry the
-        # index would otherwise mean similar_to() silently has no backing.
-        if config.backend_type != "memory":
-            raise ValueError(
-                "[semantic] is only supported by the 'memory' backend for now; "
-                f"got backend type {config.backend_type!r}"
-            )
-        from ..backends.semantic import SemanticIndex, SentenceTransformerEmbedder
-
-        embedder = SentenceTransformerEmbedder(semantic_model)
-        if vectors is not None:
-            # Precomputed by `prismql ingest --embed`: the model only encodes
-            # query text; the corpus is never re-encoded at start.
-            if config.semantic_model and config.semantic_model != embedded_model:
-                raise ValueError(
-                    f"[semantic].model = {config.semantic_model!r} but the corpus "
-                    f"was embedded with {embedded_model!r}; the query and the "
-                    "corpus must share one model (re-run prismql ingest --embed)"
-                )
-            backend_config["semantic_index"] = SemanticIndex.from_vectors(
-                embedder,
-                [d[config.id_field] for d in backend_config["documents"]],
-                vectors,
-                text_field=embedded_text or config.semantic_text_field,
-            )
-        else:
-            backend_config["semantic_index"] = SemanticIndex(
-                embedder,
-                backend_config["documents"],
-                id_field=config.id_field,
-                text_field=config.semantic_text_field,
-            )
+    index = _semantic_index(
+        config, backend_config["documents"], vectors, embedded_model, embedded_text
+    )
+    if index is not None:
+        backend_config["semantic_index"] = index
 
     backend = BackendFactory._create_search_backend(backend_config)
     return PrismQLEngine(
@@ -424,3 +404,61 @@ def compute_schema(
             for name, value in config.dictionaries.items()
         },
     }
+
+
+def _semantic_index(
+    config: ServerConfig | CorpusConfig,
+    documents: list[dict[str, Any]] | None,
+    vectors: list[Any] | None,
+    embedded_model: str | None,
+    embedded_text: str | None,
+) -> Any:
+    """The index behind similar_to(), or None when nothing backs it."""
+    semantic_model = config.semantic_model or embedded_model
+    if semantic_model and config.backend_type != "memory":
+        if config.semantic_model:
+            # Fail loudly: a configured model on a backend that can't carry
+            # the index would otherwise mean similar_to() silently has no
+            # backing.
+            raise ValueError(
+                "[semantic] is only supported by the 'memory' backend for now; "
+                f"got backend type {config.backend_type!r}"
+            )
+        # The file carries vectors but this backend cannot hold the index;
+        # nothing was configured, so nothing is promised: say so and go on.
+        print(
+            f"[prismql] {config.data}: emb column ignored on backend "
+            f"{config.backend_type!r} (similar_to() needs the memory backend)"
+        )
+        semantic_model = None
+    if not semantic_model or documents is None:
+        return None
+    from ..backends.semantic import SemanticIndex, SentenceTransformerEmbedder
+
+    embedder = SentenceTransformerEmbedder(semantic_model)
+    if vectors is not None:
+        # Precomputed by `prismql ingest --embed`: the model only encodes
+        # query text; the corpus is never re-encoded at start.
+        if config.semantic_model and config.semantic_model != embedded_model:
+            raise ValueError(
+                f"[semantic].model = {config.semantic_model!r} but the corpus "
+                f"was embedded with {embedded_model!r}; the query and the "
+                "corpus must share one model (re-run prismql ingest --embed)"
+            )
+        missing = [i for i, d in enumerate(documents) if config.id_field not in d]
+        if missing:
+            raise ValueError(
+                f"{config.data}: row {missing[0]} has no '{config.id_field}' field"
+            )
+        return SemanticIndex.from_vectors(
+            embedder,
+            [d[config.id_field] for d in documents],
+            vectors,
+            text_field=embedded_text or config.semantic_text_field,
+        )
+    return SemanticIndex(
+        embedder,
+        documents,
+        id_field=config.id_field,
+        text_field=config.semantic_text_field,
+    )

@@ -1,5 +1,6 @@
 """Codex rollouts → stream (graph #54, format #57)."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -38,7 +39,42 @@ def test_tool_results_resolve_names_and_exit_codes():
         "apply_patch",
         "exec_command",
     ]
-    assert results.get_column("error").to_list() == [True, None, False]
+    assert results.get_column("error").to_list() == [True, False, False]
+
+
+def test_exit_code_phrase_inside_a_successful_output_is_not_an_error(tmp_path):
+    call = {
+        "type": "function_call",
+        "name": "exec_command",
+        "arguments": "{}",
+        "call_id": "c",
+    }
+    output = {
+        "type": "function_call_output",
+        "call_id": "c",
+        "output": "Chunk ID: 1\nProcess exited with code 0\nOutput:\n"
+        "log says: Process exited with code 1",
+    }
+    rows = [
+        json.dumps({"type": "response_item", "timestamp": ts, "payload": payload})
+        for ts, payload in (
+            ("2026-01-01T00:00:00Z", call),
+            ("2026-01-01T00:00:01Z", output),
+        )
+    ]
+    (tmp_path / "rollout-a.jsonl").write_text("\n".join(rows) + "\n")
+    df = read_codex(tmp_path)
+    assert df.filter(df.get_column("kind") == "tool_result").get_column(
+        "error"
+    ).to_list() == [False]
+
+
+def test_error_column_is_a_bool_on_both_harnesses():
+    from prismql.ingest.sources.claude_code import read_claude_code
+
+    for df in (read_codex(FIXTURE), read_claude_code(FIXTURE.parent / "claude_code")):
+        results = df.filter(df.get_column("kind") == "tool_result")
+        assert results.get_column("error").null_count() == 0
 
 
 def test_unknown_item_raises(tmp_path):

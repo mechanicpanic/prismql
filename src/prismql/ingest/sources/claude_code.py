@@ -33,6 +33,7 @@ SCHEMA = {
     "error": pl.Boolean,
     "sidechain": pl.Boolean,
     "text": pl.Utf8,
+    "uuid": pl.Utf8,
     "parent": pl.Utf8,
 }
 
@@ -43,18 +44,19 @@ def read_claude_code(path: Path) -> pl.DataFrame:
     Rows are ordered by timestamp across sessions; ``session`` keeps them
     apart (``field(session, $s)`` = "in the same session").
     """
+    if not path.exists():
+        raise FileNotFoundError(path)
+    root = path.parent if path.is_file() else path
     files = (
         [path]
         if path.is_file()
         else sorted(p for p in path.rglob("*.jsonl") if "memory" not in p.parts)
     )
-    if not files:
-        raise ValueError(f"no .jsonl transcripts under {path}")
-    project = path.parent.name if path.is_file() else path.name
+    project = root.name
     rows: list[dict[str, Any]] = []
     skipped: Counter[str] = Counter()
     for file in files:
-        rows.extend(_read_file(file, project, skipped))
+        rows.extend(_read_file(file, root, project, skipped))
     if skipped:
         summary = ", ".join(f"{t}×{n}" for t, n in skipped.most_common())
         print(f"  skipped bookkeeping records: {summary}")
@@ -62,14 +64,25 @@ def read_claude_code(path: Path) -> pl.DataFrame:
     return normalize(df, id_col="id", time_col="time", sort="time")
 
 
-def _read_file(file: Path, project: str, skipped: Counter[str]) -> list[dict[str, Any]]:
+def _read_file(
+    file: Path, root: Path, project: str, skipped: Counter[str]
+) -> list[dict[str, Any]]:
+    # Path under the project folder: sub-agent files reuse names across
+    # sub-folders, so the stem alone would not be unique.
+    stem = file.relative_to(root).with_suffix("").as_posix()
     tool_names: dict[str, str] = {}
     out: list[dict[str, Any]] = []
-    with file.open(encoding="utf-8") as fh:
+    with file.open(encoding="utf-8", errors="replace") as fh:
         for lineno, line in enumerate(fh, 1):
             if not line.strip():
                 continue
-            rec = json.loads(line)
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                # A transcript cut mid-write (harness crash): the line is not
+                # an event of the conversation, but it is counted.
+                skipped["<truncated line>"] += 1
+                continue
             rtype = rec.get("type")
             if rtype not in STREAM_TYPES:
                 skipped[str(rtype)] += 1
@@ -82,6 +95,7 @@ def _read_file(file: Path, project: str, skipped: Counter[str]) -> list[dict[str
                 "model": msg.get("model"),
                 "role": rtype,
                 "sidechain": bool(rec.get("isSidechain", False)),
+                "uuid": rec.get("uuid"),
                 "parent": rec.get("parentUuid"),
             }
             content = msg.get("content")
@@ -99,7 +113,9 @@ def _read_file(file: Path, project: str, skipped: Counter[str]) -> list[dict[str
                 if row is None:
                     continue
                 row.update(base)
-                row["id"] = f"{rec.get('uuid')}:{i}"
+                # Not the record uuid: it repeats within a file (a sub-agent
+                # transcript replays records). File, line and block are unique.
+                row["id"] = f"{stem}:{lineno}:{i}"
                 out.append(row)
     return out
 
@@ -155,4 +171,6 @@ def _block_row(
 
 
 def _cap(text: str) -> str:
-    return text if len(text) <= TEXT_CAP else text[:TEXT_CAP]
+    """Bound the text and drop lone surrogates (they cannot reach Arrow)."""
+    text = text if len(text) <= TEXT_CAP else text[:TEXT_CAP]
+    return text.encode("utf-8", "surrogatepass").decode("utf-8", "replace")

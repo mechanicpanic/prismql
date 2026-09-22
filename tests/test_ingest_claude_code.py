@@ -60,10 +60,27 @@ def test_the_stream_answers_a_question(use_ir):
     )
     groups = engine.execute(q)
     assert len(groups) == 1
-    ids = df_ids(docs, groups[0])
-    assert ids == ["u3:0", "a3:0"]
+    assert groups == [["session:6:0", "session:7:0"]]
 
 
-def df_ids(docs, group):
-    by_id = {d["id"]: d for d in docs}
-    return [by_id[i]["id"] for i in group]
+def test_records_may_repeat_their_uuid_within_and_across_files(tmp_path):
+    line = FIXTURE.joinpath("session.jsonl").read_text().splitlines()[2]
+    (tmp_path / "agent-x.jsonl").write_text(line + "\n" + line + "\n")
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "agent-x.jsonl").write_text(line + "\n")
+    df = read_claude_code(tmp_path)
+    assert df.height == 9  # three blocks: twice in one file, once in a same-named file
+    assert df.get_column("id").n_unique() == 9
+    assert df.get_column("uuid").unique().to_list() == ["a1"]
+
+
+def test_truncated_line_and_lone_surrogate_do_not_abort(tmp_path, capsys):
+    good = FIXTURE.joinpath("session.jsonl").read_text().splitlines()[1]
+    surrogate = good.replace("fix the failing test", "bad \\ud83d char")
+    (tmp_path / "s.jsonl").write_text(good + "\n" + surrogate + "\n" + good[:40] + "\n")
+    df = read_claude_code(tmp_path)
+    assert df.height == 2
+    assert "\ufffd" in df.get_column("text").to_list()[1]
+    (tmp_path / "empty").mkdir()
+    assert read_claude_code(tmp_path / "empty").height == 0
+    assert "<truncated line>×1" in capsys.readouterr().out

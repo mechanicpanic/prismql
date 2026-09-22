@@ -21,14 +21,18 @@ import polars as pl
 from ..core import normalize
 from .claude_code import SCHEMA, TEXT_CAP, _cap
 
-_EXIT = re.compile(r"Process exited with code (\d+)")
+# The exec tool's own header, at the start of its output — not a phrase
+# quoted somewhere inside a successful tool's output.
+_EXIT = re.compile(
+    r"\AChunk ID: [^\n]*\n(?:Wall time: [^\n]*\n)?Process exited with code (\d+)"
+)
 
 
 def read_codex(path: Path) -> pl.DataFrame:
     """A rollout file or the sessions folder → the canonical stream."""
+    if not path.exists():
+        raise FileNotFoundError(path)
     files = [path] if path.is_file() else sorted(path.rglob("rollout-*.jsonl"))
-    if not files:
-        raise ValueError(f"no rollout-*.jsonl under {path}")
     rows: list[dict[str, Any]] = []
     skipped: Counter[str] = Counter()
     for file in files:
@@ -46,11 +50,15 @@ def _read_file(file: Path, skipped: Counter[str]) -> list[dict[str, Any]]:
     model: str | None = None
     call_names: dict[str, str] = {}
     out: list[dict[str, Any]] = []
-    with file.open(encoding="utf-8") as fh:
+    with file.open(encoding="utf-8", errors="replace") as fh:
         for lineno, line in enumerate(fh, 1):
             if not line.strip():
                 continue
-            rec = json.loads(line)
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                skipped["<truncated line>"] += 1
+                continue
             rtype = rec.get("type")
             payload = rec.get("payload") or {}
             if rtype == "session_meta":
@@ -76,6 +84,7 @@ def _read_file(file: Path, skipped: Counter[str]) -> list[dict[str, Any]]:
                     "project": project,
                     "model": model,
                     "sidechain": False,
+                    "uuid": None,
                     "parent": None,
                 }
             )
@@ -139,12 +148,15 @@ def _item_row(
         output = item.get("output")
         if not isinstance(output, str):
             output = json.dumps(output, ensure_ascii=False)
-        exit_code = _EXIT.search(output)
+        # Same meaning as the Claude Code column: True only where the harness
+        # itself reports a failure (a non-zero exit of the exec tool); Codex
+        # records no failure flag for other tools, so those are False.
+        exit_code = _EXIT.match(output)
         return {
             "kind": "tool_result",
             "role": "user",
             "tool": call_names.get(str(item.get("call_id"))),
-            "error": (int(exit_code.group(1)) != 0) if exit_code else None,
+            "error": bool(exit_code and int(exit_code.group(1)) != 0),
             "text": _cap(output),
         }
     if itype == "compaction":

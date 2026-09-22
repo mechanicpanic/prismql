@@ -87,3 +87,88 @@ def test_cli_table(tmp_path, capsys):
     out = pl.read_parquet(dst)
     assert out.get_column("id").to_list() == [1, 2]
     assert "2 rows" in capsys.readouterr().out
+
+
+def test_mixed_epoch_units_are_classified_per_value():
+    out = normalize(
+        pl.DataFrame(
+            {"i": [1, 2, 3], "t": [1784018113, 1784018113992, 1784018113992000000]}
+        ),
+        id_col="i",
+        time_col="t",
+    )
+    micros = [epoch_micros(v) for v in out.get_column("time").to_list()]
+    assert micros == [1784018113000000, 1784018113992000, 1784018113992000]
+
+
+def test_explicit_time_unit_overrides_the_guess():
+    out = normalize(
+        pl.DataFrame({"i": [1], "t": [50_000_000_000]}),
+        id_col="i",
+        time_col="t",
+        time_unit="ms",
+    )
+    assert out.get_column("time")[0].year == 1971
+    with pytest.raises(ValueError, match="not numeric"):
+        normalize(
+            pl.DataFrame({"i": [1], "t": ["x"]}),
+            id_col="i",
+            time_col="t",
+            time_unit="s",
+        )
+
+
+def test_date_only_and_garbage_strings_become_dates_or_nulls():
+    out = normalize(
+        pl.DataFrame({"i": [1, 2, 3], "t": ["2026-07-14", "nonsense", None]}),
+        id_col="i",
+        time_col="t",
+    )
+    assert out.get_column("time")[0] == datetime(2026, 7, 14, tzinfo=UTC)
+    assert out.get_column("time").null_count() == 2
+
+
+def test_canonical_names_in_the_source_are_dropped_not_collided():
+    src = pl.DataFrame(
+        {
+            "rev": [1],
+            "t": ["2026-07-14T00:00:00Z"],
+            "id": [9],
+            "position": [3],
+            "x": ["a"],
+        }
+    )
+    out = normalize(src, id_col="rev", time_col="t")
+    assert out.columns == ["position", "id", "time", "x"]
+    again = normalize(
+        out, id_col="id", time_col="time"
+    )  # an ingested file, ingested again
+    assert again.get_column("id").to_list() == [1]
+
+
+def test_embed_gives_null_vectors_to_rows_without_text(monkeypatch):
+    from prismql.backends import semantic as semantic_module
+    from prismql.ingest.core import embed
+
+    class Fake:
+        def __init__(self, name: str) -> None:
+            pass
+
+        def encode(self, texts: list[str]) -> list[list[float]]:
+            return [[1.0, float(len(t))] for t in texts]
+
+    monkeypatch.setattr(semantic_module, "SentenceTransformerEmbedder", Fake)
+    df = pl.DataFrame({"id": [1, 2, 3, 4], "text": ["oil", None, "", "  "]})
+    out = embed(df, text="text", model="fake")
+    vectors = out.get_column("emb").to_list()
+    assert vectors[0] is not None and vectors[1:] == [None, None, None]
+
+
+def test_server_rejects_a_parquet_whose_position_is_not_the_row_order(tmp_path):
+    from prismql.server.config import load_corpus
+
+    pl.DataFrame({"position": [1, 0], "id": [1, 2], "time": [1, 2]}).write_parquet(
+        tmp_path / "bad.parquet"
+    )
+    with pytest.raises(ValueError, match="row index"):
+        load_corpus(tmp_path / "bad.parquet")

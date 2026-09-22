@@ -126,9 +126,12 @@ events.parquet: 6 rows, 2026-06-18 18:24:12+00:00 … 2026-06-18 21:40:00+00:00
 ```
 
 It sorts, renames the id and time columns to `id` and `time`, parses the
-timestamps (ISO strings, `YYYY-MM-DD HH:MM:SS` without a zone, epoch
-seconds or milliseconds — all become UTC; anything unparseable stays as a
-null and is counted in the summary), and keeps only what you asked for.
+timestamps (ISO strings, `YYYY-MM-DD HH:MM:SS` without a zone, date-only
+strings, epoch seconds / milliseconds / microseconds / nanoseconds told
+apart by magnitude — all become UTC; anything unparseable stays as a null
+and is counted in the summary; `--time-unit ms` states the unit when the
+guess would be wrong, e.g. milliseconds before 1973), and keeps only what
+you asked for.
 Point the config at `events.parquet`, `timestamp_field = "time"`, done.
 
 Add `--embed text --model all-MiniLM-L6-v2` (extra `ingest`) and the file
@@ -139,8 +142,9 @@ which model to encode the query with because the file says so.
 The same command reads a Claude Code project's transcripts —
 `prismql ingest claude-code ~/.claude/projects/<your-project> sessions.parquet`
 — one event per prompt, thought, tool call and tool result, with `kind`,
-`tool`, `error`, `session` and `model` fields; the questions in section 5
-work on it unchanged ("a tool failed, then the same tool was retried within
+`tool`, `error`, `session` and `model` fields (`error` is true only where the
+harness itself reports a failure: `is_error` in Claude Code, a non-zero exit
+of the exec tool in Codex); the questions in section 5 work on it unchanged ("a tool failed, then the same tool was retried within
 three events"). `prismql ingest codex ~/.codex/sessions sessions.parquet`
 does the same for Codex CLI rollouts, with the same columns, so one query
 runs over both harnesses.
