@@ -135,6 +135,12 @@ uv sync --extra server
 uv run prismql-server --config prismql.toml     # POST /evaluate, GET /schema, GET /reference
 ```
 
+Beside `/evaluate` the server has two scouting endpoints that *do* rank:
+`POST /search` (full-text, tantivy syntax, BM25) and `POST /similar`
+(nearest events by embedding). They answer "what is where" before you write
+a query; the language itself stays set-in, set-out. Both take `hydrate` and
+`output: "file"` like `/evaluate`.
+
 `prismql.toml` holds all the state — backend type, data file, dictionaries,
 timestamp field, limits:
 

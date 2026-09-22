@@ -336,6 +336,23 @@ class TantivyBackend(SearchBackend):
     def supports_match(self, mode: str) -> bool:
         return mode in ("stem", "token")
 
+    def rank(self, query: str, *, limit: int) -> list[tuple[MessageId, float]]:
+        """Ranked hits for a query in tantivy's own syntax (AND/OR/NOT,
+        "quoted phrases", field:term, prefix*) over the stemmed text fields —
+        scouting, outside the algebra (graph #58). BM25 scores, best first."""
+        if limit <= 0 or self._searcher.num_docs == 0:
+            return []
+        fields = sorted(self._text_fields)
+        parsed = self._index.parse_query(query, fields)
+        result = self._searcher.search(parsed, limit)
+        return [
+            (
+                self._coerce_id(self._searcher.doc(addr).get_first(self.id_field)),
+                float(score),
+            )
+            for score, addr in result.hits
+        ]
+
     def search_semantic(self, text: str, *, threshold: float) -> set[MessageId]:
         if self.semantic_index is None:
             return super().search_semantic(text, threshold=threshold)

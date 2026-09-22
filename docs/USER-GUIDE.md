@@ -415,6 +415,13 @@ rather than as an empty list. `AGGREGATE count()` answers as
 can also pass word lists per request — `"dictionaries": {"undo": ["restored","back"]}` — which
 is the fast way to try a vocabulary before writing it into the config.
 
+Two more endpoints are for looking around, not for asking: `POST /search`
+with `{"query": "restored OR \"put back\""}` returns the best-matching
+events ranked (full-text, tantivy syntax), and `POST /similar` with
+`{"text": "someone undid a deletion"}` returns the nearest events by
+embedding when the corpus carries one. Read a few hits, learn the words,
+put them in a dictionary, then ask the real question with `/evaluate`.
+
 If you want an agent to drive this, hand it the folder `skills/prismql/`
 from a clone: it is self-contained (how to call the server, the language
 reference, the traps) and needs no Python on the agent's side.

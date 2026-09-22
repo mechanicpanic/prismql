@@ -66,6 +66,23 @@ Other endpoints: `GET /reference` (the full language doc), `GET /corpora`
 (named corpora; pass `"corpus": "<name>"` in the request to pick one),
 `POST /reload` (off unless the server enables it).
 
+**Scout before you query.** Two endpoints answer "what is where" with
+ranked hits — outside the language, which never ranks:
+
+- `POST /search` `{"query": "timeout OR \"rate limit\" OR fail*", "limit": 20}` —
+  full-text over the `text` field in tantivy syntax (`AND`/`OR`/`NOT`,
+  quoted phrases, `field:term`, `prefix*`), stemmed, BM25 best first.
+- `POST /similar` `{"text": "the agent gave up on the task", "limit": 20}` —
+  nearest events by cosine over the corpus's embedding index (needs an
+  ingested `emb` column or `[semantic].model`; 422 otherwise). Optional
+  `threshold`.
+
+Both take `corpus`, `hydrate` (`false` = ids and scores only, no events)
+and `output: "file"` (all hits to a JSONL file, a five-row preview back),
+exactly like `/evaluate` — use them to read a few hits, learn the words
+people actually wrote, then put those words in a dictionary and ask the
+real question with `/evaluate`. Hits are `{"id", "score"[, "event"]}`.
+
 ### Three things about the server that will bite you
 
 1. **The group cap.** `count` in a response is the number of groups *in

@@ -33,6 +33,29 @@ class DictSpec(BaseModel):
     match: Literal["stem", "token", "substring"] | None = None
 
 
+class SearchRequest(BaseModel):
+    """Ranked full-text scouting: what is where, before writing a query."""
+
+    query: str  # tantivy syntax: AND/OR/NOT, "phrases", field:term, prefix*
+    limit: int = Field(default=20, ge=1)
+    corpus: str | None = None
+    hydrate: bool | None = None
+    output: Literal["inline", "file"] = "inline"
+    label: str | None = None
+
+
+class SimilarRequest(BaseModel):
+    """Ranked semantic scouting over the corpus's embedding index."""
+
+    text: str
+    limit: int = Field(default=20, ge=1)
+    threshold: float | None = Field(default=None, ge=-1.0, le=1.0)
+    corpus: str | None = None
+    hydrate: bool | None = None
+    output: Literal["inline", "file"] = "inline"
+    label: str | None = None
+
+
 class EvaluateRequest(BaseModel):
     query: str
     max_results: int | None = Field(default=None, ge=1)
@@ -76,6 +99,7 @@ class ServerState:
         self.lock = threading.Lock()
         self.engines: dict[str, Any] = {}
         self.exec_locks: dict[str, threading.Lock] = {}
+        self.scouts: dict[str, Any] = {}  # per-corpus ranked full-text index
         self.loaded_at: str | None = None
 
     def reload(self) -> None:
@@ -88,6 +112,7 @@ class ServerState:
         with self.lock:
             self.engines = engines
             self.exec_locks = {name: threading.Lock() for name in engines}
+            self.scouts = {}
             self.loaded_at = datetime.now(UTC).isoformat()
 
     def engine_for(self, name: str | None) -> tuple[Any, CorpusConfig, threading.Lock]:
@@ -102,6 +127,65 @@ class ServerState:
                 self.config.corpus(resolved),
                 self.exec_locks[resolved],
             )
+
+    def scout_for(self, name: str | None) -> Any:
+        """The corpus's ranked full-text index: its own tantivy backend when
+        it has one, otherwise an in-process tantivy index built once from
+        the documents on first use (graph #58)."""
+        engine, corpus_cfg, exec_lock = self.engine_for(name)
+        resolved = name or self.config.default_corpus
+        backend = engine.search_backend
+        if getattr(backend, "rank", None) is not None:
+            return backend
+        with exec_lock:
+            scout = self.scouts.get(resolved)
+            if scout is None:
+                from ..backends.tantivy import TantivyBackend
+
+                ids = backend.get_all_document_ids()
+                docs = backend.get_documents(sorted(ids, key=str))
+                scout = TantivyBackend(
+                    docs,
+                    id_field=corpus_cfg.id_field,
+                    text_language=corpus_cfg.text_language,
+                )
+                self.scouts[resolved] = scout
+        return scout
+
+
+def _hits_payload(
+    hits: list[tuple[Any, float]], backend: Any, id_field: str, hydrate: bool
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = [{"id": i, "score": round(s, 4)} for i, s in hits]
+    if hydrate and rows:
+        fetched = backend.get_documents([i for i, _ in hits])
+        by_id = {doc.get(id_field): doc for doc in fetched}
+        for row in rows:
+            if row["id"] in by_id:
+                row["event"] = by_id[row["id"]]
+    return rows
+
+
+def _write_hits_file(
+    rows: list[dict[str, Any]], slug: str, config: ServerConfig
+) -> dict[str, Any]:
+    """All hits as JSONL under results_dir; the response carries a summary."""
+    results_dir = Path(config.results_dir or "prismql-results")
+    results_dir.mkdir(parents=True, exist_ok=True)
+    path = results_dir / f"{slug}.jsonl"
+    tmp = path.with_suffix(".jsonl.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+    tmp.replace(path)
+    preview = []
+    for row in rows[:5]:
+        entry: dict[str, Any] = {"id": row["id"], "score": row["score"]}
+        event = row.get("event")
+        if event:
+            entry["snippet"] = " ".join(str(event.get("text", "")).split())[:80]
+        preview.append(entry)
+    return {"count": len(rows), "path": str(path), "preview": preview}
 
 
 def result_to_payload(
@@ -362,6 +446,93 @@ def create_app(config: ServerConfig) -> FastAPI:
         payload["query"] = req.query
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
         return payload
+
+    def _scout_common(req: Any, request: Request) -> JSONResponse | None:
+        if _rate_limited(_client_ip(request)):
+            return _rate_limit_response()
+        if req.output == "file" and not config.enable_file_output:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "ok": False,
+                    "error": {
+                        "type": "forbidden",
+                        "message": (
+                            "output='file' is disabled on this server; set "
+                            "[server] enable_file_output = true to allow it."
+                        ),
+                    },
+                },
+            )
+        return None
+
+    def _scout_response(
+        rows: list[dict[str, Any]], req: Any, key: str, start: float
+    ) -> dict[str, Any]:
+        payload: dict[str, Any]
+        if req.output == "file":
+            payload = _write_hits_file(rows, _result_slug(key, req.label), config)
+        else:
+            payload = {"count": len(rows), "hits": rows}
+        payload["ok"] = True
+        payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
+        return payload
+
+    @app.post("/search")
+    def search(req: SearchRequest, request: Request) -> Any:
+        """Ranked full-text scouting (tantivy syntax); not a language query."""
+        early = _scout_common(req, request)
+        if early is not None:
+            return early
+        start = perf_counter()
+        try:
+            engine, corpus_cfg, _lock = state.engine_for(req.corpus)
+            scout = state.scout_for(req.corpus)
+        except KeyError as e:
+            return _error(422, "runtime", str(e.args[0]))
+        except ImportError as e:
+            return _error(501, "runtime", f"{e} — scouting needs the tantivy extra")
+        hydrate = config.hydrate if req.hydrate is None else req.hydrate
+        try:
+            hits = scout.rank(req.query, limit=req.limit)
+        except ValueError as e:
+            return _error(422, "syntax", f"search query: {e}")
+        rows = _hits_payload(hits, engine.search_backend, corpus_cfg.id_field, hydrate)
+        payload = _scout_response(rows, req, "search " + req.query, start)
+        payload["query"] = req.query
+        return payload
+
+    @app.post("/similar")
+    def similar(req: SimilarRequest, request: Request) -> Any:
+        """Ranked semantic scouting over the corpus's embedding index."""
+        early = _scout_common(req, request)
+        if early is not None:
+            return early
+        start = perf_counter()
+        try:
+            engine, corpus_cfg, _lock = state.engine_for(req.corpus)
+        except KeyError as e:
+            return _error(422, "runtime", str(e.args[0]))
+        index = getattr(engine.search_backend, "semantic_index", None)
+        if index is None:
+            return _error(
+                422,
+                "runtime",
+                "this corpus has no embedding index: ingest it with "
+                "`prismql ingest … --embed text` or configure [semantic].model",
+            )
+        hydrate = config.hydrate if req.hydrate is None else req.hydrate
+        hits = index.rank(req.text, limit=req.limit, threshold=req.threshold)
+        rows = _hits_payload(hits, engine.search_backend, corpus_cfg.id_field, hydrate)
+        payload = _scout_response(rows, req, "similar " + req.text, start)
+        payload["text"] = req.text
+        return payload
+
+    def _error(status: int, kind: str, message: str) -> JSONResponse:
+        return JSONResponse(
+            status_code=status,
+            content={"ok": False, "error": {"type": kind, "message": message}},
+        )
 
     def _health_payload() -> dict[str, Any]:
         # Snapshot under the state lock; the count reads are backend

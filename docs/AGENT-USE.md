@@ -110,7 +110,12 @@ Can:
   `"dictionaries": {"name": ["term", …]}` in the request body;
 - get a total with `AGGREGATE count()`;
 - fix its own broken query: a bad query comes back as a 422 whose
-  `error.message` says what to change.
+  `error.message` says what to change;
+- scout first: `POST /search` (ranked full-text hits, tantivy syntax) and
+  `POST /similar` (ranked nearest events by embedding, when the corpus has
+  one) show what is where before it writes a query — with `hydrate: false`
+  for ids and scores only, or `output: "file"` to keep the hits out of its
+  context entirely.
 
 The request body is `query` plus, all optional, `max_results`, `hydrate`
 (ids without events when `false`), `dictionaries`, `output`, `corpus` and
@@ -121,11 +126,13 @@ Cannot, on a default server:
 
 - change the corpus — `POST /reload` needs `enable_reload = true`;
 - write anything to disk — see the second limit below;
-- rank or score results. Text matching is set-in, set-out: no relevance,
-  no top-k. `contains(x)` takes a **dictionary name**, never a literal
-  word (`contains_phrase("…")` is the literal form);
-- use sequence operators on a backend with no order axis — OpenSearch, and
-  a tantivy index opened from disk, refuse them instead of guessing.
+- rank or score *query* results. The language is set-in, set-out: no
+  relevance, no top-k (ranking lives only in the two scouting endpoints
+  above). `contains(x)` takes a **dictionary name**, never a literal word
+  (`contains_phrase("…")` is the literal form);
+- use sequence operators on a backend with no order axis — OpenSearch
+  refuses them instead of guessing (a tantivy index built by this version
+  keeps its axis on disk).
 
 ## 6. The two limits to tell the agent about
 

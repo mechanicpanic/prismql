@@ -515,3 +515,80 @@ class TestRateLimit:
                 client.post("/evaluate", json={"query": "from(a)"}).status_code == 200
             )
         assert client.post("/evaluate", json={"query": "from(a)"}).status_code == 429
+
+
+# --- scouting: ranked full-text and semantic hits, outside the algebra (graph #58)
+
+
+def test_search_ranks_hits_on_a_memory_corpus(client):
+    pytest.importorskip("tantivy")
+    r = client.post("/search", json={"query": "spike OR reversal", "limit": 5})
+    body = r.json()
+    assert r.status_code == 200 and body["ok"]
+    assert {h["id"] for h in body["hits"]} == {1, 2}
+    assert body["hits"][0]["score"] >= body["hits"][1]["score"]
+    assert "event" in body["hits"][0]  # hydrated by default
+    r = client.post("/search", json={"query": "spike", "hydrate": False})
+    assert r.json()["hits"] == [{"id": 1, "score": r.json()["hits"][0]["score"]}]
+
+
+def test_search_syntax_error_is_422(client):
+    pytest.importorskip("tantivy")
+    r = client.post("/search", json={"query": "spike AND"})
+    assert r.status_code == 422 and r.json()["error"]["type"] == "syntax"
+
+
+def test_search_output_file(tmp_path):
+    pytest.importorskip("tantivy")
+    data = tmp_path / "events.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    cfg = ServerConfig(
+        backend_type="memory",
+        data=str(data),
+        enable_file_output=True,
+        results_dir=str(tmp_path / "out"),
+    )
+    client = TestClient(create_app(cfg))
+    r = client.post(
+        "/search", json={"query": "spike OR calm", "output": "file", "label": "scout"}
+    )
+    body = r.json()
+    assert body["count"] == 2 and "hits" not in body
+    from pathlib import Path
+
+    lines = Path(body["path"]).read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2 and json.loads(lines[0])["event"]["text"]
+    assert body["preview"][0]["snippet"]
+
+
+def test_similar_without_an_index_is_422(client):
+    r = client.post("/similar", json={"text": "price"})
+    assert r.status_code == 422 and "embedding index" in r.json()["error"]["message"]
+
+
+def test_similar_ranks_by_cosine(tmp_path, monkeypatch):
+    from prismql.backends import semantic as semantic_module
+
+    class Fake:
+        def __init__(self, name: str) -> None:
+            pass
+
+        def encode(self, texts: list[str]) -> list[list[float]]:
+            return [
+                [1.0 if "spike" in t else 0.0, 1.0 if "calm" in t else 0.0, 0.1]
+                for t in texts
+            ]
+
+    monkeypatch.setattr(semantic_module, "SentenceTransformerEmbedder", Fake)
+    data = tmp_path / "events.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    cfg = ServerConfig(backend_type="memory", data=str(data), semantic_model="fake")
+    client = TestClient(create_app(cfg))
+    r = client.post("/similar", json={"text": "spike", "limit": 2, "hydrate": False})
+    body = r.json()
+    assert body["ok"] and [h["id"] for h in body["hits"]][0] == 1
+    assert body["hits"][0]["score"] > body["hits"][1]["score"]
+    r = client.post(
+        "/similar", json={"text": "spike", "threshold": 0.99, "hydrate": False}
+    )
+    assert [h["id"] for h in r.json()["hits"]] == [1]
