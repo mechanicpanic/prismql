@@ -741,3 +741,38 @@ def test_positions_unsupported_is_a_teachable_422_not_a_500(tmp_path, monkeypatc
     entries = c.get("/activity").json()["entries"]
     assert entries[-1]["ok"] is False
     assert entries[-1]["error"]["type"] == "runtime"
+
+
+# --- GET /results/{id} and /results/{id}.jsonl (task 5, graph #65) ---------
+
+
+def test_results_pages_through_a_stored_result(client):
+    rid = client.post(
+        "/evaluate", json={"query": "SELECT from(tick_a)", "max_results": 1}
+    ).json()["result_id"]
+    p = client.get(f"/results/{rid}?offset=1&limit=5&hydrate=false").json()
+    assert p["ok"] and p["offset"] == 1 and p["count"] == 2 and p["total"] == 3
+    assert [g["ids"] for g in p["results"]] == [[2], [4]]
+    assert "events" not in p["results"][0]
+    p = client.get(f"/results/{rid}?limit=1&fields=text").json()
+    assert p["results"][0]["events"] == [{"id": 1, "text": "price spike"}]
+
+
+def test_results_stream_whole_as_jsonl(client):
+    rid = client.post(
+        "/evaluate", json={"query": "SELECT from(tick_a)", "max_results": 1}
+    ).json()["result_id"]
+    r = client.get(f"/results/{rid}.jsonl?hydrate=false")
+    assert r.status_code == 200
+    lines = [json.loads(x) for x in r.text.splitlines()]
+    assert [x["ids"] for x in lines] == [[1], [2], [4]]
+
+
+def test_unknown_or_reloaded_results_are_gone(tmp_path):
+    c = _make_client(tmp_path, enable_reload=True)
+    rid = c.post("/evaluate", json={"query": "SELECT from(tick_a)"}).json()["result_id"]
+    assert c.get(f"/results/{rid}").status_code == 200
+    c.post("/reload")
+    r = c.get(f"/results/{rid}")
+    assert r.status_code == 404 and r.json()["error"]["type"] == "gone"
+    assert c.get("/results/r999.jsonl").status_code == 404

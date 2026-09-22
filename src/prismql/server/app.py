@@ -755,6 +755,76 @@ def create_app(config: ServerConfig) -> FastAPI:
         rows = state.activity_since(since, max(1, min(limit, config.activity_max)))
         return {"ok": True, "seq": state.activity_seq, "entries": rows}
 
+    def _gone(rid: str) -> JSONResponse:
+        return _error(
+            404,
+            "gone",
+            f"result {rid} is not kept any more (evicted or the corpus was "
+            "reloaded); run the query again",
+        )
+
+    def _page_args(hydrate: bool | None, fields: str | None) -> dict[str, Any]:
+        return {
+            "hydrate": config.hydrate if hydrate is None else hydrate,
+            "fields": [f for f in fields.split(",") if f] if fields else None,
+        }
+
+    # Declared before /results/{rid}: otherwise {rid} swallows "r3.jsonl".
+    @app.get("/results/{rid}.jsonl")
+    def result_jsonl(
+        rid: str, hydrate: bool | None = None, fields: str | None = None
+    ) -> Any:
+        stored = state.results.get(rid)
+        if stored is None or stored.load != state.generation:
+            return _gone(rid)
+        try:
+            engine, corpus_cfg, _lock = state.engine_for(stored.corpus)
+        except KeyError:
+            return _gone(rid)
+        args = _page_args(hydrate, fields)
+
+        def lines() -> Any:
+            for offset in range(0, len(stored), 1000):
+                page = page_payload(
+                    stored,
+                    engine.search_backend,
+                    id_field=corpus_cfg.id_field,
+                    time_field=corpus_cfg.timestamp_field,
+                    offset=offset,
+                    limit=1000,
+                    **args,
+                )
+                for item in page.get("results") or page.get("hits") or []:
+                    yield json.dumps(item, ensure_ascii=False, default=str) + "\n"
+
+        return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+    @app.get("/results/{rid}")
+    def result_page(
+        rid: str,
+        offset: int = 0,
+        limit: int = 20,
+        hydrate: bool | None = None,
+        fields: str | None = None,
+    ) -> Any:
+        stored = state.results.get(rid)
+        if stored is None or stored.load != state.generation:
+            return _gone(rid)
+        try:
+            engine, corpus_cfg, _lock = state.engine_for(stored.corpus)
+        except KeyError:
+            return _gone(rid)
+        payload = page_payload(
+            stored,
+            engine.search_backend,
+            id_field=corpus_cfg.id_field,
+            time_field=corpus_cfg.timestamp_field,
+            offset=max(0, offset),
+            limit=max(1, min(limit, config.max_results)),
+            **_page_args(hydrate, fields),
+        )
+        return {"ok": True, "result_id": rid, **payload}
+
     @app.get("/activity/stream")
     async def activity_stream(since: int = 0, ttl: float | None = None) -> Any:
         """Server-sent events: every new journal entry as it happens.
