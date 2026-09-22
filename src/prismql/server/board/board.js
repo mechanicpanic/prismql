@@ -1,106 +1,131 @@
-// PrismQL board — entry point. Sets the theme (dark by default, remembered
-// in localStorage) and its toggle's icon/label, and keeps the journal's
-// stream connected across a server restart by carrying the boot id from
-// activity() into stream() (graph @aleph/prismql, node #76). Rendering the
-// entries themselves — the journal list, the rail, the inspector — is a
-// later task; journal.js is still a no-op stub.
+// PrismQL board — entry point: theme, the state every view module reads,
+// the actions object they call, and topbar wiring (graph @aleph/prismql,
+// node #63 for the state/actions contract later tasks extend, never
+// redefine). The live journal connection itself lives in board-stream.js.
 (function () {
   "use strict";
-  const KEY = "prismql-board-theme";
+  var THEME_KEY = "prismql-board-theme";
 
   function readTheme() {
-    try {
-      const v = localStorage.getItem(KEY);
-      return v === "light" ? "light" : "dark";
-    } catch (e) {
-      return "dark";
-    }
+    try { return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark"; }
+    catch (e) { return "dark"; }
   }
-
   function writeTheme(theme) {
-    try {
-      localStorage.setItem(KEY, theme);
-    } catch (e) {
-      // storage unavailable (private window, blocked site data) — theme
-      // still applies for this load, just isn't remembered.
-    }
+    try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* unavailable — just not remembered */ }
   }
-
   function setHidden(el, hidden) {
-    // SVGElement has no "hidden" IDL attribute at all — only HTMLElement
-    // does — so el.hidden = ... is a silent no-op on these inline <svg>
-    // icons. Toggle the content attribute directly; board.css's own
-    // author `[hidden]` rule (not the UA default) is what hides them.
+    // SVGElement has no "hidden" IDL attribute — only HTMLElement does — so
+    // el.hidden = ... is a silent no-op on these inline <svg> icons.
     if (!el) return;
-    if (hidden) el.setAttribute("hidden", "");
-    else el.removeAttribute("hidden");
+    if (hidden) el.setAttribute("hidden", ""); else el.removeAttribute("hidden");
   }
 
-  function apply(app, toggle, sun, moon, theme) {
+  var state = {
+    entries: [], seq: 0, boot: null, live: true, pending: [], down: false, freshSeq: null,
+    filters: { range: "24h", search: "", kinds: {}, srcs: {}, corpora: {}, statuses: {} },
+    sel: null, tab: "details", theme: readTheme(),
+    corpora: { names: [], default: null, board: {} },
+    full: null,
+  };
+
+  function updateTopbar() {
+    var btn = document.getElementById("live-toggle");
+    if (btn) {
+      btn.className = "live" + (state.down ? " down" : state.live ? "" : " off");
+      btn.setAttribute("aria-pressed", String(state.live));
+    }
+    var word = document.getElementById("live-word");
+    if (word) word.textContent = state.down ? "reconnecting" : state.live ? "live" : "paused";
+    var search = document.getElementById("search");
+    if (search && search.value !== state.filters.search) search.value = state.filters.search;
+  }
+
+  function render() {
+    updateTopbar();
+    if (window.PrismQLJournal) window.PrismQLJournal.render(state, actions);
+    ["PrismQLInspector", "PrismQLEditor", "PrismQLFullview"].forEach(function (name) {
+      var mod = window[name];
+      if (mod && typeof mod.render === "function") mod.render(state, actions);
+    });
+  }
+
+  var actions = {
+    select: function (seq) { state.sel = seq; state.tab = "details"; render(); },
+    openFull: function (seq) { state.sel = seq; state.tab = "details"; state.full = seq; render(); },
+    setFilter: function (key, value) { state.filters[key] = value; render(); },
+    toggleFacet: function (key, value) {
+      var o = Object.assign({}, state.filters[key]);
+      if (o[value]) delete o[value]; else o[value] = true;
+      state.filters[key] = o;
+      render();
+    },
+    resetFilters: function () {
+      state.filters = { range: "24h", search: "", kinds: {}, srcs: {}, corpora: {}, statuses: {} };
+      render();
+    },
+    toggleLive: function () {
+      if (state.down) return;
+      if (!state.live) {
+        state.entries = state.pending.concat(state.entries);
+        state.freshSeq = state.pending.length ? state.pending[0].seq : state.freshSeq;
+        state.pending = [];
+        state.live = true;
+      } else {
+        state.live = false;
+      }
+      render();
+    },
+    showPending: function () {
+      state.entries = state.pending.concat(state.entries);
+      state.freshSeq = state.pending.length ? state.pending[0].seq : null;
+      state.pending = [];
+      render();
+    },
+    setTab: function (tab) { state.tab = tab; render(); },
+    reconnect: function () { window.PrismQLBoardStream.reconnect(state, render); },
+    openInEditor: function () {},
+    rerun: function () {},
+    run: function () {},
+    newQuery: function () {},
+  };
+
+  function applyTheme(app, toggle, sun, moon, theme) {
     app.classList.remove("t-dark", "t-light");
     app.classList.add(theme === "light" ? "t-light" : "t-dark");
-    // The icon shown is the affordance for the theme a click switches TO
-    // (sun while dark — switches to light; moon while light — switches to
-    // dark), matching the canvas (Main.dc.html ~261-262).
     setHidden(sun, theme === "light");
     setHidden(moon, theme !== "light");
     if (toggle) {
-      const label = theme === "light" ? "Switch to dark theme" : "Switch to light theme";
+      var label = theme === "light" ? "Switch to dark theme" : "Switch to light theme";
       toggle.setAttribute("aria-label", label);
       toggle.setAttribute("title", label);
     }
   }
 
   function init() {
-    const app = document.getElementById("app");
+    var app = document.getElementById("app");
     if (!app) return;
-    const toggle = document.getElementById("theme-toggle");
-    const sun = document.getElementById("theme-icon-sun");
-    const moon = document.getElementById("theme-icon-moon");
-    let theme = readTheme();
-    apply(app, toggle, sun, moon, theme);
+    var toggle = document.getElementById("theme-toggle");
+    var sun = document.getElementById("theme-icon-sun");
+    var moon = document.getElementById("theme-icon-moon");
+    applyTheme(app, toggle, sun, moon, state.theme);
     if (toggle) {
       toggle.addEventListener("click", function () {
-        theme = theme === "light" ? "dark" : "light";
-        apply(app, toggle, sun, moon, theme);
-        writeTheme(theme);
+        state.theme = state.theme === "light" ? "dark" : "light";
+        applyTheme(app, toggle, sun, moon, state.theme);
+        writeTheme(state.theme);
       });
     }
+    var liveBtn = document.getElementById("live-toggle");
+    if (liveBtn) liveBtn.addEventListener("click", function () { actions.toggleLive(); });
+    var search = document.getElementById("search");
+    if (search) search.addEventListener("input", function (e) { actions.setFilter("search", e.target.value); });
+    var newQuery = document.getElementById("new-query");
+    if (newQuery) newQuery.addEventListener("click", function () { actions.newQuery(); });
+    render();
+    setInterval(render, 5000); // relative times only — no re-fetch
   }
 
-  // ------------------------------------------------------------- stream
-  function startJournalStream() {
-    if (!window.PrismQLApi) return;
-    let boot = null;
-
-    function backfillAndConnect() {
-      window.PrismQLApi
-        .activity(0)
-        .then(function (body) {
-          boot = body.boot;
-          window.PrismQLApi.stream(
-            body.seq || 0,
-            function () {}, // entries render in a later task
-            function (state) {
-              if (state === "reset") backfillAndConnect();
-            },
-            boot
-          );
-        })
-        .catch(function () {
-          // Not reachable yet — nothing to connect to until it is; a later
-          // task may surface this. stream()'s own retry loop is what
-          // handles a connection that opens and then drops.
-        });
-    }
-
-    backfillAndConnect();
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
-  startJournalStream();
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+  window.PrismQLBoardStream.connect(state, render);
 })();
