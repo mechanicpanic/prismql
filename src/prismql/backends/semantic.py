@@ -2,16 +2,18 @@
 
 The engine is deliberately commodity: any embedder behind the ``Embedder``
 protocol works (sentence-transformers, a hosted API, a test fake). The
-index is exact brute-force cosine over unit-normalized vectors in pure
-Python — no numpy in the core install; at MemoryBackend scale this is
-plenty, and heavier backends can implement ``search_semantic`` natively.
+index is exact cosine over unit-normalized vectors: one matrix product
+when numpy is installed (the ``semantic`` / ``ingest`` extras bring it —
+381k×384 answers in milliseconds), a pure-Python loop otherwise (fine for
+a few thousand rows). An ANN index is a later ``VectorIndex`` behind the
+same two calls, ``search`` and ``rank``, built from the same ``emb`` column.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import Protocol
+from typing import Any, Protocol
 
 from ..types import Document, MessageId
 
@@ -29,6 +31,17 @@ def _normalize(vector: Sequence[float]) -> list[float]:
     if norm == 0.0:
         return [0.0] * len(vector)
     return [x / norm for x in vector]
+
+
+def _matrix(vectors: Sequence[Sequence[float]]) -> Any | None:
+    """An (n, d) float32 array when numpy is installed, else None."""
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+    if not vectors:
+        return np.zeros((0, 0), dtype=np.float32)
+    return np.asarray(vectors, dtype=np.float32)
 
 
 class SentenceTransformerEmbedder:
@@ -85,6 +98,7 @@ class SemanticIndex:
 
         self._ids = ids
         self._vectors = [_normalize(v) for v in embedder.encode(texts)] if texts else []
+        self._matrix = _matrix(self._vectors)
 
     @classmethod
     def from_vectors(
@@ -102,6 +116,24 @@ class SemanticIndex:
         index.text_field = text_field
         index._ids = []
         index._vectors = []
+        index._matrix = None
+        try:
+            import numpy as np
+
+            have_numpy = True
+        except ImportError:
+            have_numpy = False
+        if have_numpy:
+            # Vectorized: 381k rows normalize in well under a second, where
+            # the per-row Python loop below takes tens of seconds.
+            width = next((len(v) for v in vectors if v is not None), 0)
+            rows = [v if v is not None else [0.0] * width for v in vectors]
+            arr = np.asarray(rows, dtype=np.float32) if rows else np.zeros((0, 0))
+            norms = np.linalg.norm(arr, axis=1) if len(arr) else np.zeros(0)
+            keep = norms > 0
+            index._ids = [i for i, k in zip(ids, keep, strict=True) if k]
+            index._matrix = (arr[keep] / norms[keep, None]).astype(np.float32)
+            return index
         for doc_id, vector in zip(ids, vectors, strict=True):
             if vector is None or not any(vector):
                 continue
@@ -109,13 +141,52 @@ class SemanticIndex:
             index._vectors.append(_normalize(vector))
         return index
 
+    def __len__(self) -> int:
+        return len(self._ids)
+
+    def _scores(self, text: str) -> Any:
+        query = _normalize(self.embedder.encode([text])[0])
+        if self._matrix is not None:
+            import numpy as np
+
+            return self._matrix @ np.asarray(query, dtype=np.float32)
+        return [
+            sum(q * v for q, v in zip(query, vector, strict=False))
+            for vector in self._vectors
+        ]
+
     def search(self, text: str, *, threshold: float) -> set[MessageId]:
         """Embed ``text`` and return ids scoring >= threshold (cosine)."""
         if not self._ids:
             return set()
-        query = _normalize(self.embedder.encode([text])[0])
+        scores = self._scores(text)
         return {
             doc_id
-            for doc_id, vector in zip(self._ids, self._vectors, strict=False)
-            if sum(q * v for q, v in zip(query, vector, strict=False)) >= threshold
+            for doc_id, score in zip(self._ids, scores, strict=True)
+            if score >= threshold
         }
+
+    def rank(
+        self, text: str, *, limit: int, threshold: float | None = None
+    ) -> list[tuple[MessageId, float]]:
+        """The ``limit`` best ids with their cosine, best first — scouting,
+        never the algebra: predicates return sets (graph #58)."""
+        if not self._ids or limit <= 0:
+            return []
+        scores = self._scores(text)
+        if self._matrix is not None:
+            import numpy as np
+
+            arr = np.asarray(scores)
+            k = min(limit, len(arr))
+            top = np.argpartition(-arr, k - 1)[:k]
+            order = top[np.argsort(-arr[top], kind="stable")]
+            pairs = [(self._ids[i], float(arr[i])) for i in order]
+        else:
+            order_list = sorted(range(len(scores)), key=lambda i: (-scores[i], i))[
+                :limit
+            ]
+            pairs = [(self._ids[i], float(scores[i])) for i in order_list]
+        if threshold is not None:
+            pairs = [(i, s) for i, s in pairs if s >= threshold]
+        return pairs

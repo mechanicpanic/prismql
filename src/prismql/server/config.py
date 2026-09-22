@@ -422,20 +422,20 @@ def _semantic_index(
 ) -> Any:
     """The index behind similar_to(), or None when nothing backs it."""
     semantic_model = config.semantic_model or embedded_model
-    if semantic_model and config.backend_type != "memory":
+    if semantic_model and config.backend_type not in ("memory", "tantivy"):
         if config.semantic_model:
             # Fail loudly: a configured model on a backend that can't carry
             # the index would otherwise mean similar_to() silently has no
             # backing.
             raise ValueError(
-                "[semantic] is only supported by the 'memory' backend for now; "
+                "[semantic] is supported by the 'memory' and 'tantivy' backends; "
                 f"got backend type {config.backend_type!r}"
             )
         # The file carries vectors but this backend cannot hold the index;
         # nothing was configured, so nothing is promised: say so and go on.
         print(
             f"[prismql] {config.data}: emb column ignored on backend "
-            f"{config.backend_type!r} (similar_to() needs the memory backend)"
+            f"{config.backend_type!r} (similar_to() needs memory or tantivy)"
         )
         semantic_model = None
     if not semantic_model or documents is None:

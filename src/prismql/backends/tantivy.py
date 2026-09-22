@@ -94,6 +94,7 @@ class TantivyBackend(SearchBackend):
         heap_size: int = 50_000_000,
         num_threads: int = 1,
         text_language: str = "english",
+        semantic_index: Any | None = None,
     ) -> None:
         if not _TANTIVY_AVAILABLE:
             raise ImportError(
@@ -103,6 +104,9 @@ class TantivyBackend(SearchBackend):
         self.id_field = id_field
         self.config = config or DEFAULT_CONFIG
         self.text_language = text_language
+        # similar_to(): the vector index is independent of the text index
+        # (built from documents or read from an ingested emb column).
+        self.semantic_index = semantic_index
 
         if (
             index_path is not None
@@ -293,6 +297,11 @@ class TantivyBackend(SearchBackend):
 
     def supports_match(self, mode: str) -> bool:
         return mode in ("stem", "token")
+
+    def search_semantic(self, text: str, *, threshold: float) -> set[MessageId]:
+        if self.semantic_index is None:
+            return super().search_semantic(text, threshold=threshold)
+        return set(self.semantic_index.search(text, threshold=threshold))
 
     def search_phrase(self, phrase: str, field: str = "text") -> set[MessageId]:
         """Native phrase search on plain tokens (adjacent, in order, not

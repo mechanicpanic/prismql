@@ -230,6 +230,8 @@ module = [
     "sentence_transformers",
     "sentence_transformers.*",
     "snowballstemmer",
+    "numpy",
+    "numpy.*",
     "polars",
     "polars.*",
     "prompt_toolkit",

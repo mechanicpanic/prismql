@@ -237,3 +237,70 @@ class TestPrecomputedVectors:
                     data=str(path), timestamp_field="time", semantic_model="other"
                 )
             )
+
+
+class TestRankAndPaths:
+    def test_rank_returns_best_first_with_scores(self):
+        index = SemanticIndex(FakeEmbedder(), DOCS)
+        ranked = index.rank("oil", limit=3)
+        assert [i for i, _ in ranked] == [1, 4, 5]
+        assert ranked[0][1] == pytest.approx(1.0)
+        assert ranked[2][1] == pytest.approx(0.7071, abs=1e-3)
+        assert index.rank("oil", limit=3, threshold=0.9) == ranked[:2]
+
+    def test_numpy_and_python_paths_agree(self):
+        index = SemanticIndex(FakeEmbedder(), DOCS)
+        fast = (
+            index.search("oil panic", threshold=0.5),
+            index.rank("oil panic", limit=5),
+        )
+        index._vectors = index._matrix.tolist()
+        index._matrix = None  # force the pure-Python path
+        slow = (
+            index.search("oil panic", threshold=0.5),
+            index.rank("oil panic", limit=5),
+        )
+        assert fast[0] == slow[0]
+        assert [i for i, _ in fast[1]] == [i for i, _ in slow[1]]
+        for (_, a), (_, b) in zip(fast[1], slow[1], strict=True):
+            assert a == pytest.approx(b, abs=1e-5)
+
+
+class TestSemanticOnTantivy:
+    def test_similar_to_works_on_the_tantivy_backend(self):
+        pytest.importorskip("tantivy")
+        from prismql.backends.tantivy import TantivyBackend
+
+        index = SemanticIndex(FakeEmbedder(), DOCS)
+        engine = PrismQLEngine(TantivyBackend(DOCS, semantic_index=index))
+        assert engine.execute('SELECT similar_to("oil", 0.99)') == [[1], [4]]
+        chain = (
+            'SELECT similar_to("oil", 0.99) FOLLOWED_BY similar_to("panic", 0.99)'
+            " INWINDOW 3"
+        )
+        assert engine.execute(chain) == [[1, 2]]
+
+    def test_server_builds_the_index_for_tantivy_from_emb(self, tmp_path, monkeypatch):
+        pytest.importorskip("tantivy")
+        import polars as pl
+
+        from prismql.backends import semantic as semantic_module
+        from prismql.ingest import normalize, write
+        from prismql.server.config import CorpusConfig, build_engine
+
+        monkeypatch.setattr(
+            semantic_module, "SentenceTransformerEmbedder", lambda _name: FakeEmbedder()
+        )
+        df = normalize(pl.DataFrame(DOCS), id_col="id", time_col="timestamp")
+        df = df.with_columns(
+            pl.Series(
+                "emb",
+                FakeEmbedder().encode(df.get_column("text").to_list()),
+                dtype=pl.List(pl.Float32),
+            ).cast(pl.Array(pl.Float32, 3))
+        )
+        path = write(df, tmp_path / "c.parquet", embed_model="fake-model")
+        engine = build_engine(
+            CorpusConfig(backend_type="tantivy", data=str(path), timestamp_field="time")
+        )
+        assert engine.execute('SELECT similar_to("oil", 0.99)') == [[1], [4]]

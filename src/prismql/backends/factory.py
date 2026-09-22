@@ -173,6 +173,7 @@ class BackendFactory:
             index_path=index_path,
             text_fields=config.get("text_fields"),
             text_language=config.get("text_language") or "english",
+            semantic_index=config.get("semantic_index"),
         )
 
     @classmethod

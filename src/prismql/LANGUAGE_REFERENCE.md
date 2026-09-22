@@ -54,26 +54,37 @@ loudly rather than returning empty results.
 **Text-matching semantics**: `contains()` routes each dictionary term by
 its shape:
 
-- **Multi-word terms always phrase-match** (order-sensitive, n-gram
-  indexed): a dictionary entry `"margin call"` matches those words in
-  that order, never `"call margin"`. This holds in every mode.
-- **Single-word terms** match as **substrings** by default ("work"
-  matches "working" — poor-man's stemming for morphology-rich languages,
-  but "hi" also matches "this"). Token mode (whole-token matching) can be
-  set per engine (`text_match="token"`; in server configs:
-  `[engine] text_match = "token"`) or **per dictionary**:
+- **Multi-word terms always phrase-match** (order-sensitive, plain
+  adjacent tokens): a dictionary entry `"margin call"` matches those words
+  in that order, never `"call margin"`. This holds in every mode.
+- **Single-word terms match by the corpus's `text_match` mode**, which is
+  **`stem`** by default: whole words, folded by a Snowball stemmer in the
+  corpus's `text_language` (`english` unless set; `german`, `russian`, …),
+  so `fail` matches `failed` and `failing`, and `hi` does not match `this`.
+  The other modes are `token` (whole words, no stemming: `rout` will not
+  match `routes`) and `substring` (`work` matches `working`, but `hi` also
+  matches `this` — for logs and identifiers, not prose). Set the mode per
+  engine (`text_match="token"`; in server configs `[engine] text_match`,
+  `[engine] text_language`, or per corpus) or **per dictionary**:
 
   ```toml
-  [dictionaries]
-  stems = ["tumble", "plunge"]          # substring (engine default)
+  [engine]
+  text_language = "german"              # the stemmer both backends use
 
-  [dictionaries.crisis]
-  match = "token"                       # "rout" won't match "routes"
-  terms = ["rout", "panic", "margin call"]
+  [dictionaries]
+  stems = ["laufen", "Haus"]            # stem mode (the default)
+
+  [dictionaries.codes]
+  match = "substring"                   # "ERR" matches "ERR_TIMEOUT"
+  terms = ["ERR", "WARN"]
   ```
 
   The same long form (`{"terms": [...], "match": "token"}`) works in the
   library API and in the server's request-scoped `dictionaries` overlay.
+  **A backend that cannot honour a mode refuses** at load or at the first
+  `contains()` — tantivy has no substring matching — it never answers with
+  a different meaning. Memory and tantivy stem with the same algorithm and
+  language, so one query is one set on both.
 
 `contains_tokens()` always matches whole tokens (Unicode-aware: preserves
 C++, emails, contractions); `contains_phrase()` matches one exact phrase.
