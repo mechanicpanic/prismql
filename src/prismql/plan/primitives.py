@@ -208,6 +208,16 @@ def anti_link(
     return _result(left, [("l_position", "l_id")], order=[l_ax, "l_position"])
 
 
+def _distinct_member(pl: Any, i: int, ascending: bool | set[int]) -> Any:
+    """Member ``i`` differs from every earlier member; for a quantified copy
+    its position also ascends (combinations, not permutations)."""
+    members = [pl.col(f"p{m}") for m in range(i)]
+    distinct = pl.all_horizontal([pl.col(f"p{i}") != m for m in members])
+    if ascending is True or (isinstance(ascending, set) and i in ascending):
+        distinct = distinct & (pl.col(f"p{i}") > pl.col(f"p{i - 1}"))
+    return distinct
+
+
 def cooccur(
     frames: list[Any],
     *,
@@ -217,6 +227,7 @@ def cooccur(
     fields: Sequence[str] = (),
     eligible: Any | None = None,
     bindings: Mapping[str, tuple[int, str]] | None = None,
+    ascending: bool | set[int] = False,
 ) -> Any:
     """Unordered co-occurrence (INWINDOW / DURING over a comma list): every
     combination of one row per frame whose members are pairwise distinct
@@ -240,6 +251,13 @@ def cooccur(
     that binds it, *before* canonicalization forgets which member was
     which. Two assignments with the same member set but different
     bindings are different groups.
+
+    ``ascending`` is for copies of one frame (a quantifier): ``True`` admits
+    only assignments whose positions increase slot by slot; a set of member
+    indices ``i`` requires ``p_i > p_{i-1}`` for those members only (a
+    quantified item inside a longer comma list). Combinations, not the
+    ``k!`` permutations that would be enumerated and then deduplicated —
+    that blow-up was an out-of-memory kill in CI.
     """
     pl = _pl()
     if window < 0:
@@ -274,8 +292,7 @@ def cooccur(
             on.append("k0")
             right_on.append(f"k{i}")
         j = left.join(right, left_on=on, right_on=right_on, how="inner")
-        members = [pl.col(f"p{m}") for m in range(i)]
-        distinct = pl.all_horizontal([pl.col(f"p{i}") != m for m in members])
+        distinct = _distinct_member(pl, i, ascending)
         fits = (pl.col(f"a{i}") >= pl.col("_hi") - window) & (
             pl.col(f"a{i}") <= pl.col("_lo") + window
         )
@@ -374,7 +391,9 @@ def quantify(
             )
             parts.append(_result(one, [("position", "id")], order=[axis, "position"]))
         else:
-            parts.append(cooccur([frame] * n, axis=axis, window=window, key=key))
+            parts.append(
+                cooccur([frame] * n, axis=axis, window=window, key=key, ascending=True)
+            )
     # Renumber groups across sizes: smaller subsets first, then canonical order.
     out = []
     for i, part in enumerate(parts):

@@ -315,6 +315,16 @@ def _cooccur_constraints(
     return None, (pl.all_horizontal(conds) if conds else None), first_leg
 
 
+def _empty(frame: Any) -> Any:
+    pl = _pl()
+    return frame.filter(pl.lit(False)).select(
+        pl.lit(0, dtype=pl.UInt32).alias("group"),
+        pl.lit(0, dtype=pl.UInt32).alias("slot"),
+        "position",
+        "id",
+    )
+
+
 def cooccur_row(
     frame: Any,
     legs: Sequence[Leg],
@@ -326,7 +336,17 @@ def cooccur_row(
     members distinct, variables held inside the enumeration and bound
     from the member that names them (before canonicalization)."""
     axis, w = axis_and_window(window, timestamp_field)
+    # More copies of a leg than it has matches (``from(a){100}`` on nine
+    # messages) can only be empty: say so before building a 100-way join.
+    copies: dict[Leg, int] = {}
+    for lg in legs:
+        copies[lg] = copies.get(lg, 0) + 1
+    if any(n > len(lg.ids) for lg, n in copies.items()):
+        return _empty(frame)
     key, eligible, bindings = _cooccur_constraints(legs)
+    # Consecutive copies of one leg (a quantified item) enumerate as
+    # combinations: their positions must ascend.
+    ascending = {i for i in range(1, len(legs)) if legs[i] == legs[i - 1]}
     return cooccur(
         [leg_frame(frame, leg.ids) for leg in legs],
         axis=axis,
@@ -335,6 +355,7 @@ def cooccur_row(
         fields=variable_fields(legs),
         eligible=eligible,
         bindings=bindings,
+        ascending=ascending,
     )
 
 
@@ -352,6 +373,9 @@ def quantified_row(
     not counting — audit A8). A variable on the restriction holds across
     all its copies."""
     axis, w = axis_and_window(window, timestamp_field)
+    if n_min > len(leg.ids):
+        return _empty(frame)
+    n_max = min(n_max, len(leg.ids))
     key = leg.equal[0][1] if len(leg.equal) == 1 and not leg.unequal else None
     if len(leg.equal) > 1 or leg.unequal:
         raise PrismQLRuntimeError(
