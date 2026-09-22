@@ -842,9 +842,22 @@ def test_activity_stream_replays_and_ends_with_keepalive(client):
 
 def test_board_page_and_lexer_are_served_from_the_package(client):
     page = client.get("/board/")
-    assert page.status_code == 200 and "PrismQL board" in page.text
+    assert page.status_code == 200 and 'id="journal"' in page.text
     lexer = client.get("/board/prismql-lexer.js")
     assert lexer.status_code == 200 and "PrismQLLexer" in lexer.text
+    for asset in (
+        "format.js",
+        "lexjson.js",
+        "api.js",
+        "journal.js",
+        "inspector.js",
+        "editor.js",
+        "fullview.js",
+        "board.js",
+        "board.css",
+    ):
+        resp = client.get(f"/board/{asset}")
+        assert resp.status_code == 200, asset
 
 
 # --- results as objects (graph #65)

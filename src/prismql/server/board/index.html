@@ -4,35 +4,104 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PrismQL board</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="board.css" />
+  <link rel="stylesheet" href="board-views.css" />
 </head>
 <body>
-  <header class="top">
-    <div class="brand">PrismQL <span class="dim">board</span></div>
-    <div class="status" id="status">connecting…</div>
-    <label class="filter"><input type="checkbox" id="only-agents" /> agents only</label>
-    <label class="filter">corpus <select id="corpus"></select></label>
-  </header>
-
-  <main class="layout">
-    <section class="feed" id="feed" aria-label="activity"></section>
-
-    <aside class="side">
-      <div class="editor-wrap">
-        <pre class="editor-highlight" id="highlight" aria-hidden="true"></pre>
-        <textarea id="editor" class="editor" spellcheck="false" autocomplete="off"
-          placeholder="SELECT … — or click a row on the left"></textarea>
+  <div id="app" class="app t-dark">
+    <header class="topbar" id="topbar">
+      <div class="logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3 21 19H3z"></path>
+          <path d="M12 3v16M7.5 11h9" opacity=".55"></path>
+        </svg>
+        PrismQL <span>board</span>
       </div>
-      <div class="editor-actions">
-        <label>max <input type="number" id="max" value="20" min="1" /></label>
-        <label><input type="checkbox" id="hydrate" checked /> events</label>
-        <button id="run">Run <kbd>⌘⏎</kbd></button>
+      <button class="live off" type="button" id="live-toggle" aria-pressed="false"
+        title="Pause or resume the live journal">
+        <i></i><b id="live-word">off</b>
+      </button>
+      <label class="searchbox">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="m20 20-3.5-3.5"></path>
+        </svg>
+        <input type="search" id="search" placeholder="Search queries, sources, results"
+          aria-label="Search the journal" />
+      </label>
+      <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
+        <button class="iconbtn" type="button" id="theme-toggle" aria-label="Switch theme" title="Switch theme"></button>
+        <button class="primary" type="button" id="new-query">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+            stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"></path>
+          </svg>
+          New query
+        </button>
       </div>
-      <section class="result" id="result"></section>
+    </header>
+
+    <nav class="rail" id="rail" aria-label="Filters">
+      <div>
+        <h3>Time</h3>
+        <div class="seg" id="rail-range" role="group" aria-label="Time range"></div>
+      </div>
+      <div>
+        <h3>Kind</h3>
+        <div id="rail-kind"></div>
+      </div>
+      <div>
+        <h3>Source</h3>
+        <div id="rail-source"></div>
+      </div>
+      <div>
+        <h3>Corpus</h3>
+        <div id="rail-corpus"></div>
+      </div>
+      <div>
+        <h3>Status</h3>
+        <div id="rail-status"></div>
+      </div>
+      <div id="rail-reset"></div>
+    </nav>
+
+    <main class="journal" id="journal" aria-label="Journal">
+      <div class="jhead">
+        <h2>Journal</h2>
+        <span class="count" id="journal-count"></span>
+        <div id="journal-errpill"></div>
+        <span style="margin-left: auto; font-size: 12px; color: var(--faint);">newest first</span>
+      </div>
+      <div class="chips" id="journal-chips"></div>
+      <div class="list" id="journal-list" tabindex="0"
+        aria-label="Requests. Arrow keys move, Enter opens the output full screen"></div>
+    </main>
+
+    <aside class="insp" id="inspector" aria-label="Inspector">
+      <div class="tabs" role="tablist">
+        <button class="tab on" id="tab-details" type="button" role="tab" aria-selected="true">Request</button>
+        <button class="tab" id="tab-editor" type="button" role="tab" aria-selected="false">Editor</button>
+      </div>
+      <div class="pane" id="inspector-pane"></div>
     </aside>
-  </main>
+
+    <div id="full" class="fv" hidden></div>
+  </div>
 
   <script src="prismql-lexer.js"></script>
+  <script src="format.js"></script>
+  <script src="lexjson.js"></script>
+  <script src="api.js"></script>
+  <script src="journal.js"></script>
+  <script src="inspector.js"></script>
+  <script src="editor.js"></script>
+  <script src="fullview.js"></script>
   <script src="board.js"></script>
 </body>
 </html>
