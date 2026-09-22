@@ -63,6 +63,23 @@ def test_evaluate_sequential_chain(client):
     assert r.json()["results"][0]["ids"] == [1, 2, 4]
 
 
+def test_kept_groups_come_in_stream_order(tmp_path):
+    # ids whose string order differs from load order: e1, e11, e2 loaded as e2, e11, e1
+    docs = [
+        {"id": "e2", "user": "u", "text": "spike", "timestamp": 1000},
+        {"id": "e11", "user": "u", "text": "spike", "timestamp": 1010},
+        {"id": "e1", "user": "u", "text": "spike", "timestamp": 1020},
+    ]
+    data = tmp_path / "e.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in docs))
+    c = TestClient(create_app(ServerConfig(backend_type="memory", data=str(data))))
+    body = c.post(
+        "/evaluate", json={"query": "SELECT from(u)", "hydrate": False}
+    ).json()
+    assert [g["positions"][0] for g in body["results"]] == [0, 1, 2]
+    assert [g["ids"] for g in body["results"]] == [["e2"], ["e11"], ["e1"]]
+
+
 def test_evaluate_syntax_error(client):
     r = client.post("/evaluate", json={"query": "SELEC from(a)"})
     assert r.status_code == 422
@@ -675,6 +692,29 @@ def test_similar_ranks_by_cosine(tmp_path, monkeypatch):
         "/similar", json={"text": "spike", "threshold": 0.99, "hydrate": False}
     )
     assert [h["id"] for h in r.json()["hits"]] == [1]
+
+
+def test_similar_journal_records_the_threshold(tmp_path, monkeypatch):
+    from prismql.backends import semantic as semantic_module
+
+    class Fake:
+        def __init__(self, name: str) -> None:
+            pass
+
+        def encode(self, texts: list[str]) -> list[list[float]]:
+            return [[1.0 if "spike" in t else 0.0, 0.1] for t in texts]
+
+    monkeypatch.setattr(semantic_module, "SentenceTransformerEmbedder", Fake)
+    data = tmp_path / "e.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    c = TestClient(
+        create_app(
+            ServerConfig(backend_type="memory", data=str(data), semantic_model="fake")
+        )
+    )
+    c.post("/similar", json={"text": "spike", "threshold": 0.5, "hydrate": False})
+    entry = c.get("/activity").json()["entries"][-1]
+    assert entry["kind"] == "similar" and entry["threshold"] == 0.5
 
 
 def test_scouting_limits_are_capped_by_the_server(tmp_path):

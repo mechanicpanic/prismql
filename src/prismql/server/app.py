@@ -485,11 +485,18 @@ def create_app(config: ServerConfig) -> FastAPI:
                     positions = [backend.positions(g) for g in groups]
                 except PrismQLRuntimeError as e:
                     return _runtime_error(str(e))
+                # kept groups come in stream order, by each group's first
+                # slot; sorted is stable so ties keep the engine's order
+                # (graph @aleph/prismql, node #73).
+                order = sorted(
+                    range(len(groups)),
+                    key=lambda i: positions[i][0] if positions[i] else -1,
+                )
                 stored = StoredResult.from_groups(
                     kind,
                     req.corpus or config.default_corpus,
-                    positions,
-                    labels,
+                    [positions[i] for i in order],
+                    labels if labels is None else [labels[i] for i in order],
                     load=load,
                 )
                 rid = state.results.put(stored)
@@ -582,6 +589,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                 "result_id": payload.get("result_id"),
                 "total": payload.get("total"),
                 "elapsed_ms": payload["elapsed_ms"],
+                "threshold": getattr(req, "threshold", None),
             }
         )
 
