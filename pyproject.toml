@@ -289,6 +289,9 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "httpx>=0.27",
+    # the semantic index's numpy path is tested against the pure-Python one;
+    # without it here that test skips silently (graph @aleph/prismql, node #26)
+    "numpy>=1.24",
 ]
 [tool.uv]
 default-groups = ["dev"]
