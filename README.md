@@ -179,9 +179,11 @@ config ones for that query only — so an agent can iterate on the semantic
 layer without touching server state. `GET /schema` describes the loaded
 corpus (fields, coverage, example values) and is the thing to read before
 writing queries against an unfamiliar corpus. Beyond one page, a match or
-scout result is kept server-side under a `result_id` and paged with `GET
-/results/{result_id}` (or streamed whole with the `.jsonl` form) instead of
-re-run; `AGGREGATE count()` still counts every group, uncapped.
+scout result is kept server-side under an opaque `result_id` and paged with
+`GET /results/{result_id}` (or streamed whole with the `.jsonl` form,
+which carries an `X-PrismQL-Total` header with the line count) instead of
+re-run; both routes are rate-limited like `/evaluate`.
+`AGGREGATE count()` still counts every group, uncapped.
 
 MCP-native agents get a single `evaluate()` tool through a stdio shim:
 

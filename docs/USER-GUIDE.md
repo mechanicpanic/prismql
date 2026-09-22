@@ -405,7 +405,7 @@ curl -s localhost:8901/health
 
 curl -s -X POST localhost:8901/evaluate -H 'Content-Type: application/json' \
   -d '{"query":"SELECT field(kind, delete) FOLLOWED_BY field(kind, save) DURING 10 minutes","max_results":5}'
-# {"kind":"groups","count":2,"total":2,"truncated":false,"result_id":"r1","results":[{"ids":["e2","e3"],"positions":[1,2],"times":[...],"events":[{...full records...}]}, ...]}
+# {"kind":"groups","count":2,"total":2,"truncated":false,"result_id":"r12-3fa9c1d0","results":[{"ids":["e2","e3"],"positions":[1,2],"times":[...],"events":[{...full records...}]}, ...]}
 ```
 
 `GET /schema` is `\schema` as JSON. A bad query comes back as a 422 whose
@@ -417,15 +417,21 @@ is the fast way to try a vocabulary before writing it into the config.
 
 **A match result is kept, not just returned.** Anything that is not an
 aggregate or `GROUP BY` answer — those stay small and inline, no id — is
-held on the server under the `result_id` you see above, in memory only.
-`max_results` is the size of that first page; `count` is how many groups
-this response carries, `total` is how many the query found, and
+held on the server under the `result_id` you see above, in memory only. The
+id is opaque (treat it as an unparsed token, not "r" plus a counter): the
+hex suffix is what keeps an id held from before a restart from matching a
+different result on the new process, where the counter alone would repeat
+from 1. `max_results` is the size of that first page; `count` is how many
+groups this response carries, `total` is how many the query found, and
 `truncated` means paging further would return more. Fetch the rest with
-`GET /results/r1?offset=5&limit=5` (same `hydrate` and `fields` knobs as
-`/evaluate`), or stream every kept group at once with `GET
-/results/r1.jsonl`. Kept results do not survive `/reload` or a restart,
-and the oldest are dropped first once `[server] results_memory_mb`
-(default 256 MB) fills up; either way a stale id comes back as
+`GET /results/r12-3fa9c1d0?offset=5&limit=5` (same `hydrate` and `fields`
+knobs as `/evaluate`), or stream every kept group at once with `GET
+/results/r12-3fa9c1d0.jsonl` — its response carries an `X-PrismQL-Total`
+header with the number of lines the stream will send. Both `/results/{id}`
+routes are rate-limited the same way `/evaluate` is. Kept results do not
+survive `/reload` or a restart, and the oldest are dropped first once
+`[server] results_memory_mb` (default 256 MB) fills up; either way a stale
+id comes back as
 `{"ok":false,"error":{"type":"gone","message":"...run the query again"}}`
 — not silently empty.
 

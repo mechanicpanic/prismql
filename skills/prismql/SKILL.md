@@ -65,7 +65,9 @@ after query`), not the missing keyword.
 Other endpoints: `GET /reference` (the full language doc), `GET /corpora`
 (named corpora; pass `"corpus": "<name>"` in the request to pick one),
 `GET /results/{result_id}` / `GET /results/{result_id}.jsonl` (page or
-stream a kept match or scout result), `POST /reload` (off unless the
+stream a kept match or scout result — rate-limited like the endpoints
+above; the `.jsonl` response carries an `X-PrismQL-Total` header with the
+number of lines the stream will send), `POST /reload` (off unless the
 server enables it).
 
 **Scout before you query.** Two endpoints answer "what is where" with
@@ -94,9 +96,13 @@ same way.
 ### Four things about the server that will bite you
 
 1. **A match or scout result is kept, not just returned — page it, don't
-   re-run it.** Anything with a `result_id` (everything except an aggregate
-   or `GROUP BY` answer, which stay small and inline with no id) is held on
-   the server in memory. `count` is how many items *this response* carries,
+   re-run it.** `result_id` is opaque — treat it as an unparsed token, not
+   "r" plus a counter; the hex suffix is what keeps an id held from before a
+   restart from matching a different result on the new process, where the
+   counter alone repeats from 1. Anything with a `result_id` (everything
+   except an aggregate or `GROUP BY` answer, which stay small and inline
+   with no id) is held on the server in memory. `count` is how many items
+   *this response* carries,
    `max_results` is the page size, `total` is how many the query found, and
    `"truncated": true` means paging further returns more. Fetch the rest
    with `GET /results/{result_id}?offset=…&limit=…&hydrate=…&fields=…` (the

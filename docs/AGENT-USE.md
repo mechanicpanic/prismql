@@ -155,15 +155,24 @@ rest — it pages the kept result by the `result_id` the response carries:
 ```console
 $ curl -s -X POST localhost:8901/evaluate -H 'Content-Type: application/json' \
     -d '{"query": "SELECT field(kind, save)", "max_results": 2, "hydrate": false}'
-{"kind":"groups","count":2,"total":8,"truncated":true,"result_id":"r1","results":[{"ids":["e1"]},{"ids":["e12"]}], …}
+{"kind":"groups","count":2,"total":8,"truncated":true,"result_id":"r12-3fa9c1d0","results":[{"ids":["e1"]},{"ids":["e12"]}], …}
 
-$ curl -s "localhost:8901/results/r1?offset=2&limit=2"
-{"ok":true,"result_id":"r1","kind":"groups","total":8,"offset":2,"count":2,"truncated":true,"results":[…]}
+$ curl -s "localhost:8901/results/r12-3fa9c1d0?offset=2&limit=2"
+{"ok":true,"result_id":"r12-3fa9c1d0","kind":"groups","total":8,"offset":2,"count":2,"truncated":true,"results":[…]}
 
 $ curl -s -X POST localhost:8901/evaluate -H 'Content-Type: application/json' \
     -d '{"query": "SELECT field(kind, save) AGGREGATE count()"}'
 {"kind":"aggregate","function":"count","field":null,"value":8, …}
 ```
+
+`result_id` is opaque — treat it as an unparsed token, not "r" plus a
+counter: the numeric part alone can repeat across a server restart, so the
+hex suffix is what makes an id from before a restart practically never
+collide with a live one. `GET /results/{id}` and `/results/{id}.jsonl` are
+rate-limited the same way `/evaluate` is. `GET /results/{id}.jsonl` also
+carries an `X-PrismQL-Total` response header: the number of lines the
+stream will send, so the agent can check it received the whole thing
+without buffering it first.
 
 `/search` and `/similar` are paged the same way, but their `total` can run
 ahead of what the server kept: it holds only the best `[server]
