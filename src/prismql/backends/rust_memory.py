@@ -6,7 +6,7 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from ..types import Document, MessageGroup, MessageId, QueryResult
+from ..types import Document, MessageId
 from .base import SearchBackend
 from .order import OrderIndex, epoch_micros
 
@@ -56,8 +56,7 @@ class RustMemoryBackend(SearchBackend):
             id_field: Field name containing the document ID
             timestamp_fields: Fields to parse + cache as timestamps at index
                 time, enabling the temporal fast paths (filter_by_time_range
-                / filter_by_time_window / group_by_temporal_unit /
-                merge_within_time_window) without re-parsing per query.
+                / group_by_temporal_unit) without re-parsing per query.
                 Defaults to ["timestamp"], matching PrismQLEngine's default
                 timestamp_field; pass [] to disable timestamp caching.
                 Note: timestamps are cached at construction — mutating a
@@ -84,12 +83,7 @@ class RustMemoryBackend(SearchBackend):
         # fail with misleading kwarg TypeErrors here, crash with
         # AttributeError mid-query (the wrapper delegates unconditionally),
         # or silently fall back to the slow Python paths at query time.
-        required_kernels = (
-            "merge_within_time_window",
-            "merge_temporal_link",
-            "extend_temporal_link",
-            "get_timestamps",
-        )
+        required_kernels = ("get_timestamps",)
         missing = [k for k in required_kernels if not hasattr(_RustMemoryBackend, k)]
         if missing:
             raise ImportError(
@@ -330,77 +324,6 @@ class RustMemoryBackend(SearchBackend):
             inclusive,
         )
         return set(ids)
-
-    def filter_by_time_window(
-        self,
-        results: Sequence[MessageGroup],
-        field: str,
-        window: timedelta,
-    ) -> QueryResult:
-        """Keep only result groups whose messages all have a `field`
-        timestamp and span at most `window`."""
-        # Groups containing a non-usize id can't have a timestamp for every
-        # member, so they'd be dropped anyway — drop them up front rather
-        # than overflow at the FFI boundary.
-        valid_groups = [list(g) for g in results if all(self._valid_id(i) for i in g)]
-        return self._backend.filter_by_time_window(  # type: ignore[no-any-return]
-            valid_groups, field, window
-        )
-
-    def merge_temporal_link(
-        self,
-        lhs: Sequence[MessageId],
-        rhs: Sequence[MessageId],
-        field: str,
-        duration: timedelta,
-        forward: bool,
-    ) -> QueryResult:
-        """Greedy temporal sequential pairing (DURING), fully in Rust: ids
-        cross the FFI boundary once each way, timestamps never leave Rust.
-        Ties are broken by ascending id (deterministic)."""
-        return self._backend.merge_temporal_link(  # type: ignore[no-any-return]
-            [i for i in lhs if self._valid_id(i)],
-            [i for i in rhs if self._valid_id(i)],
-            field,
-            duration,
-            forward,
-        )
-
-    def extend_temporal_link(
-        self,
-        sequences: Sequence[MessageGroup],
-        rhs: Sequence[MessageId],
-        field: str,
-        duration: timedelta,
-        forward: bool,
-    ) -> QueryResult:
-        """Extend sequences by one temporal link (chained DURING) in Rust."""
-        valid_seqs = [list(s) for s in sequences if all(self._valid_id(i) for i in s)]
-        return self._backend.extend_temporal_link(  # type: ignore[no-any-return]
-            valid_seqs,
-            [i for i in rhs if self._valid_id(i)],
-            field,
-            duration,
-            forward,
-        )
-
-    def merge_within_time_window(
-        self,
-        groups: Sequence[MessageGroup],
-        field: str,
-        window: timedelta,
-    ) -> QueryResult:
-        """Every combination of one message per group (no ordering
-        constraint between groups) whose `field` timestamp span fits within
-        `window`. Pruned enumeration — infeasible combinations are never
-        materialized, unlike the cartesian-product fallback path.
-
-        Raises ValueError if intermediate results exceed the OOM safety cap.
-        """
-        valid_groups = [[i for i in g if self._valid_id(i)] for g in groups]
-        return self._backend.merge_within_time_window(  # type: ignore[no-any-return]
-            valid_groups, field, window
-        )
 
     def group_by_temporal_unit(
         self,

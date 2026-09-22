@@ -5,8 +5,8 @@ the window merges, sequential pair builders, temporal filters, partition
 logic — is inherited unchanged and semantics stay byte-identical with the
 parse-tree path. Only the *traversal* is reimplemented here, reading IR nodes
 instead of ANTLR contexts. The per-body state conventions
-(``variable_constraints``, ``pattern_names``, ``_seq_leg_constraints``,
-``_seq_partition_key``) are kept exactly, including their reset points, so
+(``variable_constraints``, ``pattern_names``, ``_seq_leg_constraints``)
+are kept exactly, including their reset points, so
 behaviour (and behavioural quirks) match the visitor.
 
 A later cleanup can extract the shared helpers into their own module and
@@ -19,6 +19,7 @@ from datetime import datetime
 
 from ..aggregators.types import AggregateResult, GroupedResult
 from ..exceptions import PrismQLRuntimeError
+from ..plan.bridge import run_body_span
 from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..types import (
     MessageGroup,
@@ -131,7 +132,6 @@ class IRExecutor(PrismQLVisitor):
         self.current_restriction_position = 0
         self.pattern_names = []
         self._seq_leg_constraints = []
-        self._seq_partition_key = None
         self._restriction_ranges = []
 
         # Step 1: window extraction.
@@ -195,26 +195,11 @@ class IRExecutor(PrismQLVisitor):
         # candidate selection by the operator layer (graph #8); a post-hoc
         # pass that indexed groups by id order dropped valid groups (A9).
 
-        # Step 2.4: temporal window filtering (DURING).
+        # Step 2.4: a trailing DURING on a chain — the whole group's span.
         if temporal_window is not None:
-            if hasattr(
-                self.search_backend, "has_timestamp_field"
-            ) and self.search_backend.has_timestamp_field(self.timestamp_field):
-                results = self.search_backend.filter_by_time_window(  # type: ignore[attr-defined]
-                    results, self.timestamp_field, temporal_window
-                )
-            else:
-                all_msg_ids: set[MessageId] = set()
-                for group in results:
-                    all_msg_ids.update(group)
-                documents = self.search_backend.get_documents(list(all_msg_ids))
-                results = TemporalProcessor.filter_by_time_window(
-                    results,
-                    documents,
-                    self.timestamp_field,
-                    temporal_window,
-                    id_field=getattr(self.search_backend, "id_field", "id"),
-                )
+            results = run_body_span(
+                self.search_backend, self.timestamp_field, results, temporal_window
+            )
 
         # Step 2.5: temporal filter (BEFORE/AFTER/BETWEEN).
         if q.temporal_filter is not None:
@@ -336,7 +321,6 @@ class IRExecutor(PrismQLVisitor):
 
             num_constraints_before = len(self.variable_constraints)
             self._seq_leg_constraints = []
-            self._seq_partition_key = None
 
             result = self.execute_restriction(item.expr)
 
@@ -410,15 +394,9 @@ class IRExecutor(PrismQLVisitor):
         lhs = self.execute_restriction(expr.lhs)
         if not self._seq_leg_constraints:
             self._seq_leg_constraints = [list(self.variable_constraints[n_before_lhs:])]
-            self._seq_partition_key = self._leg_key(self._seq_leg_constraints[0])
         n_before_rhs = len(self.variable_constraints)
         rhs = self.execute_bool(expr.rhs)
         rhs_leg = list(self.variable_constraints[n_before_rhs:])
-        if expr.op in ("FOLLOWED_BY", "PRECEDED_BY") and (
-            self._seq_partition_key is None
-            or self._leg_key(rhs_leg) != self._seq_partition_key
-        ):
-            self._seq_partition_key = None
         window = expr.window
 
         if isinstance(rhs, (list, PartialSequence)):

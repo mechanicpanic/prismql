@@ -324,18 +324,6 @@ class TestRustMemoryBackendTemporal:
         result = temporal_backend.filter_by_time_range([0, 100, 101], "timestamp")
         assert result == {0}
 
-    def test_filter_by_time_window(self, temporal_backend):
-        from datetime import timedelta
-
-        # Docs are 1 hour apart; a [0,1,2] group spans 2h.
-        results = [[0, 1, 2], [0, 1, 5], [0, 100, 1]]
-        out = temporal_backend.filter_by_time_window(
-            results, "timestamp", timedelta(hours=2)
-        )
-        # First group fits (2h span); second is 5h (drops); third has a
-        # missing-timestamp message (drops).
-        assert out == [[0, 1, 2]]
-
     def test_group_by_temporal_unit_day(self, temporal_backend):
         groups = temporal_backend.group_by_temporal_unit(
             list(range(50)) + [100, 101], "timestamp", "day"
@@ -370,42 +358,6 @@ class TestRustMemoryBackendTemporal:
             if max(times) - min(times) <= window:
                 out.add(tuple(combo))
         return out
-
-    def test_merge_within_time_window_parity(
-        self, timestamped_documents, temporal_backend
-    ):
-        from datetime import timedelta
-
-        # Unsorted groups, overlap between groups, junk members
-        groups = [
-            [5, 1, 30, 100],  # 100 has no timestamp
-            [2, 6, 31, 1],  # overlaps group 0 (id 1)
-            [3, 32, 7, 101],  # 101 has invalid timestamp
-        ]
-        for window in [timedelta(hours=2), timedelta(hours=5), timedelta(0)]:
-            expected = self._reference_merge(groups, timestamped_documents, window)
-            got = temporal_backend.merge_within_time_window(groups, "timestamp", window)
-            assert {tuple(r) for r in got} == expected, f"window={window}"
-
-    def test_merge_within_time_window_keeps_unordered_combos(self, temporal_backend):
-        from datetime import timedelta
-
-        # Group 0's pick (id 5) is LATER than group 1's pick (id 3):
-        # DURING semantics impose no chronological order between
-        # restrictions, unlike INWINDOW.
-        got = temporal_backend.merge_within_time_window(
-            [[5], [3]], "timestamp", timedelta(hours=3)
-        )
-        assert got == [[5, 3]]
-
-    def test_merge_within_time_window_empty_factor(self, temporal_backend):
-        from datetime import timedelta
-
-        # A group with no usable timestamps empties the whole product.
-        got = temporal_backend.merge_within_time_window(
-            [[1, 2], [100]], "timestamp", timedelta(hours=1)
-        )
-        assert got == []
 
     def test_during_query_end_to_end_matches_python_backend(self):
         from datetime import datetime, timedelta

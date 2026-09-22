@@ -1,6 +1,7 @@
 ## Unreleased
 
-### Changed (P3)
+### Changed (P3 — one operator layer)
+- Every sequence/window operator executes through `prismql.plan` on both execution paths: FOLLOWED_BY / PRECEDED_BY and their negations, chains, INWINDOW / DURING comma rows, quantifiers, subquery stages. The Python builders, the backtracking window merger, the post-hoc variable validator and the Rust operator kernels are deleted; `RustMemoryBackend` remains as a search-only backend. Semantics now match the language reference where the engine used to diverge (audit A1–A10, D2): stream distance on gapped and string ids, unordered co-occurrence, no message reuse across axes, ranges enumerated, slots in axis order, variables held inside candidate selection, one group per subquery stage with the union's span in the window. Backends without an order axis (OpenSearch) raise `PositionalUnsupportedError` on sequence operators.
 - `polars` and `pyarrow` are core dependencies: the operator layer is a Polars plan over an Arrow table and every sequence/window query needs it. `[plan]` and `[arrow]` remain as empty aliases for one release.
 - An open quantifier range `{n,}` is rejected (`OPEN_QUANTIFIER`, both dialects, validator and runtime) unless `quantifier_ceiling = m` is configured (engine argument; `[engine] quantifier_ceiling` in `prismql.toml`, reported by `GET /schema`), in which case it reads as `{n,m}` (a minimum above the ceiling is rejected). Enumeration itself still runs as the minimum until the operator layer lands (A8). The plan enumerates groups up to an explicit size and never truncates silently (graph #46).
 

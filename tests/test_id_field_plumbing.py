@@ -1,7 +1,7 @@
 """A configurable id_field must be honored on every path, not just at load.
 
 Three internal sites hard-coded doc.get("id"): the Python temporal-link
-fallback and both VariableValidator lookups. With any other id_field they
+fallback and the operator layer's frame. With any other id_field they
 found no documents and returned EMPTY results silently — the release
 blocker class (see #18/#21/#23/#41).
 """

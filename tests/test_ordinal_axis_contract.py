@@ -9,8 +9,6 @@ index on the Python fallback (A2), and string ids sort lexicographically
 
 import pytest
 
-import prismql.processors.window as window_mod
-import prismql.visitors.query_visitor as qv
 from prismql.backends.memory import MemoryBackend
 from prismql.engine import PrismQLEngine
 
@@ -29,13 +27,6 @@ FB = "SELECT from(a) FOLLOWED_BY from(b) INWINDOW 3"
 CO = "SELECT from(a), from(b) INWINDOW 3"
 
 
-@pytest.fixture
-def python_paths(monkeypatch):
-    monkeypatch.setattr(qv, "RUST_FOLLOWED_BY_AVAILABLE", False)
-    monkeypatch.setattr(qv, "RUST_PRECEDED_BY_AVAILABLE", False)
-    monkeypatch.setattr(window_mod, "RUST_AVAILABLE", False)
-
-
 def test_gapped_ids_are_adjacent_in_the_stream_on_rust_path():
     # ids 1 and 10 are consecutive documents: stream distance 1.
     engine = PrismQLEngine(MemoryBackend(documents=GAPPED))
@@ -43,7 +34,6 @@ def test_gapped_ids_are_adjacent_in_the_stream_on_rust_path():
     assert engine.execute(CO) == [[1, 10]]
 
 
-@pytest.mark.usefixtures("python_paths")
 def test_gapped_ids_are_adjacent_in_the_stream_on_python_path():
     engine = PrismQLEngine(MemoryBackend(documents=GAPPED))
     assert engine.execute(FB) == [[1, 10]]

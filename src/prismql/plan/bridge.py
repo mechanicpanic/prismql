@@ -272,3 +272,25 @@ def run_merge_groups(
     w = window_of(window)
     frame, frames = _stages(backend, ts, stages, w)
     return groups(merge_groups(frame, frames, window=w, timestamp_field=ts))
+
+
+def run_body_span(
+    backend: Any,
+    ts: str,
+    id_groups: Sequence[Sequence[MessageId]],
+    window: Any,
+) -> list[list[MessageId]]:
+    """A trailing DURING on a chain: keep the groups whose whole span on the
+    time axis is within the window; a group with a missing timestamp is
+    rejected (spec amendment 8)."""
+    from .operators import body_span
+
+    w = window_of(window)
+    if not isinstance(w, tuple):
+        raise ValueError("run_body_span takes a temporal window")
+    members = {m for g in id_groups for m in g}
+    if not members:
+        return []
+    frame = _frame(backend, members, [], ts)
+    res = _result_from_groups(frame, id_groups, _axis_col(w, ts))
+    return groups(body_span(frame, res, window=w, timestamp_field=ts))

@@ -2,7 +2,7 @@
 
 Regression tests for the 0.1.0 correctness fix: constraints recorded inside
 a sequential chain were all stamped with the same position, so the
-VariableValidator compared a message against itself and every mixed-value
+the old variable validator compared a message against itself and every mixed-value
 chain slipped through. Constraints are now bucketed per leg in chronological
 group order and validated against the right slot.
 """

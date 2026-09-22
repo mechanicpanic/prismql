@@ -97,23 +97,17 @@ Only the `text` field is indexed for the text predicates (memory backend;
 tantivy takes `text_fields`). A dictionary is the semantic layer: invest
 there, and pass it in-band via `dictionaries` while iterating.
 
-## Known-wrong today (read before trusting a result)
+## What changed with the operator layer (read if you knew the old engine)
 
-The legacy execution path is being replaced by a Polars plan (P3). Until
-then these return **wrong or empty results without an error**:
-
-- **Two variables on a leg, or a variable that skips a leg (A10).** A
-  single `$k` on a two-leg link is fine. `field(page,$p) AND from($u)` on
-  one leg, or `from($u) FOLLOWED_BY x FOLLOWED_BY from($u)`, pick the
-  nearest candidate first and only then check the variable; any other
-  entity's event in between drops the group, so the count is too low,
-  often 0. Cross-check by dropping one variable.
-- **Positional distance is id arithmetic on the Rust path (A2).** With
-  gapped or string ids prefer `DURING`, or assign sequential integer ids.
-- **Quantifier ranges run as their minimum (A8).** `{2,5}` means `{2}`.
-- **`{n,}` is rejected unless `[engine] quantifier_ceiling = m` is set** (then it
-  means `{n,m}`); the 422 says so. Prefer an explicit `{n,m}`.
-- **Groups are printed in id order, not stream order (A9).**
+Every sequence/window operator runs once, as a Polars plan over the
+ordered corpus. Consequences you can rely on: positional distance is
+stream distance (ids are labels; string ids fine); `A, B INWINDOW n` is
+unordered and commutes; a group never holds the same message twice;
+`{n,m}` enumerates every size; slots come back in axis order; pattern
+variables are held while the nearest candidate is chosen, so two variables
+on a leg or a variable that skips a leg work. Subquery stages merge as one
+group per stage with the union's span in the window. Backends without an
+order axis (OpenSearch) refuse sequence operators instead of guessing.
 
 ## Inline Python (no server)
 

@@ -12,6 +12,7 @@ from ..exceptions import PrismQLRuntimeError
 from ..grammar.generated.PrismQLParser import PrismQLParser
 from ..grammar.generated.PrismQLVisitor import PrismQLVisitor as BasePrismQLVisitor
 from ..plan.bridge import (
+    run_body_span,
     run_chain_groups,
     run_cooccur,
     run_link,
@@ -30,15 +31,6 @@ from ..types import (
 )
 
 # Try to import Rust backend for performance
-try:
-    from prismql_rust import merge_followed_by as rust_merge_followed_by
-    from prismql_rust import merge_preceded_by as rust_merge_preceded_by
-
-    RUST_FOLLOWED_BY_AVAILABLE = True
-    RUST_PRECEDED_BY_AVAILABLE = True
-except ImportError:
-    RUST_FOLLOWED_BY_AVAILABLE = False
-    RUST_PRECEDED_BY_AVAILABLE = False
 
 
 class PrismQLVisitor(BasePrismQLVisitor):
@@ -86,7 +78,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # field-value partition instead of globally — greedy-global would
         # pick the nearest candidate from any partition and lose chains the
         # post-hoc validator can never recover.
-        self._seq_partition_key: tuple[str, str] | None = None
         # (min, max) per restriction item of the current body, in order
         # (quantifier ranges are enumerated by the operator layer — A8).
         self._restriction_ranges: list[tuple[int, int]] = []
@@ -137,7 +128,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
         self.current_restriction_position = 0
         self.pattern_names = []
         self._seq_leg_constraints = []
-        self._seq_partition_key = None
         self._restriction_ranges = []
 
         # Step 1: Extract window size if specified (position-based or time-based)
@@ -225,28 +215,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # candidate selection by the operator layer (graph #8); a post-hoc
         # pass that indexed groups by id order dropped valid groups (A9).
 
-        # Step 2.4: Apply temporal window filtering if DURING was used
+        # Step 2.4: a trailing DURING on a chain — the whole group's span.
         if temporal_window is not None:
-            # Use backend's cached timestamps when available (Rust path);
-            # otherwise fetch documents and parse per-query (Python path).
-            if hasattr(
-                self.search_backend, "has_timestamp_field"
-            ) and self.search_backend.has_timestamp_field(self.timestamp_field):
-                results = self.search_backend.filter_by_time_window(  # type: ignore[attr-defined]
-                    results, self.timestamp_field, temporal_window
-                )
-            else:
-                all_msg_ids = set()
-                for group in results:
-                    all_msg_ids.update(group)
-                documents = self.search_backend.get_documents(list(all_msg_ids))
-                results = TemporalProcessor.filter_by_time_window(
-                    results,
-                    documents,
-                    self.timestamp_field,
-                    temporal_window,
-                    id_field=getattr(self.search_backend, "id_field", "id"),
-                )
+            results = run_body_span(
+                self.search_backend, self.timestamp_field, results, temporal_window
+            )
 
         # Step 2.5: Apply temporal filtering if specified (BEFORE, AFTER, BETWEEN)
         if ctx.temporal_filter():
@@ -433,7 +406,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # Track how many constraints exist before visiting this restriction
             num_constraints_before = len(self.variable_constraints)
             self._seq_leg_constraints = []
-            self._seq_partition_key = None
 
             # Process the underlying restriction
             result = self.visitRestriction(named_restriction_ctx.restriction())
@@ -559,16 +531,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # Innermost leg of the chain: the lhs visit above fell through to
             # the boolean layer, so everything it recorded is one leg bucket.
             self._seq_leg_constraints = [list(self.variable_constraints[n_before_lhs:])]
-            self._seq_partition_key = self._leg_key(self._seq_leg_constraints[0])
         n_before_rhs = len(self.variable_constraints)
         rhs = self.visitBool_restriction(ctx.bool_restriction())
         rhs_leg = list(self.variable_constraints[n_before_rhs:])
-        # Correlation key survives only while every leg repeats it exactly.
-        if (ctx.FollowedBy() or ctx.PrecededBy()) and (
-            self._seq_partition_key is None
-            or self._leg_key(rhs_leg) != self._seq_partition_key
-        ):
-            self._seq_partition_key = None
         window = self._extract_window_constraint(ctx)
 
         # The right operand comes from the boolean layer; a list or
@@ -601,15 +566,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if ctx.NotFollowedBy():
             return self._apply_negative_link(lhs, rhs, window, "NOT_FOLLOWED_BY")
         return self._apply_negative_link(lhs, rhs, window, "NOT_PRECEDED_BY")
-
-    @staticmethod
-    def _leg_key(
-        bucket: list[VariableConstraint],
-    ) -> tuple[str, str] | None:
-        """The (variable, field) a leg correlates on, if exactly one."""
-        if len(bucket) == 1:
-            return (bucket[0].variable_name, bucket[0].field_name)
-        return None
 
     def _apply_sequential_link(
         self,
@@ -645,53 +601,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
             window,
             operator == "FOLLOWED_BY",
         )
-
-    def _apply_link_partitioned(
-        self,
-        lhs: set[MessageId] | list[MessageGroup],
-        rhs: set[MessageId],
-        window: WindowConstraint,
-        operator: str,
-        field: str,
-    ) -> list[MessageGroup]:
-        """Run one positive link independently within each partition of the
-        correlation field (the EQL `sequence by` evaluation shape)."""
-        id_field = getattr(self.search_backend, "id_field", "id")
-
-        def value_map(ids: set[MessageId]) -> dict[MessageId, Any]:
-            docs = self.search_backend.get_documents(list(ids))
-            return {doc[id_field]: doc.get(field) for doc in docs if id_field in doc}
-
-        rhs_parts: dict[Any, set[MessageId]] = {}
-        for mid, value in value_map(rhs).items():
-            if value is not None:
-                rhs_parts.setdefault(value, set()).add(mid)
-
-        lhs_parts: dict[Any, Any] = {}
-        if isinstance(lhs, list):
-            # Sequences: every member shares the key by construction of the
-            # previous partitioned link, so key by the first message.
-            firsts = {group[0] for group in lhs if group}
-            first_values = value_map(firsts)
-            for group in lhs:
-                value = first_values.get(group[0]) if group else None
-                if value is not None:
-                    lhs_parts.setdefault(value, []).append(group)
-        else:
-            for mid, value in value_map(lhs).items():
-                if value is not None:
-                    lhs_parts.setdefault(value, set()).add(mid)
-
-        results: list[MessageGroup] = []
-        for value, lhs_part in lhs_parts.items():
-            rhs_part = rhs_parts.get(value)
-            if not rhs_part:
-                continue
-            results.extend(
-                self._apply_link_evaluated(lhs_part, rhs_part, window, operator)
-            )
-        results.sort(key=lambda group: group[0] if group else 0)
-        return results
 
     def _apply_negative_link(
         self,
@@ -1079,25 +988,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         raise PrismQLRuntimeError("Unknown condition type")
 
-    def _positional_universe(self) -> tuple[list[MessageId], dict[MessageId, int]]:
-        """Every document id in ascending order, with id -> index.
-
-        Never capped: a 1,000,000-id cap here silently dropped every lhs
-        beyond the first million on the full Chicago tier (88% of pairs),
-        on the Rust path too. Cached per visitor — the corpus is immutable
-        for the engine's lifetime — so chains do not rebuild it per link.
-        This whole universe disappears with the ordinal axis (spec
-        2026-09-18, P3).
-        """
-        total = self.search_backend.get_total_documents()
-        cached = getattr(self, "_universe_cache", None)
-        if cached is not None and cached[0] == total:
-            return cached[1], cached[2]
-        all_ids = sorted(self.search_backend.get_all_document_ids(limit=total))
-        id_to_pos = {msg_id: i for i, msg_id in enumerate(all_ids)}
-        self._universe_cache = (total, all_ids, id_to_pos)
-        return all_ids, id_to_pos
-
     def _search_dictionary(self, dict_name: str) -> set[MessageId]:
         """Resolve a dictionary condition with per-term routing.
 
@@ -1230,33 +1120,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 "at construction, e.g. MemoryBackend(..., semantic_index=index)."
             ) from None
 
-    def _generate_all_combinations(self, groups: list[MessageGroup]) -> QueryResult:
-        """
-        Generate ALL possible combinations of messages from restriction groups.
-
-        This is used for temporal windows where we want all combinations,
-        not just non-overlapping pairs from the greedy algorithm.
-
-        Args:
-            groups: List of message groups (one per restriction)
-
-        Returns:
-            All possible combinations (cartesian product)
-        """
-        if not groups:
-            return []
-
-        # If single group, each message becomes its own result group
-        if len(groups) == 1:
-            return [[msg_id] for msg_id in groups[0]]
-
-        # Generate cartesian product of all groups
-        import itertools
-
-        all_combinations = list(itertools.product(*groups))
-        # Convert tuples to lists
-        return [list(combo) for combo in all_combinations]
-
     def _constraints_by_restriction(self, n: int) -> list[list[Any]]:
         buckets: list[list[Any]] = [[] for _ in range(n)]
         for c in self.variable_constraints:
@@ -1376,181 +1239,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         raise ValueError(f"Unknown sequential operator: {partial.operator}")
 
-    def _create_sequential_pairs(
-        self,
-        lhs_messages: set[MessageId],
-        rhs_messages: set[MessageId],
-        window: int,
-        forward: bool,
-    ) -> QueryResult:
-        """
-        Create pairs of messages that satisfy a sequential constraint.
-
-        Uses Rust backend when available for 10-100x speedup on FOLLOWED_BY and
-        PRECEDED_BY queries.
-
-        Args:
-            lhs_messages: Left-hand side message IDs (already filtered to matching ones)
-            rhs_messages: Right-hand side message IDs
-            window: Window size
-            forward: True for FOLLOWED_BY (look forward), False for PRECEDED_BY (look backward)
-
-        Returns:
-            List of message groups, each containing a pair [lhs_msg, rhs_msg]
-        """
-        if not lhs_messages or not rhs_messages:
-            return []
-
-        # Try Rust backend for FOLLOWED_BY with numeric IDs (massive performance boost!)
-        if (
-            forward
-            and RUST_FOLLOWED_BY_AVAILABLE
-            and all(isinstance(msg_id, int) for msg_id in lhs_messages)
-            and all(isinstance(msg_id, int) for msg_id in rhs_messages)
-        ):
-            try:
-                return rust_merge_followed_by(  # type: ignore[no-any-return]
-                    list(lhs_messages), list(rhs_messages), window
-                )
-            except Exception:  # noqa: S110
-                # Fall back to Python on any error (intentional)
-                pass
-
-        # Try Rust backend for PRECEDED_BY with numeric IDs (massive performance boost!)
-        if (
-            not forward
-            and RUST_PRECEDED_BY_AVAILABLE
-            and all(isinstance(msg_id, int) for msg_id in lhs_messages)
-            and all(isinstance(msg_id, int) for msg_id in rhs_messages)
-        ):
-            try:
-                return rust_merge_preceded_by(  # type: ignore[no-any-return]
-                    list(lhs_messages), list(rhs_messages), window
-                )
-            except Exception:  # noqa: S110
-                # Fall back to Python on any error (intentional)
-                pass
-
-        # Python fallback implementation
-        # Get all document IDs to establish the full sequence
-        all_ids, id_to_pos = self._positional_universe()
-
-        result = []
-        for lhs_msg in sorted(lhs_messages):
-            if lhs_msg not in id_to_pos:
-                continue
-            pos = id_to_pos[lhs_msg]
-
-            # Find the closest matching RHS message within window
-            if forward:
-                # Look forward (FOLLOWED_BY)
-                for i in range(pos + 1, min(pos + 1 + window, len(all_ids))):
-                    if all_ids[i] in rhs_messages:
-                        # Found a match - create a pair
-                        result.append([lhs_msg, all_ids[i]])
-                        break
-            else:
-                # Look backward (PRECEDED_BY): NEAREST predecessor first, the
-                # mirror of FOLLOWED_BY's nearest successor and what the Rust
-                # kernel does — scanning from the window's far edge picked the
-                # earliest match and silently diverged from the Rust path.
-                for i in range(pos - 1, max(0, pos - window) - 1, -1):
-                    if all_ids[i] in rhs_messages:
-                        # Found a match - create a pair (RHS first, then LHS for chronological order)
-                        result.append([all_ids[i], lhs_msg])
-                        break
-
-        return result
-
-    def _extend_sequences_followed_by(
-        self,
-        lhs_sequences: list[MessageGroup],
-        rhs_messages: set[MessageId],
-        window: int,
-    ) -> list[MessageGroup]:
-        """
-        Extend existing message sequences with messages from rhs that follow.
-
-        Used for chained FOLLOWED_BY: (A FOLLOWED_BY B) FOLLOWED_BY C
-        where lhs_sequences contains pairs [A, B] and we need to extend with C.
-
-        Args:
-            lhs_sequences: List of message groups (sequences from previous FOLLOWED_BY)
-            rhs_messages: Set of message IDs to look for
-            window: Window size for the sequential constraint
-
-        Returns:
-            List of extended message groups, each with one additional message appended
-        """
-        if not lhs_sequences or not rhs_messages:
-            return []
-
-        # Get all document IDs to establish the full sequence
-        all_ids, id_to_pos = self._positional_universe()
-
-        result = []
-        for sequence in lhs_sequences:
-            # Get the last message in the sequence
-            last_msg = sequence[-1]
-            if last_msg not in id_to_pos:
-                continue
-            pos = id_to_pos[last_msg]
-
-            # Look for a message from rhs that follows within window
-            for i in range(pos + 1, min(pos + 1 + window, len(all_ids))):
-                if all_ids[i] in rhs_messages:
-                    # Found a match - extend the sequence
-                    extended = sequence + [all_ids[i]]
-                    result.append(extended)
-                    break
-
-        return result
-
-    def _extend_sequences_preceded_by(
-        self,
-        lhs_sequences: list[MessageGroup],
-        rhs_messages: set[MessageId],
-        window: int,
-    ) -> list[MessageGroup]:
-        """
-        Extend existing message sequences with messages from rhs that precede.
-
-        Used for chained PRECEDED_BY: (A PRECEDED_BY B) PRECEDED_BY C
-        where lhs_sequences contains pairs [B, A] and we need to prepend C.
-
-        Args:
-            lhs_sequences: List of message groups (sequences from previous PRECEDED_BY)
-            rhs_messages: Set of message IDs to look for
-            window: Window size for the sequential constraint
-
-        Returns:
-            List of extended message groups, each with one additional message prepended
-        """
-        if not lhs_sequences or not rhs_messages:
-            return []
-
-        # Get all document IDs to establish the full sequence
-        all_ids, id_to_pos = self._positional_universe()
-
-        result = []
-        for sequence in lhs_sequences:
-            # Get the first message in the sequence
-            first_msg = sequence[0]
-            if first_msg not in id_to_pos:
-                continue
-            pos = id_to_pos[first_msg]
-
-            # Look for the NEAREST rhs message that precedes within window
-            # (same rule as the pair builder and the Rust kernel).
-            for i in range(pos - 1, max(0, pos - window) - 1, -1):
-                if all_ids[i] in rhs_messages:
-                    # Found a match - prepend to the sequence
-                    extended = [all_ids[i]] + sequence
-                    result.append(extended)
-                    break
-
-        return result
-
     def _parse_time_window(self, ctx: Any) -> int:
         """
         Parse time-based window and convert to position-based window size.
@@ -1609,240 +1297,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if unit in ("w", "week", "weeks"):
             return timedelta(weeks=value)
         raise ValueError(f"Unsupported DURING time unit: {unit}")
-
-    def _temporal_link_kernel(self, name: str) -> Any | None:
-        """Return the backend's temporal-link kernel method, when usable.
-
-        Backends offering `merge_temporal_link` / `extend_temporal_link`
-        (Rust) evaluate temporal sequential links without ids or timestamps
-        round-tripping per message. Note: the kernels break timestamp TIES
-        by ascending id (deterministic); the Python builders break ties by
-        set-iteration order.
-        """
-        kernel = getattr(self.search_backend, name, None)
-        if kernel is None:
-            return None
-        has_field = getattr(self.search_backend, "has_timestamp_field", None)
-        if has_field is not None and not has_field(self.timestamp_field):
-            return None
-        return kernel
-
-    def _get_timestamps_for_messages(
-        self, msg_ids: set[MessageId]
-    ) -> dict[MessageId, datetime]:
-        """Fetch and parse timestamps for the given message IDs.
-
-        Skips messages without a parseable timestamp.
-        """
-        if not msg_ids:
-            return {}
-        # Fast path: backends with a timestamp projection (Rust) return only
-        # epoch scalars — no per-document dict materialization, which is the
-        # dominant cost of temporal links on large corpora.
-        get_timestamps = getattr(self.search_backend, "get_timestamps", None)
-        if get_timestamps is not None and (
-            not hasattr(self.search_backend, "has_timestamp_field")
-            or self.search_backend.has_timestamp_field(self.timestamp_field)
-        ):
-            projected = get_timestamps(list(msg_ids), self.timestamp_field)
-            return dict(projected)
-        documents = self.search_backend.get_documents(list(msg_ids))
-        id_field = getattr(self.search_backend, "id_field", "id")
-        result: dict[MessageId, datetime] = {}
-        for doc in documents:
-            msg_id = doc.get(id_field)
-            ts = doc.get(self.timestamp_field)
-            if msg_id is None or ts is None:
-                continue
-            # _coerce_timestamp interprets numeric epochs as UTC — local-tz
-            # parsing made DURING results depend on the host timezone and
-            # diverge from the Rust kernels across DST folds (review #44).
-            parsed = TemporalProcessor._coerce_timestamp(ts)
-            if parsed is not None:
-                result[msg_id] = parsed
-        return result
-
-    def _create_sequential_pairs_temporal(
-        self,
-        lhs_messages: set[MessageId],
-        rhs_messages: set[MessageId],
-        duration: timedelta,
-        forward: bool,
-    ) -> QueryResult:
-        """Sequential pairing using time proximity (DURING).
-
-        Mirrors _create_sequential_pairs but measures distance in timestamps
-        instead of position. For each LHS message (in chronological order),
-        emits the first RHS match whose timestamp lies in the directional
-        window of width `duration` around the LHS timestamp.
-
-        Pairs are emitted in chronological order: forward→[lhs, rhs],
-        backward→[rhs, lhs].
-        """
-        if not lhs_messages or not rhs_messages:
-            return []
-
-        kernel = self._temporal_link_kernel("merge_temporal_link")
-        if kernel is not None:
-            return kernel(  # type: ignore[no-any-return]
-                list(lhs_messages),
-                list(rhs_messages),
-                self.timestamp_field,
-                duration,
-                forward,
-            )
-
-        timestamps = self._get_timestamps_for_messages(lhs_messages | rhs_messages)
-        lhs_with_ts = sorted(
-            ((mid, timestamps[mid]) for mid in lhs_messages if mid in timestamps),
-            key=lambda x: x[1],
-        )
-        rhs_with_ts = sorted(
-            ((mid, timestamps[mid]) for mid in rhs_messages if mid in timestamps),
-            key=lambda x: x[1],
-        )
-
-        import bisect
-
-        rhs_times = [t for _, t in rhs_with_ts]
-        result: QueryResult = []
-        for lhs_msg, t_lhs in lhs_with_ts:
-            if forward:
-                # First rhs strictly after t_lhs (binary search — a linear
-                # scan here is O(lhs*rhs) and melts on dense partitions).
-                i = bisect.bisect_right(rhs_times, t_lhs)
-                if i < len(rhs_with_ts) and rhs_times[i] - t_lhs <= duration:
-                    result.append([lhs_msg, rhs_with_ts[i][0]])
-            else:
-                # PRECEDED_BY: last rhs strictly before t_lhs.
-                i = bisect.bisect_left(rhs_times, t_lhs) - 1
-                if i >= 0 and t_lhs - rhs_times[i] <= duration:
-                    result.append([rhs_with_ts[i][0], lhs_msg])
-        return result
-
-    def _extend_sequences_followed_by_temporal(
-        self,
-        lhs_sequences: list[MessageGroup],
-        rhs_messages: set[MessageId],
-        duration: timedelta,
-    ) -> list[MessageGroup]:
-        """
-        Temporal counterpart of _extend_sequences_followed_by.
-
-        Extends each sequence with the earliest rhs message whose timestamp
-        lies in (t_last, t_last + duration], where t_last is the timestamp of
-        the sequence's final message. Sequences whose anchor has no parseable
-        timestamp or no qualifying match are dropped.
-        """
-        if not lhs_sequences or not rhs_messages:
-            return []
-
-        kernel = self._temporal_link_kernel("extend_temporal_link")
-        if kernel is not None:
-            return kernel(  # type: ignore[no-any-return]
-                lhs_sequences,
-                list(rhs_messages),
-                self.timestamp_field,
-                duration,
-                True,
-            )
-
-        anchor_ids = {seq[-1] for seq in lhs_sequences}
-        timestamps = self._get_timestamps_for_messages(anchor_ids | rhs_messages)
-        rhs_with_ts = sorted(
-            ((mid, timestamps[mid]) for mid in rhs_messages if mid in timestamps),
-            key=lambda x: x[1],
-        )
-
-        import bisect
-
-        rhs_times = [t for _, t in rhs_with_ts]
-        result: list[MessageGroup] = []
-        for sequence in lhs_sequences:
-            t_last = timestamps.get(sequence[-1])
-            if t_last is None:
-                continue
-            # First rhs strictly after t_last (binary search)
-            i = bisect.bisect_right(rhs_times, t_last)
-            if i < len(rhs_with_ts) and rhs_times[i] - t_last <= duration:
-                result.append(sequence + [rhs_with_ts[i][0]])
-        return result
-
-    def _extend_sequences_preceded_by_temporal(
-        self,
-        lhs_sequences: list[MessageGroup],
-        rhs_messages: set[MessageId],
-        duration: timedelta,
-    ) -> list[MessageGroup]:
-        """
-        Temporal counterpart of _extend_sequences_preceded_by.
-
-        Prepends to each sequence the latest rhs message whose timestamp lies
-        in [t_first - duration, t_first), where t_first is the timestamp of
-        the sequence's first message.
-        """
-        if not lhs_sequences or not rhs_messages:
-            return []
-
-        kernel = self._temporal_link_kernel("extend_temporal_link")
-        if kernel is not None:
-            return kernel(  # type: ignore[no-any-return]
-                lhs_sequences,
-                list(rhs_messages),
-                self.timestamp_field,
-                duration,
-                False,
-            )
-
-        anchor_ids = {seq[0] for seq in lhs_sequences}
-        timestamps = self._get_timestamps_for_messages(anchor_ids | rhs_messages)
-        rhs_with_ts = sorted(
-            ((mid, timestamps[mid]) for mid in rhs_messages if mid in timestamps),
-            key=lambda x: x[1],
-        )
-
-        import bisect
-
-        rhs_times = [t for _, t in rhs_with_ts]
-        result: list[MessageGroup] = []
-        for sequence in lhs_sequences:
-            t_first = timestamps.get(sequence[0])
-            if t_first is None:
-                continue
-            # Last rhs strictly before t_first (binary search)
-            i = bisect.bisect_left(rhs_times, t_first) - 1
-            if i >= 0 and t_first - rhs_times[i] <= duration:
-                result.append([rhs_with_ts[i][0], *sequence])
-        return result
-
-    def _apply_not_followed_by_temporal(
-        self,
-        lhs: set[MessageId],
-        rhs: set[MessageId],
-        duration: timedelta,
-    ) -> QueryResult:
-        """Inverse of temporal FOLLOWED_BY: return single-element groups for
-        LHS messages that have no qualifying RHS within (t_lhs, t_lhs+duration].
-        """
-        pairs = self._create_sequential_pairs_temporal(lhs, rhs, duration, forward=True)
-        matched = {pair[0] for pair in pairs}
-        return [[msg] for msg in sorted(lhs - matched)]
-
-    def _apply_not_preceded_by_temporal(
-        self,
-        lhs: set[MessageId],
-        rhs: set[MessageId],
-        duration: timedelta,
-    ) -> QueryResult:
-        """Inverse of temporal PRECEDED_BY: single-element groups for LHS
-        messages with no qualifying RHS within [t_lhs-duration, t_lhs).
-        """
-        pairs = self._create_sequential_pairs_temporal(
-            lhs, rhs, duration, forward=False
-        )
-        # temporal PRECEDED_BY emits [rhs, lhs] chronologically — lhs is at index 1
-        matched = {pair[1] for pair in pairs}
-        return [[msg] for msg in sorted(lhs - matched)]
 
     def _parse_time_window_to_timedelta(self, ctx: Any) -> "timedelta":
         """
@@ -2242,138 +1696,3 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Should not reach here with valid parse tree
         return (1, 1)
-
-    def _apply_followed_by(
-        self, lhs: set[MessageId], rhs: set[MessageId], window: int
-    ) -> set[MessageId]:
-        """
-        Apply FOLLOWED_BY operator: return IDs from lhs that are followed by
-        an ID from rhs within the specified window.
-
-        Args:
-            lhs: Left-hand side message IDs
-            rhs: Right-hand side message IDs
-            window: Maximum distance (number of positions) to look ahead
-
-        Returns:
-            Set of message IDs from lhs that satisfy the condition
-
-        Example:
-            lhs={1,3,5}, rhs={4,6}, window=2
-            - ID 1: no rhs within 2 positions after (IDs 2,3 in sequence)
-            - ID 3: ID 4 is 1 position after in full sequence -> MATCH
-            - ID 5: ID 6 is 1 position after in full sequence -> MATCH
-            Result: {3, 5}
-        """
-        if not lhs or not rhs:
-            return set()
-
-        # Get all document IDs to establish the full sequence
-        # Use a reasonable limit to avoid performance issues
-        all_ids, id_to_pos = self._positional_universe()
-
-        result = set()
-        for msg_id in lhs:
-            if msg_id not in id_to_pos:
-                continue
-            pos = id_to_pos[msg_id]
-            # Check if any rhs ID appears within window positions after this ID
-            for i in range(pos + 1, min(pos + 1 + window, len(all_ids))):
-                if all_ids[i] in rhs:
-                    result.add(msg_id)
-                    break
-
-        return result
-
-    def _apply_preceded_by(
-        self, lhs: set[MessageId], rhs: set[MessageId], window: int
-    ) -> set[MessageId]:
-        """
-        Apply PRECEDED_BY operator: return IDs from lhs that are preceded by
-        an ID from rhs within the specified window.
-
-        Args:
-            lhs: Left-hand side message IDs
-            rhs: Right-hand side message IDs
-            window: Maximum distance (number of positions) to look behind
-
-        Returns:
-            Set of message IDs from lhs that satisfy the condition
-
-        Example:
-            lhs={3,5,7}, rhs={2,6}, window=2
-            - ID 3: ID 2 is 1 position before in full sequence -> MATCH
-            - ID 5: no rhs within 2 positions before (IDs 3,4 in sequence)
-            - ID 7: ID 6 is 1 position before in full sequence -> MATCH
-            Result: {3, 7}
-        """
-        if not lhs or not rhs:
-            return set()
-
-        # Get all document IDs to establish the full sequence
-        all_ids, id_to_pos = self._positional_universe()
-
-        result = set()
-        for msg_id in lhs:
-            if msg_id not in id_to_pos:
-                continue
-            pos = id_to_pos[msg_id]
-            # Check if any rhs ID appears within window positions before this ID
-            for i in range(max(0, pos - window), pos):
-                if all_ids[i] in rhs:
-                    result.add(msg_id)
-                    break
-
-        return result
-
-    def _apply_not_followed_by(
-        self, lhs: set[MessageId], rhs: set[MessageId], window: int
-    ) -> set[MessageId]:
-        """
-        Apply NOT_FOLLOWED_BY operator: return IDs from lhs that are NOT followed
-        by an ID from rhs within the specified window.
-
-        Args:
-            lhs: Left-hand side message IDs
-            rhs: Right-hand side message IDs
-            window: Maximum distance (number of positions) to look ahead
-
-        Returns:
-            Set of message IDs from lhs that satisfy the condition
-
-        Example:
-            lhs={1,3,5}, rhs={4,6}, window=2
-            - ID 1: no rhs within 2 positions after -> MATCH
-            - ID 3: ID 4 is 1 position after -> NO MATCH
-            - ID 5: ID 6 is 1 position after -> NO MATCH
-            Result: {1}
-        """
-        # Get IDs that ARE followed by, then invert
-        followed_by = self._apply_followed_by(lhs, rhs, window)
-        return lhs - followed_by
-
-    def _apply_not_preceded_by(
-        self, lhs: set[MessageId], rhs: set[MessageId], window: int
-    ) -> set[MessageId]:
-        """
-        Apply NOT_PRECEDED_BY operator: return IDs from lhs that are NOT preceded
-        by an ID from rhs within the specified window.
-
-        Args:
-            lhs: Left-hand side message IDs
-            rhs: Right-hand side message IDs
-            window: Maximum distance (number of positions) to look behind
-
-        Returns:
-            Set of message IDs from lhs that satisfy the condition
-
-        Example:
-            lhs={3,5,7}, rhs={2,6}, window=2
-            - ID 3: ID 2 is 1 position before -> NO MATCH
-            - ID 5: no rhs within 2 positions before -> MATCH
-            - ID 7: ID 6 is 1 position before -> NO MATCH
-            Result: {5}
-        """
-        # Get IDs that ARE preceded by, then invert
-        preceded_by = self._apply_preceded_by(lhs, rhs, window)
-        return lhs - preceded_by

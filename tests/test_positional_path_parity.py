@@ -9,8 +9,6 @@ mirroring FOLLOWED_BY's nearest-successor rule.
 
 import pytest
 
-import prismql.processors.window as window_mod
-import prismql.visitors.query_visitor as qv
 from prismql.backends.memory import MemoryBackend
 from prismql.engine import PrismQLEngine
 
@@ -22,12 +20,8 @@ DOCS = [
 ]
 
 
-@pytest.fixture(params=["rust", "python"])
-def engine(request, monkeypatch):
-    if request.param == "python":
-        monkeypatch.setattr(qv, "RUST_FOLLOWED_BY_AVAILABLE", False)
-        monkeypatch.setattr(qv, "RUST_PRECEDED_BY_AVAILABLE", False)
-        monkeypatch.setattr(window_mod, "RUST_AVAILABLE", False)
+@pytest.fixture
+def engine():
     return PrismQLEngine(MemoryBackend(documents=DOCS))
 
 

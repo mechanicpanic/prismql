@@ -142,7 +142,6 @@ ignore = [
 "src/prismql/backends/factory.py" = ["C901"]  # Complexity - future refactor candidate
 "src/prismql/backends/spacy.py" = ["S110", "C901"]  # Intentional except pass, complexity
 "src/prismql/processors/window.py" = ["C901", "ANN001", "ANN202", "SIM102"]  # Complexity, helper-closure annotations
-"src/prismql/processors/histogram_window.py" = ["C901", "ANN001", "ANN202", "ANN204", "B007", "E501"]  # Performance-critical helpers
 "src/prismql/highlighting/pygments_lexer.py" = ["E501"]  # Long regex strings
 "tests/test_quantifier_fix.py" = ["E501"]  # Long query strings
 "tests/test_sequential_chaining.py" = ["E501"]  # Long query strings
@@ -242,7 +241,6 @@ follow_imports = "skip"
 [[tool.mypy.overrides]]
 module = [
     "prismql.processors.window",
-    "prismql.processors.histogram_window",
 ]
 ignore_errors = true
 

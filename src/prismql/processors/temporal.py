@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
-from ..types import MessageId, QueryResult
+from ..types import MessageId
 
 
 class TemporalUnit(StrEnum):
@@ -269,61 +269,3 @@ class TemporalProcessor:
             groups.setdefault(group_key, set()).add(msg_id)
 
         return groups
-
-    @staticmethod
-    def filter_by_time_window(
-        results: QueryResult,
-        documents: list[dict[str, Any]],
-        timestamp_field: str,
-        window_duration: timedelta,
-        id_field: str = "id",
-    ) -> QueryResult:
-        """
-        Filter query results using time-based window (true WITHIN implementation).
-
-        Only keeps message groups where all messages are within the specified
-        time window of each other.
-
-        Args:
-            results: Query results to filter
-            documents: List of document dictionaries with timestamps
-            timestamp_field: Name of the timestamp field
-            window_duration: Maximum time span for messages in a group
-            id_field: Name of the document ID field
-
-        Returns:
-            Filtered query results
-        """
-        # Build timestamp lookup
-        timestamps: dict[MessageId, datetime] = {}
-        for doc in documents:
-            msg_id = doc.get(id_field)
-            timestamp_value = doc.get(timestamp_field)
-
-            if msg_id is None or timestamp_value is None:
-                continue
-
-            msg_time = TemporalProcessor._coerce_timestamp(timestamp_value)
-            if msg_time is not None:
-                timestamps[msg_id] = msg_time
-
-        # Filter groups
-        filtered_results: QueryResult = []
-        for group in results:
-            # Get timestamps for all messages in group
-            group_times = [timestamps.get(msg_id) for msg_id in group]
-
-            # Skip group if any message has no timestamp
-            if None in group_times:
-                continue
-
-            # Check if all messages are within window
-            group_times_clean = [t for t in group_times if t is not None]
-            if not group_times_clean:
-                continue
-
-            time_span = max(group_times_clean) - min(group_times_clean)
-            if time_span <= window_duration:
-                filtered_results.append(group)
-
-        return filtered_results

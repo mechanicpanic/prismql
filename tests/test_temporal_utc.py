@@ -92,44 +92,21 @@ class TestNumericEpochsAreUTC:
 
 
 @pytest.mark.skipif(SKIP_RUST, reason=SKIP_REASON)
-class TestKernelOverflowGuards:
-    """Direct backend-API edge cases (not reachable via the grammar).
-
-    Review 2026-07-12, task #44 minors: negative-duration overflow mapped
-    to i64::MAX ('match nothing' inverted into 'match everything'), and
-    gap subtraction wrapping for epochs near chrono's year bounds.
-    """
-
-    def test_negative_duration_matches_nothing(self):
-        from datetime import timedelta
-
-        backend = RustMemoryBackend(documents=DOCS)
-        # Python reference: gap <= negative timedelta is always False.
-        result = backend.merge_temporal_link(
-            {1}, {2}, "timestamp", timedelta(days=-999_999_999), True
-        )
-        assert result == []
-        assert (
-            backend.extend_temporal_link(
-                [[1]], {2}, "timestamp", timedelta(days=-999_999_999), True
-            )
-            == []
-        )
+class TestExtremeEpochs:
+    """Epochs near the representable bounds must not wrap into a match
+    (review 2026-07-12, task #44 minors — kept as an engine-level contract
+    now that the temporal kernels are gone)."""
 
     def test_extreme_epoch_gap_does_not_wrap(self):
-        from datetime import timedelta
-
         docs = [
             {"id": 1, "user": "a", "text": "x", "timestamp": -8.2e12},
             {"id": 2, "user": "b", "text": "y", "timestamp": 8.2e12},
         ]
-        backend = RustMemoryBackend(documents=docs)
-        # True gap ~1.65e19 us overflows i64; wrapping made it negative and
-        # emitted a pair spanning ~520k years. Must match nothing.
-        result = backend.merge_temporal_link(
-            {1}, {2}, "timestamp", timedelta(hours=1), True
-        )
-        assert result == []
+        engine = PrismQLEngine(MemoryBackend(documents=docs))
+        # True gap ~1.64e19 us overflows i64; a wrap would emit a pair
+        # spanning ~520k years. Must match nothing.
+        assert engine.execute("SELECT from(a) FOLLOWED_BY from(b) DURING 1 hour") == []
+        assert engine.execute("SELECT from(a), from(b) DURING 1 hour") == []
 
 
 @pytest.mark.skipif(SKIP_RUST, reason=SKIP_REASON)
@@ -139,7 +116,7 @@ def test_capability_handshake_covers_all_kernels(monkeypatch):
     import prismql.backends.rust_memory as rm
 
     class StaleBackend:
-        merge_within_time_window = object()  # old kernel present
+        pass  # no get_timestamps
         # merge_temporal_link / extend_temporal_link / get_timestamps absent
 
     monkeypatch.setattr(rm, "_RustMemoryBackend", StaleBackend)
