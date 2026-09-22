@@ -6,16 +6,10 @@
 (function (root) {
   "use strict";
 
-  var RANGES = [["15m", 900], ["1h", 3600], ["24h", 86400], ["7d", 604800], ["all", 0]];
   var KIND_COLOR = { evaluate: "var(--k-evaluate)", search: "var(--k-search)", similar: "var(--k-similar)" };
   var STATUS_COLOR = { ok: "var(--ok)", capped: "var(--warn)", error: "var(--err)", empty: "var(--faint)" };
   var KIND_VALUES = ["evaluate", "search", "similar"];
   var STATUS_VALUES = ["ok", "capped", "empty", "error"];
-
-  function rangeSeconds(label) {
-    for (var i = 0; i < RANGES.length; i++) if (RANGES[i][0] === label) return RANGES[i][1];
-    return 86400;
-  }
 
   // Distinct values actually seen (never a hardcoded list — "who" and
   // "corpus" are open-ended, unlike kind/status which are the server's own
@@ -29,65 +23,59 @@
     return out.sort();
   }
 
-  function effFilters(state) {
-    var f = state.filters;
-    return { range: rangeSeconds(f.range), search: f.search, kinds: f.kinds, srcs: f.srcs, corpora: f.corpora, statuses: f.statuses };
-  }
-
   function renderRanges(state, actions) {
+    var U = window.PrismQLBoardUtil;
     var el = document.getElementById("rail-range");
     el.innerHTML = "";
-    RANGES.forEach(function (r) {
+    U.RANGES.forEach(function (r) {
       var on = state.filters.range === r[0];
-      var btn = document.createElement("button");
+      var btn = U.mk("button", on ? "on" : "", r[0]);
       btn.type = "button";
-      btn.className = on ? "on" : "";
       btn.setAttribute("aria-pressed", String(on));
-      btn.textContent = r[0];
       btn.addEventListener("click", function () { actions.setFilter("range", r[0]); });
       el.appendChild(btn);
     });
   }
 
+  // A rebuilt checkbox is a new DOM node — the browser drops focus to
+  // <body> unless we restore it by the value the input carried, not by
+  // node identity (fix round 1, #2).
   function renderFacetGroup(elId, key, values, nowMs, state, actions, opts) {
+    var U = window.PrismQLBoardUtil;
     var el = document.getElementById(elId);
+    var active = document.activeElement;
+    var refocus = (active && active.tagName === "INPUT" && el.contains(active)) ? active.dataset.value : null;
     el.innerHTML = "";
-    var counts = window.PrismQLFormat.facetCounts(state.entries, effFilters(state), nowMs, key, values);
+    var counts = window.PrismQLFormat.facetCounts(state.entries, U.effFilters(state), nowMs, key, values);
+    var again = null;
     values.forEach(function (v) {
       var n = counts[v] || 0;
       var on = !!state.filters[key][v];
-      var label = document.createElement("label");
-      label.className = "facet" + (n === 0 && !on ? " zero" : "");
+      var label = U.mk("label", "facet" + (n === 0 && !on ? " zero" : ""));
       var input = document.createElement("input");
       input.type = "checkbox";
       input.checked = on;
+      input.dataset.value = String(v);
       input.addEventListener("change", function () { actions.toggleFacet(key, v); });
       label.appendChild(input);
+      if (String(v) === refocus) again = input;
       if (opts.color) {
-        var dot = document.createElement("span");
-        dot.className = "dot";
+        var dot = U.mk("span", "dot");
         dot.style.background = opts.color[v] || "";
         if (opts.round) dot.style.borderRadius = "50%";
         label.appendChild(dot);
       }
       label.appendChild(document.createTextNode(v));
-      if (opts.agent && window.PrismQLFormat.isAgent(v)) {
-        var who = document.createElement("span");
-        who.className = "who";
-        who.textContent = "agent";
-        label.appendChild(who);
-      }
-      var nEl = document.createElement("span");
-      nEl.className = "n";
-      nEl.textContent = String(n);
-      label.appendChild(nEl);
+      if (opts.agent && window.PrismQLFormat.isAgent(v)) label.appendChild(U.mk("span", "who", "agent"));
+      label.appendChild(U.mk("span", "n", String(n)));
       el.appendChild(label);
     });
+    if (again) again.focus({ preventScroll: true });
   }
 
   function anyFilter(state) {
     var f = state.filters;
-    return f.range !== "24h" || f.search !== "" ||
+    return f.range !== "24h" || f.search.trim() !== "" ||
       Object.keys(f.kinds).length > 0 || Object.keys(f.srcs).length > 0 ||
       Object.keys(f.corpora).length > 0 || Object.keys(f.statuses).length > 0;
   }
@@ -103,10 +91,8 @@
     var resetEl = document.getElementById("rail-reset");
     resetEl.innerHTML = "";
     if (anyFilter(state)) {
-      var btn = document.createElement("button");
+      var btn = window.PrismQLBoardUtil.mk("button", "reset", "Reset all filters");
       btn.type = "button";
-      btn.className = "reset";
-      btn.textContent = "Reset all filters";
       btn.addEventListener("click", function () { actions.resetFilters(); });
       resetEl.appendChild(btn);
     }

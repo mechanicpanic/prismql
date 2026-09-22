@@ -5,25 +5,6 @@
 (function (root) {
   "use strict";
 
-  var RANGES = [["15m", 900], ["1h", 3600], ["24h", 86400], ["7d", 604800], ["all", 0]];
-
-  function rangeSeconds(label) {
-    for (var i = 0; i < RANGES.length; i++) if (RANGES[i][0] === label) return RANGES[i][1];
-    return 86400;
-  }
-
-  function effFilters(state) {
-    var f = state.filters;
-    return { range: rangeSeconds(f.range), search: f.search, kinds: f.kinds, srcs: f.srcs, corpora: f.corpora, statuses: f.statuses };
-  }
-
-  function mk(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = text;
-    return e;
-  }
-
   function buildChips(state, actions) {
     var chips = [];
     [["kinds", "kind"], ["srcs", "source"], ["corpora", "corpus"], ["statuses", "status"]].forEach(function (g) {
@@ -34,8 +15,8 @@
         });
       });
     });
-    if (state.filters.search) {
-      var s = state.filters.search.trim();
+    var s = (state.filters.search || "").trim(); // whitespace-only: no chip (fix round 1, #6)
+    if (s) {
       chips.push({
         group: "text", text: "“" + s + "”", aria: "Clear search",
         remove: function () { actions.setFilter("search", ""); },
@@ -45,6 +26,7 @@
   }
 
   function renderChips(chips) {
+    var mk = window.PrismQLBoardUtil.mk;
     var el = document.getElementById("journal-chips");
     el.innerHTML = "";
     el.hidden = chips.length === 0;
@@ -63,6 +45,7 @@
   }
 
   function renderErrPill(errors, state, actions) {
+    var mk = window.PrismQLBoardUtil.mk;
     var el = document.getElementById("journal-errpill");
     el.innerHTML = "";
     if (errors === 0 || state.filters.statuses.error) return;
@@ -76,8 +59,9 @@
 
   function render(state, actions) {
     var F = window.PrismQLFormat;
+    var U = window.PrismQLBoardUtil;
     var nowMs = Date.now();
-    var ef = effFilters(state);
+    var ef = U.effFilters(state);
     var visible = state.entries.filter(function (e) { return F.matches(e, ef, nowMs); });
 
     if (window.PrismQLRail) window.PrismQLRail.render(state, actions);

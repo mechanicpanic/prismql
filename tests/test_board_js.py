@@ -11,9 +11,11 @@ TESTS = Path(__file__).parent / "board"
 
 
 @pytest.mark.skipif(NODE is None, reason="node is not installed")
-def test_board_format_js() -> None:
+def test_board_js() -> None:
+    specs = sorted(str(p) for p in TESTS.glob("*.test.mjs"))
+    assert specs, "no tests/board/*.test.mjs files found"
     proc = subprocess.run(
-        [NODE, "--test", str(TESTS / "format.test.mjs")],
+        [NODE, "--test", *specs],
         capture_output=True,
         text=True,
         timeout=60,

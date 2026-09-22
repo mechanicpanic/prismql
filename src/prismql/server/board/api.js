@@ -5,8 +5,9 @@
 (function (root) {
   "use strict";
 
-  async function activity(since) {
-    const r = await fetch("/activity?since=" + (since || 0) + "&limit=200");
+  async function activity(since, limit) {
+    const q = "since=" + (since || 0) + "&limit=" + (limit == null ? 200 : limit);
+    const r = await fetch("/activity?" + q);
     try {
       return await r.json();
     } catch (e) {

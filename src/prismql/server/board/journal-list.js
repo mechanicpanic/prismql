@@ -1,26 +1,22 @@
 // PrismQLJournalList: the journal's list — offline banner, the paused
 // "N new requests" pill, days newest-first, rows, the two empty states and
-// ↑/↓/Enter keyboard nav (graph @aleph/prismql, node #63). Called from
-// PrismQLJournal.render(); no public entry point of its own beyond
-// render(state, actions, visible, nowMs, anyFilter).
+// ↑/↓/Enter keyboard nav (graph @aleph/prismql, node #63). The periodic 5 s
+// refresh calls tick() instead of render(): a rebuild drops keyboard focus
+// to <body> (fix round 1, #2), tick() only patches ".rel" text in place.
 (function (root) {
   "use strict";
 
   var lastVisible = [];
-
-  function mk(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = text;
-    return e;
-  }
+  var F = window.PrismQLFormat;
+  var mk = window.PrismQLBoardUtil.mk;
 
   function buildRow(entry, state, actions, nowMs) {
-    var F = window.PrismQLFormat;
     var status = F.status(entry);
     var cls = "row s-" + status + (entry.seq === state.sel ? " sel" : "") + (entry.seq === state.freshSeq ? " fresh" : "");
     var btn = mk("button", cls);
     btn.type = "button";
+    btn.dataset.seq = String(entry.seq);
+    btn.dataset.ts = entry.ts; // read back by tick() to refresh ".rel" in place
     if (entry.seq === state.sel) btn.setAttribute("aria-current", "true");
     btn.addEventListener("click", function () { actions.select(entry.seq); });
     btn.addEventListener("dblclick", function () { actions.openFull(entry.seq); });
@@ -52,7 +48,6 @@
   }
 
   function renderBanner(el, state, actions) {
-    var F = window.PrismQLFormat;
     var banner = mk("div", "banner");
     banner.appendChild(mk("b", null, "Lost the journal stream."));
     var newest = state.entries[0];
@@ -96,7 +91,9 @@
     el.dataset.wired = "1";
     el.addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
-        if (state.sel != null) { e.preventDefault(); actions.openFull(state.sel); }
+        // A reset can outlive the seq it pointed at (fix round 1, #3).
+        var exists = state.sel != null && state.entries.some(function (en) { return en.seq === state.sel; });
+        if (exists) { e.preventDefault(); actions.openFull(state.sel); }
         return;
       }
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -108,13 +105,13 @@
   }
 
   function render(state, actions, visible, nowMs, anyFilter) {
-    var F = window.PrismQLFormat;
     lastVisible = visible;
     var el = document.getElementById("journal-list");
+    var hadFocus = el === document.activeElement || el.contains(document.activeElement);
     el.innerHTML = "";
     if (state.down) renderBanner(el, state, actions);
     if (state.pending.length) renderPending(el, state, actions);
-    var lastKey = null;
+    var lastKey = null, selectedBtn = null;
     visible.forEach(function (entry) {
       var d = F.dayLabel(entry.ts, nowMs);
       if (d.key !== lastKey) {
@@ -124,13 +121,29 @@
         day.appendChild(mk("span", null, d.sub));
         el.appendChild(day);
       }
-      el.appendChild(buildRow(entry, state, actions, nowMs));
+      var row = buildRow(entry, state, actions, nowMs);
+      if (entry.seq === state.sel) selectedBtn = row;
+      el.appendChild(row);
     });
     if (visible.length === 0) renderEmpty(el, state, actions, anyFilter);
     wireKeys(el, state, actions);
+    // A rebuild just dropped focus to <body> — restore it (fix round 1, #2).
+    if (hadFocus) (selectedBtn || el).focus({ preventScroll: true });
   }
 
-  var api = { render: render };
+  function tick(nowMs) { // no rebuild — driven by board.js's 5 s interval
+    var el = document.getElementById("journal-list");
+    if (!el) return;
+    var rows = el.querySelectorAll(".row[data-ts]");
+    for (var i = 0; i < rows.length; i++) {
+      var relEl = rows[i].querySelector(".rel");
+      if (!relEl) continue;
+      var sec = Math.max(0, Math.round((nowMs - new Date(rows[i].dataset.ts).getTime()) / 1000));
+      relEl.textContent = F.rel(sec);
+    }
+  }
+
+  var api = { render: render, tick: tick };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLJournalList = api;
 })(typeof window !== "undefined" ? window : globalThis);
