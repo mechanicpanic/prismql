@@ -135,7 +135,10 @@ uv sync --extra server
 uv run prismql-server --config prismql.toml     # POST /evaluate, GET /schema, GET /reference
 ```
 
-Beside `/evaluate` the server has two scouting endpoints that *do* rank:
+`/board/` on the same server is a live feed of every request the server
+answers — agents' and yours — with the query highlighted, the outcome, and an
+editor to re-run or change any of it (summaries only; results stay where they
+were). Beside `/evaluate` the server has two scouting endpoints that *do* rank:
 `POST /search` (full-text, tantivy syntax, BM25) and `POST /similar`
 (nearest events by embedding). They answer "what is where" before you write
 a query; the language itself stays set-in, set-out. Both take `hydrate` and

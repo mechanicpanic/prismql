@@ -79,7 +79,10 @@ ranked hits — outside the language, which never ranks:
 
 Both take `corpus`, `hydrate` (`false` = ids and scores only, no events)
 and `output: "file"` (all hits to a JSONL file, a five-row preview back),
-exactly like `/evaluate` — use them to read a few hits, learn the words
+exactly like `/evaluate`. Send `X-PrismQL-Client: <your name>` on every
+request: the server keeps a journal of requests (`GET /activity`) and shows
+it to the person on `/board/` — with your name, they can follow what you
+asked and open any of it themselves — use them to read a few hits, learn the words
 people actually wrote, then put those words in a dictionary and ask the
 real question with `/evaluate`. Hits are `{"id", "score"[, "event"]}`.
 

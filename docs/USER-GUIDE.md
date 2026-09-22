@@ -415,6 +415,12 @@ rather than as an empty list. `AGGREGATE count()` answers as
 can also pass word lists per request — `"dictionaries": {"undo": ["restored","back"]}` — which
 is the fast way to try a vocabulary before writing it into the config.
 
+`/board/` on the same server is the board: a live feed of everything the
+server was asked — by you, by a script, by an agent — with the query
+highlighted and the outcome beside it, an editor to re-run or change any of
+it, and the results of your own runs. It stores summaries, not results, so
+nothing on it gets large.
+
 Two more endpoints are for looking around, not for asking: `POST /search`
 with `{"query": "restored OR \"put back\""}` returns the best-matching
 events ranked (full-text, tantivy syntax), and `POST /similar` with

@@ -606,3 +606,70 @@ def test_scouting_limits_are_capped_by_the_server(tmp_path):
     assert body["count"] == 1 and body["truncated"] is True
     body = client.post("/search", json={"query": "spike", "limit": 1}).json()
     assert body["truncated"] is False
+
+
+# --- the board: a journal of every request, live (graph #63)
+
+
+def test_activity_records_queries_scouting_and_errors(client):
+    pytest.importorskip("tantivy")
+    client.post(
+        "/evaluate",
+        json={"query": "SELECT from(tick_a)", "label": "a"},
+        headers={"X-PrismQL-Client": "agent-1"},
+    )
+    client.post("/evaluate", json={"query": "SELECT from(tick_a) AGGREGATE count()"})
+    client.post("/evaluate", json={"query": "SELECT from("})
+    client.post("/search", json={"query": "spike", "hydrate": False})
+    client.post("/similar", json={"text": "spike"})
+    body = client.get("/activity").json()
+    assert body["ok"] and body["seq"] == 5
+    kinds = [(e["kind"], e["ok"]) for e in body["entries"]]
+    assert kinds == [
+        ("evaluate", True),
+        ("evaluate", True),
+        ("evaluate", False),
+        ("search", True),
+        ("similar", False),
+    ]
+    first = body["entries"][0]
+    assert first["who"] == "agent-1" and first["label"] == "a"
+    assert first["count"] == 3 and first["result"] == "groups"
+    assert (
+        body["entries"][1]["value"] == 3 and body["entries"][1]["result"] == "aggregate"
+    )
+    assert body["entries"][2]["error"]["type"] == "syntax"
+    assert body["entries"][3]["count"] == 1 and body["entries"][3]["query"] == "spike"
+    assert "embedding index" in body["entries"][4]["error"]["message"]
+    later = client.get("/activity?since=3").json()
+    assert [e["seq"] for e in later["entries"]] == [4, 5]
+
+
+def test_activity_journal_is_written_beside_the_results(tmp_path):
+    data = tmp_path / "events.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    cfg = ServerConfig(
+        backend_type="memory",
+        data=str(data),
+        enable_file_output=True,
+        results_dir=str(tmp_path / "out"),
+    )
+    client = TestClient(create_app(cfg))
+    client.post("/evaluate", json={"query": "SELECT from(tick_b)"})
+    lines = (tmp_path / "out" / "activity.jsonl").read_text().splitlines()
+    assert len(lines) == 1 and json.loads(lines[0])["query"] == "SELECT from(tick_b)"
+
+
+def test_activity_stream_replays_and_ends_with_keepalive(client):
+    client.post("/evaluate", json={"query": "SELECT from(tick_a)"})
+    with client.stream("GET", "/activity/stream?ttl=0.2") as r:
+        assert r.headers["content-type"].startswith("text/event-stream")
+        text = "".join(r.iter_text())
+    assert "event: seq" in text and '"query": "SELECT from(tick_a)"' in text
+
+
+def test_board_page_and_lexer_are_served_from_the_package(client):
+    page = client.get("/board/")
+    assert page.status_code == 200 and "PrismQL board" in page.text
+    lexer = client.get("/board/prismql-lexer.js")
+    assert lexer.status_code == 200 and "PrismQLLexer" in lexer.text

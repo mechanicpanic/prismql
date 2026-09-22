@@ -12,6 +12,9 @@
 ### Changed (tantivy)
 - A tantivy index built with `index_path` writes its order axis beside the index (`order.parquet`: ids in load order, configured `timestamp_fields` as UTC microseconds) and reads it back when opened, so an index opened from disk supports sequence operators. Both backends carry every configured timestamp field on the axis, not only `timestamp`. Tantivy tokenizes with the memory backend's token shapes (one shared regex). The index layout is versioned: an index built by an earlier prismql is refused on open with rebuild instructions instead of failing on the first token search.
 
+### Added (the board)
+- `/board/`: a page served by the server itself (whatever `static_dir` says) with a live feed of every request — `/evaluate`, `/search`, `/similar`, successes and errors — as `{who, corpus, query, outcome, elapsed, label, file}` summaries, the query highlighted, and an editor to re-run or change any of them with a chosen `max_results` and hydration. Backed by `GET /activity?since=` and the event stream `GET /activity/stream`; a ring of `[server] activity_max` entries (500) in memory and `activity.jsonl` beside the results when file output is on. Clients name themselves with the `X-PrismQL-Client` header. The demo page now loads the same lexer (`/board/prismql-lexer.js`).
+
 ### Added (scouting)
 - `POST /search` (ranked full-text hits in tantivy query syntax over the corpus's text fields; an in-process tantivy index is built once per corpus on first use when the query backend is not tantivy) and `POST /similar` (ranked nearest events by cosine over the embedding index). Both take `corpus`, `limit`, `hydrate` and `output: "file"` like `/evaluate`; `limit` is capped by `max_results` (inline) or `file_output_max_groups` (file) and `truncated` says when the cap bit; hits are `{id, score[, event]}`. Ranking lives only here; the language stays set-in, set-out.
 

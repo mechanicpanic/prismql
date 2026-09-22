@@ -6,13 +6,14 @@ import hashlib
 import json
 import re
 import threading
+from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..aggregators.types import AggregateResult, GroupedResult
@@ -101,6 +102,12 @@ class ServerState:
         self.exec_locks: dict[str, threading.Lock] = {}
         self.scouts: dict[str, Any] = {}  # per-corpus ranked full-text index
         self.loaded_at: str | None = None
+        # The board's journal (graph #63): one summary per request, never the
+        # results themselves. A ring in memory; JSONL beside the results when
+        # file output is enabled, so the board survives a restart.
+        self.activity: deque[dict[str, Any]] = deque(maxlen=config.activity_max)
+        self.activity_seq = 0
+        self.activity_lock = threading.Lock()
 
     def reload(self) -> None:
         # Build outside the lock (slow); swap under it (fast). In-flight
@@ -114,6 +121,28 @@ class ServerState:
             self.exec_locks = {name: threading.Lock() for name in engines}
             self.scouts = {}
             self.loaded_at = datetime.now(UTC).isoformat()
+
+    def record(self, entry: dict[str, Any]) -> dict[str, Any]:
+        """Append one request summary to the journal and return it with its seq."""
+        with self.activity_lock:
+            self.activity_seq += 1
+            entry = {
+                "seq": self.activity_seq,
+                "ts": datetime.now(UTC).isoformat(timespec="milliseconds"),
+                **entry,
+            }
+            self.activity.append(entry)
+        if self.config.enable_file_output:
+            results_dir = Path(self.config.results_dir or "prismql-results")
+            results_dir.mkdir(parents=True, exist_ok=True)
+            with (results_dir / "activity.jsonl").open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+        return entry
+
+    def activity_since(self, seq: int, limit: int) -> list[dict[str, Any]]:
+        with self.activity_lock:
+            rows = [e for e in self.activity if e["seq"] > seq]
+        return rows[-limit:] if limit else rows
 
     def engine_for(self, name: str | None) -> tuple[Any, CorpusConfig, threading.Lock]:
         resolved = name or self.config.default_corpus
@@ -277,7 +306,7 @@ def create_app(config: ServerConfig) -> FastAPI:
     app = FastAPI(title="PrismQL Server")
     app.state.prismql = state
 
-    from collections import defaultdict, deque
+    from collections import defaultdict
 
     hits: dict[str, deque[float]] = defaultdict(deque)
     prune_threshold = 1024
@@ -291,6 +320,11 @@ def create_app(config: ServerConfig) -> FastAPI:
         if real_ip:
             return real_ip
         return str(request.client.host) if request.client else "unknown"
+
+    def _who(request: Request) -> str:
+        """The board's "who": a client's own name (X-PrismQL-Client) or its address."""
+        name = str(request.headers.get("x-prismql-client", "")).strip()
+        return name[:64] if name else _client_ip(request)
 
     def _rate_limited(client_ip: str) -> bool:
         if not config.rate_limit_per_minute:
@@ -399,6 +433,7 @@ def create_app(config: ServerConfig) -> FastAPI:
             try:
                 result = engine.execute(req.query)
             except PrismQLSyntaxError as e:
+                _record_failure(req, request, "evaluate", "syntax", str(e), start)
                 return JSONResponse(
                     status_code=422,
                     content={
@@ -412,6 +447,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                     },
                 )
             except PrismQLRuntimeError as e:
+                _record_failure(req, request, "evaluate", "runtime", str(e), start)
                 return JSONResponse(
                     status_code=422,
                     content={
@@ -445,7 +481,61 @@ def create_app(config: ServerConfig) -> FastAPI:
         payload["ok"] = True
         payload["query"] = req.query
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
+        state.record(
+            {
+                "kind": "evaluate",
+                "corpus": req.corpus or config.default_corpus,
+                "who": _who(request),
+                "query": req.query,
+                "label": req.label,
+                "dictionaries": sorted(req.dictionaries) if req.dictionaries else [],
+                "ok": True,
+                "result": payload.get("kind"),
+                "count": payload.get("count", payload.get("groups")),
+                "value": payload.get("value"),
+                "truncated": payload.get("truncated", False),
+                "output": req.output,
+                "path": payload.get("path"),
+                "elapsed_ms": payload["elapsed_ms"],
+            }
+        )
         return payload
+
+    def _record_failure(
+        req: Any, request: Request, kind: str, etype: str, message: str, start: float
+    ) -> None:
+        state.record(
+            {
+                "kind": kind,
+                "corpus": req.corpus or config.default_corpus,
+                "who": _who(request),
+                "query": getattr(req, "query", None) or getattr(req, "text", None),
+                "label": req.label,
+                "ok": False,
+                "error": {"type": etype, "message": message[:500]},
+                "elapsed_ms": round((perf_counter() - start) * 1000, 2),
+            }
+        )
+
+    def _record_scout(
+        req: Any, request: Request, kind: str, payload: dict[str, Any]
+    ) -> None:
+        state.record(
+            {
+                "kind": kind,
+                "corpus": req.corpus or config.default_corpus,
+                "who": _who(request),
+                "query": getattr(req, "query", None) or getattr(req, "text", None),
+                "label": req.label,
+                "ok": True,
+                "result": "hits",
+                "count": payload.get("count"),
+                "truncated": payload.get("truncated", False),
+                "output": req.output,
+                "path": payload.get("path"),
+                "elapsed_ms": payload["elapsed_ms"],
+            }
+        )
 
     def _scout_common(req: Any, request: Request) -> JSONResponse | None:
         if _rate_limited(_client_ip(request)):
@@ -509,10 +599,12 @@ def create_app(config: ServerConfig) -> FastAPI:
         try:
             hits = scout.rank(req.query, limit=limit)
         except ValueError as e:
+            _record_failure(req, request, "search", "syntax", str(e), start)
             return _error(422, "syntax", f"search query: {e}")
         rows = _hits_payload(hits, engine.search_backend, corpus_cfg.id_field, hydrate)
         payload = _scout_response(rows, req, "search " + req.query, start, capped)
         payload["query"] = req.query
+        _record_scout(req, request, "search", payload)
         return payload
 
     @app.post("/similar")
@@ -528,18 +620,19 @@ def create_app(config: ServerConfig) -> FastAPI:
             return _error(422, "runtime", str(e.args[0]))
         index = getattr(engine.search_backend, "semantic_index", None)
         if index is None:
-            return _error(
-                422,
-                "runtime",
+            message = (
                 "this corpus has no embedding index: ingest it with "
-                "`prismql ingest … --embed text` or configure [semantic].model",
+                "`prismql ingest … --embed text` or configure [semantic].model"
             )
+            _record_failure(req, request, "similar", "runtime", message, start)
+            return _error(422, "runtime", message)
         hydrate = config.hydrate if req.hydrate is None else req.hydrate
         limit, capped = _scout_limit(req)
         hits = index.rank(req.text, limit=limit, threshold=req.threshold)
         rows = _hits_payload(hits, engine.search_backend, corpus_cfg.id_field, hydrate)
         payload = _scout_response(rows, req, "similar " + req.text, start, capped)
         payload["text"] = req.text
+        _record_scout(req, request, "similar", payload)
         return payload
 
     def _error(status: int, kind: str, message: str) -> JSONResponse:
@@ -622,9 +715,49 @@ def create_app(config: ServerConfig) -> FastAPI:
     def reference() -> PlainTextResponse:
         return PlainTextResponse(load_reference(), media_type="text/markdown")
 
-    if config.static_dir:
-        from fastapi.staticfiles import StaticFiles
+    @app.get("/activity")
+    def activity(since: int = 0, limit: int = 200) -> Any:
+        """The board's journal: request summaries newer than ``since`` (seq)."""
+        rows = state.activity_since(since, max(1, min(limit, config.activity_max)))
+        return {"ok": True, "seq": state.activity_seq, "entries": rows}
 
+    @app.get("/activity/stream")
+    async def activity_stream(since: int = 0, ttl: float | None = None) -> Any:
+        """Server-sent events: every new journal entry as it happens.
+        ``ttl`` (seconds) ends the stream — for proxies with idle limits and
+        for tests; the page reconnects from the last seq it saw."""
+        import asyncio
+
+        async def events() -> Any:
+            last = since
+            deadline = perf_counter() + ttl if ttl else None
+            yield f"event: seq\ndata: {state.activity_seq}\n\n"
+            while deadline is None or perf_counter() < deadline:
+                rows = state.activity_since(last, 0)
+                for row in rows:
+                    last = row["seq"]
+                    data = json.dumps(row, ensure_ascii=False, default=str)
+                    yield f"data: {data}\n\n"
+                if not rows:
+                    yield ": keep-alive\n\n"
+                await asyncio.sleep(0.5)
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    from fastapi.staticfiles import StaticFiles
+
+    # The board ships with the package and is served whatever static_dir
+    # says; mounted before the demo root so "/board" is not shadowed.
+    app.mount(
+        "/board",
+        StaticFiles(directory=str(Path(__file__).parent / "board"), html=True),
+        name="board",
+    )
+    if config.static_dir:
         app.mount("/", StaticFiles(directory=config.static_dir, html=True))
 
     return app

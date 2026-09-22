@@ -79,6 +79,7 @@ class ServerConfig:
     file_output_max_groups: int = 100_000
     # Cap on total terms in a request-scoped dictionary overlay.
     max_request_dictionary_terms: int = 2000
+    activity_max: int = 500  # the board's journal ring (graph #63)
     # A value is either a plain term list or {"terms": [...],
     # "match": "substring"|"token"} (single-word mode; multi-word terms
     # always phrase-match). TOML long form: [dictionaries.<name>] tables.
@@ -200,6 +201,7 @@ def load_config(path: str | Path) -> ServerConfig:
         enable_file_output=server.get("enable_file_output", False),
         file_output_max_groups=server.get("file_output_max_groups", 100_000),
         max_request_dictionary_terms=server.get("max_request_dictionary_terms", 2000),
+        activity_max=int(server.get("activity_max", 500)),
         dictionaries=dictionaries,
         corpora=corpora,
         default_corpus=default_corpus,

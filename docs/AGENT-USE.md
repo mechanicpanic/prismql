@@ -177,6 +177,17 @@ the file.
 
 ## 7. Check the agent got it right
 
+Open `http://127.0.0.1:8901/board/` while the agent works. Every request the
+server answers — queries, scouting, file outputs, errors — appears there as
+it happens, with the query highlighted, who asked (the agent's
+`X-PrismQL-Client` name), how many groups came back and how long it took.
+Click a row to see its label and file path, **open** to re-run it with your
+own `max` and with or without events, **edit** to change it and run it
+yourself; your runs land in the same feed as `board`. The server keeps
+summaries only (last 500 in memory; `results/activity.jsonl` when file
+output is on), never the results.
+
+
 Save these 13 lines as `events.jsonl` and the config from section 2 beside
 it, start the server, and ask the agent the three questions in plain words
 — do not give it the queries.

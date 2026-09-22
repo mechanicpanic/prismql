@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PrismQL board</title>
+  <link rel="stylesheet" href="board.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">PrismQL <span class="dim">board</span></div>
+    <div class="status" id="status">connecting…</div>
+    <label class="filter"><input type="checkbox" id="only-agents" /> agents only</label>
+    <label class="filter">corpus <select id="corpus"></select></label>
+  </header>
+
+  <main class="layout">
+    <section class="feed" id="feed" aria-label="activity"></section>
+
+    <aside class="side">
+      <div class="editor-wrap">
+        <pre class="editor-highlight" id="highlight" aria-hidden="true"></pre>
+        <textarea id="editor" class="editor" spellcheck="false" autocomplete="off"
+          placeholder="SELECT … — or click a row on the left"></textarea>
+      </div>
+      <div class="editor-actions">
+        <label>max <input type="number" id="max" value="20" min="1" /></label>
+        <label><input type="checkbox" id="hydrate" checked /> events</label>
+        <button id="run">Run <kbd>⌘⏎</kbd></button>
+      </div>
+      <section class="result" id="result"></section>
+    </aside>
+  </main>
+
+  <script src="prismql-lexer.js"></script>
+  <script src="board.js"></script>
+</body>
+</html>
