@@ -56,7 +56,12 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     if args.embed:
         df = core.embed(df, text=args.embed, model=args.model)
-    path = core.write(df, args.dst)
+    path = core.write(
+        df,
+        args.dst,
+        embed_model=args.model if args.embed else None,
+        embed_text=args.embed,
+    )
     info = core.describe(df)
     print(f"{path}: {info['rows']} rows, {info['first']} … {info['last']}")
     if info["null_time"]:

@@ -167,3 +167,73 @@ def test_unbacked_backend_raises_teachable():
     engine = PrismQLEngine(MemoryBackend(documents=DOCS))
     with pytest.raises(PrismQLRuntimeError, match="SemanticIndex"):
         engine.execute('SELECT similar_to("oil", 0.7)')
+
+
+class TestPrecomputedVectors:
+    def test_from_vectors_skips_null_and_zero_rows(self):
+        vectors = [[1.0, 0, 0], None, [0.0, 0.0, 0.0], [1.0, 0, 0], [1.0, 1.0, 0]]
+        index = SemanticIndex.from_vectors(
+            FakeEmbedder(), [d["id"] for d in DOCS], vectors
+        )
+        assert index.search("oil", threshold=0.99) == {1, 4}
+        assert index.search("oil", threshold=0.7) == {1, 4, 5}
+
+    def test_server_reads_emb_from_parquet_without_re_encoding(
+        self, tmp_path, monkeypatch
+    ):
+        import polars as pl
+
+        from prismql.backends import semantic as semantic_module
+        from prismql.ingest import normalize, write
+        from prismql.server.config import CorpusConfig, build_engine
+
+        calls: list[list[str]] = []
+
+        class CountingEmbedder(FakeEmbedder):
+            def __init__(self, model_name: str) -> None:
+                self.model_name = model_name
+
+            def encode(self, texts: Sequence[str]) -> list[list[float]]:
+                calls.append(list(texts))
+                return super().encode(texts)
+
+        monkeypatch.setattr(
+            semantic_module, "SentenceTransformerEmbedder", CountingEmbedder
+        )
+        df = normalize(pl.DataFrame(DOCS), id_col="id", time_col="timestamp")
+        df = df.with_columns(
+            pl.Series(
+                "emb",
+                FakeEmbedder().encode(df.get_column("text").to_list()),
+                dtype=pl.List(pl.Float32),
+            ).cast(pl.Array(pl.Float32, 3))
+        )
+        path = write(df, tmp_path / "c.parquet", embed_model="fake-model")
+
+        engine = build_engine(CorpusConfig(data=str(path), timestamp_field="time"))
+        assert calls == []  # nothing encoded at start
+        assert engine.execute('SELECT similar_to("oil", 0.99)') == [[1], [4]]
+        assert calls == [["oil"]]  # only the query text
+        assert engine.search_backend.get_documents([1])[0].get("emb") is None
+
+    def test_model_mismatch_is_loud(self, tmp_path, monkeypatch):
+        import polars as pl
+
+        from prismql.backends import semantic as semantic_module
+        from prismql.ingest import normalize, write
+        from prismql.server.config import CorpusConfig, build_engine
+
+        monkeypatch.setattr(
+            semantic_module, "SentenceTransformerEmbedder", lambda _name: FakeEmbedder()
+        )
+        df = normalize(pl.DataFrame(DOCS), id_col="id", time_col="timestamp")
+        df = df.with_columns(
+            pl.Series("emb", [[1.0, 0, 0]] * 5, dtype=pl.List(pl.Float32))
+        )
+        path = write(df, tmp_path / "c.parquet", embed_model="fake-model")
+        with pytest.raises(ValueError, match="embedded with 'fake-model'"):
+            build_engine(
+                CorpusConfig(
+                    data=str(path), timestamp_field="time", semantic_model="other"
+                )
+            )

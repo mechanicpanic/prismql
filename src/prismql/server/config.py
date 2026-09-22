@@ -203,6 +203,37 @@ def load_config(path: str | Path) -> ServerConfig:
     )
 
 
+def load_corpus(
+    path: str | Path,
+) -> tuple[list[dict[str, Any]], list[Any] | None, str | None, str | None]:
+    """Documents plus, for a Parquet stream written by ``prismql ingest
+    --embed``, its ``emb`` vectors (kept out of the documents) and the model
+    and text column stamped in the file's metadata."""
+    p = Path(path)
+    if p.suffix.lower() != ".parquet":
+        return load_documents(p), None, None, None
+    try:
+        import pyarrow.parquet as pq
+    except ImportError as e:
+        raise ImportError(
+            "Parquet data requires pyarrow: uv pip install pyarrow"
+        ) from e
+    table = pq.read_table(p)
+    meta = table.schema.metadata or {}
+    model = meta.get(b"prismql.embed_model")
+    text = meta.get(b"prismql.embed_text")
+    vectors = None
+    if "emb" in table.column_names:
+        vectors = table.column("emb").to_pylist()
+        table = table.drop_columns(["emb"])
+    return (
+        table.to_pylist(),
+        vectors,
+        model.decode() if model else None,
+        text.decode() if text else None,
+    )
+
+
 def load_documents(path: str | Path) -> list[dict[str, Any]]:
     """Load documents from .json / .jsonl / .csv / .parquet.
 
@@ -276,8 +307,12 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         and config.index_path
         and Path(config.index_path).exists()
     )
+    vectors: list[Any] | None = None
+    embedded_model: str | None = None
+    embedded_text: str | None = None
     if config.data:
-        backend_config["documents"] = load_documents(config.data)
+        docs, vectors, embedded_model, embedded_text = load_corpus(config.data)
+        backend_config["documents"] = docs
     elif not opening_existing:
         raise ValueError(
             "[backend].data is required (or, for tantivy, an existing "
@@ -288,7 +323,8 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
     if config.backend_type == "rust_memory":
         backend_config["timestamp_fields"] = config.timestamp_fields
 
-    if config.semantic_model:
+    semantic_model = config.semantic_model or embedded_model
+    if semantic_model:
         # Fail loudly: a configured model on a backend that can't carry the
         # index would otherwise mean similar_to() silently has no backing.
         if config.backend_type != "memory":
@@ -298,12 +334,29 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
             )
         from ..backends.semantic import SemanticIndex, SentenceTransformerEmbedder
 
-        backend_config["semantic_index"] = SemanticIndex(
-            SentenceTransformerEmbedder(config.semantic_model),
-            backend_config["documents"],
-            id_field=config.id_field,
-            text_field=config.semantic_text_field,
-        )
+        embedder = SentenceTransformerEmbedder(semantic_model)
+        if vectors is not None:
+            # Precomputed by `prismql ingest --embed`: the model only encodes
+            # query text; the corpus is never re-encoded at start.
+            if config.semantic_model and config.semantic_model != embedded_model:
+                raise ValueError(
+                    f"[semantic].model = {config.semantic_model!r} but the corpus "
+                    f"was embedded with {embedded_model!r}; the query and the "
+                    "corpus must share one model (re-run prismql ingest --embed)"
+                )
+            backend_config["semantic_index"] = SemanticIndex.from_vectors(
+                embedder,
+                [d[config.id_field] for d in backend_config["documents"]],
+                vectors,
+                text_field=embedded_text or config.semantic_text_field,
+            )
+        else:
+            backend_config["semantic_index"] = SemanticIndex(
+                embedder,
+                backend_config["documents"],
+                id_field=config.id_field,
+                text_field=config.semantic_text_field,
+            )
 
     backend = BackendFactory._create_search_backend(backend_config)
     return PrismQLEngine(

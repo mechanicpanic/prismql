@@ -113,6 +113,36 @@ A CSV needs the same columns and a header row; a Parquet file and a JSON
 array the same columns. All four were loaded from the same six records and
 answered the section 5 queries identically.
 
+### When the file is not in that shape: `prismql ingest`
+
+If the table has the right rows but the wrong order, an odd timestamp
+format, or twenty columns you do not need, let the ingest command write the
+stream for you instead of editing the file by hand:
+
+```
+$ uv run prismql ingest table export.csv events.parquet --id rev_id --time created --sort created --keep user,kind,page,text
+events.parquet: 6 rows, 2026-06-18 18:24:12+00:00 … 2026-06-18 21:40:00+00:00
+  columns: position, id, time, user, kind, page, text
+```
+
+It sorts, renames the id and time columns to `id` and `time`, parses the
+timestamps (ISO strings, `YYYY-MM-DD HH:MM:SS` without a zone, epoch
+seconds or milliseconds — all become UTC; anything unparseable stays as a
+null and is counted in the summary), and keeps only what you asked for.
+Point the config at `events.parquet`, `timestamp_field = "time"`, done.
+
+Add `--embed text --model all-MiniLM-L6-v2` (extra `ingest`) and the file
+also carries one embedding per row; the server then answers
+`similar_to("…", 0.7)` without encoding the corpus at start, and it knows
+which model to encode the query with because the file says so.
+
+The same command reads a Claude Code project's transcripts —
+`prismql ingest claude-code ~/.claude/projects/<your-project> sessions.parquet`
+— one event per prompt, thought, tool call and tool result, with `kind`,
+`tool`, `error`, `session` and `model` fields; the questions in section 5
+work on it unchanged ("a tool failed, then the same tool was retried within
+three events").
+
 ---
 
 ## 3. The config file

@@ -86,6 +86,29 @@ class SemanticIndex:
         self._ids = ids
         self._vectors = [_normalize(v) for v in embedder.encode(texts)] if texts else []
 
+    @classmethod
+    def from_vectors(
+        cls,
+        embedder: Embedder,
+        ids: Sequence[MessageId],
+        vectors: Sequence[Sequence[float] | None],
+        text_field: str = "text",
+    ) -> SemanticIndex:
+        """An index over precomputed vectors (an ``emb`` column written by
+        ``prismql ingest --embed``); ``embedder`` only encodes query text.
+        A null or all-zero vector means "no text": that id is not indexed."""
+        index = cls.__new__(cls)
+        index.embedder = embedder
+        index.text_field = text_field
+        index._ids = []
+        index._vectors = []
+        for doc_id, vector in zip(ids, vectors, strict=True):
+            if vector is None or not any(vector):
+                continue
+            index._ids.append(doc_id)
+            index._vectors.append(_normalize(vector))
+        return index
+
     def search(self, text: str, *, threshold: float) -> set[MessageId]:
         """Embed ``text`` and return ids scoring >= threshold (cosine)."""
         if not self._ids:

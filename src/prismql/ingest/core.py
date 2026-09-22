@@ -136,11 +136,34 @@ def embed(
     return df.with_columns(col)
 
 
-def write(df: pl.DataFrame, dst: str | Path) -> Path:
-    """Write the stream as Parquet; ``emb`` lands as FixedSizeList<float32, d>."""
+EMBED_MODEL_KEY = b"prismql.embed_model"
+EMBED_TEXT_KEY = b"prismql.embed_text"
+
+
+def write(
+    df: pl.DataFrame,
+    dst: str | Path,
+    *,
+    embed_model: str | None = None,
+    embed_text: str | None = None,
+) -> Path:
+    """Write the stream as Parquet; ``emb`` lands as FixedSizeList<float32, d>.
+
+    The model that produced ``emb`` is stamped into the file's schema
+    metadata so the server can encode query text with the same model
+    without being told again in its config.
+    """
+    import pyarrow.parquet as pq
+
     p = Path(dst)
     p.parent.mkdir(parents=True, exist_ok=True)
-    df.write_parquet(p)
+    table = df.to_arrow()
+    if embed_model:
+        meta = dict(table.schema.metadata or {})
+        meta[EMBED_MODEL_KEY] = embed_model.encode()
+        meta[EMBED_TEXT_KEY] = (embed_text or "text").encode()
+        table = table.replace_schema_metadata(meta)
+    pq.write_table(table, p)
     return p
 
 

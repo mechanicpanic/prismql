@@ -1,7 +1,7 @@
 ## Unreleased
 
 ### Added (ingest toolkit)
-- `prismql ingest table SRC DST --id --time [--sort] [--keep] [--embed COL --model M]` writes the ordered Parquet stream the engine loads without config (`position`, `id`, `time` as UTC microseconds, kept fields, optional `emb` vectors); `prismql ingest claude-code DIR DST` turns a Claude Code project's transcripts into one event per content block (`kind`, `tool`, `error`, `session`, `model`, `text`). New extra `[ingest]` for `--embed`.
+- `prismql ingest table SRC DST --id --time [--sort] [--keep] [--embed COL --model M]` writes the ordered Parquet stream the engine loads without config (`position`, `id`, `time` as UTC microseconds, kept fields, optional `emb` vectors); `prismql ingest claude-code DIR DST` turns a Claude Code project's transcripts into one event per content block (`kind`, `tool`, `error`, `session`, `model`, `text`). New extra `[ingest]` for `--embed`. The server reads `emb` from such a Parquet file into the semantic index instead of encoding the corpus at start; the embedding model is taken from the file's metadata (a differing `[semantic].model` is an error).
 
 ### Added (P3)
 - `!$k` in both dialects: "unequal to the value an earlier leg bound to `$k`", chosen inside candidate selection; `UNBOUND_NEGATED_VARIABLE` when nothing bound it.
