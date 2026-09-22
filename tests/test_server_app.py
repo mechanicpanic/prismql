@@ -1,7 +1,7 @@
 """Tests for the PrismQL HTTP server."""
 
 import json
-from typing import Never
+from typing import Any, Never
 
 import pytest
 
@@ -756,6 +756,12 @@ def test_results_pages_through_a_stored_result(client):
     assert "events" not in p["results"][0]
     p = client.get(f"/results/{rid}?limit=1&fields=text").json()
     assert p["results"][0]["events"] == [{"id": 1, "text": "price spike"}]
+    p = client.get(
+        f"/results/{rid}", params={"limit": 1, "fields": "text, user"}
+    ).json()
+    assert p["results"][0]["events"] == [
+        {"id": 1, "text": "price spike", "user": "tick_a"}
+    ]
 
 
 def test_results_stream_whole_as_jsonl(client):
@@ -776,3 +782,35 @@ def test_unknown_or_reloaded_results_are_gone(tmp_path):
     r = c.get(f"/results/{rid}")
     assert r.status_code == 404 and r.json()["error"]["type"] == "gone"
     assert c.get("/results/r999.jsonl").status_code == 404
+
+
+def test_results_page_refuses_a_result_raced_by_a_concurrent_reload(tmp_path):
+    # A reload landing between the load check and engine_for() must not let
+    # a page through mapped against the NEW order axis (fix round 1, #1).
+    c = _make_client(tmp_path, enable_reload=True)
+    state = c.app.state.prismql
+    rid = c.post("/evaluate", json={"query": "SELECT from(tick_a)"}).json()["result_id"]
+    original = state.engine_for
+
+    def racy(name: str | None) -> Any:
+        state.reload()
+        return original(name)
+
+    state.engine_for = racy
+    r = c.get(f"/results/{rid}")
+    assert r.status_code == 404 and r.json()["error"]["type"] == "gone"
+
+
+def test_results_jsonl_refuses_a_result_raced_by_a_concurrent_reload(tmp_path):
+    c = _make_client(tmp_path, enable_reload=True)
+    state = c.app.state.prismql
+    rid = c.post("/evaluate", json={"query": "SELECT from(tick_a)"}).json()["result_id"]
+    original = state.engine_for
+
+    def racy(name: str | None) -> Any:
+        state.reload()
+        return original(name)
+
+    state.engine_for = racy
+    r = c.get(f"/results/{rid}.jsonl")
+    assert r.status_code == 404 and r.json()["error"]["type"] == "gone"

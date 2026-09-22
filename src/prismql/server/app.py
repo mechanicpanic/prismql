@@ -766,14 +766,19 @@ def create_app(config: ServerConfig) -> FastAPI:
     def _page_args(hydrate: bool | None, fields: str | None) -> dict[str, Any]:
         return {
             "hydrate": config.hydrate if hydrate is None else hydrate,
-            "fields": [f for f in fields.split(",") if f] if fields else None,
+            "fields": (
+                [f.strip() for f in fields.split(",") if f.strip()] if fields else None
+            ),
         }
 
-    # Declared before /results/{rid}: otherwise {rid} swallows "r3.jsonl".
-    @app.get("/results/{rid}.jsonl")
-    def result_jsonl(
-        rid: str, hydrate: bool | None = None, fields: str | None = None
-    ) -> Any:
+    def _kept(rid: str) -> tuple[StoredResult, Any, CorpusConfig] | JSONResponse:
+        """The stored result plus the engine/corpus it was computed on — or
+        ``gone``. ``engine_for`` runs between two equal reads of
+        ``state.generation``: a reload landing in between bumps generation
+        and swaps engines together under ``state.lock``, so unequal reads
+        mean the fetched engine no longer matches ``stored.load`` and old
+        positions must not be mapped through its new order axis (review
+        2026-09-22, fix round 1, #1)."""
         stored = state.results.get(rid)
         if stored is None or stored.load != state.generation:
             return _gone(rid)
@@ -781,6 +786,19 @@ def create_app(config: ServerConfig) -> FastAPI:
             engine, corpus_cfg, _lock = state.engine_for(stored.corpus)
         except KeyError:
             return _gone(rid)
+        if stored.load != state.generation:
+            return _gone(rid)
+        return stored, engine, corpus_cfg
+
+    # Declared before /results/{rid}: otherwise {rid} swallows "r3.jsonl".
+    @app.get("/results/{rid}.jsonl")
+    def result_jsonl(
+        rid: str, hydrate: bool | None = None, fields: str | None = None
+    ) -> Any:
+        kept = _kept(rid)
+        if isinstance(kept, JSONResponse):
+            return kept
+        stored, engine, corpus_cfg = kept
         args = _page_args(hydrate, fields)
 
         def lines() -> Any:
@@ -807,13 +825,10 @@ def create_app(config: ServerConfig) -> FastAPI:
         hydrate: bool | None = None,
         fields: str | None = None,
     ) -> Any:
-        stored = state.results.get(rid)
-        if stored is None or stored.load != state.generation:
-            return _gone(rid)
-        try:
-            engine, corpus_cfg, _lock = state.engine_for(stored.corpus)
-        except KeyError:
-            return _gone(rid)
+        kept = _kept(rid)
+        if isinstance(kept, JSONResponse):
+            return kept
+        stored, engine, corpus_cfg = kept
         payload = page_payload(
             stored,
             engine.search_backend,
