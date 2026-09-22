@@ -433,14 +433,51 @@ from(alice) !~> from(bob) |> within(10)
 
 ### Window Semantics
 
-- **within**: positional distance. Numeric IDs: `abs(id1 - id2)`.
-  String IDs: difference of positions in the sorted ID list.
+- **Position** is a message's place in the stream: the order the corpus was
+  loaded in. IDs are labels only — gaps between numeric IDs and the sort
+  order of string IDs do not affect distance.
+- **within(N)**: positional distance — at most N positions apart
+  (`a ~> b |> within(1)`: b is the very next message).
 - **during** on `+`-joined restrictions: the whole matched group must span at
   most TIME (`max(ts) - min(ts) <= TIME`).
 - **during** on an arrow (`a ~> b |> during(TIME)` or `a ~>(TIME) b`):
-  directional — b must occur *after* a and within TIME of it.
+  directional — b must occur *strictly after* a and within TIME of it.
 - **No window**: all results from restriction (no proximity constraint);
   arrows always require one.
+
+### How Matches Are Chosen
+
+Arrows (`~>`, `<~`, chains):
+- **Nearest partner, one per message.** Each message matching the left side
+  gets the single nearest eligible message on the right side, after it for
+  `~>`, before it for `<~` — never every message in the window. Stream
+  `a1 a2 b1 b2`: `from(a) ~> from(b) |> within(5)` →
+  `[[a1, b1], [a2, b1]]`.
+- **Partners are shared.** Two left messages may pick the same partner (`b1`
+  above).
+- **Strictly later in time.** On a `during` arrow the partner's timestamp
+  must be strictly later (strictly earlier for `<~`): a message with the same
+  timestamp never continues the sequence, even when it is next in the
+  stream. `within` arrows look at positions only.
+- **Ties go by position.** Among candidates with the same timestamp the
+  nearest in the stream wins: the earliest going forward, the latest going
+  backward.
+- **Chains grow link by link.** Each element is the nearest after the
+  previous one; a trailing window bounds every link, not the whole chain; no
+  message appears twice in a group.
+- **Pattern variables choose, not filter.** `$k` / `!$k` pick the nearest
+  message whose value fits; a message with another value in between does not
+  break the match.
+- **No timestamp, no temporal link.** A message without a timestamp takes no
+  part in `during` — on either side of an arrow, in co-occurrence, and on the
+  left of `!~>` / `!<~` (it is dropped, not reported as "not followed").
+
+Co-occurrence (`+`): every combination of one message per restriction, all
+distinct, within the window; restriction order does not matter and each set
+is returned once. Stream `a1 a2 b1 b2`: `from(a) + from(b) |> within(5)` →
+all four `[a, b]` pairs.
+
+Every result group lists its messages in stream order.
 
 ## Syntax Decision Tree
 

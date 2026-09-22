@@ -469,13 +469,51 @@ SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 10
 
 ### Window Semantics
 
-- **INWINDOW**: positional distance. Numeric IDs: `abs(id1 - id2)`.
-  String IDs: difference of positions in the sorted ID list.
+- **Position** is a message's place in the stream: the order the corpus was
+  loaded in. IDs are labels only — gaps between numeric IDs and the sort
+  order of string IDs do not affect distance.
+- **INWINDOW N**: positional distance — at most N positions apart
+  (`A FOLLOWED_BY B INWINDOW 1`: B is the very next message).
 - **DURING** on comma-separated restrictions: the whole matched group must
   span at most TIME (`max(ts) - min(ts) <= TIME`).
 - **DURING** on a sequential link (`A FOLLOWED_BY B DURING TIME`):
-  directional — B must occur *after* A and within TIME of it.
+  directional — B must occur *strictly after* A and within TIME of it.
 - **No window**: All results from restriction (no proximity constraint)
+
+### How Matches Are Chosen
+
+Sequential links (`FOLLOWED_BY`, `PRECEDED_BY`, chains):
+- **Nearest partner, one per message.** Each message matching the left side
+  gets the single nearest eligible message on the right side, after it for
+  `FOLLOWED_BY`, before it for `PRECEDED_BY` — never every message in the
+  window. Stream `a1 a2 b1 b2`: `SELECT from(a) FOLLOWED_BY from(b)
+  INWINDOW 5` → `[[a1, b1], [a2, b1]]`.
+- **Partners are shared.** Two left messages may pick the same partner (`b1`
+  above).
+- **Strictly later in time.** On a `DURING` link the partner's timestamp must
+  be strictly later (strictly earlier for `PRECEDED_BY`): a message with the
+  same timestamp never continues the sequence, even when it is next in the
+  stream. `INWINDOW` links look at positions only.
+- **Ties go by position.** Among candidates with the same timestamp the
+  nearest in the stream wins: the earliest going forward, the latest going
+  backward.
+- **Chains grow link by link.** Each element is the nearest after the
+  previous one; a trailing window bounds every link, not the whole chain; no
+  message appears twice in a group.
+- **Pattern variables choose, not filter.** `$k` / `!$k` pick the nearest
+  message whose value fits; a message with another value in between does not
+  break the match.
+- **No timestamp, no temporal link.** A message without a timestamp takes no
+  part in `DURING` — on either side of a link, in co-occurrence, and on the
+  left of `NOT_FOLLOWED_BY` / `NOT_PRECEDED_BY` (it is dropped, not reported
+  as "not followed").
+
+Co-occurrence (comma-separated restrictions): every combination of one
+message per restriction, all distinct, within the window; restriction order
+does not matter and each set is returned once. Stream `a1 a2 b1 b2`:
+`SELECT from(a), from(b) INWINDOW 5` → all four `[a, b]` pairs.
+
+Every result group lists its messages in stream order.
 
 ## Syntax Decision Tree
 
