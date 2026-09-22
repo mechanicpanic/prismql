@@ -179,7 +179,9 @@ from(alice){2,}         -- At least 2: needs quantifier_ceiling (see below)
 rejected (`OPEN_QUANTIFIER`) unless `quantifier_ceiling = m` is configured
 (`PrismQLEngine(quantifier_ceiling=m)`; server: `[engine] quantifier_ceiling`),
 which reads every `{n,}` as `{n,m}`; a minimum above the ceiling is rejected too.
-Prefer an explicit `{n,m}`. Until the operator layer lands (P3), ranges run as their minimum (audit A8): `{2,}` with a ceiling of 3 still returns only pairs.
+Prefer an explicit `{n,m}`. A range enumerates every size in it: `{2,3}`
+over three matching messages in the window returns the three pairs and the
+triple.
 
 ### 5. Pattern Variables
 
@@ -450,9 +452,9 @@ from(alice) !~> from(bob) |> within(10)
 Arrows (`~>`, `<~`, chains):
 - **Nearest partner, one per message.** Each message matching the left side
   gets the single nearest eligible message on the right side, after it for
-  `~>`, before it for `<~` — never every message in the window. Stream
-  `a1 a2 b1 b2`: `from(a) ~> from(b) |> within(5)` →
-  `[[a1, b1], [a2, b1]]`.
+  `~>`, before it for `<~`, along the window's axis (positions for `within`,
+  time for `during`) — never every message in the window. Stream
+  `a1 a2 b1 b2`: `from(a) ~> from(b) |> within(5)` → `[[a1, b1], [a2, b1]]`.
 - **Partners are shared.** Two left messages may pick the same partner (`b1`
   above).
 - **Strictly later in time.** On a `during` arrow the partner's timestamp
@@ -470,14 +472,20 @@ Arrows (`~>`, `<~`, chains):
   break the match.
 - **No timestamp, no temporal link.** A message without a timestamp takes no
   part in `during` — on either side of an arrow, in co-occurrence, and on the
-  left of `!~>` / `!<~` (it is dropped, not reported as "not followed").
+  left of `!~>` / `!<~` (it is dropped, not reported as "not followed"); on
+  the excluded side it blocks nothing.
 
 Co-occurrence (`+`): every combination of one message per restriction, all
 distinct, within the window; restriction order does not matter and each set
 is returned once. Stream `a1 a2 b1 b2`: `from(a) + from(b) |> within(5)` →
 all four `[a, b]` pairs.
 
-Every result group lists its messages in stream order.
+Order inside a result group: a sequence lists its messages in sequence order,
+each before the next along its link's axis (`a ~> b` and `b <~ a` both give
+`[a, b]`); co-occurrence lists them along the window's axis — stream order for
+a positional window, time order for a temporal one, ties by stream position.
+With positional windows all of this is stream order; it differs only when
+timestamps run backwards in load order, and the engine warns when they do.
 
 ## Syntax Decision Tree
 
