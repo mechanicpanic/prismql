@@ -1,0 +1,13 @@
+{"type":"session_meta","timestamp":"2026-03-17T17:19:47.145Z","payload":{"id":"abc","cwd":"/home/u/proj","cli_version":"0.108.0","model_provider":"openai"}}
+{"type":"turn_context","timestamp":"2026-03-17T17:19:47.200Z","payload":{"turn_id":"t1","model":"gpt-5.4"}}
+{"type":"response_item","timestamp":"2026-03-17T17:19:47.300Z","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"You are Codex."}]}}
+{"type":"response_item","timestamp":"2026-03-17T17:19:47.400Z","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"run the tests"}]}}
+{"type":"response_item","timestamp":"2026-03-17T17:20:01.000Z","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"Find the test runner first."}],"content":null}}
+{"type":"response_item","timestamp":"2026-03-17T17:20:02.000Z","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"pytest\"}","call_id":"c1"}}
+{"type":"event_msg","timestamp":"2026-03-17T17:20:02.100Z","payload":{"type":"token_count"}}
+{"type":"response_item","timestamp":"2026-03-17T17:20:05.000Z","payload":{"type":"function_call_output","call_id":"c1","output":"Chunk ID: 1\nProcess exited with code 1\nOutput:\nFAILED tests/test_x.py"}}
+{"type":"response_item","timestamp":"2026-03-17T17:20:09.000Z","payload":{"type":"custom_tool_call","name":"apply_patch","input":"*** Begin Patch","call_id":"c2","status":"completed"}}
+{"type":"response_item","timestamp":"2026-03-17T17:20:10.000Z","payload":{"type":"custom_tool_call_output","call_id":"c2","output":"Done"}}
+{"type":"response_item","timestamp":"2026-03-17T17:20:11.000Z","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"pytest\"}","call_id":"c3"}}
+{"type":"response_item","timestamp":"2026-03-17T17:20:14.000Z","payload":{"type":"function_call_output","call_id":"c3","output":"Chunk ID: 2\nProcess exited with code 0\nOutput:\n1 passed"}}
+{"type":"response_item","timestamp":"2026-03-17T17:20:15.000Z","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Fixed."}]}}

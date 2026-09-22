@@ -141,7 +141,9 @@ The same command reads a Claude Code project's transcripts —
 — one event per prompt, thought, tool call and tool result, with `kind`,
 `tool`, `error`, `session` and `model` fields; the questions in section 5
 work on it unchanged ("a tool failed, then the same tool was retried within
-three events").
+three events"). `prismql ingest codex ~/.codex/sessions sessions.parquet`
+does the same for Codex CLI rollouts, with the same columns, so one query
+runs over both harnesses.
 
 ---
 

@@ -102,7 +102,7 @@ Both `timestamp_*` keys are needed: without `[engine].timestamp_field` a
 Have a table that is not quite in that shape, or a folder of Claude Code
 transcripts? `prismql ingest table export.csv events.parquet --id rev_id --time
 created --sort created` (or `prismql ingest claude-code ~/.claude/projects/<project>
-sessions.parquet`) writes the stream for you: sorted, timestamps parsed to UTC,
+sessions.parquet`, or `prismql ingest codex ~/.codex/sessions …`) writes the stream for you: sorted, timestamps parsed to UTC,
 optionally with an embedding column (`--embed text`) the server reads instead
 of encoding at start. Details in `docs/USER-GUIDE.md`, section 2.
 

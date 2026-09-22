@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import core
 
-SOURCES = ("table", "claude-code")
+SOURCES = ("table", "claude-code", "codex")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,10 +49,14 @@ def run(argv: Sequence[str] | None = None) -> int:
             sort=args.sort,
             keep=[c for c in (args.keep or "").split(",") if c] or None,
         )
-    else:
+    elif args.source == "claude-code":
         from .sources.claude_code import read_claude_code
 
         df = read_claude_code(Path(args.src))
+    else:
+        from .sources.codex import read_codex
+
+        df = read_codex(Path(args.src))
 
     if args.embed:
         df = core.embed(df, text=args.embed, model=args.model)
