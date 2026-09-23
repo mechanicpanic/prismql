@@ -57,7 +57,17 @@
     return g.plus || g.label || "";
   }
 
+  // A request's name on the board is its journal #seq; result_id only keys
+  // stored results (groups/hits), so it rides along as a tooltip.
+  function requestId(entry) {
+    return {
+      text: "#" + entry.seq,
+      title: entry.result_id != null ? "result " + entry.result_id : "",
+    };
+  }
+
   var api = {
+    requestId: requestId,
     localDateTime: localDateTime, whenAbs: whenAbs, srcKind: srcKind,
     statusLabel: statusLabel, outputKind: outputKind, gapText: gapText,
   };

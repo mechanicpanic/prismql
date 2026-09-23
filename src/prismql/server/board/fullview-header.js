@@ -69,7 +69,10 @@
     var meta = mk("span", "fmeta");
     meta.appendChild(mk("b", null, entry.who || ""));
     meta.appendChild(document.createTextNode(" · " + (entry.corpus || "") + " · " + F.dur(entry.elapsed_ms) + " · "));
-    meta.appendChild(mk("span", "mono", entry.result_id != null ? String(entry.result_id) : "#" + entry.seq));
+    var rid = IF.requestId(entry);
+    var idSpan = mk("span", "mono", rid.text);
+    if (rid.title) idSpan.title = rid.title;
+    meta.appendChild(idSpan);
     head.appendChild(meta);
 
     var right = mk("div");

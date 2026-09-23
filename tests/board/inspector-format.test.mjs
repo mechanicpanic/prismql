@@ -87,3 +87,12 @@ test("whenAbs: day label plus hms, comma-joined", () => {
   const nowMs = new Date(2026, 8, 23, 15, 0, 0).getTime();
   assert.equal(IF.whenAbs(iso, nowMs), "Wed 23 Sep, 14:34:56");
 });
+
+test("requestId: a request is always named by its journal #seq, never its result_id", () => {
+  // result_id counts only stored results (groups/hits), so showing it for some
+  // rows and #seq for others reads as one counter restarting.
+  assert.deepEqual(IF.requestId({ seq: 3, result_id: "r1-5a3be33f" }), {
+    text: "#3", title: "result r1-5a3be33f",
+  });
+  assert.deepEqual(IF.requestId({ seq: 2, result_id: null }), { text: "#2", title: "" });
+});
