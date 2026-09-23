@@ -164,6 +164,29 @@ def test_group_by_aggregate_is_stored_as_a_pageable_rows_result(client):
     ]
 
 
+def test_group_by_aggregate_with_no_matches_stores_zero_rows(client):
+    # `is_grouped()` used `bool(grouped_values)`, false for zero groups, so
+    # this looked like a plain aggregate: no result_id, value null (graph
+    # @aleph/prismql, #90 fix round 1, #3). It must answer grouped with an
+    # empty rows result instead.
+    r = client.post(
+        "/evaluate",
+        json={"query": "SELECT from(nobody) GROUP BY user AGGREGATE count()"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["kind"] == "aggregate"
+    assert body["grouped_values"] == {}
+    assert body["total"] == 0
+    rid = body["result_id"]
+    assert rid
+
+    page = client.get(f"/results/{rid}").json()
+    assert page["kind"] == "rows"
+    assert page["total"] == 0 and page["count"] == 0
+    assert page["rows"] == []
+
+
 def test_group_by_aggregate_rows_page_and_clamp(client):
     r = client.post(
         "/evaluate",

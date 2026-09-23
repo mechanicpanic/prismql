@@ -48,13 +48,19 @@ class AggregateResult:
             field: Field name aggregated over
         """
         self.value = value
-        self.grouped_values = grouped_values or {}
+        # A grouped call passes grouped_values={} for zero matched groups
+        # (graph @aleph/prismql, #90 fix round 1, #3) — "grouped" is
+        # whether the caller passed the mapping at all, not whether it
+        # came back non-empty; `bool(grouped_values)` made an empty GROUP
+        # BY ... AGGREGATE answer indistinguishable from a plain aggregate.
+        self._grouped = grouped_values is not None
+        self.grouped_values = dict(grouped_values) if grouped_values is not None else {}
         self.function = function
         self.field = field
 
     def is_grouped(self) -> bool:
         """Check if this is a grouped result."""
-        return bool(self.grouped_values)
+        return self._grouped
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
@@ -81,6 +87,7 @@ class AggregateResult:
         return (
             self.value == other.value
             and dict(self.grouped_values) == dict(other.grouped_values)
+            and self._grouped == other._grouped
             and self.function == other.function
             and self.field == other.field
         )
