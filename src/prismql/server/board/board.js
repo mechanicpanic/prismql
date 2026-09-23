@@ -24,6 +24,7 @@
     sel: null, tab: "details", theme: readTheme(),
     corpora: null, corporaFailed: false, // null = not loaded yet (fix round 1, #3)
     full: null,
+    corpusSel: null, schemas: {}, // the Corpus tab (graph #86): rail pick, fetched schemas
     editor: null, editorPending: null, // editor.js's own state (Task 6) — lazily built
   };
 
@@ -70,7 +71,8 @@
   }
 
   var actions = {
-    select: function (seq) { state.sel = seq; state.tab = "details"; render(); },
+    select: function (seq) { state.sel = seq; state.corpusSel = null; state.tab = "details"; render(); },
+    openCorpus: function (name) { state.corpusSel = name; state.tab = "corpus"; render(); },
     openFull: function (seq) { window.PrismQLFull.open(state, render, seq); },
     closeFull: function () { state.full = null; render(); },
     setFilter: function (key, value) { state.filters[key] = value; render(); },

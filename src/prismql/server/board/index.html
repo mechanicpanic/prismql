@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="board.css" />
   <link rel="stylesheet" href="board-views.css" />
   <link rel="stylesheet" href="board-full.css" />
+  <link rel="stylesheet" href="board-corpus.css" />
 </head>
 <body>
   <div id="app" class="app t-dark">
@@ -84,6 +85,10 @@
         <div id="rail-status"></div>
       </div>
       <div id="rail-reset"></div>
+      <div class="rail-corpora">
+        <h3>Corpora</h3>
+        <div id="rail-corpora"></div>
+      </div>
     </nav>
 
     <main class="journal" id="journal" aria-label="Journal">
@@ -102,6 +107,7 @@
       <div class="tabs" role="tablist">
         <button class="tab on" id="tab-details" type="button" role="tab" aria-selected="true">Request</button>
         <button class="tab" id="tab-editor" type="button" role="tab" aria-selected="false">Editor</button>
+        <button class="tab" id="tab-corpus" type="button" role="tab" aria-selected="false">Corpus</button>
       </div>
       <div class="pane" id="inspector-pane"></div>
     </aside>
@@ -126,6 +132,10 @@
   <script src="inspector-detail.js"></script>
   <script src="inspector-output.js"></script>
   <script src="rail.js"></script>
+  <script src="corpus-logic.js"></script>
+  <script src="corpus-schemas.js"></script>
+  <script src="rail-corpora.js"></script>
+  <script src="inspector-corpus.js"></script>
   <script src="journal-list.js"></script>
   <script src="journal.js"></script>
   <script src="inspector.js"></script>

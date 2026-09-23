@@ -112,6 +112,7 @@
     lastSignature = signatureOf(inRange, nowMs);
 
     if (window.PrismQLRail) window.PrismQLRail.render(state, actions, nowMs);
+    if (window.PrismQLRailCorpora) window.PrismQLRailCorpora.render(state, actions);
 
     var chips = buildChips(state, actions);
     renderChips(chips);

@@ -14,29 +14,23 @@
   var IF = window.PrismQLInspectorFormat;
   var UI = window.PrismQLInspectorUI;
 
+  var TABS = { "tab-details": "details", "tab-editor": "editor", "tab-corpus": "corpus" };
   function wireTabs(actions) {
-    var d = document.getElementById("tab-details");
-    var e = document.getElementById("tab-editor");
-    if (d && !d.dataset.wired) {
-      d.dataset.wired = "1";
-      d.addEventListener("click", function () { actions.setTab("details"); });
-    }
-    if (e && !e.dataset.wired) {
-      e.dataset.wired = "1";
-      e.addEventListener("click", function () { actions.setTab("editor"); });
-    }
+    Object.keys(TABS).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && !el.dataset.wired) {
+        el.dataset.wired = "1";
+        el.addEventListener("click", function () { actions.setTab(TABS[id]); });
+      }
+    });
   }
   function updateTabs(state) {
-    var d = document.getElementById("tab-details");
-    var e = document.getElementById("tab-editor");
-    if (d) {
-      d.className = "tab" + (state.tab === "details" ? " on" : "");
-      d.setAttribute("aria-selected", String(state.tab === "details"));
-    }
-    if (e) {
-      e.className = "tab" + (state.tab === "editor" ? " on" : "");
-      e.setAttribute("aria-selected", String(state.tab === "editor"));
-    }
+    Object.keys(TABS).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.className = "tab" + (state.tab === TABS[id] ? " on" : "");
+      el.setAttribute("aria-selected", String(state.tab === TABS[id]));
+    });
   }
 
   function buildHeader(wrap, entry, nowMs) {
@@ -44,7 +38,9 @@
     dhead.appendChild(mk("span", "kind " + entry.kind, entry.kind));
     var status = F.status(entry);
     dhead.appendChild(mk("span", "badge s-" + status, IF.statusLabel(status)));
-    var id = mk("span", null, entry.result_id != null ? String(entry.result_id) : "#" + entry.seq);
+    var rid = IF.requestId(entry);
+    var id = mk("span", null, rid.text);
+    if (rid.title) id.title = rid.title;
     id.style.marginLeft = "auto";
     id.style.font = "11px 'JetBrains Mono', monospace";
     id.style.color = "var(--faint)";
@@ -103,6 +99,11 @@
     // The Editor tab's content is editor.js's (Task 6): it owns #inspector-pane
     // entirely while state.tab === "editor" and must not be nuked out from
     // under it on every render — clearing only happens on the Details path.
+    if (state.tab === "corpus") {
+      pane.innerHTML = "";
+      window.PrismQLInspectorCorpus.render(pane, state);
+      return;
+    }
     if (state.tab !== "details") return;
     pane.innerHTML = "";
     // entries first, then pending — a paused run's own match never merges

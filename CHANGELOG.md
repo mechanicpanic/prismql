@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Added (the corpus on the board)
+- The board's rail lists every corpus with its event count and what it can answer; its card in the new *Corpus* tab shows each field's type, coverage and ten most frequent values with counts, the role fields and the dictionaries' words (graph @aleph/prismql, #86). `GET /schema` is computed once per load over every event (was: the first 1,000 on every call, behind the corpus lock) and gains `distinct`, `top`, `complete`, `capabilities`, `dictionary_terms`, `board` and `text_search`; the old keys keep their shape.
+- The inspector's header names a request by its `#seq`, the result id in the tooltip (as the full view already did).
+
 ### Changed (text search runs on a full-text index)
 - A `memory` corpus answers `contains()`, phrases and `/search` from one tantivy index per corpus (graph @aleph/prismql, #91): `[corpora.<name>] text_index = "tantivy" | "memory"` (default tantivy when the extra is installed; `text_match = "substring"` stays in Python), `text_index_path` keeps it on disk with a fingerprint of the loaded text and the tokenizing code and rebuilds it when either differs; a folder that is not a text index (including a tantivy backend's own index) is never overwritten. Same sets as before (two tokenizer differences, Greek final sigma and superscript digits, are pinned), verified on Village: a phrase query 10 s → 0.18 s, `contains(outreach)` in a chain 20 s → 0.07 s, `/search` on a memory corpus no longer builds a second index (75 s on first use → 1.5 ms). `/schema` reports `text_search`.
 - `TantivyBackend` reads match sets from a position fast field instead of each hit's stored document (index layout 3; an index of layout 2 is refused with rebuild instructions): a common word 1.2 s → 81 ms on Village.

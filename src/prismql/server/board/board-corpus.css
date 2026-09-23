@@ -1,0 +1,26 @@
+/* The rail's Corpora block and the inspector's Corpus tab (graph
+   @aleph/prismql, node #86). Same tokens and row metrics as the rail facets
+   and the Request pane, so the two read as one board. */
+.rail-corpora{border-top:1px solid var(--line);padding-top:16px}
+.crow{display:flex;align-items:center;gap:8px;width:100%;height:32px;padding:0 8px;border:0;border-radius:7px;background:none;font:inherit;font-size:13px;color:var(--text-2);cursor:pointer;text-align:left;box-sizing:border-box}
+.crow:hover{background:var(--hover)}
+.crow.on{background:var(--sel);color:var(--text)}
+.crow .cn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crow .cmark{font-size:10px;color:var(--faint);border:1px solid var(--line);border-radius:4px;padding:0 4px;line-height:15px;flex-shrink:0}
+.crow .n{margin-left:auto;font:11px "JetBrains Mono",monospace;color:var(--faint);flex-shrink:0}
+.cname{font-size:16px;font-weight:600;color:var(--text)}
+.caps{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.cap{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:600;color:var(--faint);background:var(--sunken);text-decoration:line-through;text-decoration-thickness:1px}
+.cap.on{color:var(--ok);background:var(--ok-bg);text-decoration:none}
+.flds{display:flex;flex-direction:column;margin-top:-8px}
+.fld{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}
+.fld:last-child{border-bottom:0}
+.fld .fh{display:flex;align-items:baseline;gap:8px;min-width:0}
+.fld .fn{font:600 13px "JetBrains Mono",monospace;color:var(--text);overflow-wrap:anywhere}
+.fld .ft{font:11px "JetBrains Mono",monospace;color:var(--faint)}
+.fld .role{font-size:10px;color:var(--k-evaluate);border:1px solid currentColor;border-radius:4px;padding:0 4px;line-height:15px}
+.fld .cov{margin-left:auto;font-size:11px;color:var(--faint);white-space:nowrap}
+.vals{display:flex;flex-wrap:wrap;gap:4px 6px}
+.val{display:inline-flex;align-items:baseline;gap:6px;max-width:100%;box-sizing:border-box;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:12px/1.5 "JetBrains Mono",monospace;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.val b{font-weight:400;font-size:11px;color:var(--faint)}
+.vnote{font-size:12px;color:var(--faint)}

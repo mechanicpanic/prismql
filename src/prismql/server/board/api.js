@@ -122,6 +122,17 @@
     return body;
   }
 
+  // The corpus schema, computed once per load on the server (graph #86).
+  async function schema(corpus) {
+    const r = await fetch("/schema?corpus=" + encodeURIComponent(corpus));
+    let body = null;
+    try { body = await r.json(); } catch (e) { /* body stays null */ }
+    if (!r.ok || !body || !body.fields) {
+      throw new Error((body && body.error && body.error.message) || "schema: bad response (" + r.status + ")");
+    }
+    return body;
+  }
+
   // Shared by evaluate/search/similar — finding 3's "Run again" posts a
   // search/similar entry straight to its own endpoint, never /evaluate.
   async function post(path, body) {
@@ -141,7 +152,7 @@
   const api = {
     activity: activity, stream: stream, page: page,
     jsonlUrl: jsonlUrl, corpora: corpora, evaluate: evaluate,
-    search: search, similar: similar,
+    search: search, similar: similar, schema: schema,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLApi = api;

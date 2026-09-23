@@ -527,6 +527,16 @@ backfill, `GET /activity/stream` for the live feed by server-sent events),
 plus `GET /results/{id}` for the full groups/hits behind a kept request and
 `GET /corpora` for the board-field mapping and the known corpus names.
 
+**What a corpus holds.** The rail's *Corpora* block lists every corpus the
+server loaded with its event count and what it can answer (`similar` when it
+has embeddings, `search` when full-text ranking is available); a click opens
+its card in the *Corpus* tab — the id, time and board fields, every field
+with its type, how many events carry it and its ten most frequent values
+with counts (or "over 1,000 values" instead of a misleading few), and each
+dictionary's words. The tab also shows the selected request's corpus. The
+same data is `GET /schema?corpus=<name>`, computed once per load over every
+event of a memory corpus.
+
 A request is attributed by the `X-PrismQL-Client` header — an agent that
 sets it shows up under that name; anything that does not (a person's
 `curl`, a browser) shows as its IP address. The board's own editor sets it

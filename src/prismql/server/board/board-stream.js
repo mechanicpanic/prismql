@@ -59,6 +59,7 @@
       // changed, so re-ask /corpora too (fix round 2, #5).
       if (window.PrismQLInspectorFetch) window.PrismQLInspectorFetch.clearCache();
       if (window.PrismQLInspectorCorpora) window.PrismQLInspectorCorpora.reset(state);
+      if (window.PrismQLCorpusSchemas) window.PrismQLCorpusSchemas.reset(state);
       connect(state, render);
     } else if (kind === "down") {
       if (!state.down) { state.down = true; render(); }
