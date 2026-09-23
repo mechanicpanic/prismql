@@ -1044,6 +1044,15 @@ def _resolve_port(config: ServerConfig, args_port: int | None) -> int:
     return args_port if args_port is not None else config.port
 
 
+# /activity/stream's generator never checks for disconnection — the only
+# way uvicorn ends it on shutdown is by cancelling its task, and uvicorn's
+# own default (timeout_graceful_shutdown=None) never does that: it waits
+# for the connection to close on its own, which it never does, so the
+# server hangs at "Waiting for connections to close" and the board's
+# EventSource sees nothing wrong.
+SHUTDOWN_GRACE_SECONDS = 3
+
+
 def main() -> None:
     """Console entry point: prismql-server --config prismql.toml"""
     import argparse
@@ -1056,4 +1065,9 @@ def main() -> None:
     args = parser.parse_args()
     config = load_config(args.config)
     port = _resolve_port(config, args.port)
-    uvicorn.run(create_app(config), host=config.host, port=port)
+    uvicorn.run(
+        create_app(config),
+        host=config.host,
+        port=port,
+        timeout_graceful_shutdown=SHUTDOWN_GRACE_SECONDS,
+    )

@@ -1099,3 +1099,107 @@ def test_results_jsonl_refuses_a_result_raced_by_a_concurrent_reload(tmp_path):
     state.engine_for = racy
     r = c.get(f"/results/{rid}.jsonl")
     assert r.status_code == 404 and r.json()["error"]["type"] == "gone"
+
+
+@pytest.mark.slow
+def test_activity_stream_closes_within_the_shutdown_grace_on_sigterm(tmp_path) -> None:
+    # /activity/stream's generator loops forever and never notices a
+    # disconnect; uvicorn's own default (timeout_graceful_shutdown=None)
+    # then waits for it to end on its own, which it never does — the real
+    # server hangs at "Waiting for connections to close" on SIGTERM and the
+    # board's EventSource never learns the process is gone (observed live
+    # with a real uvicorn subprocess). This drives the real console entry
+    # point (main()), not a hand-built uvicorn.run call, so it pins
+    # main()'s own timeout_graceful_shutdown= wiring against a real
+    # process and a real socket, not TestClient's in-process transport.
+    import contextlib
+    import signal
+    import socket
+    import subprocess
+    import sys
+    import time
+
+    # The bound the fix promises: main()'s timeout_graceful_shutdown, plus
+    # slack for process/socket scheduling. Deliberately NOT imported from
+    # prismql.server.app — this asserts the observable deadline the board
+    # relies on, not whatever constant the implementation happens to use.
+    max_seconds_to_close = 6
+
+    data = tmp_path / "events.jsonl"
+    data.write_text(json.dumps({"id": 1, "user": "a", "text": "x", "timestamp": 1}))
+    cfg_file = tmp_path / "prismql.toml"
+    cfg_file.write_text(
+        f"""
+[backend]
+type = "memory"
+data = {str(data)!r}
+"""
+    )
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "from prismql.server.app import main; main()",
+            "--config",
+            str(cfg_file),
+            "--port",
+            str(port),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + 15
+        sock = None
+        while time.monotonic() < deadline:
+            try:
+                sock = socket.create_connection(("127.0.0.1", port), timeout=1)
+                break
+            except OSError:
+                time.sleep(0.2)
+        assert sock is not None, "server never opened its port"
+        with contextlib.closing(sock):
+            sock.sendall(
+                b"GET /activity/stream HTTP/1.1\r\n"
+                b"Host: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n"
+            )
+            sock.settimeout(5)
+            buf = b""
+            while b"event: seq" not in buf:
+                chunk = sock.recv(4096)
+                assert chunk, "connection closed before the handshake arrived"
+                buf += chunk
+
+            t0 = time.monotonic()
+            proc.send_signal(signal.SIGTERM)
+            # An absolute deadline, not a per-recv idle timeout: the bug
+            # this pins is a steady 0.5s keep-alive that never stops, which
+            # would keep resetting a per-call timeout forever.
+            hard_deadline = t0 + max_seconds_to_close + 4
+            saw_eof = False
+            try:
+                while True:
+                    remaining = hard_deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError
+                    sock.settimeout(remaining)
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        saw_eof = True
+                        break
+            except TimeoutError:
+                saw_eof = False
+            elapsed = time.monotonic() - t0
+        assert saw_eof, "the SSE connection never closed after SIGTERM"
+        assert elapsed < max_seconds_to_close, (
+            f"stream stayed open {elapsed:.1f}s past SIGTERM"
+        )
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            proc.terminate()
+        proc.wait(timeout=10)
