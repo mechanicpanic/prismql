@@ -2,7 +2,7 @@
 
 *The one place project state lives. Updated in the same commit as the change
 it describes. Agent memory points here; it does not duplicate this.*
-*Last update: 2026-09-23 (board final fix wave).*
+*Last update: 2026-09-23 (board follow-ups listed under Open).*
 
 ## Shipped (newest first)
 
@@ -55,9 +55,15 @@ it describes. Agent memory points here; it does not duplicate this.*
 2. **Frame cost, now measured (graph #14)** — Village (381k rows, `emb` column) on memory: start 54 s, two-leg chain 0.1 s, `contains` chain 1.1 s; the same corpus on tantivy with `index_path` (714 MB): first start 85 s, reopen 19 s, `/search` 10 ms with no lazy build — but the same two-leg chain 2.9 s and the `contains` chain 3.9 s, because `query_frame` fetches the participating documents one by one from the index (`get_documents`) and reads fields from dicts. The fix is the plan's deferred task: the backend keeps the corpus as an Arrow/Polars table and `query_frame` slices it by position (ingest plan task 6). Until then large corpora stay on memory (start-up dominated by the text index: 21 s of the 54 s) and tantivy is the scouting/persisted-index backend, not the fast one.
 5. Agent surface track; workbench M0–M3; mismatch diary Q04–Q18; `similar_to` v2.
 
+**Board follow-ups (owner, 2026-09-23)** — to enter the graph when it is reachable again (iskron was down all afternoon), then leave this list.
+- **Query line breaks** (agreed): the board's lexer breaks a query before `FOLLOWED_BY`/`PRECEDED_BY`/`DURING`/`INWINDOW`/`AGGREGATE`/`GROUP BY` — always in the Request view, by a button or shortcut in the editor (not while typing).
+- **Event numbers ①② in the query** (proposed, owner's yes pending): the server derives each event slot's source from the parsed query and puts that layout on the journal entry; the board marks ①② only where the mapping is honest. Observed on the engine: `PRECEDED_BY` numbers in reverse of the text, a `NOT_` link gives no event, a quantifier gives several (`{2,3}` → 2–3), subqueries add up, and comma co-occurrence (`A, B INWINDOW n`) is in time order — there the board says "N events, time order" instead of numbering. Not in the JS lexer: that would be a second implementation of the chain rules.
+- **Corpus schema on the board** (decided: top N, right panel): compute the schema once per corpus at load and on `/reload`, over the whole table, not the first 1000 rows (today village's `kind` examples miss `REQUEST_HUMAN_HELPER`), and serve `/schema` from it (today it is recomputed per call and waits behind `/evaluate`'s corpus lock). Values as the top N by frequency with the distinct count. Add what is available: `similar` (model, or why not), `search`, dictionary words (not only counts), board fields. Board: a "Corpora" block in the left rail; a corpus card in the right panel.
+
 **Not decided / to verify**
 - Novelty claim for the ranked semantic join rests on 2026 preprints (HiMu unverified; VectraFlow verified).
 - Railway XFF/X-Real-IP behaviour on the live deploy; Chicago 372 re-run after the DST fixes (done implicitly by the spike: 372 reproduced on both sides).
+- **`INWINDOW` measures two different things**: after a comma it bounds the whole group (first to last event ≤ n, order free); after `FOLLOWED_BY` it bounds each step (per link). Born when `INWIN` and positional `WITHIN` were merged into one word (b58da4d, 2025-11-13, "both are positional distance") and made explicit for chains in ef6eed8 (2026-06-10); no record of the difference being weighed. Owner's call: keep one word and make the two measures visible (references, board), or split into two words (touches the paper, both references, the LLM eval).
 - swarmchasing hackathon (Oct 3–4, AI Village dataset, gated — access requested? not yet): language is strong for failure-shape questions; needs `!$k`; native ingest is layer 1.
 
 ## Paper and studies
