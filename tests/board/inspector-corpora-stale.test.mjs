@@ -74,3 +74,36 @@ test("ensure(): a pre-reset in-flight request neither writes stale data nor arms
   await flush();
   assert.equal(calls, 3, "B's own retry chain continues on schedule");
 });
+
+test("ensure(): a pre-reset in-flight request that SUCCEEDS late must not write into post-reset state (fix round 1, #9)", async () => {
+  const pending = [];
+  let calls = 0;
+  const api = {
+    corpora: () => {
+      calls++;
+      return new Promise((resolve) => pending.push(resolve));
+    },
+  };
+  const renders = [];
+  setWindow(api, renders);
+  const C = freshCorpora();
+  const state = { corpora: null, corporaFailed: false };
+
+  C.ensure(state); // request A (pre-reset generation)
+  await flush();
+  assert.equal(calls, 1);
+
+  C.reset(state);
+  C.ensure(state); // request B (post-reset generation) — A is still outstanding
+  await flush();
+  assert.equal(calls, 2);
+
+  pending[0]({ corpora: ["stale-a"], default: "stale-a", board: {} }); // A resolves late — SUCCESS, not a failure
+  await flush();
+  assert.equal(state.corpora, null, "a stale SUCCESS must not overwrite post-reset state either");
+
+  pending[1]({ corpora: ["fresh-b"], default: "fresh-b", board: {} }); // B — the real, current answer
+  await flush();
+  assert.deepEqual(state.corpora, { corpora: ["fresh-b"], default: "fresh-b", board: {} },
+    "only the current generation's own success is ever written");
+});

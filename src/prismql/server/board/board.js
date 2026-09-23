@@ -1,8 +1,6 @@
 // PrismQL board — entry point: theme, the state every view module reads,
 // the actions object they call, and topbar wiring (graph @aleph/prismql,
-// node #63 — later tasks attach more actions via window.PrismQLBoard.actions
-// rather than growing this file, #10). Live connection and the live/pause
-// actions live in board-stream.js (fix round 2, #1 — one cap site).
+// node #63). Live connection lives in board-stream.js.
 (function () {
   "use strict";
   var THEME_KEY = "prismql-board-theme";
@@ -46,9 +44,7 @@
     var btn = document.getElementById("live-toggle");
     if (btn) {
       btn.className = "live" + (state.down ? " down" : state.live ? "" : " off");
-      // No aria-pressed (carry-over, Task 4 review): the label already
-      // says "live"/"paused"/"reconnecting" and must not drift with the
-      // note every 5 s (fix round 2, #4).
+      // No aria-pressed — the label text already carries state (fix round 2, #4).
       var label = state.down ? "Reconnecting to the live journal" : state.live ? "Pause the live journal" : "Resume the live journal";
       btn.setAttribute("aria-label", label);
       btn.setAttribute("title", label);
@@ -65,10 +61,8 @@
     nowMs = nowMs || Date.now();
     updateTopbar(nowMs);
     if (window.PrismQLJournal) window.PrismQLJournal.render(state, actions, nowMs);
-    // Editor before Inspector: a run's own journal entry arriving mid-render
-    // may flip state.tab to "details" (editor.js's checkPendingRun) — the
-    // Inspector pass right after must see that already, one clean render,
-    // no nested render() call (task-6 brief).
+    // Editor first: its checkPendingRun may flip state.tab to "details"
+    // mid-render — Inspector must see that in the same pass (task-6).
     ["PrismQLEditor", "PrismQLInspector", "PrismQLFull"].forEach(function (name) {
       var mod = window[name];
       if (mod && typeof mod.render === "function") mod.render(state, actions, nowMs);
@@ -135,10 +129,8 @@
     var newQuery = document.getElementById("new-query");
     if (newQuery) newQuery.addEventListener("click", function () { actions.newQuery(); });
     render();
-    // journal.tick(): changed signature → a full render(); unchanged →
-    // only a .rel patch, never a rebuild (fix round 1, #1 — a rebuild
-    // every 5 s drops focus/selection). Live note + inspector "when" are
-    // their own cheap patches, outside journal.js.
+    // journal.tick(): changed signature -> a full render(); unchanged ->
+    // just a .rel patch (fix round 1, #1 — a rebuild every 5s drops focus).
     setInterval(function () {
       var nowMs = Date.now();
       if (window.PrismQLJournal && window.PrismQLJournal.tick) window.PrismQLJournal.tick(state, actions, nowMs);

@@ -12,10 +12,7 @@
 
   function ensureEditorState(state) {
     if (!state.editor) {
-      state.editor = {
-        query: "SELECT ", corpus: null, max: "", hydrate: false,
-        running: false, error: null, rev: 0, focus: false,
-      };
+      state.editor = { query: "SELECT ", corpus: null, running: false, error: null, rev: 0, focus: false };
     }
     return state.editor;
   }
@@ -54,17 +51,22 @@
   function run(state, render) {
     var ed = ensureEditorState(state);
     if (ed.running) return;
+    if (L.unknownCorpus(ed, state.corpora)) {
+      ed.error = { pos: null, message: "corpus ‘" + ed.corpus + "’ is not on this server" };
+      render();
+      return;
+    }
     ed.running = true;
     ed.error = null;
     render();
     var sentQuery = ed.query;
-    var startedAt = Date.now();
+    var baselineSeq = state.seq; // no clocks in run<->entry matching (fix round 1, #2)
     window.PrismQLApi.evaluate(L.buildEvaluateBody(ed)).then(function (res) {
       ed.running = false;
       if (res.status === 200 && res.body && res.body.ok) {
         state.editorPending = {
           resultId: res.body.result_id != null ? res.body.result_id : null,
-          query: sentQuery, sinceMs: startedAt,
+          query: sentQuery, baselineSeq: baselineSeq,
         };
       } else {
         ed.error = L.describeError(res.status, res.body);

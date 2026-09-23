@@ -1,8 +1,10 @@
 // Pins the editor's pure helpers (graph @aleph/prismql, node #63; task-6
-// brief): max-groups clamping, the /evaluate body it actually sends, the
-// 422 → inline-error shape (line:column for syntax, message-only for
-// runtime), which journal entry a finished run resolves to, and the
-// recent-queries list.
+// brief, fix round 1): the /evaluate body it actually sends (just query +
+// corpus), the 422 → inline-error shape (line:column for syntax,
+// message-only for runtime, joined messages for FastAPI's own
+// {"detail": [...]} validation 422), which journal entry a finished run
+// resolves to — by seq, no clocks — the paused-journal select-or-just-clear
+// decision, unknown-corpus detection, and the recent-queries list.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -10,35 +12,13 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const L = require("../../src/prismql/server/board/editor-logic.js");
 
-test("clampMax: blank or unset sends nothing — the server's own default applies", () => {
-  assert.equal(L.clampMax(""), null);
-  assert.equal(L.clampMax(null), null);
-  assert.equal(L.clampMax(undefined), null);
+test("buildEvaluateBody: just query when no corpus is set", () => {
+  assert.deepEqual(L.buildEvaluateBody({ query: "SELECT $a", corpus: "" }), { query: "SELECT $a" });
 });
 
-test("clampMax: garbage input sends nothing", () => {
-  assert.equal(L.clampMax("abc"), null);
-  assert.equal(L.clampMax(NaN), null);
-});
-
-test("clampMax: clamps below 1 up to 1, never below", () => {
-  assert.equal(L.clampMax("0"), 1);
-  assert.equal(L.clampMax("-5"), 1);
-});
-
-test("clampMax: a valid count is floored and passed through", () => {
-  assert.equal(L.clampMax("12"), 12);
-  assert.equal(L.clampMax(7.9), 7);
-});
-
-test("buildEvaluateBody: omits corpus and max_results the user never set", () => {
-  const body = L.buildEvaluateBody({ query: "SELECT $a", corpus: "", max: "", hydrate: false });
-  assert.deepEqual(body, { query: "SELECT $a", hydrate: false });
-});
-
-test("buildEvaluateBody: carries corpus, clamped max and hydrate through", () => {
-  const body = L.buildEvaluateBody({ query: "SELECT $a", corpus: "village", max: "0", hydrate: true });
-  assert.deepEqual(body, { query: "SELECT $a", hydrate: true, corpus: "village", max_results: 1 });
+test("buildEvaluateBody: carries corpus, and only query/corpus — no max_results, no hydrate", () => {
+  const body = L.buildEvaluateBody({ query: "SELECT $a", corpus: "village" });
+  assert.deepEqual(body, { query: "SELECT $a", corpus: "village" });
 });
 
 test("describeError: a syntax 422 carries line:column", () => {
@@ -49,6 +29,18 @@ test("describeError: a syntax 422 carries line:column", () => {
 test("describeError: a runtime 422 has no position", () => {
   const d = L.describeError(422, { error: { type: "runtime", message: "unknown corpus 'x'" } });
   assert.deepEqual(d, { pos: null, message: "unknown corpus 'x'" });
+});
+
+test("describeError: FastAPI's own request-validation 422 ({detail: [...]}) joins the messages", () => {
+  const d = L.describeError(422, {
+    detail: [{ loc: ["body", "query"], msg: "field required", type: "value_error.missing" }],
+  });
+  assert.deepEqual(d, { pos: null, message: "field required" });
+});
+
+test("describeError: FastAPI detail with several entries joins them", () => {
+  const d = L.describeError(422, { detail: [{ msg: "a" }, { msg: "b" }] });
+  assert.equal(d.message, "a; b");
 });
 
 test("describeError: any other status describes itself with status + message", () => {
@@ -63,28 +55,84 @@ test("describeError: no body at all (network failure) still describes itself", (
   assert.match(d.message, /request failed/);
 });
 
-test("findPendingMatch: matches by result_id, ignoring who !== board and other result_ids", () => {
+test("findPendingMatch: seq-only — an aggregate with a badly skewed clock still matches (ts never read)", () => {
   const entries = [
-    { who: "10.0.0.1", result_id: "r1", ts: "2026-01-01T00:00:02Z" },
-    { who: "board", result_id: "r2", ts: "2026-01-01T00:00:01Z" },
-    { who: "board", result_id: "r1", ts: "2026-01-01T00:00:00Z" },
+    { who: "board", result_id: null, query: "SELECT count($a)", seq: 12, ts: "1970-01-01T00:00:00Z" },
+    { who: "board", result_id: null, query: "SELECT count($a)", seq: 5, ts: "2099-01-01T00:00:00Z" }, // below baseline
   ];
-  const found = L.findPendingMatch(entries, { resultId: "r1", query: "x", sinceMs: 0 });
+  const found = L.findPendingMatch(entries, { resultId: null, query: "SELECT count($a)", baselineSeq: 10 });
+  assert.equal(found, entries[0]);
+});
+
+test("findPendingMatch: two identical board runs — each matches only the entry above its own baseline", () => {
+  const entries = [
+    { who: "board", result_id: null, query: "SELECT contains(x)", seq: 20 },
+    { who: "board", result_id: null, query: "SELECT contains(x)", seq: 10 },
+  ];
+  const firstRun = L.findPendingMatch(entries, { resultId: null, query: "SELECT contains(x)", baselineSeq: 0 });
+  assert.equal(firstRun, entries[1], "the first run's own baseline (0) is answered by the lower-seq entry");
+  const secondRun = L.findPendingMatch(entries, { resultId: null, query: "SELECT contains(x)", baselineSeq: 10 });
+  assert.equal(secondRun, entries[0], "the second run's baseline (10) excludes the first run's own entry");
+});
+
+test("findPendingMatch: result_id wins over query, and ignores who !== board", () => {
+  const entries = [
+    { who: "10.0.0.1", result_id: "r1", seq: 5 },
+    { who: "board", result_id: "r2", seq: 6 },
+    { who: "board", result_id: "r1", seq: 7 },
+  ];
+  const found = L.findPendingMatch(entries, { resultId: "r1", query: "x", baselineSeq: 0 });
   assert.equal(found, entries[2]);
 });
 
-test("findPendingMatch: an aggregate (no result_id) matches by query + timing", () => {
-  const sinceMs = Date.parse("2026-01-01T00:00:00Z");
-  const entries = [
-    { who: "board", result_id: null, query: "SELECT count($a)", ts: "2026-01-01T00:00:05Z" },
-    { who: "board", result_id: null, query: "SELECT count($a)", ts: "2025-12-31T23:59:00Z" }, // before the run — not it
-  ];
-  const found = L.findPendingMatch(entries, { resultId: null, query: "SELECT count($a)", sinceMs: sinceMs });
+test("findPendingMatch: an entry that arrived before the POST resolved (already in the array) still matches", () => {
+  const entries = [{ who: "board", result_id: "r9", seq: 3 }];
+  const found = L.findPendingMatch(entries, { resultId: "r9", query: "x", baselineSeq: 0 });
   assert.equal(found, entries[0]);
 });
 
 test("findPendingMatch: no pending run means no match", () => {
   assert.equal(L.findPendingMatch([{ who: "board" }], null), null);
+});
+
+test("resolvePendingRun: unresolved while absent from both the live and the paused journal", () => {
+  assert.equal(L.resolvePendingRun([], [], { resultId: "r1", query: "x", baselineSeq: 0 }, "x"), null);
+});
+
+test("resolvePendingRun: found only in the paused queue (state.pending) still resolves", () => {
+  const pendingQueue = [{ who: "board", result_id: "r1", seq: 4 }];
+  const r = L.resolvePendingRun([], pendingQueue, { resultId: "r1", query: "x", baselineSeq: 0 }, "x");
+  assert.equal(r.entry, pendingQueue[0]);
+  assert.equal(r.select, true);
+});
+
+test("resolvePendingRun: select is true when the editor text is unchanged since the run started", () => {
+  const entries = [{ who: "board", result_id: null, query: "SELECT $a", seq: 5 }];
+  const r = L.resolvePendingRun(entries, [], { resultId: null, query: "SELECT $a", baselineSeq: 0 }, "SELECT $a");
+  assert.equal(r.select, true);
+});
+
+test("resolvePendingRun: select is false once the user has typed something else — no tab flip, no focus steal", () => {
+  const entries = [{ who: "board", result_id: null, query: "SELECT $a", seq: 5 }];
+  const r = L.resolvePendingRun(entries, [], { resultId: null, query: "SELECT $a", baselineSeq: 0 }, "SELECT $b now");
+  assert.equal(r.entry, entries[0], "the marker still resolves — the caller clears it");
+  assert.equal(r.select, false);
+});
+
+test("unknownCorpus: false before /corpora has loaded at all — absence proves nothing yet", () => {
+  assert.equal(L.unknownCorpus({ corpus: "village" }, null), false);
+});
+
+test("unknownCorpus: false when no corpus is chosen", () => {
+  assert.equal(L.unknownCorpus({ corpus: null }, { corpora: ["village"] }), false);
+});
+
+test("unknownCorpus: false when the corpus is among the loaded names", () => {
+  assert.equal(L.unknownCorpus({ corpus: "village" }, { corpora: ["village", "wiki"] }), false);
+});
+
+test("unknownCorpus: true once /corpora has loaded and the corpus isn't in it", () => {
+  assert.equal(L.unknownCorpus({ corpus: "gone" }, { corpora: ["village", "wiki"] }), true);
 });
 
 test("recentQueries: only who === board, newest first, capped at 5", () => {

@@ -7,6 +7,8 @@
   "use strict";
   var mk = window.PrismQLBoardUtil.mk;
 
+  // Just corpus + Run: "max groups" and "with event text" have no visible
+  // effect on the board and were dropped (fix round 1, #5).
   function buildOpts(pane, ed) {
     var opts = mk("div", "opts");
     var corpusLabel = mk("label", null, "corpus ");
@@ -15,24 +17,6 @@
     select.id = "editor-corpus";
     corpusLabel.appendChild(select);
     opts.appendChild(corpusLabel);
-
-    var maxLabel = mk("label", null, "max groups ");
-    var max = document.createElement("input");
-    max.className = "field";
-    max.type = "number";
-    max.min = "1";
-    max.id = "editor-max";
-    max.style.width = "64px";
-    maxLabel.appendChild(max);
-    opts.appendChild(maxLabel);
-
-    var hydrateLabel = document.createElement("label");
-    var hydrate = document.createElement("input");
-    hydrate.type = "checkbox";
-    hydrate.id = "editor-hydrate";
-    hydrateLabel.appendChild(hydrate);
-    hydrateLabel.appendChild(document.createTextNode(" with event text"));
-    opts.appendChild(hydrateLabel);
 
     var runBtn = mk("button", "primary");
     runBtn.type = "button";
@@ -44,8 +28,6 @@
     pane.appendChild(opts);
 
     select.addEventListener("change", function () { ed.corpus = select.value; });
-    max.addEventListener("input", function () { ed.max = max.value; });
-    hydrate.addEventListener("change", function () { ed.hydrate = hydrate.checked; });
   }
 
   function buildSkel(pane) {
@@ -103,10 +85,17 @@
     recent.id = "editor-recent";
     pane.appendChild(recent);
 
+    // Typing clears a stale error immediately, in place — no full redraw
+    // needed to drop the red border once the query it complained about
+    // has actually changed (fix round 1, #4).
     textarea.addEventListener("input", function () {
       ed.query = textarea.value;
       pre.innerHTML = window.PrismQLLexer.highlight(textarea.value);
-      ed.error = null;
+      if (ed.error) {
+        ed.error = null;
+        box.className = "editor";
+        err.hidden = true;
+      }
     });
     textarea.addEventListener("scroll", function () {
       pre.scrollTop = textarea.scrollTop;

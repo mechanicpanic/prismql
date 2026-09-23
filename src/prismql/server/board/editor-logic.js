@@ -1,32 +1,23 @@
 // PrismQLEditorLogic: pure helpers for the editor (graph @aleph/prismql,
-// node #63; task-6 brief) — clamping, the 422 body → inline-error shape,
-// which journal entry a run resolves to, and the recent-queries list. No
-// DOM, no window, so these are unit-testable directly under node.
+// node #63; task-6 brief, fix round 1). No DOM, no window, so these are
+// unit-testable directly under node.
 (function (root) {
   "use strict";
 
-  // "max groups" → max_results, clamped >= 1; blank/garbage sends nothing
-  // so the server's own default applies.
-  function clampMax(raw) {
-    if (raw === "" || raw == null) return null;
-    var n = Math.floor(Number(raw));
-    if (!isFinite(n) || isNaN(n)) return null;
-    return n < 1 ? 1 : n;
-  }
-
-  // POST /evaluate body from the editor's own state — never sends a corpus
-  // or max_results the user hasn't actually set (global-constraints.md:
-  // "never guess a column" applies just as much to never guessing a field).
+  // POST /evaluate body: just {query, corpus} — max groups and hydrate
+  // have no visible effect on the board (the inspector pages the kept
+  // result itself and always hydrates), so those controls were dropped
+  // (fix round 1, #5 — a deviation from the canvas, noted in the report).
   function buildEvaluateBody(ed) {
-    var body = { query: ed.query, hydrate: !!ed.hydrate };
+    var body = { query: ed.query };
     if (ed.corpus) body.corpus = ed.corpus;
-    var max = clampMax(ed.max);
-    if (max != null) body.max_results = max;
     return body;
   }
 
   // A 422's error body carries line/column only for a syntax error
-  // (app.py); a runtime error has a message only. Any other failure
+  // (app.py); a runtime error has a message only. FastAPI's own request
+  // validation 422 ({"detail": [...]}) never reaches that shape at all —
+  // its messages are joined instead (fix round 1, #8). Any other failure
   // (network, 403, 429, 5xx) is described by its status + message.
   function describeError(status, body) {
     var err = body && body.error;
@@ -34,28 +25,49 @@
       var hasPos = err.line != null && err.column != null;
       return { pos: hasPos ? err.line + ":" + err.column : null, message: err.message || "invalid query" };
     }
+    if (body && Array.isArray(body.detail)) {
+      var msgs = body.detail.map(function (d) { return (d && d.msg) || String(d); }).join("; ");
+      return { pos: null, message: msgs || "invalid request" };
+    }
     if (err && err.message) return { pos: null, message: "HTTP " + status + " · " + err.message };
     return { pos: null, message: "HTTP " + (status || "—") + " · request failed" };
   }
 
-  // Which arrived journal entry answers a just-finished run: the newest
-  // board entry carrying the run's own result_id, or — for an aggregate,
-  // which never gets one — the newest board entry with the same query that
-  // arrived no earlier than the run started (task-6 brief).
+  // Which arrived journal entry answers a just-finished run — no clocks:
+  // the run remembers state.seq as it stood before the POST
+  // (pending.baselineSeq); the answer is the lowest-seq board entry above
+  // that baseline carrying the run's own result_id, or — for an
+  // aggregate, which never gets one — the same query (fix round 1, #2).
   function findPendingMatch(entries, pending) {
     if (!pending) return null;
+    var best = null;
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
-      if (e.who !== "board") continue;
-      if (pending.resultId != null) {
-        if (e.result_id === pending.resultId) return e;
-        continue;
-      }
-      if (e.query !== pending.query) continue;
-      var t = new Date(e.ts).getTime();
-      if (!isNaN(t) && t + 1000 >= pending.sinceMs) return e;
+      if (e.who !== "board" || e.seq == null || e.seq <= pending.baselineSeq) continue;
+      var matches = pending.resultId != null ? e.result_id === pending.resultId : e.query === pending.query;
+      if (matches && (best == null || e.seq < best.seq)) best = e;
     }
-    return null;
+    return best;
+  }
+
+  // Resolves a pending run against both the live and the paused journal —
+  // a paused board never merges into `entries` (fix round 1, #3). Returns
+  // null while unresolved, else {entry, select}: select is false once the
+  // user has edited the query since the run started — the marker still
+  // clears, but nothing steals focus or flips the tab.
+  function resolvePendingRun(entries, pendingQueue, pending, currentQuery) {
+    if (!pending) return null;
+    var found = findPendingMatch(entries, pending) || findPendingMatch(pendingQueue, pending);
+    if (!found) return null;
+    return { entry: found, select: pending.query === currentQuery };
+  }
+
+  // True only once /corpora has actually loaded and ed.corpus isn't in
+  // it — never true before the list has loaded, when absence proves
+  // nothing (fix round 1, #7).
+  function unknownCorpus(ed, corporaState) {
+    if (!ed.corpus || !corporaState) return false;
+    return (corporaState.corpora || []).indexOf(ed.corpus) === -1;
   }
 
   // The last 5 journal entries this editor itself sent (who === "board"),
@@ -75,9 +87,9 @@
   }
 
   var api = {
-    clampMax: clampMax, buildEvaluateBody: buildEvaluateBody,
-    describeError: describeError, findPendingMatch: findPendingMatch,
-    recentQueries: recentQueries, singleLine: singleLine,
+    buildEvaluateBody: buildEvaluateBody, describeError: describeError,
+    findPendingMatch: findPendingMatch, resolvePendingRun: resolvePendingRun,
+    unknownCorpus: unknownCorpus, recentQueries: recentQueries, singleLine: singleLine,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLEditorLogic = api;
