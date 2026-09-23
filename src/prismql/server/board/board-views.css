@@ -2,8 +2,8 @@
    #76). Ported from Main.dc.html ~lines 98-164, one rule per line, same
    order as the canvas. Full-view rules live in board-full.css. */
 .insp{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-width:0;min-height:0}
-.tabs{display:flex;gap:4px;padding:0 12px;border-bottom:1px solid var(--line);height:56px;align-items:flex-end;box-sizing:border-box}
-.tab{height:40px;display:flex;align-items:center;gap:8px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+.tabs{display:flex;gap:4px;padding:0 12px;border-bottom:1px solid var(--line);height:56px;align-items:stretch;box-sizing:border-box}
+.tab{display:flex;align-items:center;gap:8px;padding:1px 12px 0;box-sizing:border-box;border:0;border-bottom:2px solid transparent;background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;margin-bottom:-1px}
 .tab:hover{color:var(--text)}
 .tab.on{color:var(--text);border-bottom-color:var(--accent)}
 .pane{flex:1;min-height:0;overflow:auto;padding:16px 18px 24px;display:flex;flex-direction:column;gap:16px}
