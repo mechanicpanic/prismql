@@ -59,6 +59,7 @@ class SentenceTransformerEmbedder:
                 "Install it with: pip install 'prismql[semantic]' "
                 "(or supply any other Embedder implementation)"
             ) from e
+        self.model_name = model_name
         self.model = SentenceTransformer(model_name)
 
     def encode(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:

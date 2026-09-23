@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .schema import compute_schema  # noqa: F401  re-export: the REPL imports it here
+
 if TYPE_CHECKING:
     from ..engine import PrismQLEngine
 
@@ -394,73 +396,6 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         text_match=config.text_match,
         quantifier_ceiling=config.quantifier_ceiling,
     )
-
-
-def _text_search(backend: Any) -> str:
-    """Which index answers text predicates: a full-text one or Python's."""
-    if getattr(backend, "text_index", None) is not None:
-        return "tantivy"
-    return "tantivy" if type(backend).__name__ == "TantivyBackend" else "memory"
-
-
-SCHEMA_SAMPLE_CAP = 1000
-EXAMPLES_MAX_CARDINALITY = 20
-
-
-def compute_schema(
-    engine: PrismQLEngine, config: ServerConfig | CorpusConfig
-) -> dict[str, Any]:
-    """Introspect the loaded corpus: fields, coverage, types, examples.
-
-    PrismQL is schema-on-read — documents are free-form dicts and nothing is
-    coerced beyond ids/timestamps — so the schema is inferred from a sample
-    of the loaded documents rather than declared anywhere. Shared by the
-    server's GET /schema and the REPL's \\schema command.
-    """
-    backend = engine.search_backend
-    total = backend.get_total_documents()
-    sample_ids = list(backend.get_all_document_ids(limit=SCHEMA_SAMPLE_CAP))
-    docs = backend.get_documents(sample_ids) if sample_ids else []
-    n = len(docs)
-
-    field_values: dict[str, list[Any]] = {}
-    for doc in docs:
-        for key, value in doc.items():
-            field_values.setdefault(key, []).append(value)
-
-    fields: dict[str, Any] = {}
-    for key, values in sorted(field_values.items()):
-        type_names = {type(v).__name__ for v in values if v is not None}
-        info: dict[str, Any] = {
-            "coverage": round(len(values) / n, 3) if n else 0.0,
-            "type": type_names.pop() if len(type_names) == 1 else "mixed",
-        }
-        # Examples only for categorical-ish fields. A field where every
-        # sampled document has a unique value (distinct == values == n) is
-        # an id or free text — skip those.
-        distinct = {str(v) for v in values if v is not None}
-        if 0 < len(distinct) <= EXAMPLES_MAX_CARDINALITY and not (
-            len(distinct) == len(values) == n
-        ):
-            info["examples"] = sorted(distinct)[:10]
-        fields[key] = info
-
-    return {
-        "backend": type(backend).__name__,
-        "documents": total,
-        "sampled": n,
-        "id_field": config.id_field,
-        "timestamp_field": config.timestamp_field,
-        "text_match": config.text_match,
-        "text_search": _text_search(backend),
-        "text_language": config.text_language,
-        "quantifier_ceiling": config.quantifier_ceiling,
-        "fields": fields,
-        "dictionaries": {
-            name: len(value["terms"] if isinstance(value, dict) else value)
-            for name, value in config.dictionaries.items()
-        },
-    }
 
 
 def _semantic_index(

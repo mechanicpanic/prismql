@@ -26,11 +26,11 @@ from .config import (
     CorpusConfig,
     ServerConfig,
     build_engine,
-    compute_schema,
     load_config,
 )
 from .pages import page_payload, rows_page_payload
 from .results import ResultStore, StoredResult
+from .schema import compute_schema
 
 
 class DictSpec(BaseModel):
@@ -105,6 +105,7 @@ class ServerState:
         self.config = config
         self.lock = threading.Lock()
         self.engines: dict[str, Any] = {}
+        self.schemas: dict[str, dict[str, Any]] = {}
         self.exec_locks: dict[str, threading.Lock] = {}
         # per-corpus ranked full-text index, keyed with the engine it was
         # built from: reuse only when that engine is still the current one
@@ -135,8 +136,15 @@ class ServerState:
             name: build_engine(self.config.corpus(name))
             for name in self.config.corpus_names()
         }
+        # Once per load, over every event (graph @aleph/prismql, #86): the
+        # schema never changes between loads, so no request recomputes it.
+        schemas = {
+            name: compute_schema(engine, self.config.corpus(name))
+            for name, engine in engines.items()
+        }
         with self.lock:
             self.engines = engines
+            self.schemas = schemas
             self.exec_locks = {name: threading.Lock() for name in engines}
             self.scouts = {}
             self.loaded_at = datetime.now(UTC).isoformat()
@@ -901,8 +909,9 @@ def create_app(config: ServerConfig) -> FastAPI:
                     "error": {"type": "runtime", "message": str(e.args[0])},
                 },
             )
-        with exec_lock:
-            return compute_schema(engine, corpus_cfg)
+        with state.lock:
+            cached = state.schemas.get(corpus or config.default_corpus)
+        return cached if cached is not None else compute_schema(engine, corpus_cfg)
 
     @app.get("/corpora")
     def corpora() -> dict[str, Any]:
