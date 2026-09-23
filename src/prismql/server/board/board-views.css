@@ -24,6 +24,7 @@
 .kv dd{margin:0;color:var(--text-2);min-width:0}
 .sect{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);padding-top:4px;border-top:1px solid var(--line);padding-top:16px}
 .sect .push{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:400}
+.chains{display:flex;flex-direction:column;gap:12px}
 .chain{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 12px}
 .gtitle{display:flex;gap:8px;font:11px "JetBrains Mono",monospace;color:var(--faint);margin-bottom:8px}
 .ev{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px}
@@ -33,8 +34,12 @@
 .ev .l .a{color:var(--k-similar)}
 .ev .l .t{font-family:"JetBrains Mono",monospace;margin-left:auto}
 .ev .x{font-size:13px;line-height:1.5;color:var(--text-2);margin-top:3px}
+/* one rail through a group: the badge sits on it, and a stem runs from each
+   badge down through its text to the gap line and the next badge */
+.ev .spine{display:flex;flex-direction:column;align-items:center}
+.ev:not(:last-child) .spine::after{content:"";flex:1;width:1px;background:var(--line-2)}
 .gapl{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;align-items:center;height:26px}
-.gapl i{justify-self:center;width:1px;height:26px;background:var(--line-2)}
+.gapl i{justify-self:center;width:1px;height:100%;background:var(--line-2)}
 .gapl > span{font:11px "JetBrains Mono",monospace;color:var(--faint)}
 .hit{display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
 .hit:last-child{border-bottom:0}

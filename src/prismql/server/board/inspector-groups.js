@@ -30,7 +30,9 @@
 
   function evDiv(n, event, timeIso, board) {
     var div = mk("div", "ev");
-    div.appendChild(mk("div", "n", String(n)));
+    var spine = mk("div", "spine");
+    spine.appendChild(mk("div", "n", String(n)));
+    div.appendChild(spine);
     var right = document.createElement("div");
     right.style.minWidth = "0";
     var l = mk("div", "l");
@@ -92,7 +94,7 @@
     }
     if (blocker) return { note: "", body: blocker };
     if (pending && groups.length === 0) return { note: "", body: PF.loadingBlock() };
-    var body = document.createElement("div");
+    var body = mk("div", "chains");
     groups.forEach(function (g, i) { body.appendChild(chainDiv(g, i, bf.board, bf.idField)); });
     var more = mk("div", "more");
     more.appendChild(mk("span", null, pending ? "loading…" : PL.groupsMoreLabel(groups.length, total)));
