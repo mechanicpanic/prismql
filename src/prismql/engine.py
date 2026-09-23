@@ -10,7 +10,11 @@ from .aggregators.types import AggregateResult, GroupedResult
 from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
 from .backends.factory import BackendFactory
 from .dialects.pipe import parse_pipe
-from .exceptions import PrismQLRuntimeError, PrismQLSyntaxError
+from .exceptions import (
+    PrismQLRuntimeError,
+    PrismQLSyntaxError,
+    unquoted_value_hint,
+)
 from .grammar.generated.PrismQLLexer import PrismQLLexer
 from .grammar.generated.PrismQLParser import PrismQLParser
 from .ir.executor import IRExecutor
@@ -61,7 +65,11 @@ class PrismQLErrorListener(ErrorListener):
         msg: str,
         e: Any,
     ) -> None:
-        raise PrismQLSyntaxError(f"Syntax error: {msg}", line=line, column=column)
+        hint = ""
+        prefix = "token recognition error at: '"
+        if msg.startswith(prefix) and len(msg) > len(prefix):
+            hint = unquoted_value_hint(msg[len(prefix)])
+        raise PrismQLSyntaxError(f"Syntax error: {msg}{hint}", line=line, column=column)
 
 
 class PrismQLEngine:

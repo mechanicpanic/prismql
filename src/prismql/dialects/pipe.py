@@ -40,7 +40,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from ..aggregators.types import AggregationFunction
-from ..exceptions import PrismQLSyntaxError
+from ..exceptions import PrismQLSyntaxError, unquoted_value_hint
 from ..ir.nodes import (
     AbsoluteTs,
     And,
@@ -132,7 +132,8 @@ def _tokenize(source: str) -> list[_Token]:
         m = _TOKEN_RE.match(source, pos)
         if m is None:
             raise PrismQLSyntaxError(
-                f"Unexpected character {source[pos]!r} in pipe query",
+                f"Unexpected character {source[pos]!r} in pipe query"
+                + unquoted_value_hint(source[pos]),
                 line=1,
                 column=pos,
             )

@@ -71,3 +71,15 @@ class PositionalUnsupportedError(PrismQLRuntimeError):
     Raised by SearchBackend's order-contract defaults; backends that carry
     an OrderIndex (memory, rust_memory) override them.
     """
+
+
+# Characters that end an unquoted value; a value containing one needs quotes.
+_VALUE_BREAKERS = "-/:@.#&'"
+
+
+def unquoted_value_hint(char: str) -> str:
+    """A hint for a lexer stop at ``char`` when it most likely sits inside an
+    unquoted value (graph @aleph/prismql, #97); empty for other characters."""
+    if char in _VALUE_BREAKERS:
+        return f' — a value with {char!r} must be in quotes, e.g. field(name, "a-b")'
+    return ""
