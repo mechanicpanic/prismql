@@ -187,8 +187,11 @@ class SemanticIndex:
 
             arr = np.asarray(scores)
             k = min(limit, len(arr))
-            top = np.argpartition(-arr, k - 1)[:k]
-            order = top[np.argsort(-arr[top], kind="stable")]
+            # every row scoring at least the k-th best, ties included, then
+            # best first and ties by position — as the pure-Python path does
+            kth = np.partition(-arr, k - 1)[k - 1]
+            cand = np.flatnonzero(-arr <= kth)
+            order = cand[np.lexsort((cand, -arr[cand]))][:k]
             pairs = [(self._ids[i], float(arr[i])) for i in order]
             total = int((arr >= threshold).sum()) if threshold is not None else len(arr)
         else:

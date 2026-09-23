@@ -318,3 +318,16 @@ class TestSemanticOnTantivy:
             CorpusConfig(backend_type="tantivy", data=str(path), timestamp_field="time")
         )
         assert engine.execute('SELECT similar_to("oil", 0.99)') == [[1], [4]]
+
+
+def test_rank_breaks_ties_by_position_on_both_paths():
+    """Equal scores rank in load order, including which ties make the cut —
+    numpy's argpartition alone returns ties in arbitrary order (CI saw it)."""
+    pytest.importorskip("numpy")
+    ids = [10, 11, 12, 13, 14, 15]
+    index = SemanticIndex.from_vectors(FakeEmbedder(), ids, [[1.0, 0.0, 0.0]] * 6)
+    fast = [i for i, _ in index.rank("oil", limit=4)]
+    index._vectors = index._matrix.tolist()
+    index._matrix = None
+    slow = [i for i, _ in index.rank("oil", limit=4)]
+    assert fast == slow == [10, 11, 12, 13]
