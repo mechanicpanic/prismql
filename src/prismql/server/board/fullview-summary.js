@@ -43,7 +43,11 @@
       var box = mk("div", "tiles");
       tiles.forEach(function (t) {
         var tile = mk("div", "tile");
-        tile.appendChild(mk("b", null, t.v));
+        var val = mk("b", null, t.v);
+        // Fix round 2, #4: a long value (a cross-year time range) ellipses
+        // in its 148px box — the title attribute still carries it in full.
+        val.title = t.v;
+        tile.appendChild(val);
         tile.appendChild(mk("span", null, t.l));
         box.appendChild(tile);
       });

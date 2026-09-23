@@ -15,7 +15,7 @@
 .fsum .code{max-height:96px;overflow:auto;box-sizing:border-box}
 .tiles{display:grid;grid-template-columns:repeat(4,148px);gap:8px}
 .tile{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:4px;justify-content:center}
-.tile b{font:600 15px "JetBrains Mono",monospace;color:var(--text);white-space:nowrap}
+.tile b{font:600 15px "JetBrains Mono",monospace;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .tile > span{font-size:11px;color:var(--faint)}
 .fbar{display:flex;align-items:center;gap:12px;padding:10px 24px;border-bottom:1px solid var(--line);min-width:0}
 .vseg{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--sunken);flex:none}
@@ -27,7 +27,7 @@
 .achip{height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
 .achip:hover{color:var(--text)}
 .achip.on{border-color:var(--k-similar);color:var(--text);background:color-mix(in srgb,var(--k-similar) 14%,var(--surface))}
-.fnote{margin-left:auto;font-size:12px;color:var(--faint);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.fnote{margin-left:auto;font-size:12px;color:var(--faint);white-space:nowrap;flex:none}
 .fbody{min-height:0;display:grid;grid-template-rows:minmax(0,1fr)}
 .tl{display:grid;grid-template-columns:340px minmax(0,1fr);min-height:0}
 .gnav{border-right:1px solid var(--line);overflow:auto;background:var(--panel)}

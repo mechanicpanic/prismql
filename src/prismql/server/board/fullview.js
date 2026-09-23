@@ -62,11 +62,15 @@
       var gi = Math.min(vs.group, lastFiltered.length - 1);
       vs.group = e.key === "ArrowDown" ? Math.min(lastFiltered.length - 1, gi + 1) : Math.max(0, gi - 1);
       render(state, actions);
-      // Fix round 1, #10: focus follows the selection to the newly
-      // current nav button, not left behind on the #full section.
+      // Fix round 1, #10 / round 2, #3: focus AND the scroll position
+      // follow the selection to the new nav button — preventScroll only
+      // stops the browser's own jump, scrollIntoView still has to run.
       var full = document.getElementById("full");
       var current = full && full.querySelector(".gnav .gitem.on");
-      if (current) current.focus({ preventScroll: true });
+      if (current) {
+        current.focus({ preventScroll: true });
+        current.scrollIntoView({ block: "nearest" });
+      }
     }
   }
   function wireKeys(el) {
@@ -112,7 +116,10 @@
       el.appendChild(loading);
       lastFiltered = [];
     } else {
-      var allowed = FL.viewsFor(outputKind);
+      // Fix round 2, #4: a blocked (gone/error) body has no timeline/table
+      // to show — the switch only ever offers Summary/Raw, whatever the
+      // result kind would otherwise allow.
+      var allowed = ctx.blocker ? ["summary", "raw"] : FL.viewsFor(outputKind);
       if (allowed.indexOf(vs.view) < 0) vs.view = allowed[0];
       Summary.buildSum(el, entry, ctx.tiles);
       Summary.buildBar(el, allowed, vs.view, ctx, vs, function () { render(state, actions); });

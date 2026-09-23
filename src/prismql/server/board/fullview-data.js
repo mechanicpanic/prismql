@@ -13,12 +13,15 @@
   var PAGE = FL.PAGE; // fix round 1, #8: one shared constant, not a literal per file
 
   // Fix round 1, #2: a fetch that turned up nothing has nothing real to
-  // show — "the corpus's whole story" would be an invented one.
+  // show — "the corpus's whole story" would be an invented one. Fix round
+  // 2, #4: a blocked view has nothing to filter either — canFilter false
+  // hides the filter box and chips (the view switch itself is trimmed to
+  // Summary/Raw by the caller, fullview.js).
   var GONE_NOTE = "result no longer kept";
   function blockedContext(kind, res) {
     return {
       kind: kind, loaded: [], filtered: [], pending: false, blocker: res.blocker, gone: res.gone,
-      loadBound: res.loadBound, total: null, tiles: [], canFilter: true, agents: [],
+      loadBound: res.loadBound, total: null, tiles: [], canFilter: false, agents: [],
       note: res.gone ? GONE_NOTE : "",
     };
   }
@@ -32,7 +35,16 @@
     for (var o = 0; o < loadTo && o < loadBound && !blocker; o += PAGE) {
       var rec = PF.fetchPage(entry.result_id, o, PAGE, fields);
       if (rec.status === "loading") { pending = true; break; }
-      if (rec.data.gone) { blocker = PF.goneBlock(actions, entry); gone = true; break; }
+      // Fix round 2, #1: "Run again" must leave the full view first — the
+      // shared goneBlock (inspector-fetch.js, also used by the inspector
+      // pane, which has no view to close) only ever calls `actions.rerun`,
+      // so a local actions stand-in closes #full before it.
+      if (rec.data.gone) {
+        var rerunActions = { rerun: function (e) { actions.closeFull(); actions.rerun(e); } };
+        blocker = PF.goneBlock(rerunActions, entry);
+        gone = true;
+        break;
+      }
       if (rec.data.error) { blocker = PF.errorBlock(rec.data.error.message); break; }
       if (rec.data.kept != null) loadBound = Math.min(loadBound, rec.data.kept);
       (rec.data[listKey] || []).forEach(function (x) { items.push(x); });

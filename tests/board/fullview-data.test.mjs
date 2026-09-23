@@ -17,20 +17,30 @@ const PageLogic = require("../../src/prismql/server/board/inspector-page-logic.j
 const FullLogic = require("../../src/prismql/server/board/fullview-logic.js");
 const Format = require("../../src/prismql/server/board/format.js");
 
+// dispatch() lets a test fire the click a real goneBlock button wired via
+// addEventListener; emptyBlock's stub actually appends `opts.action` (the
+// real goneBlock passes its "Run again" button there) so it's reachable.
 function fakeEl() {
+  var listeners = {};
   return {
-    children: [], style: {},
+    children: [], style: {}, textContent: "", className: "",
     appendChild(c) { this.children.push(c); return c; },
-    addEventListener() {},
+    addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
+    dispatch(type) { (listeners[type] || []).forEach(function (fn) { fn({}); }); },
     setAttribute() {},
   };
+}
+function fakeEmptyBlock(title, detail, opts) {
+  var el = fakeEl();
+  if (opts && opts.action) el.appendChild(opts.action);
+  return el;
 }
 
 function freshModules(pageImpl) {
   globalThis.document = { createElement: () => fakeEl() };
   globalThis.window = {
     PrismQLBoardUtil: BoardUtil,
-    PrismQLInspectorUI: { emptyBlock: () => fakeEl(), ICON_FULL: "" },
+    PrismQLInspectorUI: { emptyBlock: fakeEmptyBlock, ICON_FULL: "" },
     PrismQLInspectorPageLogic: PageLogic,
     PrismQLFullLogic: FullLogic,
     PrismQLFormat: Format,
@@ -118,4 +128,31 @@ test("fix round 1, #12: hits with kept < total show it in the note, never as a 5
   assert.equal(ctx.tiles.some((t) => t.l === "kept"), false);
   assert.equal(ctx.tiles.length, 4);
   assert.match(ctx.note, /kept 2/);
+});
+
+// --- fix round 2 ---
+
+test("fix round 2, #1: 'Run again' on a gone result closes the full view before rerunning", async () => {
+  const Data = freshModules(async () => ({ gone: true }));
+  const entry = { result_id: "r6", total: 5, kind: "evaluate", result: "groups" };
+  const calls = [];
+  const actionsWithRerun = { closeFull: () => calls.push("close"), rerun: (e) => calls.push("rerun:" + e.result_id) };
+  Data.buildContext(entry, board, "groups", vs(), actionsWithRerun);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "groups", vs(), actionsWithRerun);
+
+  const btn = ctx.blocker.children[0].children.find((c) => c.textContent === "Run again");
+  assert.ok(btn, "the gone block must contain a Run again button");
+  btn.dispatch("click");
+  assert.deepEqual(calls, ["close", "rerun:r6"], "closeFull must run, then rerun — never the other order or neither");
+});
+
+test("fix round 2, #4: a blocked (gone) result hides the filter box and chips", async () => {
+  const Data = freshModules(async () => ({ gone: true }));
+  const entry = { result_id: "r7", total: 5, kind: "evaluate", result: "groups" };
+  Data.buildContext(entry, board, "groups", vs(), actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "groups", vs(), actions);
+  assert.equal(ctx.canFilter, false);
+  assert.deepEqual(ctx.agents, []);
 });
