@@ -1,5 +1,13 @@
 ## Unreleased
 
+### Fixed (the board, final fix wave)
+- The full view's paging skipped groups whenever `[server] max_results` capped a page below 50: it advanced the offset by a fixed 50 instead of the page's own returned count. It now advances by what each page actually returned, so every kept group loads, correctly numbered, even under a low cap.
+- "Capped" now means cut off, not "there are more pages": the journal's new `capped` field is true only when scouting kept fewer hits than it found, or file output holds fewer than what was kept — an inline `/evaluate` page is never capped by itself, since the board can still page through the rest of what the store kept. The board's status pill and result label read this field instead of a page's own `truncated` bit.
+- "Run again" now replays a request by its own kind: `search`/`similar` post straight back to `POST /search`/`POST /similar`, never through `/evaluate`; "Open in editor" is offered only for `evaluate` requests. A request that carried its own request-scoped dictionaries can't be replayed (the board never held their terms) — "Run again" is disabled with a visible note; "Open in editor" stays offered, with the same note.
+- `GET /corpora` now also reports each corpus's `id_field`; the board pairs a group's events back to its ids/positions by that field instead of assuming `"id"`.
+- The timeline's group range now uses the earliest/latest of a group's non-null times (`INWINDOW` groups are unordered — the times list isn't guaranteed chronological) instead of the filtered array's first/last element; a named result's event cards show their own slot labels instead of a generic "event n"; the journal's "N of M requests" count is drawn from one consistent set (the range+search-filtered set, not the journal's whole lifetime count); a live journal arrival no longer rebuilds the open full view — it patches only the header's "k of n" nav, so scroll/filter/table selection survive it.
+- Every empty state on the board (the journal's "Nothing asked yet"/"No requests match" and the inspector's "Nothing selected") now shares one component and one vertical rhythm — same icon slot, same top offset below the header row — instead of the inspector's pane padding pushing its title 16px below the journal's.
+
 ### Removed (breaking — backends)
 - The OpenSearch/Elasticsearch, PostgreSQL and DuckDB backends and their extras. None carried an order axis (so no sequence operators since P3) and two had no tests. A database or a search cluster is not a backend: make a table, `prismql ingest table` it, the engine reads the Arrow stream (graph #53). The remaining backends — memory, tantivy, rust_memory — all carry the axis.
 

@@ -445,20 +445,34 @@ The layout is four parts. On the left, **filters** — time range, kind
 (ok/capped/empty/error) — each with a live count, and "reset all filters"
 once any is set. In the middle, the **journal**, newest first, grouped by
 day, one row per request: time, kind, source, corpus, a one-line result
-("6 groups", "1 hit", "= 181", "capped at 3", "syntax error") and how long
-it took. On the right, the **Request pane**, showing the selected row's
-real output — not just its summary: a match's groups as chains, each pair
-of events joined by a gap line ("+3m12s · 2 events between", from the
-positions and times in between, either half dropped when it has nothing to
-show); a search or similar's hits with their score and a bar, and, for
-search, the matched terms highlighted in the text; a plain value for an
-aggregate; a `GROUP BY` count; and a runtime or syntax error with its
-line/column when the query has one. The same pane has an **Editor** tab —
-the picked query, highlighted, a corpus picker, a Run button — which reruns
-or edits any request; a run from here reaches the server exactly like any
-other client, identifying itself as `board` (see below). Double-click a row,
-or press Enter on the selected one, for the **full view**: the same output
-at full size, in Timeline, Table or Raw JSON, paged 50 at a time.
+("6 groups", "1 hit", "= 181", "3 groups · capped", "syntax error") and how
+long it took. "Capped" means cut off, not just "more pages": scouting kept
+fewer hits than it found, or file output holds fewer than what was kept —
+an inline `/evaluate` page is never capped by itself, since the board can
+still page through the rest of what the store kept. On the right, the
+**Request pane**, showing the selected row's real output — not just its
+summary: a match's groups as chains, each pair of events joined by a gap
+line ("+3m12s · 2 events between", from the positions and times in between,
+either half dropped when it has nothing to show); a search or similar's
+hits with their score and a bar, and, for search, the matched terms
+highlighted in the text; a plain value for an aggregate; a `GROUP BY`
+count; and a runtime or syntax error with its line/column when the query
+has one. The same pane has an **Editor** tab — the picked query,
+highlighted, a corpus picker, a Run button. "Open in editor" is offered
+only for an `evaluate` request (search/similar have no editor surface of
+their own); "Run again" replays a request by its own kind instead — an
+`evaluate` entry through the editor, a `search`/`similar` entry straight to
+its own endpoint (`POST /search`/`POST /similar`), never through
+`/evaluate`. Either way, a request that carried its own request-scoped
+dictionaries can't be replayed (the board never held their terms): "Run
+again" is disabled with a visible note, "Open in editor" stays offered with
+the same note. A run from here reaches the server exactly like any other
+client, identifying itself as `board` (see below). Double-click a row, or
+press Enter on the selected one, for the **full view**: the same output at
+full size, in Timeline, Table or Raw JSON, paged 50 at a time — a page can
+come back shorter than 50 when `[server] max_results` caps it lower; the
+full view keeps paging until every kept group has loaded, correctly
+numbered, never skipping the ones a short page would otherwise drop.
 
 The board reads an event's `kind` and `actor` from the fields you name
 under `[corpora.<name>.board]` in the config (`[board]` on a single-corpus
@@ -473,7 +487,10 @@ actor = "agent"
 Leave it unset for a corpus and the board still shows the request and its
 output — just the event text, with no kind/actor line on each one. `GET
 /corpora` echoes the mapping back per corpus, so you can check what the
-board will show without opening it.
+board will show without opening it — it also reports each corpus's
+`id_field` (`[corpora.<name>] id_field`, default `"id"`), which is how the
+board pairs a group's events back to its own ids/positions when a corpus
+uses a different id field.
 
 Where the data comes from: the journal itself (`GET /activity?since=` for a
 backfill, `GET /activity/stream` for the live feed by server-sent events),
