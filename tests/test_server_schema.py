@@ -3,6 +3,7 @@ first thousand, and says what the corpus can answer (graph @aleph/prismql,
 #86): the board's corpus card and agents read it."""
 
 import json
+from importlib.util import find_spec
 
 from fastapi.testclient import TestClient
 
@@ -57,7 +58,8 @@ def test_a_high_cardinality_field_says_so_instead_of_listing(tmp_path):
 def test_the_schema_says_what_the_corpus_can_answer(tmp_path):
     body = _client(tmp_path).get("/schema").json()
     assert body["capabilities"]["similar"] == {"available": False, "model": None}
-    assert body["capabilities"]["search"] is True
+    # search ranks through tantivy: available exactly when the extra is installed
+    assert body["capabilities"]["search"] is (find_spec("tantivy") is not None)
     assert body["dictionary_terms"] == {
         "talky": {"terms": ["talk", "chat"], "match": None},
         "exact": {"terms": ["x"], "match": "token"},
