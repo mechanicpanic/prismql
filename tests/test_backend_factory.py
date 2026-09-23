@@ -1,6 +1,6 @@
 """Tests for backend factory."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -16,7 +16,6 @@ class TestBackendFactory:
         """Test configuration validation with valid config."""
         config = {
             "search_backend": {"type": "memory", "documents": []},
-            "nlp_backend": {"type": "spacy", "model": "en_core_web_sm"},
             "user_dictionaries": {"test": ["word1", "word2"]},
         }
 
@@ -25,7 +24,7 @@ class TestBackendFactory:
 
     def test_validate_config_missing_search_backend(self):
         """Test validation fails without search backend."""
-        config = {"nlp_backend": {"type": "spacy"}}
+        config = {}
 
         with pytest.raises(ValueError, match="must include 'search_backend'"):
             BackendFactory.validate_config(config)
@@ -44,18 +43,15 @@ class TestBackendFactory:
         with pytest.raises(ValueError, match="search_backend must specify 'type'"):
             BackendFactory.validate_config(config)
 
-    def test_validate_config_invalid_nlp_backend(self):
-        """Test validation fails with invalid NLP backend."""
-        config = {"search_backend": {"type": "memory"}, "nlp_backend": "not_a_dict"}
+    def test_validate_config_nlp_backend_removed(self):
+        """nlp_backend was removed (graph @aleph/prismql #106): annotate at
+        ingest time or pass precomputed_indexes."""
+        config = {
+            "search_backend": {"type": "memory"},
+            "nlp_backend": {"type": "spacy"},
+        }
 
-        with pytest.raises(ValueError, match="nlp_backend must be a dictionary"):
-            BackendFactory.validate_config(config)
-
-    def test_validate_config_missing_nlp_type(self):
-        """Test validation fails without NLP backend type."""
-        config = {"search_backend": {"type": "memory"}, "nlp_backend": {}}
-
-        with pytest.raises(ValueError, match="nlp_backend must specify 'type'"):
+        with pytest.raises(ValueError, match="'nlp_backend' was removed"):
             BackendFactory.validate_config(config)
 
     def test_create_memory_backend(self):
@@ -73,13 +69,11 @@ class TestBackendFactory:
 
         (
             search_backend,
-            nlp_backend,
             precomputed,
             user_dicts,
         ) = BackendFactory.create_backends(config)
 
         assert isinstance(search_backend, MemoryBackend)
-        assert nlp_backend is None
         assert precomputed is None
         assert user_dicts is None
 
@@ -99,116 +93,6 @@ class TestBackendFactory:
         ):
             BackendFactory.create_backends(config)
 
-    @patch("prismql.backends.spacy.SpacyBackend")
-    def test_create_spacy_backend_with_nlp_object(self, mock_spacy_class):
-        """Test creating spaCy backend with nlp object."""
-        mock_nlp = MagicMock()
-        mock_backend = MagicMock()
-        mock_spacy_class.return_value = mock_backend
-
-        config = {
-            "search_backend": {
-                "type": "memory",
-                "documents": [{"id": 1, "text": "test"}],
-            },
-            "nlp_backend": {
-                "type": "spacy",
-                "nlp": mock_nlp,
-                "entity_mappings": {"PERSON": "PERSON"},
-                "batch_size": 50,
-            },
-        }
-
-        _, nlp_backend, _, _ = BackendFactory.create_backends(config)
-
-        # Verify spaCy backend was created
-        mock_spacy_class.assert_called_once()
-        call_args = mock_spacy_class.call_args
-
-        assert call_args[0][0] == mock_nlp  # First arg is nlp object
-        backend_config = call_args[0][1]  # Second arg is config
-        assert backend_config["entity_mappings"] == {"PERSON": "PERSON"}
-        assert backend_config["batch_size"] == 50
-
-        assert nlp_backend == mock_backend
-
-    @patch("prismql.backends.spacy.SpacyBackend")
-    def test_create_spacy_backend_with_model_name(self, mock_spacy_class):
-        """Test creating spaCy backend with model name."""
-        mock_nlp = MagicMock()
-        mock_backend = MagicMock()
-        mock_spacy_class.return_value = mock_backend
-
-        # Mock spacy module and load function
-        mock_spacy = MagicMock()
-        mock_spacy.load.return_value = mock_nlp
-
-        config = {
-            "search_backend": {
-                "type": "memory",
-                "documents": [{"id": 1, "text": "test"}],
-            },
-            "nlp_backend": {"type": "spacy", "model": "en_core_web_sm"},
-        }
-
-        with patch.dict("sys.modules", {"spacy": mock_spacy}):
-            _, nlp_backend, _, _ = BackendFactory.create_backends(config)
-
-        # Verify spaCy model was loaded
-        mock_spacy.load.assert_called_once_with("en_core_web_sm")
-
-        # Verify backend was created with loaded model
-        mock_spacy_class.assert_called_once()
-        assert mock_spacy_class.call_args[0][0] == mock_nlp
-
-    def test_create_spacy_backend_model_load_error(self):
-        """Test spaCy backend creation with model load error."""
-        config = {
-            "search_backend": {
-                "type": "memory",
-                "documents": [{"id": 1, "text": "test"}],
-            },
-            "nlp_backend": {"type": "spacy", "model": "nonexistent_model"},
-        }
-
-        # Mock spacy module
-        mock_spacy = MagicMock()
-        mock_spacy.load.side_effect = Exception("Model not found")
-
-        with (
-            patch.dict("sys.modules", {"spacy": mock_spacy}),
-            pytest.raises(ValueError, match="Failed to load spaCy model"),
-        ):
-            BackendFactory.create_backends(config)
-
-    def test_create_spacy_backend_missing_nlp_and_model(self):
-        """Test spaCy backend creation without nlp object or model."""
-        config = {
-            "search_backend": {
-                "type": "memory",
-                "documents": [{"id": 1, "text": "test"}],
-            },
-            "nlp_backend": {"type": "spacy"},
-        }
-
-        with pytest.raises(
-            ValueError, match="spaCy backend requires 'nlp' object or 'model' name"
-        ):
-            BackendFactory.create_backends(config)
-
-    def test_create_unknown_nlp_backend(self):
-        """Test creating unknown NLP backend type."""
-        config = {
-            "search_backend": {
-                "type": "memory",
-                "documents": [{"id": 1, "text": "test"}],
-            },
-            "nlp_backend": {"type": "unknown_nlp"},
-        }
-
-        with pytest.raises(ValueError, match="Unknown NLP backend type: unknown_nlp"):
-            BackendFactory.create_backends(config)
-
     def test_create_precomputed_indexes(self):
         """Test creating precomputed indexes."""
         config = {
@@ -223,7 +107,7 @@ class TestBackendFactory:
             },
         }
 
-        _, _, precomputed, _ = BackendFactory.create_backends(config)
+        _, precomputed, _ = BackendFactory.create_backends(config)
 
         assert isinstance(precomputed, PrecomputedIndexes)
         assert precomputed.entities["PERSON"] == {"msg1", "msg2"}
@@ -246,7 +130,7 @@ class TestBackendFactory:
             },
         }
 
-        _, _, precomputed, _ = BackendFactory.create_backends(config)
+        _, precomputed, _ = BackendFactory.create_backends(config)
 
         # Should handle sets correctly
         assert precomputed.entities["PERSON"] == {"msg1", "msg2"}
@@ -265,7 +149,7 @@ class TestBackendFactory:
             },
         }
 
-        _, _, _, user_dicts = BackendFactory.create_backends(config)
+        _, _, user_dicts = BackendFactory.create_backends(config)
 
         expected = {"sentiment": ["happy", "sad"], "colors": ["red", "blue", "green"]}
         assert user_dicts == expected
@@ -276,7 +160,7 @@ class TestBackendFactory:
 
         assert isinstance(examples, dict)
         assert "memory_only" in examples
-        assert "tantivy_spacy" in examples
+        assert "tantivy_precomputed" in examples
         assert "memory_precomputed" in examples
 
         # Verify structure of memory example
@@ -285,9 +169,9 @@ class TestBackendFactory:
         assert "documents" in memory_config["search_backend"]
 
         # Verify structure of the tantivy example
-        tantivy_config = examples["tantivy_spacy"]
+        tantivy_config = examples["tantivy_precomputed"]
         assert tantivy_config["search_backend"]["type"] == "tantivy"
-        assert tantivy_config["nlp_backend"]["type"] == "spacy"
+        assert "precomputed_indexes" in tantivy_config
         assert "user_dictionaries" in tantivy_config
 
     def test_import_error_handling(self):
@@ -312,13 +196,11 @@ class TestBackendFactory:
 
         (
             search_backend,
-            nlp_backend,
             precomputed,
             user_dicts,
         ) = BackendFactory.create_backends(config)
 
         assert isinstance(search_backend, MemoryBackend)
-        assert nlp_backend is None
         assert precomputed is None
         assert user_dicts is None
 
@@ -342,6 +224,6 @@ def test_create_rust_memory_backend():
             "timestamp_fields": ["timestamp"],
         }
     }
-    backend, _, _, _ = BackendFactory.create_backends(config)
+    backend, _, _ = BackendFactory.create_backends(config)
     assert isinstance(backend, RustMemoryBackend)
     assert backend.has_timestamp_field("timestamp")

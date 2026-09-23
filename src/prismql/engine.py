@@ -7,7 +7,7 @@ from antlr4 import CommonTokenStream, InputStream
 from antlr4.error.ErrorListener import ErrorListener
 
 from .aggregators.types import AggregateResult, GroupedResult
-from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
+from .backends.base import PrecomputedIndexes, SearchBackend
 from .backends.factory import BackendFactory
 from .dialects.pipe import parse_pipe
 from .exceptions import (
@@ -103,7 +103,6 @@ class PrismQLEngine:
     def __init__(
         self,
         search_backend: SearchBackend,
-        nlp_backend: NLPBackend | None = None,
         user_dictionaries: Mapping[str, Any] | None = None,
         precomputed_indexes: PrecomputedIndexes | None = None,
         timestamp_field: str = "timestamp",
@@ -116,13 +115,10 @@ class PrismQLEngine:
 
         Args:
             search_backend: Backend for text search operations
-            nlp_backend: DEPRECATED. Use precomputed_indexes instead.
-                       NLP features should be precomputed and provided via indexes
-                       rather than computed on-the-fly during queries.
             user_dictionaries: Optional mapping of dictionary names to word lists
             precomputed_indexes: Precomputed feature indexes (entities, questions,
-                               custom features). This is the recommended way to add
-                               NLP features to PrismQL.
+                               custom features). Text annotation happens at
+                               ingest time and reaches the engine this way.
             timestamp_field: Name of the timestamp field for temporal operations
             use_ir: Execute via the IR pipeline (parse -> lower -> execute;
                 default). Set False to run the legacy parse-tree visitor
@@ -139,40 +135,8 @@ class PrismQLEngine:
                 as {n,m}. None (default): an open range is an error — the
                 engine enumerates groups up to an explicit size and never
                 truncates silently (graph @aleph/prismql #46).
-
-        Note:
-            The nlp_backend parameter is deprecated and will be removed in a future
-            version. For NLP features:
-            1. Precompute features using your preferred method (LLM, spaCy, human
-               annotation, etc.)
-            2. Build PrecomputedIndexes with your features
-            3. Pass indexes to the engine
-
-            Example:
-                >>> indexes = PrecomputedIndexes(
-                ...     entities={'ORG': {1, 5}},
-                ...     custom_features={'action_items': {2, 9}}
-                ... )
-                >>> engine = PrismQLEngine(
-                ...     search_backend=backend,
-                ...     precomputed_indexes=indexes
-                ... )
         """
-        import warnings
-
         self.search_backend = search_backend
-
-        # Deprecation warning for nlp_backend
-        if nlp_backend is not None:
-            warnings.warn(
-                "The 'nlp_backend' parameter is deprecated and will be removed in "
-                "a future version. Please use 'precomputed_indexes' instead. "
-                "Precompute NLP features using your preferred method (LLM annotations, "
-                "spaCy, human annotation, etc.) and provide them as PrecomputedIndexes.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        self.nlp_backend = nlp_backend
 
         self.user_dictionaries, self.dictionary_modes = normalize_dictionaries(
             user_dictionaries
@@ -203,7 +167,6 @@ class PrismQLEngine:
         self.use_ir = use_ir
         self.visitor = IRExecutor(
             search_backend=search_backend,
-            nlp_backend=nlp_backend,
             user_dictionaries=self.user_dictionaries,
             precomputed_indexes=self.precomputed_indexes,
             timestamp_field=timestamp_field,
@@ -374,10 +337,6 @@ class PrismQLEngine:
             ...         "index_name": "messages",
             ...         "field_mappings": {"text": "content", "user": "author"}
             ...     },
-            ...     "nlp_backend": {
-            ...         "type": "spacy",
-            ...         "model": "en_core_web_sm"
-            ...     },
             ...     "user_dictionaries": {
             ...         "sentiment": ["happy", "sad", "angry"]
             ...     }
@@ -390,7 +349,6 @@ class PrismQLEngine:
         # Create backends
         (
             search_backend,
-            nlp_backend,
             precomputed_indexes,
             user_dictionaries,
         ) = BackendFactory.create_backends(validated_config)
@@ -398,7 +356,6 @@ class PrismQLEngine:
         # Create engine
         return cls(
             search_backend=search_backend,
-            nlp_backend=nlp_backend,
             user_dictionaries=user_dictionaries,
             text_match=config.get("text_match", "stem"),
             precomputed_indexes=precomputed_indexes,

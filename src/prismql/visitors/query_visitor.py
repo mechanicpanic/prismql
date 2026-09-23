@@ -7,7 +7,7 @@ from typing import Any
 
 from ..aggregators.aggregator import Aggregator
 from ..aggregators.types import AggregateResult, AggregationFunction, GroupedResult
-from ..backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
+from ..backends.base import PrecomputedIndexes, SearchBackend
 from ..exceptions import PrismQLRuntimeError
 from ..grammar.generated.PrismQLParser import PrismQLParser
 from ..grammar.generated.PrismQLVisitor import PrismQLVisitor as BasePrismQLVisitor
@@ -48,7 +48,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
     def __init__(
         self,
         search_backend: SearchBackend,
-        nlp_backend: NLPBackend | None = None,
         user_dictionaries: Mapping[str, Sequence[str]] | None = None,
         precomputed_indexes: PrecomputedIndexes | None = None,
         timestamp_field: str = "timestamp",
@@ -58,7 +57,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
     ) -> None:
         self.search_backend = search_backend
         self.quantifier_ceiling = quantifier_ceiling
-        self.nlp_backend = nlp_backend
         self.user_dictionaries = user_dictionaries or {}
         self.text_match = text_match
         # Per-dictionary single-word match mode (overrides text_match)

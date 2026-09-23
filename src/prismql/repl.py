@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .aggregators.types import AggregateResult, GroupedResult
-from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
+from .backends.base import PrecomputedIndexes, SearchBackend
 from .engine import PrismQLEngine
 from .exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from .server.config import ServerConfig, compute_schema
@@ -38,7 +38,6 @@ class PrismQLRepl:
     def __init__(
         self,
         search_backend: SearchBackend | None = None,
-        nlp_backend: NLPBackend | None = None,
         precomputed_indexes: PrecomputedIndexes | None = None,
         user_dictionaries: dict[str, list[str]] | None = None,
         *,
@@ -50,7 +49,6 @@ class PrismQLRepl:
 
         Args:
             search_backend: Search backend to use (ignored if engine is given)
-            nlp_backend: Optional NLP backend
             precomputed_indexes: Optional precomputed indexes
             user_dictionaries: Optional user dictionaries
             engine: Pre-built engine (e.g. from a prismql.toml via build_engine)
@@ -63,7 +61,6 @@ class PrismQLRepl:
         elif search_backend is not None:
             self.engine = PrismQLEngine(
                 search_backend=search_backend,
-                nlp_backend=nlp_backend,
                 precomputed_indexes=precomputed_indexes,
                 user_dictionaries=user_dictionaries or {},
             )
@@ -251,8 +248,6 @@ Press Ctrl+D or type \\quit to exit.
         print(f"  Total queries executed: {self.query_count}")
         print(f"  Backend type: {type(self.engine.search_backend).__name__}")
         print(f"  Documents loaded: {self.engine.search_backend.get_total_documents()}")
-        if self.engine.nlp_backend:
-            print(f"  NLP backend: {type(self.engine.nlp_backend).__name__}")
         print(f"  User dictionaries: {len(self.engine.user_dictionaries)}")
         print()
 
@@ -453,13 +448,11 @@ def main() -> None:
             config = json.load(f)
         (
             search_backend,
-            nlp_backend,
             precomputed,
             user_dicts,
         ) = BackendFactory.create_backends(config)
         repl = PrismQLRepl(
             search_backend=search_backend,
-            nlp_backend=nlp_backend,
             precomputed_indexes=precomputed,
             user_dictionaries=user_dicts,
         )

@@ -24,7 +24,7 @@ Example:
 
 from .__version__ import __version__
 from .aggregators.types import AggregateResult, AggregationFunction, GroupedResult
-from .backends.base import NLPBackend, PrecomputedIndexes, SearchBackend
+from .backends.base import PrecomputedIndexes, SearchBackend
 from .backends.factory import BackendFactory
 from .engine import PrismQLEngine
 from .exceptions import PrismQLError, PrismQLRuntimeError, PrismQLSyntaxError
@@ -37,7 +37,6 @@ __all__ = [
     "PrismQLEngine",
     # Backend interfaces and factory
     "SearchBackend",
-    "NLPBackend",  # DEPRECATED - use PrecomputedIndexes
     "PrecomputedIndexes",
     "BackendFactory",
     # Utilities

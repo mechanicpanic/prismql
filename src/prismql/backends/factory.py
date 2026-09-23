@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from .base import NLPBackend, PrecomputedIndexes, SearchBackend
+from .base import PrecomputedIndexes, SearchBackend
 
 
 class BackendFactory:
@@ -20,14 +20,6 @@ class BackendFactory:
                 "index_path": "idx/messages",
                 "timestamp_fields": ["time"],
             },
-            "nlp_backend": {
-                "type": "spacy",
-                "nlp": spacy_model,
-                "entity_mappings": {
-                    "PERSON": "PERSON",
-                    "GPE": "LOCATION"
-                }
-            },
             "precomputed_indexes": {
                 "entities": {...},
                 "questions": {...},
@@ -44,7 +36,6 @@ class BackendFactory:
         cls, config: dict[str, Any]
     ) -> tuple[
         SearchBackend,
-        NLPBackend | None,
         PrecomputedIndexes | None,
         dict[str, Any] | None,
     ]:
@@ -55,8 +46,7 @@ class BackendFactory:
             config: Configuration dictionary
 
         Returns:
-            Tuple of (search_backend, nlp_backend, precomputed_indexes,
-            user_dictionaries)
+            Tuple of (search_backend, precomputed_indexes, user_dictionaries)
 
         Raises:
             ValueError: If configuration is invalid
@@ -64,11 +54,6 @@ class BackendFactory:
         """
         # Create search backend (required)
         search_backend = cls._create_search_backend(config.get("search_backend", {}))
-
-        # Create NLP backend (optional)
-        nlp_backend = None
-        if "nlp_backend" in config:
-            nlp_backend = cls._create_nlp_backend(config["nlp_backend"])
 
         # Create precomputed indexes (optional)
         precomputed_indexes = None
@@ -80,7 +65,7 @@ class BackendFactory:
         # Extract user dictionaries
         user_dictionaries = config.get("user_dictionaries")
 
-        return search_backend, nlp_backend, precomputed_indexes, user_dictionaries
+        return search_backend, precomputed_indexes, user_dictionaries
 
     @classmethod
     def _create_search_backend(cls, config: dict[str, Any]) -> SearchBackend:
@@ -171,54 +156,6 @@ class BackendFactory:
         )
 
     @classmethod
-    def _create_nlp_backend(cls, config: dict[str, Any]) -> NLPBackend:
-        """Create NLP backend from configuration."""
-        backend_type = config.get("type", "").lower()
-
-        if not backend_type:
-            raise ValueError("nlp_backend.type is required")
-
-        if backend_type == "spacy":
-            return cls._create_spacy_backend(config)
-        raise ValueError(f"Unknown NLP backend type: {backend_type}")
-
-    @classmethod
-    def _create_spacy_backend(cls, config: dict[str, Any]) -> NLPBackend:
-        """Create spaCy backend."""
-        try:
-            from .spacy import SpacyBackend
-        except ImportError as e:
-            raise ImportError("spaCy backend is not available") from e
-
-        nlp = config.get("nlp")
-        if nlp is None:
-            # Try to load model by name
-            model_name = config.get("model")
-            if model_name:
-                try:
-                    import spacy  # type: ignore[import-not-found]
-
-                    nlp = spacy.load(model_name)
-                except Exception as e:
-                    raise ValueError(
-                        f"Failed to load spaCy model '{model_name}': {e}"
-                    ) from e
-            else:
-                raise ValueError(
-                    "spaCy backend requires 'nlp' object or 'model' name "
-                    "in configuration"
-                )
-
-        # Extract backend configuration
-        backend_config = {
-            "entity_mappings": config.get("entity_mappings", {}),
-            "question_patterns": config.get("question_patterns", []),
-            "batch_size": config.get("batch_size", 100),
-        }
-
-        return SpacyBackend(nlp, backend_config)
-
-    @classmethod
     def _create_precomputed_indexes(cls, config: dict[str, Any]) -> PrecomputedIndexes:
         """Create precomputed indexes from configuration."""
         entities = config.get("entities")
@@ -273,14 +210,15 @@ class BackendFactory:
         if "type" not in search_config:
             raise ValueError("search_backend must specify 'type'")
 
-        # Validate NLP backend if present
+        # nlp_backend was removed (graph @aleph/prismql #106): text
+        # annotation now happens at ingest, and reaches the engine as
+        # PrecomputedIndexes.
         if "nlp_backend" in config:
-            nlp_config = config["nlp_backend"]
-            if not isinstance(nlp_config, dict):
-                raise ValueError("nlp_backend must be a dictionary")
-
-            if "type" not in nlp_config:
-                raise ValueError("nlp_backend must specify 'type'")
+            raise ValueError(
+                "'nlp_backend' was removed; annotate at ingest time "
+                "('prismql ingest ... --annotate') or pass "
+                "'precomputed_indexes' instead"
+            )
 
         # Validate precomputed indexes if present
         if "precomputed_indexes" in config:
@@ -315,7 +253,7 @@ class BackendFactory:
                     "id_field": "id",
                 }
             },
-            "tantivy_spacy": {
+            "tantivy_precomputed": {
                 "search_backend": {
                     "type": "tantivy",
                     "documents": [
@@ -325,14 +263,12 @@ class BackendFactory:
                     "index_path": "idx/chat_messages",
                     "timestamp_fields": ["timestamp"],
                 },
-                "nlp_backend": {
-                    "type": "spacy",
-                    "model": "en_core_web_sm",
-                    "entity_mappings": {
-                        "PERSON": "PERSON",
-                        "GPE": "LOCATION",
-                        "ORG": "ORGANIZATION",
+                "precomputed_indexes": {
+                    "entities": {
+                        "PERSON": [1],
+                        "GPE": [2],
                     },
+                    "questions": [2],
                 },
                 "user_dictionaries": {
                     "sentiment": ["happy", "sad", "angry", "excited"],

@@ -1,6 +1,6 @@
 """Integration tests for PrismQL with new backends."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -83,18 +83,8 @@ class TestPrismQLEngineIntegration:
         assert [2] in results
 
     def test_from_config_spacy_backend(self):
-        """Test engine creation with spaCy NLP backend."""
-        # Mock spaCy model
-        mock_nlp = MagicMock()
-        mock_doc = MagicMock()
-        mock_nlp.return_value = mock_doc
-
-        # Mock entity extraction
-        mock_ent = MagicMock()
-        mock_ent.text = "John Doe"
-        mock_ent.label_ = "PERSON"
-        mock_doc.ents = [mock_ent]
-
+        """nlp_backend was removed (graph @aleph/prismql #106): annotate at
+        ingest time or pass precomputed_indexes."""
         config = {
             "search_backend": {
                 "type": "memory",
@@ -105,17 +95,12 @@ class TestPrismQLEngineIntegration:
             },
             "nlp_backend": {
                 "type": "spacy",
-                "nlp": mock_nlp,
                 "entity_mappings": {"PERSON": "PERSON"},
             },
         }
 
-        engine = PrismQLEngine.from_config(config)
-
-        # Test NLP-based query (this would normally require NLP processing)
-        # For now, just verify the engine was created successfully
-        assert engine.nlp_backend is not None
-        assert hasattr(engine.nlp_backend, "extract_entities")
+        with pytest.raises(ValueError, match="'nlp_backend' was removed"):
+            PrismQLEngine.from_config(config)
 
     def test_get_example_configs(self):
         """Test getting example configurations."""
@@ -123,7 +108,7 @@ class TestPrismQLEngineIntegration:
 
         assert isinstance(examples, dict)
         assert "memory_only" in examples
-        assert "tantivy_spacy" in examples
+        assert "tantivy_precomputed" in examples
 
         # Verify examples are valid
         for _name, config in examples.items():

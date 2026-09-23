@@ -9,7 +9,7 @@ a database, a cluster — feeds the engine through layer 1: make a table,
 
 from typing import TYPE_CHECKING, Any
 
-from .base import NLPBackend, PrecomputedIndexes, SearchBackend
+from .base import PrecomputedIndexes, SearchBackend
 from .factory import BackendFactory
 from .memory import MemoryBackend
 from .semantic import Embedder, SemanticIndex, SentenceTransformerEmbedder
@@ -17,22 +17,15 @@ from .semantic import Embedder, SemanticIndex, SentenceTransformerEmbedder
 # Optional backends (may not be available if dependencies aren't installed)
 if TYPE_CHECKING:
     from .rust_memory import RustMemoryBackend
-    from .spacy import SpacyBackend
 else:
     try:
         from .rust_memory import RustMemoryBackend
     except ImportError:
         RustMemoryBackend = Any  # type: ignore[misc,assignment]
 
-    try:
-        from .spacy import SpacyBackend
-    except ImportError:
-        SpacyBackend = Any  # type: ignore[misc,assignment]
-
 __all__ = [
     # Core interfaces
     "SearchBackend",
-    "NLPBackend",
     "PrecomputedIndexes",
     # Factory
     "BackendFactory",
@@ -44,5 +37,4 @@ __all__ = [
     "SentenceTransformerEmbedder",
     # Optional backends
     "RustMemoryBackend",
-    "SpacyBackend",
 ]

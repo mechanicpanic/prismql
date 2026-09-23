@@ -210,59 +210,6 @@ class SearchBackend(ABC):
         raise NotImplementedError("This backend does not support document retrieval")
 
 
-class NLPBackend(ABC):
-    """
-    Abstract base class for NLP processing backends.
-
-    This interface allows PrismQL to work with different NLP libraries
-    (spaCy, CoreNLP, transformers, etc.) for advanced text analysis.
-    """
-
-    @abstractmethod
-    def extract_entities(self, text: str) -> Mapping[NERLabel, list[str]]:
-        """
-        Extract named entities from text.
-
-        Args:
-            text: Text to analyze
-
-        Returns:
-            Dictionary mapping entity types to lists of entity texts
-            Expected keys: DATE, TIME, GPE/LOC, ORG, URL, PERSON
-        """
-        pass
-
-    @abstractmethod
-    def has_question(self, text: str) -> bool:
-        """
-        Check if text contains a question.
-
-        Args:
-            text: Text to analyze
-
-        Returns:
-            True if text contains a question
-        """
-        pass
-
-    def extract_noun_phrases(self, text: str) -> list[str]:
-        """
-        Extract noun phrases from text.
-
-        This is optional - backends can implement if they support
-        syntactic parsing.
-
-        Args:
-            text: Text to analyze
-
-        Returns:
-            List of noun phrases
-        """
-        raise NotImplementedError(
-            "This backend does not support noun phrase extraction"
-        )
-
-
 class PrecomputedIndexes:
     """
     Container for precomputed feature indexes.
