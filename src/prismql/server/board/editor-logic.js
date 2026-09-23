@@ -45,6 +45,11 @@
   // instead (fix round 2, #2); the matching rules themselves (who, query,
   // corpus, result_id) are unchanged — a restart never widens who a
   // pending run is allowed to match, only resets where it starts looking.
+  // pending.corpus is only ever null when the editor ran before /corpora
+  // had loaded (or once it failed) — the server always journals a real
+  // corpus name (req.corpus or its own default_corpus), never a null one,
+  // so that case skips the corpus comparison instead of requiring the
+  // impossible entry.corpus === null (fix round 3).
   function findPendingMatch(entries, pending, currentBoot) {
     if (!pending) return null;
     var baseline = pending.boot === currentBoot ? pending.baselineSeq : 0;
@@ -54,7 +59,7 @@
       if (e.who !== "board" || e.seq == null || e.seq <= baseline) continue;
       var matches = pending.resultId != null
         ? e.result_id === pending.resultId
-        : e.query === pending.query && e.corpus === pending.corpus;
+        : e.query === pending.query && (pending.corpus == null || e.corpus === pending.corpus);
       if (matches && (best == null || e.seq < best.seq)) best = e;
     }
     return best;

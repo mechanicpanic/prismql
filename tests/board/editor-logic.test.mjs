@@ -203,3 +203,16 @@ test("resolvePendingRun: threads currentBoot through to both the live and paused
   const r = L.resolvePendingRun([], pendingQueue, pending, "x", "new");
   assert.equal(r.entry, pendingQueue[0]);
 });
+
+// --- fix round 3 -------------------------------------------------------
+// An aggregate run sent before /corpora loaded (or when it failed) has
+// pending.corpus === null, but the server always journals a real corpus
+// name (req.corpus or its own default_corpus) — the strict corpus check
+// from fix round 2 then never matched, and the run never resolved. A null
+// pending.corpus skips the comparison instead of requiring corpus === null.
+
+test("findPendingMatch: a null pending corpus skips the corpus check — matches an entry on the default corpus", () => {
+  const entries = [{ who: "board", result_id: null, query: "SELECT count($a)", corpus: "wiki", seq: 5 }];
+  const pending = { resultId: null, query: "SELECT count($a)", corpus: null, baselineSeq: 0 };
+  assert.equal(L.findPendingMatch(entries, pending), entries[0]);
+});

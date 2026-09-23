@@ -60,7 +60,11 @@
     ed.error = null;
     render();
     var sentQuery = ed.query;
-    var sentCorpus = ed.corpus;
+    // The server always journals a real corpus (req.corpus or its own
+    // default_corpus) — resolve a null one to the known default here too,
+    // or findPendingMatch's corpus check has nothing real to compare
+    // against (fix round 3).
+    var sentCorpus = ed.corpus || (state.corpora && state.corpora.default) || null;
     var baselineSeq = state.seq; // no clocks in run<->entry matching (fix round 1, #2)
     var baselineBoot = state.boot; // a restart voids the baseline (fix round 2, #2)
     window.PrismQLApi.evaluate(L.buildEvaluateBody(ed)).then(function (res) {
