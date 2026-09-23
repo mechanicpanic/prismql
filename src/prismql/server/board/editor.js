@@ -78,6 +78,12 @@
     if (ed.corpus) select.value = ed.corpus;
   }
 
+  function patchDictNote(ed) {
+    var note = document.getElementById("editor-dict-note");
+    note.hidden = !ed.dictNote;
+    if (ed.dictNote) note.textContent = ed.dictNote;
+  }
+
   function patchRunState(ed) {
     document.getElementById("editor-box").className = "editor" + (ed.error ? " bad" : "");
     var runBtn = document.getElementById("editor-run");
@@ -123,6 +129,7 @@
     if (!document.getElementById("editor-textarea")) Build.mount(pane, ed, actions);
     patchCorpusSelect(ed, state.corpora);
     patchRunState(ed);
+    patchDictNote(ed);
     patchQuery(ed);
     patchRecent(state);
   }

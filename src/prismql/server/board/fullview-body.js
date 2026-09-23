@@ -58,7 +58,7 @@
     loadable(nav, ctx, vs, onMore);
     tl.appendChild(nav);
     var detail = mk("div", "gdetail");
-    Timeline.renderDetail(detail, ctx.filtered[gi], ctx.total, board);
+    Timeline.renderDetail(detail, ctx.filtered[gi], ctx.total, board, ctx.labels);
     tl.appendChild(detail);
     body.appendChild(tl);
     return ctx.filtered;

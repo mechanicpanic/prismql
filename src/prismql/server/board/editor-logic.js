@@ -101,10 +101,32 @@
     return (q || "").replace(/\s*\n\s*/g, " ");
   }
 
+  // Finding 3: "Run again" replays a request by its own kind — evaluate
+  // through the editor (no body here, null), search/similar directly
+  // against their own endpoints. A request that used request-scoped
+  // dictionaries can't be replayed: the board never held their terms.
+  var DICT_NOTE = "used request dictionaries — the board can't replay them";
+  var DEFAULT_LIMIT = 20;
+
+  function hasRequestDictionaries(entry) {
+    return !!(entry.dictionaries && entry.dictionaries.length);
+  }
+
+  function rerunBody(entry) {
+    if (entry.kind !== "search" && entry.kind !== "similar") return null;
+    var limit = entry.total > 0 ? entry.total : DEFAULT_LIMIT;
+    var body = entry.kind === "search" ? { query: entry.query } : { text: entry.query };
+    if (entry.corpus) body.corpus = entry.corpus;
+    if (entry.kind === "similar" && entry.threshold != null) body.threshold = entry.threshold;
+    body.limit = limit;
+    return body;
+  }
+
   var api = {
     buildEvaluateBody: buildEvaluateBody, describeError: describeError,
     findPendingMatch: findPendingMatch, resolvePendingRun: resolvePendingRun,
     unknownCorpus: unknownCorpus, recentQueries: recentQueries, singleLine: singleLine,
+    hasRequestDictionaries: hasRequestDictionaries, rerunBody: rerunBody, DICT_NOTE: DICT_NOTE,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLEditorLogic = api;

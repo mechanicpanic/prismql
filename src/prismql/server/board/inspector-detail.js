@@ -7,6 +7,7 @@
   var F = window.PrismQLFormat;
   var IF = window.PrismQLInspectorFormat;
   var UI = window.PrismQLInspectorUI;
+  var L = window.PrismQLEditorLogic;
 
   function actBtn(label, icon, onClick, title) {
     var btn = mk("button", "ghost");
@@ -21,11 +22,22 @@
   var ICON_RERUN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"></path></svg>';
   var ICON_FILE = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>';
 
+  // Finding 3: "Open in editor" only makes sense for an evaluate entry —
+  // /search and /similar have no editor surface of their own. A request
+  // that carried its own dictionaries can't be replayed by either path (the
+  // board never held their terms), so "Run again" is disabled with a
+  // visible note; "Open in editor" stays offered, with the same note, so
+  // the query text is still reachable.
   function buildActs(wrap, entry, actions) {
     var acts = mk("div", "acts");
     acts.appendChild(actBtn("Full view", UI.ICON_FULL, function () { actions.openFull(entry.seq); }, "Open the output full screen (Enter)"));
-    acts.appendChild(actBtn("Open in editor", ICON_EDIT, function () { actions.openInEditor(entry); }));
-    acts.appendChild(actBtn("Run again", ICON_RERUN, function () { actions.rerun(entry); }));
+    var dictBlocked = L.hasRequestDictionaries(entry);
+    if (entry.kind === "evaluate") {
+      acts.appendChild(actBtn("Open in editor", ICON_EDIT, function () { actions.openInEditor(entry); }));
+    }
+    var rerunBtn = actBtn("Run again", ICON_RERUN, function () { actions.rerun(entry); });
+    if (dictBlocked) { rerunBtn.disabled = true; rerunBtn.title = L.DICT_NOTE; }
+    acts.appendChild(rerunBtn);
     if (entry.result_id != null) {
       var a = document.createElement("a");
       a.className = "ghost";
@@ -36,6 +48,7 @@
       acts.appendChild(a);
     }
     wrap.appendChild(acts);
+    if (dictBlocked) wrap.appendChild(mk("div", "dict-note", L.DICT_NOTE));
   }
 
   function addKv(dl, label, fill, cls) {

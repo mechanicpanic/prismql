@@ -33,6 +33,14 @@
     return entries.map(function (e) { return e.seq + ":" + F.dayLabel(e.ts, nowMs).label; }).join(",");
   }
 
+  // Finding 5: "X of Y" against inRangeEntries — the same set every facet
+  // count and the rail use — never the journal's whole lifetime count.
+  function countText(visibleLen, inRangeLen, anyFilter) {
+    return (visibleLen === inRangeLen && !anyFilter)
+      ? visibleLen + " requests"
+      : visibleLen + " of " + inRangeLen + " requests";
+  }
+
   var lastSignature = null;
 
   function buildChips(state, actions) {
@@ -110,9 +118,7 @@
     var anyFilter = chips.length > 0 || state.filters.range !== "24h";
 
     document.getElementById("journal-count").textContent =
-      (visible.length === inRange.length && !anyFilter)
-        ? visible.length + " requests"
-        : visible.length + " of " + state.entries.length + " requests";
+      countText(visible.length, inRange.length, anyFilter);
 
     var errors = visible.filter(function (e) { return F.status(e) === "error"; }).length;
     renderErrPill(errors, state, actions);
@@ -120,13 +126,10 @@
     if (window.PrismQLJournalList) window.PrismQLJournalList.render(state, actions, visible, nowMs, anyFilter);
   }
 
-  // The 5 s beat: re-derive what should be visible right now. Unchanged
-  // (same seqs, same day labels) → just patch ".rel" text, no rebuild, no
-  // focus or selection loss (fix round 1, #1 — board.js's own interval
-  // patches the live note and the inspector's "when" the same cheap way).
-  // Changed (a row aged out of the range, or "Today" rolled to
-  // "Yesterday") → the top-level PrismQLBoard.render(nowMs), so every
-  // panel gets fresh counts, not just the journal.
+  // The 5 s beat: re-derive what should be visible. Unchanged (same seqs,
+  // same day labels) → just patch ".rel" text, no rebuild, no focus/
+  // selection loss (fix round 1, #1). Changed → PrismQLBoard.render(nowMs)
+  // so every panel gets fresh counts, not just the journal.
   function tick(state, actions, nowMs) {
     var sig = signatureOf(inRangeEntries(state, nowMs), nowMs);
     if (sig === lastSignature) {
@@ -139,7 +142,7 @@
 
   var api = {
     render: render, tick: tick, _visibleEntries: visibleEntries,
-    _inRangeEntries: inRangeEntries, _signatureOf: signatureOf,
+    _inRangeEntries: inRangeEntries, _signatureOf: signatureOf, _countText: countText,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLJournal = api;

@@ -7,6 +7,10 @@
 .tab:hover{color:var(--text)}
 .tab.on{color:var(--text);border-bottom-color:var(--accent)}
 .pane{flex:1;min-height:0;overflow:auto;padding:16px 18px 24px;display:flex;flex-direction:column;gap:16px}
+/* Finding 6: "Nothing selected" is the pane's only content then — cancel
+   the pane's own top padding so its icon/title fall on the same lines as
+   the journal's "Nothing asked yet" (#journal-list has no top padding). */
+.pane > .empty{margin-top:-16px}
 .dhead{display:flex;align-items:center;gap:8px}
 .badge{display:flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:600}
 .badge.s-ok{color:var(--ok);background:var(--ok-bg)}.badge.s-error{color:var(--err);background:var(--err-bg)}.badge.s-capped{color:var(--warn);background:var(--warn-bg)}.badge.s-empty{color:var(--muted);background:var(--sunken)}
@@ -61,6 +65,7 @@ mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
 .field{height:30px;box-sizing:border-box;padding:0 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:12px}
 .opts input[type=checkbox]{margin:0;accent-color:var(--focus)}
 .inline-err{display:flex;gap:10px;align-items:baseline;padding:10px 12px;border:1px solid var(--err-line);border-radius:8px;background:var(--err-bg);font:12px "JetBrains Mono",monospace;color:var(--err)}
+.inline-note,.dict-note{font-size:11px;color:var(--faint);padding:2px 0}
 .recent{display:flex;flex-direction:column}
 .recent button{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;padding:8px 6px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;cursor:pointer;border-radius:0}
 .recent button:hover{background:var(--hover)}

@@ -12,7 +12,7 @@
 
   function ensureEditorState(state) {
     if (!state.editor) {
-      state.editor = { query: "SELECT ", corpus: null, running: false, error: null, rev: 0, focus: false };
+      state.editor = { query: "SELECT ", corpus: null, running: false, error: null, rev: 0, focus: false, dictNote: null };
     }
     return state.editor;
   }
@@ -22,6 +22,10 @@
     ed.query = entry.query || "";
     ed.corpus = entry.corpus || ed.corpus;
     ed.error = null;
+    // Finding 3: "Open in editor" stays offered for an entry that used
+    // request-scoped dictionaries, but the same note the inspector shows
+    // follows the query text in here too — the board never held the terms.
+    ed.dictNote = L.hasRequestDictionaries(entry) ? L.DICT_NOTE : null;
     ed.rev++;
   }
 
@@ -31,7 +35,18 @@
     render();
   }
 
+  // Finding 3: only evaluate replays through the editor/(re)run — search
+  // and similar post straight back to their own endpoint. Neither path
+  // runs at all when the entry used request-scoped dictionaries; the
+  // board never held their terms to resend (inspector-detail.js disables
+  // the button and shows L.DICT_NOTE before this is ever reached).
   function rerun(state, render, entry) {
+    if (L.hasRequestDictionaries(entry)) return;
+    if (entry.kind !== "evaluate") {
+      var api = entry.kind === "search" ? window.PrismQLApi.search : window.PrismQLApi.similar;
+      api(L.rerunBody(entry));
+      return;
+    }
     loadQuery(state, entry);
     state.tab = "editor";
     render();

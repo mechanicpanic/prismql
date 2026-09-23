@@ -26,19 +26,19 @@
     };
   }
 
-  // Pages of PAGE through the offset the "Load more"/scroll-to-end action
-  // asked for (vs.loadTo), never past what the store actually kept — a
-  // hits page's own `kept` (page_payload: len(stored), graph #65) can be
-  // smaller than `total` (the found count) when scouting capped the depth.
+  // Pages through vs.loadTo, never past what the store kept (`kept` can be
+  // less than `total` when scouting capped the depth). Finding 1: a page
+  // can hold fewer than PAGE items (max_results < PAGE caps every page),
+  // so the offset advances by the page's own returned count, stopping on
+  // an empty page or loadBound.
   function loadPaged(entry, fields, loadTo, actions, listKey) {
     var items = [], pending = false, blocker = null, gone = false, loadBound = entry.total || 0;
-    for (var o = 0; o < loadTo && o < loadBound && !blocker; o += PAGE) {
+    var labels = null; // finding 5: a named result's slot labels
+    for (var o = 0; o < loadTo && o < loadBound && !blocker; ) {
       var rec = PF.fetchPage(entry.result_id, o, PAGE, fields);
       if (rec.status === "loading") { pending = true; break; }
-      // Fix round 2, #1: "Run again" must leave the full view first — the
-      // shared goneBlock (inspector-fetch.js, also used by the inspector
-      // pane, which has no view to close) only ever calls `actions.rerun`,
-      // so a local actions stand-in closes #full before it.
+      // "Run again" must leave the full view first (goneBlock only calls
+      // actions.rerun — a local stand-in closes #full before it).
       if (rec.data.gone) {
         var rerunActions = { rerun: function (e) { actions.closeFull(); actions.rerun(e); } };
         blocker = PF.goneBlock(rerunActions, entry);
@@ -47,19 +47,23 @@
       }
       if (rec.data.error) { blocker = PF.errorBlock(rec.data.error.message); break; }
       if (rec.data.kept != null) loadBound = Math.min(loadBound, rec.data.kept);
-      (rec.data[listKey] || []).forEach(function (x) { items.push(x); });
+      if (rec.data.labels != null) labels = rec.data.labels;
+      var page = rec.data[listKey] || [];
+      page.forEach(function (x) { items.push(x); });
+      if (page.length === 0) break;
+      o += page.length;
     }
-    return { items: items, pending: pending, blocker: blocker, gone: gone, loadBound: loadBound };
+    return { items: items, pending: pending, blocker: blocker, gone: gone, loadBound: loadBound, labels: labels };
   }
 
-  function groupsContext(entry, board, vs, actions) {
+  function groupsContext(entry, board, vs, actions, idField) {
     var fields = PL.fieldsFor(board);
     var res = loadPaged(entry, fields, vs.loadTo, actions, "results");
     if (res.blocker) return blockedContext("groups", res);
     var groups = res.items.map(function (g, i) {
       return {
         n: i + 1, ids: g.ids, positions: g.positions, times: g.times,
-        slots: PL.pairEventsToSlots(g.ids, g.events), raw: g,
+        slots: PL.pairEventsToSlots(g.ids, g.events, idField), raw: g,
       };
     });
     var q = vs.q.trim().toLowerCase();
@@ -79,7 +83,7 @@
     return {
       kind: "groups", loaded: groups, filtered: filtered,
       pending: res.pending, blocker: res.blocker, loadBound: res.loadBound, total: entry.total,
-      canFilter: true, agents: agents, tiles: tiles,
+      canFilter: true, agents: agents, tiles: tiles, labels: res.labels,
       note: FL.loadNote(groups.length, entry.total, filtered.length < groups.length ? filtered.length : null),
     };
   }
@@ -121,8 +125,8 @@
     };
   }
 
-  function buildContext(entry, board, outputKind, vs, actions) {
-    if (outputKind === "groups") return groupsContext(entry, board, vs, actions);
+  function buildContext(entry, board, outputKind, vs, actions, idField) {
+    if (outputKind === "groups") return groupsContext(entry, board, vs, actions, idField);
     if (outputKind === "hits") return hitsContext(entry, board, vs, actions);
     return summaryContext(outputKind);
   }

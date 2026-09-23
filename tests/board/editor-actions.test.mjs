@@ -44,3 +44,59 @@ test("run(): a null corpus resolves to state.corpora.default before it's stored 
 
   assert.equal(state.editorPending.corpus, "wiki", "resolved to the known default, not left null");
 });
+
+// --- finding 3: rerun dispatch by kind ---
+
+test("rerun(): a search entry posts straight to /search, never the editor", () => {
+  const calls = [];
+  globalThis.window = {
+    PrismQLApi: {
+      search: (body) => { calls.push(["search", body]); return Promise.resolve({}); },
+      similar: () => { throw new Error("must not call similar"); },
+      evaluate: () => { throw new Error("must not call evaluate"); },
+    },
+  };
+  const A = freshActions();
+  const state = freshState({ tab: "details" });
+  const entry = { kind: "search", query: "spike", corpus: "wiki", total: 4 };
+
+  A.rerun(state, function () {}, entry);
+
+  assert.deepEqual(calls, [["search", { query: "spike", corpus: "wiki", limit: 4 }]]);
+  assert.equal(state.tab, "details", "a search rerun never flips the tab to the editor");
+});
+
+test("rerun(): a similar entry posts straight to /similar, never the editor", () => {
+  const calls = [];
+  globalThis.window = {
+    PrismQLApi: {
+      similar: (body) => { calls.push(["similar", body]); return Promise.resolve({}); },
+      search: () => { throw new Error("must not call search"); },
+      evaluate: () => { throw new Error("must not call evaluate"); },
+    },
+  };
+  const A = freshActions();
+  const state = freshState({ tab: "details" });
+  const entry = { kind: "similar", query: "calm seas", corpus: null, total: 2, threshold: 0.6 };
+
+  A.rerun(state, function () {}, entry);
+
+  assert.deepEqual(calls, [["similar", { text: "calm seas", threshold: 0.6, limit: 2 }]]);
+});
+
+test("rerun(): an entry with request dictionaries is not replayed at all", () => {
+  globalThis.window = {
+    PrismQLApi: {
+      evaluate: () => { throw new Error("must not call evaluate"); },
+      search: () => { throw new Error("must not call search"); },
+      similar: () => { throw new Error("must not call similar"); },
+    },
+  };
+  const A = freshActions();
+  const state = freshState({ tab: "details" });
+  const entry = { kind: "evaluate", query: "SELECT from(a)", dictionaries: ["spikes"] };
+
+  A.rerun(state, function () {}, entry);
+
+  assert.equal(state.tab, "details", "the editor is never opened for a blocked rerun");
+});

@@ -14,22 +14,36 @@ test("status: error when ok is false", () => {
 
 test("status: empty by total 0", () => {
   assert.equal(
-    F.status({ ok: true, result: "groups", total: 0, truncated: false }),
+    F.status({ ok: true, result: "groups", total: 0, capped: false }),
     "empty",
   );
 });
 
 test("status: empty by hits count 0", () => {
   assert.equal(
-    F.status({ ok: true, result: "hits", count: 0, total: 5, truncated: false }),
+    F.status({ ok: true, result: "hits", count: 0, total: 5, capped: false }),
     "empty",
   );
 });
 
-test("status: capped when ok and truncated", () => {
+test("status: capped when ok and entry.capped — cut off, not merely a short page (finding 2)", () => {
   assert.equal(
-    F.status({ ok: true, result: "groups", total: 3, truncated: true }),
+    F.status({ ok: true, result: "groups", total: 3, capped: true }),
     "capped",
+  );
+});
+
+test("status: a short inline page (truncated) with capped false is still ok — the board can page for the rest", () => {
+  assert.equal(
+    F.status({ ok: true, result: "groups", total: 3, truncated: true, capped: false }),
+    "ok",
+  );
+});
+
+test("status: an entry from an older server, with no capped field at all, reads ok", () => {
+  assert.equal(
+    F.status({ ok: true, result: "groups", total: 3 }),
+    "ok",
   );
 });
 
@@ -41,7 +55,7 @@ test("status: aggregate is ok", () => {
       value: 50,
       count: null,
       total: null,
-      truncated: false,
+      capped: false,
     }),
     "ok",
   );
@@ -51,21 +65,28 @@ test("status: aggregate is ok", () => {
 
 test("resultLabel: groups, not capped", () => {
   assert.equal(
-    F.resultLabel({ ok: true, result: "groups", total: 6, truncated: false }),
+    F.resultLabel({ ok: true, result: "groups", total: 6, capped: false }),
     "6 groups",
   );
 });
 
 test("resultLabel: groups, capped", () => {
   assert.equal(
-    F.resultLabel({ ok: true, result: "groups", total: 3, truncated: true }),
+    F.resultLabel({ ok: true, result: "groups", total: 3, capped: true }),
     "3 groups · capped",
+  );
+});
+
+test("resultLabel: groups, truncated page but not capped — never shows '· capped'", () => {
+  assert.equal(
+    F.resultLabel({ ok: true, result: "groups", total: 3, truncated: true, capped: false }),
+    "3 groups",
   );
 });
 
 test("resultLabel: named behaves like groups", () => {
   assert.equal(
-    F.resultLabel({ ok: true, result: "named", total: 12, truncated: false }),
+    F.resultLabel({ ok: true, result: "named", total: 12, capped: false }),
     "12 groups",
   );
 });
@@ -142,7 +163,7 @@ test("resultLabel: file output adds arrow", () => {
       ok: true,
       result: "groups",
       total: 47,
-      truncated: false,
+      capped: false,
       output: "file",
     }),
     "47 groups → file",

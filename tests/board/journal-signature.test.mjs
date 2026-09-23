@@ -111,3 +111,19 @@ test("signatureOf is stable when nothing relevant changed (a few seconds later)"
 
   assert.equal(sig1, sig2, "a plain 5 s beat with nothing crossing a boundary must not force a rebuild");
 });
+
+// --- finding 5: the journal's "X of Y" count uses one consistent set ---
+// The denominator is the range+search-filtered set (inRangeEntries) — the
+// very set every facet count and the rail are drawn from (journal.js's own
+// comment) — never the journal's whole lifetime entry count, which the
+// user can't even see without changing the range.
+
+test("countText: a facet filter narrows against inRange, not the whole journal's lifetime count", () => {
+  const J = freshJournal();
+  assert.equal(J._countText(3, 20, true), "3 of 20 requests");
+});
+
+test("countText: no filters at all — just the plain count, no 'of'", () => {
+  const J = freshJournal();
+  assert.equal(J._countText(20, 20, false), "20 requests");
+});

@@ -83,9 +83,13 @@
   // rather than block forever. A `board` missing its own map (a
   // malformed /corpora response) never throws (fix round 2, #1).
   function boardFieldsFor(state, corpus) {
-    if (state.corpora) return { board: (state.corpora.board || {})[corpus] || {}, blocked: false };
-    if (state.corporaFailed) return { board: {}, blocked: false };
-    return { board: {}, blocked: true };
+    if (state.corpora) return {
+      board: (state.corpora.board || {})[corpus] || {},
+      idField: (state.corpora.id_field || {})[corpus] || "id",
+      blocked: false,
+    };
+    if (state.corporaFailed) return { board: {}, idField: "id", blocked: false };
+    return { board: {}, idField: "id", blocked: true };
   }
 
   function goneBlock(actions, entry) {

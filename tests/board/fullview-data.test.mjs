@@ -147,6 +147,40 @@ test("fix round 2, #1: 'Run again' on a gone result closes the full view before 
   assert.deepEqual(calls, ["close", "rerun:r6"], "closeFull must run, then rerun — never the other order or neither");
 });
 
+test("finding 1: full view paging advances by the page's own count, not a fixed PAGE, when the server caps below it", async () => {
+  const N = 80, CAP = 25;
+  const all = [];
+  for (let i = 0; i < N; i++) {
+    all.push({ ids: ["g" + i], positions: [i], times: [null], events: [{ id: "g" + i, agent: "A", kind: "K" }] });
+  }
+  const Data = freshModules(async (rid, opts) => {
+    const off = opts.offset;
+    return { kind: "groups", total: N, results: all.slice(off, off + CAP) };
+  });
+  const entry = { result_id: "rN", total: N, kind: "evaluate", result: "groups" };
+  let ctx;
+  for (let i = 0; i < 10; i++) {
+    ctx = Data.buildContext(entry, board, "groups", { loadTo: N, q: "", agents: {} }, actions);
+    if (!ctx.pending) break;
+    await flush();
+  }
+  assert.equal(ctx.pending, false, "loading must finish within a handful of page fetches");
+  assert.equal(ctx.loaded.length, N, "all 80 groups must load despite the 25-item server cap");
+  assert.deepEqual(ctx.loaded.map((g) => g.n), Array.from({ length: N }, (_, i) => i + 1));
+});
+
+test("finding 4: buildContext threads idField through to pairEventsToSlots for groups", async () => {
+  const Data = freshModules(async () => ({
+    kind: "groups", total: 1,
+    results: [{ ids: ["x"], positions: [1], times: [null], events: [{ event_id: "x", agent: "A", kind: "K" }] }],
+  }));
+  const entry = { result_id: "rid", total: 1, kind: "evaluate", result: "groups" };
+  Data.buildContext(entry, board, "groups", vs(), actions, "event_id");
+  await flush();
+  const ctx = Data.buildContext(entry, board, "groups", vs(), actions, "event_id");
+  assert.equal(ctx.loaded[0].slots[0].agent, "A", "the event must be paired by event_id, not the default 'id'");
+});
+
 test("fix round 2, #4: a blocked (gone) result hides the filter box and chips", async () => {
   const Data = freshModules(async () => ({ gone: true }));
   const entry = { result_id: "r7", total: 5, kind: "evaluate", result: "groups" };

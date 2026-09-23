@@ -66,10 +66,14 @@
   // time that happens its own index no longer lines up with the slots —
   // pair by id instead (fix round 1, #7). A slot with no matching event
   // renders without text.
-  function pairEventsToSlots(ids, events) {
+  // Finding 4: pairs by the corpus's own id field (from /corpora's
+  // id_field, default "id") — a corpus configured with a different id
+  // field hydrates its events keyed by that field, not "id".
+  function pairEventsToSlots(ids, events, idField) {
+    idField = idField || "id";
     var byId = {};
     (events || []).forEach(function (e) {
-      if (e && e.id != null) byId[e.id] = e;
+      if (e && e[idField] != null) byId[e[idField]] = e;
     });
     return (ids || []).map(function (id) { return byId[id] || null; });
   }

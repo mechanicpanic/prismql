@@ -135,3 +135,25 @@ test("fix round 2, #4: a fetch in flight across clearCache() (a stream reset) is
   await flush();
   assert.equal(secondCalls, 1, "a real new request was made after the reset");
 });
+
+// --- boardFieldsFor: idField (finding 4) ---
+
+test("boardFieldsFor: carries the corpus's own id_field from /corpora", () => {
+  setWindow(async () => ({}), []);
+  const PF = freshFetch();
+  const state = { corpora: { board: { v: {} }, id_field: { v: "event_id" } } };
+  assert.equal(PF.boardFieldsFor(state, "v").idField, "event_id");
+});
+
+test("boardFieldsFor: idField defaults to 'id' when /corpora has no id_field entry for this corpus", () => {
+  setWindow(async () => ({}), []);
+  const PF = freshFetch();
+  const state = { corpora: { board: { v: {} } } };
+  assert.equal(PF.boardFieldsFor(state, "v").idField, "id");
+});
+
+test("boardFieldsFor: idField defaults to 'id' before /corpora has loaded", () => {
+  setWindow(async () => ({}), []);
+  const PF = freshFetch();
+  assert.equal(PF.boardFieldsFor({}, "v").idField, "id");
+});

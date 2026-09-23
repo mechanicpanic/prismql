@@ -135,6 +135,25 @@ test("timelineItems: a null slot renders without kind/actor/text", () => {
   assert.equal(items[0].text, null);
 });
 
+// Finding 5: a named result shows its own slot labels instead of "event n".
+test("timelineItems: a named result's slot label rides along each event item", () => {
+  const group = {
+    ids: ["a", "b"], positions: [10, 41], times: [null, null],
+    slots: [{ text: "hi" }, { text: "bye" }],
+  };
+  const items = FR.timelineItems(group, board, ["scout", "flee"]);
+  assert.equal(items[0].label, "scout");
+  assert.equal(items[2].label, "flee");
+});
+test("timelineItems: no labels given (an unnamed result) carries no label", () => {
+  const group = { ids: ["a"], positions: [0], times: [null], slots: [{ text: "hi" }] };
+  assert.equal(FR.timelineItems(group, board)[0].label, null);
+});
+test("timelineItems: a null slot name in labels (an unnamed slot in a mixed pattern) carries no label either", () => {
+  const group = { ids: ["a"], positions: [0], times: [null], slots: [{ text: "hi" }] };
+  assert.equal(FR.timelineItems(group, board, [null])[0].label, null);
+});
+
 // --- navItemFor ---
 
 test("navItemFor: snippet prefers the first slot with real text", () => {
@@ -165,4 +184,19 @@ test("groupHeaderInfo: range runs from the first to the last real time", () => {
   assert.equal(info.total, 6);
   assert.equal(info.actor, "gemini");
   assert.match(info.range, /\d{2}:\d{2}:\d{2} → \d{2}:\d{2}:\d{2}/);
+});
+
+// Finding 5: INWINDOW groups are UNORDERED — a group's `times` list is not
+// guaranteed chronological, so the range must use min/max, never the
+// filtered array's first/last element.
+test("groupHeaderInfo: an unordered group's range still runs earliest to latest, not first-slot to last-slot", () => {
+  const F = require("../../src/prismql/server/board/format.js");
+  const IF = require("../../src/prismql/server/board/inspector-format.js");
+  const earliest = "2026-06-03T18:02:11Z", latest = "2026-06-03T18:19:40Z";
+  const group = {
+    n: 1, times: [latest, earliest, "2026-06-03T18:10:00Z"],
+    slots: [{}, {}, {}],
+  };
+  const info = FR.groupHeaderInfo(group, 1, board);
+  assert.equal(info.range, IF.localDateTime(earliest) + " → " + F.hms(latest));
 });

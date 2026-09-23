@@ -114,32 +114,34 @@
     const r = await fetch("/corpora");
     let body = null;
     try { body = await r.json(); } catch (e) { /* body stays null */ }
-    // A non-2xx (a proxy's 502) or a 2xx body missing its own "corpora"
-    // list both reject — never mistaken for real data (fix round 2, #1).
+    // A non-2xx or a 2xx body missing "corpora" both reject — never
+    // mistaken for real data (fix round 2, #1).
     if (!r.ok || !body || !Array.isArray(body.corpora)) {
       throw new Error("corpora: bad response (" + r.status + ")");
     }
     return body;
   }
 
-  async function evaluate(body) {
-    const r = await fetch("/evaluate", {
+  // Shared by evaluate/search/similar — finding 3's "Run again" posts a
+  // search/similar entry straight to its own endpoint, never /evaluate.
+  async function post(path, body) {
+    const r = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-PrismQL-Client": "board" },
       body: JSON.stringify(body),
     });
     let parsed = null;
-    try {
-      parsed = await r.json();
-    } catch (e) {
-      parsed = null;
-    }
+    try { parsed = await r.json(); } catch (e) { parsed = null; }
     return { status: r.status, body: parsed };
   }
+  function evaluate(body) { return post("/evaluate", body); }
+  function search(body) { return post("/search", body); }
+  function similar(body) { return post("/similar", body); }
 
   const api = {
     activity: activity, stream: stream, page: page,
     jsonlUrl: jsonlUrl, corpora: corpora, evaluate: evaluate,
+    search: search, similar: similar,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLApi = api;

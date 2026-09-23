@@ -216,3 +216,38 @@ test("findPendingMatch: a null pending corpus skips the corpus check — matches
   const pending = { resultId: null, query: "SELECT count($a)", corpus: null, baselineSeq: 0 };
   assert.equal(L.findPendingMatch(entries, pending), entries[0]);
 });
+
+// --- finding 3: Run again / Open in editor dispatch by kind ---
+
+test("hasRequestDictionaries: false when the entry carries no dictionaries", () => {
+  assert.equal(L.hasRequestDictionaries({ kind: "evaluate", dictionaries: [] }), false);
+  assert.equal(L.hasRequestDictionaries({ kind: "evaluate" }), false);
+});
+
+test("hasRequestDictionaries: true when the entry used request-scoped dictionaries", () => {
+  assert.equal(L.hasRequestDictionaries({ kind: "evaluate", dictionaries: ["spikes"] }), true);
+});
+
+test("rerunBody: evaluate has no rerun body — it goes through the editor instead", () => {
+  assert.equal(L.rerunBody({ kind: "evaluate", query: "SELECT from(a)" }), null);
+});
+
+test("rerunBody: search reruns via POST /search {query, corpus, limit}", () => {
+  const body = L.rerunBody({ kind: "search", query: "spike OR calm", corpus: "village", total: 7 });
+  assert.deepEqual(body, { query: "spike OR calm", corpus: "village", limit: 7 });
+});
+
+test("rerunBody: search without a total falls back to a sane default limit", () => {
+  const body = L.rerunBody({ kind: "search", query: "spike", corpus: null, total: 0 });
+  assert.deepEqual(body, { query: "spike", limit: 20 });
+});
+
+test("rerunBody: similar reruns via POST /similar {text, corpus, threshold, limit}", () => {
+  const body = L.rerunBody({ kind: "similar", query: "calm seas", corpus: "village", total: 3, threshold: 0.5 });
+  assert.deepEqual(body, { text: "calm seas", corpus: "village", threshold: 0.5, limit: 3 });
+});
+
+test("rerunBody: similar without a threshold omits it", () => {
+  const body = L.rerunBody({ kind: "similar", query: "calm seas", corpus: null, total: 3 });
+  assert.deepEqual(body, { text: "calm seas", limit: 3 });
+});

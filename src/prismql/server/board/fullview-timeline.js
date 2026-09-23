@@ -36,7 +36,7 @@
     var l = mk("div", "l");
     if (it.kind != null) l.appendChild(mk("span", "k", String(it.kind)));
     if (it.actor != null) l.appendChild(mk("span", "a", String(it.actor)));
-    l.appendChild(mk("span", "e", "event " + it.n));
+    l.appendChild(mk("span", "e", it.label || "event " + it.n));
     card.appendChild(l);
     if (it.text != null) card.appendChild(mk("div", "x", String(it.text)));
     row.appendChild(card);
@@ -58,7 +58,7 @@
     });
   }
 
-  function renderDetail(el, group, total, board) {
+  function renderDetail(el, group, total, board, labels) {
     if (!group) {
       el.appendChild(UI.emptyBlock("No groups match", "Clear the filter or pick other agents.", { compact: true }));
       return;
@@ -72,7 +72,7 @@
     if (info.range) bits.push(info.range);
     gdh.appendChild(mk("span", null, bits.join(" · ")));
     el.appendChild(gdh);
-    FR.timelineItems(group, board).forEach(function (it) {
+    FR.timelineItems(group, board, labels).forEach(function (it) {
       el.appendChild(it.isGap ? gapRow(it) : eventCard(it));
     });
   }

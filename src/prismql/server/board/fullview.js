@@ -1,10 +1,7 @@
-// PrismQLFull: the #full overlay — wires `state.full` to the header
-// (fullview-header.js), the summary/view-bar (fullview-summary.js), the
-// per-view body (fullview-body.js) and data assembly (fullview-data.js);
-// owns keyboard (Esc/←→/↑↓), focus/scroll preservation across a rebuild,
-// and its own ephemeral view state — which view/group/filter is picked,
-// same pattern as inspector-groups.js's local `shown` (task-7 brief; graph
-// @aleph/prismql, node #76).
+// PrismQLFull: the #full overlay — wires `state.full` to the header, the
+// summary/view-bar, the per-view body and data assembly; owns keyboard
+// (Esc/←→/↑↓), focus/scroll preservation, and its own ephemeral view
+// state (task-7 brief; graph @aleph/prismql, node #76).
 (function (root) {
   "use strict";
   var mk = window.PrismQLBoardUtil.mk;
@@ -23,15 +20,12 @@
   var wasOpen = false;
   var stateRef = null, actionsRef = null;
   var lastFiltered = []; // this render's filtered groups (Timeline), for ↑/↓ nav
+  var lastBodySig = null; // finding 5: what the body was last built from
 
   function resetView(seq) { vs = { seq: seq, view: null, group: 0, q: "", agents: {}, loadTo: PAGE }; }
 
-  // The single door into the full view — the journal's dblclick/Enter, the
-  // header's ←/→ neighbor buttons and this module's own ArrowLeft/Right all
-  // call this (through board.js's `openFull` action), so a fresh view/
-  // filter/group state greets every entry it lands on, same request or not
-  // (design canvas: both `openFull` and its own `goTo` always reset
-  // fview/fgroup/fq/fagents — never just on a changed seq).
+  // The single door into the full view: a fresh view/filter/group state
+  // greets every entry it lands on, same request or not.
   function open(state, render, seq) {
     state.sel = seq;
     state.tab = "details";
@@ -62,9 +56,7 @@
       var gi = Math.min(vs.group, lastFiltered.length - 1);
       vs.group = e.key === "ArrowDown" ? Math.min(lastFiltered.length - 1, gi + 1) : Math.max(0, gi - 1);
       render(state, actions);
-      // Fix round 1, #10 / round 2, #3: focus AND the scroll position
-      // follow the selection to the new nav button — preventScroll only
-      // stops the browser's own jump, scrollIntoView still has to run.
+      // Focus and scroll follow the selection to the new nav button.
       var full = document.getElementById("full");
       var current = full && full.querySelector(".gnav .gitem.on");
       if (current) {
@@ -94,20 +86,28 @@
         if (list) (list.querySelector(".row.sel") || list).focus({ preventScroll: true });
       }
       wasOpen = false;
+      lastBodySig = null;
       return;
     }
     if (entry.seq !== vs.seq) resetView(entry.seq);
     wireKeys(el);
-    var saved = Focus.captureFocus(el);
-    var scroll = Focus.captureScroll(el);
-    el.innerHTML = "";
     var visible = window.PrismQLJournal ? window.PrismQLJournal._visibleEntries(state, nowMs) : [];
     var idx = visible.findIndex(function (r) { return r.seq === entry.seq; });
     var bf = PF.boardFieldsFor(state, entry.corpus);
     var outputKind = IF.outputKind(entry);
-    // ctx is built before the header (fix round 1, #9): a gone result must
-    // never offer "Download .jsonl" for a file the store no longer holds.
-    var ctx = bf.blocked ? null : Data.buildContext(entry, bf.board, outputKind, vs, actions);
+    // ctx before the header: a gone result must never offer a download.
+    var ctx = bf.blocked ? null : Data.buildContext(entry, bf.board, outputKind, vs, actions, bf.idField);
+    // Finding 5: a live arrival elsewhere changes visible/idx but not the
+    // body's own inputs — patch the header's nav and stop.
+    var bodySig = [
+      entry.seq, vs.view, vs.group, vs.q, JSON.stringify(vs.agents), vs.loadTo,
+      ctx ? ctx.loaded.length + ":" + ctx.pending + ":" + ctx.filtered.length + ":" + !!ctx.blocker : "blocked",
+    ].join("|");
+    if (bodySig === lastBodySig && wasOpen && Header.patchNav(el, actions, visible, idx)) return;
+    lastBodySig = bodySig;
+    var saved = Focus.captureFocus(el);
+    var scroll = Focus.captureScroll(el);
+    el.innerHTML = "";
     Header.build(el, entry, actions, nowMs, visible, idx, !!(ctx && ctx.gone));
     if (bf.blocked) {
       el.appendChild(mk("div", "fsum"));

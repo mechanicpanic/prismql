@@ -20,6 +20,7 @@
     btn.addEventListener("click", function () { actions.closeFull(); });
     return btn;
   }
+  // .onclick, not addEventListener — patchNav (finding 5) reassigns it.
   function navBtn(path, title, disabled, onClick) {
     var btn = mk("button", "iconbtn");
     btn.type = "button";
@@ -27,8 +28,23 @@
     btn.setAttribute("aria-label", title);
     btn.disabled = disabled;
     btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="' + path + '"></path></svg>';
-    btn.addEventListener("click", onClick);
+    btn.onclick = onClick;
     return btn;
+  }
+
+  // Finding 5: a live arrival patches only the "k of n" count and prev/
+  // next, never a full rebuild (which drops scroll/filter selection).
+  function patchNav(el, actions, visible, idx) {
+    var count = el.querySelector("#fhead-nav-count");
+    if (!count) return false;
+    count.textContent = idx >= 0 ? (idx + 1) + " of " + visible.length : "";
+    var prev = el.querySelector("#fhead-nav-prev");
+    prev.disabled = idx <= 0;
+    prev.onclick = function () { if (visible[idx - 1]) actions.openFull(visible[idx - 1].seq); };
+    var next = el.querySelector("#fhead-nav-next");
+    next.disabled = idx < 0 || idx >= visible.length - 1;
+    next.onclick = function () { if (visible[idx + 1]) actions.openFull(visible[idx + 1].seq); };
+    return true;
   }
 
   // Fix round 1, #3: opening the editor from the full view closes it first
@@ -59,13 +75,19 @@
 
     var right = mk("div");
     right.style.cssText = "margin-left:auto;display:flex;gap:8px;align-items:center;flex:none";
-    right.appendChild(mk("span", null, idx >= 0 ? (idx + 1) + " of " + visible.length : ""));
-    right.appendChild(navBtn("M15 5l-7 7 7 7", "Newer request (←)", idx <= 0, function () {
+    var navCount = mk("span", null, idx >= 0 ? (idx + 1) + " of " + visible.length : "");
+    navCount.id = "fhead-nav-count";
+    right.appendChild(navCount);
+    var prevBtn = navBtn("M15 5l-7 7 7 7", "Newer request (←)", idx <= 0, function () {
       if (visible[idx - 1]) actions.openFull(visible[idx - 1].seq);
-    }));
-    right.appendChild(navBtn("M9 5l7 7-7 7", "Older request (→)", idx < 0 || idx >= visible.length - 1, function () {
+    });
+    prevBtn.id = "fhead-nav-prev";
+    right.appendChild(prevBtn);
+    var nextBtn = navBtn("M9 5l7 7-7 7", "Older request (→)", idx < 0 || idx >= visible.length - 1, function () {
       if (visible[idx + 1]) actions.openFull(visible[idx + 1].seq);
-    }));
+    });
+    nextBtn.id = "fhead-nav-next";
+    right.appendChild(nextBtn);
     right.appendChild(mk("div", "vsep"));
     var editBtn = mk("button", "ghost", "Open in editor");
     editBtn.type = "button";
@@ -119,7 +141,7 @@
     return box;
   }
 
-  var api = { build: build, buildFcenter: buildFcenter };
+  var api = { build: build, buildFcenter: buildFcenter, patchNav: patchNav };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLFullHeader = api;
 })(typeof window !== "undefined" ? window : globalThis);

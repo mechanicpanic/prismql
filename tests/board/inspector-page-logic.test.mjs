@@ -112,3 +112,17 @@ test("pairEventsToSlots: no events at all yields all-null slots", () => {
 test("pairEventsToSlots: no ids yields an empty array", () => {
   assert.deepEqual(PL.pairEventsToSlots([], [{ id: "a" }]), []);
 });
+
+test("pairEventsToSlots: pairs by the corpus's own id_field (finding 4), not a hardcoded 'id'", () => {
+  const ids = ["a", "b"];
+  const events = [{ event_id: "a", text: "1" }, { event_id: "b", text: "2" }];
+  const slots = PL.pairEventsToSlots(ids, events, "event_id");
+  assert.equal(slots[0].text, "1");
+  assert.equal(slots[1].text, "2");
+});
+
+test("pairEventsToSlots: idField defaults to 'id' when not given", () => {
+  const ids = ["a"];
+  const events = [{ id: "a", text: "1" }];
+  assert.equal(PL.pairEventsToSlots(ids, events)[0].text, "1");
+});

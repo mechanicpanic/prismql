@@ -109,7 +109,7 @@
     // into entries (fix round 2, #1).
     var entry = window.PrismQLBoardUtil.findEntry(state, state.sel);
     if (!entry) {
-      pane.appendChild(UI.emptyBlock("Nothing selected", "Pick a request in the journal to see its query, timing and results."));
+      pane.appendChild(UI.emptyBlock("Nothing selected", "Pick a request in the journal to see its query, timing and results.", { icon: UI.ICON_EMPTY_CURSOR }));
       return;
     }
     buildHeader(pane, entry, nowMs);

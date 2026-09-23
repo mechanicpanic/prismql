@@ -75,6 +75,11 @@
     err.appendChild(msg);
     pane.appendChild(err);
 
+    var dictNote = mk("div", "inline-note");
+    dictNote.id = "editor-dict-note";
+    dictNote.hidden = true;
+    pane.appendChild(dictNote);
+
     buildOpts(pane, ed);
     buildSkel(pane);
 

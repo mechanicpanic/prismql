@@ -76,7 +76,11 @@
     });
   }
 
-  function timelineItems(group, board) {
+  // Finding 5: a named result (labels — pattern_names, shared by every
+  // group) shows its own slot label on each event item instead of the
+  // generic "event n"; an unnamed slot (labels[j] absent/null) still
+  // falls back to "event n" at render time (fullview-timeline.js).
+  function timelineItems(group, board, labels) {
     var ids = group.ids || [], positions = group.positions || [];
     var times = group.times || [], slots = group.slots || [];
     var items = [];
@@ -87,7 +91,7 @@
       }
       var ev = slots[j], t = times[j];
       items.push({
-        isGap: false, n: j + 1,
+        isGap: false, n: j + 1, label: (labels && labels[j]) || null,
         hms: t != null ? F.hms(t) : "", date: t != null ? IF.localDateTime(t).split(" ")[0] : "",
         kind: fieldOf(ev, board.kind), actor: fieldOf(ev, board.actor),
         text: ev && ev.text != null ? ev.text : null,
@@ -110,12 +114,18 @@
   }
 
   function groupHeaderInfo(group, total, board) {
+    // Finding 5: INWINDOW groups are unordered — `times` is not
+    // guaranteed chronological, so the range is the min/max of the
+    // non-null times, never the filtered array's first/last element.
     var times = (group.times || []).filter(function (t) { return t != null; });
+    var ms = times.map(function (t) { return new Date(t).getTime(); });
+    var earliest = times[ms.indexOf(Math.min.apply(null, ms))];
+    var latest = times[ms.indexOf(Math.max.apply(null, ms))];
     var lead = (group.slots || [])[0] || null;
     return {
       n: group.n, total: total, actor: fieldOf(lead, board.actor) || "",
       span: F.span(group.times || []),
-      range: times.length ? IF.localDateTime(times[0]) + " → " + F.hms(times[times.length - 1]) : "",
+      range: times.length ? IF.localDateTime(earliest) + " → " + F.hms(latest) : "",
     };
   }
 

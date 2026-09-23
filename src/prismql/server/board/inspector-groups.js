@@ -48,7 +48,7 @@
     div.appendChild(mk("span", null, IF.gapText(prevPos, pos, prevTime, time)));
     return div;
   }
-  function chainDiv(g, i, board) {
+  function chainDiv(g, i, board, idField) {
     var div = mk("div", "chain");
     var title = mk("div", "gtitle");
     title.appendChild(mk("span", null, "group " + (i + 1)));
@@ -56,7 +56,10 @@
     title.appendChild(mk("span", null, "span " + F.span(g.times)));
     div.appendChild(title);
     var ids = g.ids || [], positions = g.positions || [], times = g.times || [];
-    var slots = PL.pairEventsToSlots(ids, g.events); // by id — the server can drop an id it couldn't hydrate, shifting `events`' own index (fix round 1, #7)
+    // Paired by the corpus's own id field (finding 4) — the server can
+    // drop an id it couldn't hydrate, shifting `events`' own index (fix
+    // round 1, #7).
+    var slots = PL.pairEventsToSlots(ids, g.events, idField);
     for (var j = 0; j < ids.length; j++) {
       if (j > 0) div.appendChild(gapDiv(positions[j - 1], positions[j], times[j - 1], times[j]));
       div.appendChild(evDiv(j + 1, slots[j], times[j], board));
@@ -90,7 +93,7 @@
     if (blocker) return { note: "", body: blocker };
     if (pending && groups.length === 0) return { note: "", body: PF.loadingBlock() };
     var body = document.createElement("div");
-    groups.forEach(function (g, i) { body.appendChild(chainDiv(g, i, bf.board)); });
+    groups.forEach(function (g, i) { body.appendChild(chainDiv(g, i, bf.board, bf.idField)); });
     var more = mk("div", "more");
     more.appendChild(mk("span", null, pending ? "loading…" : PL.groupsMoreLabel(groups.length, total)));
     if (!pending && groups.length < total) {

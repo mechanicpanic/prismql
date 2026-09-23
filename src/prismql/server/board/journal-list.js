@@ -8,6 +8,7 @@
   var lastVisible = [];
   var F = window.PrismQLFormat;
   var mk = window.PrismQLBoardUtil.mk;
+  var UI = window.PrismQLInspectorUI;
 
   function buildRow(entry, state, actions, nowMs) {
     var status = F.status(entry);
@@ -69,20 +70,19 @@
     el.appendChild(pill);
   }
 
+  // Finding 6: the shared emptyBlock, same icon slot as the inspector's.
   function renderEmpty(el, state, actions, anyFilter) {
-    var empty = mk("div", "empty");
-    empty.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>';
-    empty.appendChild(mk("strong", null, state.entries.length === 0 ? "Nothing asked yet" : "No requests match"));
-    empty.appendChild(mk("span", null, state.entries.length === 0
+    var title = state.entries.length === 0 ? "Nothing asked yet" : "No requests match";
+    var detail = state.entries.length === 0
       ? "Requests from agents and people show up here as the server receives them."
-      : "Nothing in the " + (state.filters.range === "all" ? "whole journal" : "last " + state.filters.range) + " fits these filters."));
+      : "Nothing in the " + (state.filters.range === "all" ? "whole journal" : "last " + state.filters.range) + " fits these filters.";
+    var action = null;
     if (anyFilter) {
-      var reset = mk("button", "ghost", "Reset all filters");
-      reset.type = "button";
-      reset.addEventListener("click", function () { actions.resetFilters(); });
-      empty.appendChild(reset);
+      action = mk("button", "ghost", "Reset all filters");
+      action.type = "button";
+      action.addEventListener("click", function () { actions.resetFilters(); });
     }
-    el.appendChild(empty);
+    el.appendChild(UI.emptyBlock(title, detail, { icon: UI.ICON_EMPTY_FILTER, action: action }));
   }
 
   function wireKeys(el, state, actions) {
