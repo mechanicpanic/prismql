@@ -71,7 +71,8 @@
 
   var actions = {
     select: function (seq) { state.sel = seq; state.tab = "details"; render(); },
-    openFull: function (seq) { state.sel = seq; state.tab = "details"; state.full = seq; render(); },
+    openFull: function (seq) { window.PrismQLFull.open(state, render, seq); },
+    closeFull: function () { state.full = null; render(); },
     setFilter: function (key, value) { state.filters[key] = value; render(); },
     toggleFacet: function (key, value) {
       var o = Object.assign({}, state.filters[key]);
@@ -137,6 +138,7 @@
       else render(nowMs);
       updateLiveNote(nowMs);
       if (window.PrismQLInspector && window.PrismQLInspector.tick) window.PrismQLInspector.tick(nowMs);
+      if (window.PrismQLFull && window.PrismQLFull.tick) window.PrismQLFull.tick(nowMs);
     }, 5000);
   }
 
