@@ -10,20 +10,17 @@
 
   // The editor runs all three kinds of request (graph @aleph/prismql,
   // #111): a query to /evaluate, a search (tantivy syntax) to /search, a
-  // similar text to /similar. `top` is how many ranked hits the server
-  // keeps; `threshold` (similar only) is optional. A field that doesn't
-  // read as a number is an error here, never a quietly dropped filter.
-  var DEFAULT_TOP = 50;
-
+  // similar text to /similar with an optional threshold. No limit is sent:
+  // the server keeps its scout depth either way and the board pages the
+  // kept result, so a limit would only size a first page nobody sees (#65).
+  // A threshold that doesn't read as a number is an error here, never a
+  // quietly dropped filter.
   function buildRunBody(ed) {
     var kind = ed.kind || "evaluate";
     if (kind === "evaluate") return { endpoint: "evaluate", body: L.buildEvaluateBody(ed) };
     var text = (ed.query || "").trim();
     if (!text) return { error: "type what to search for" };
-    var topText = String(ed.top == null ? "" : ed.top).trim();
-    var top = topText === "" ? DEFAULT_TOP : Number(topText);
-    if (!Number.isInteger(top) || top < 1) return { error: "top must be a whole number of at least 1" };
-    var body = kind === "search" ? { query: text, limit: top } : { text: text, limit: top };
+    var body = kind === "search" ? { query: text } : { text: text };
     if (kind === "similar") {
       var thText = String(ed.threshold == null ? "" : ed.threshold).trim();
       if (thText !== "") {
@@ -47,7 +44,7 @@
 
   function kindInfo(kind) { return KIND_INFO[kind] || KIND_INFO.evaluate; }
 
-  var api = { buildRunBody: buildRunBody, DEFAULT_TOP: DEFAULT_TOP, kindInfo: kindInfo };
+  var api = { buildRunBody: buildRunBody, kindInfo: kindInfo };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLEditorKinds = api;
 })(typeof window !== "undefined" ? window : globalThis);

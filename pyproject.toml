@@ -36,12 +36,12 @@ nlp = [
     "spacy>=3.0.0",
 ]
 semantic = [
-    "sentence-transformers>=2.2",
+    "sentence-transformers>=2.4",  # encode(prompt=)
     "numpy>=1.24",
 ]
 # `prismql ingest --embed`: the same model stack, named for what it does.
 ingest = [
-    "sentence-transformers>=2.2",
+    "sentence-transformers>=2.4",  # encode(prompt=)
     "numpy>=1.24",
 ]
 # Kept as empty aliases for one release: both are core since P3.

@@ -88,6 +88,10 @@ def run(argv: Sequence[str] | None = None) -> int:
 
         df = read_codex(Path(args.src))
 
+    if (args.doc_prompt or args.query_prompt) and not args.embed:
+        # a stamp is written only beside vectors this run computes
+        print("--doc-prompt/--query-prompt need --embed COL", file=sys.stderr)
+        return 2
     kinds = [k for k in (args.annotate or "").split(",") if k]
     if kinds:
         from .annotate import annotate

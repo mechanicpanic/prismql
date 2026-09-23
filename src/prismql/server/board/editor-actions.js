@@ -12,7 +12,7 @@
 
   function ensureEditorState(state) {
     if (!state.editor) {
-      state.editor = { kind: "evaluate", query: "SELECT ", corpus: null, top: "", threshold: "",
+      state.editor = { kind: "evaluate", query: "SELECT ", corpus: null, threshold: "",
         running: false, error: null, rev: 0, focus: false, dictNote: null };
     }
     return state.editor;
@@ -71,10 +71,11 @@
   // ("SELECT " or empty) is swapped for the new kind's own start.
   function setKind(state, render, kind) {
     var ed = ensureEditorState(state);
-    if (ed.kind === kind) return;
+    if (ed.kind === kind || ed.running) return;
     if (ed.query.trim() === K.kindInfo(ed.kind).start.trim()) ed.query = K.kindInfo(kind).start;
     ed.kind = kind;
     ed.error = null;
+    ed.dictNote = null;
     ed.rev++;
     ed.focus = true;
     render();

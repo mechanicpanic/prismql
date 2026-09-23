@@ -461,6 +461,13 @@ def _semantic_index(
             raise ValueError(
                 f"{config.data}: row {missing[0]} has no '{config.id_field}' field"
             )
+        if stamp and stamp.doc_prompt and not stamp.query_prompt:
+            # documents prompted, queries not: it runs, and ranks worse
+            print(
+                f"[prismql] {config.data}: emb stamped with a doc_prompt but no "
+                "query_prompt; queries are encoded without a prompt (re-run "
+                "prismql ingest with --query-prompt)"
+            )
         # the documents were encoded with the stamped doc prompt; the query
         # must carry the matching query prompt (graph @aleph/prismql, #96)
         return SemanticIndex.from_vectors(

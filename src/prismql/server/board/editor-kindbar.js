@@ -1,6 +1,6 @@
 // PrismQLEditorKindbar: the editor's kind switch (Query · Search ·
-// Similar) and the two number fields a scout takes, top and threshold
-// (graph @aleph/prismql, #111). Built once with the editor, patched on
+// Similar) and the threshold field a similar takes (graph @aleph/prismql,
+// #111). Built once with the editor, patched on
 // every render by editor.js; what differs per kind is data in
 // editor-kinds.js.
 (function (root) {
@@ -22,8 +22,8 @@
     return wrap;
   }
 
-  // The switch goes above the text box; the fields go into the options
-  // row, before Format (which only a query has).
+  // The switch goes above the text box; the threshold goes into the
+  // options row, before Format (which only a query has).
   function build(pane, opts, ed) {
     var seg = mk("div", "seg kinds");
     seg.id = "editor-kinds";
@@ -42,20 +42,14 @@
     pane.insertBefore(seg, pane.firstChild);
 
     var fmt = document.getElementById("editor-format");
-    opts.insertBefore(numberField("editor-top", "top", String(K.DEFAULT_TOP),
-      function (v) { ed.top = v; }), fmt);
     opts.insertBefore(numberField("editor-threshold", "threshold", "none",
       function (v) { ed.threshold = v; }), fmt);
-  }
-
-  function escape(text) {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   // A query is highlighted by the language's lexer; search and similar
   // text is not the language, so it is shown as typed.
   function paint(ed, text) {
-    return K.kindInfo(ed.kind).highlight ? window.PrismQLLexer.highlight(text) : escape(text);
+    return K.kindInfo(ed.kind).highlight ? window.PrismQLLexer.highlight(text) : window.PrismQLLexer.escapeHtml(text);
   }
 
   function patch(ed) {
@@ -70,13 +64,10 @@
     var textarea = document.getElementById("editor-textarea");
     textarea.placeholder = info.placeholder;
     textarea.setAttribute("aria-label", info.label);
-    document.getElementById("editor-top-label").hidden = kind === "evaluate";
     document.getElementById("editor-threshold-label").hidden = kind !== "similar";
     document.getElementById("editor-format").hidden = kind !== "evaluate";
     // Format carries the push to the right; without it, Run does
     document.getElementById("editor-run").style.marginLeft = kind === "evaluate" ? "" : "auto";
-    var top = document.getElementById("editor-top");
-    if (document.activeElement !== top) top.value = ed.top || "";
     var th = document.getElementById("editor-threshold");
     if (document.activeElement !== th) th.value = ed.threshold || "";
   }

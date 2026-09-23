@@ -31,14 +31,11 @@
       if (err.column != null) where += (where ? ", " : "") + "column " + err.column;
       if (where) errbox.appendChild(mk("div", "p", where));
       box.appendChild(errbox);
-      // Round 2 (found in verification): only evaluate has query text to
-      // fix — same rule as the header's own "Open in editor" nav button.
-      if (entry.kind === "evaluate") {
-        var fixBtn = mk("button", "primary", "Fix in editor");
-        fixBtn.type = "button";
-        fixBtn.addEventListener("click", function () { goToEditor(actions, entry); });
-        box.appendChild(fixBtn);
-      }
+      // A failed query, search or similar is fixed in the editor (#111).
+      var fixBtn = mk("button", "primary", "Fix in editor");
+      fixBtn.type = "button";
+      fixBtn.addEventListener("click", function () { goToEditor(actions, entry); });
+      box.appendChild(fixBtn);
     } else if (outputKind === "file") {
       var file = mk("div", "file");
       file.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v4h4"></path></svg>';

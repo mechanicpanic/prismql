@@ -91,14 +91,11 @@
     nextBtn.id = "fhead-nav-next";
     right.appendChild(nextBtn);
     right.appendChild(mk("div", "vsep"));
-    // Finding 3 round 2: only evaluate has an editor surface — same rule
-    // as the inspector's acts row (inspector-detail.js).
-    if (entry.kind === "evaluate") {
-      var editBtn = mk("button", "ghost", "Open in editor");
-      editBtn.type = "button";
-      editBtn.addEventListener("click", function () { goToEditor(actions, entry); });
-      right.appendChild(editBtn);
-    }
+    // Every kind opens in the editor, as in the inspector's acts row (#111).
+    var editBtn = mk("button", "ghost", "Open in editor");
+    editBtn.type = "button";
+    editBtn.addEventListener("click", function () { goToEditor(actions, entry); });
+    right.appendChild(editBtn);
     if (entry.result_id != null && !hideDownload) {
       var a = document.createElement("a");
       a.className = "ghost";

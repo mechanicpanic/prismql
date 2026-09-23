@@ -133,3 +133,25 @@ def test_sentence_transformer_embedder_hands_the_prompt_to_the_model():
     seen.clear()
     embedder.encode(["x"])
     assert seen == {}
+
+
+def test_cli_refuses_prompts_without_embed(tmp_path, capsys):
+    from prismql.ingest.cli import run
+
+    src = tmp_path / "s.csv"
+    pl.DataFrame({"i": [1], "t": [1], "text": ["oil"]}).write_csv(src)
+    argv = ["table", str(src), str(tmp_path / "o.parquet"), "--id", "i", "--time", "t"]
+    assert run([*argv, "--query-prompt", "query: "]) == 2
+    assert "--embed" in capsys.readouterr().err
+
+
+@pytest.mark.usefixtures("fake")
+def test_server_says_so_when_documents_have_a_prompt_and_queries_none(tmp_path, capsys):
+    from prismql.ingest.core import embed
+    from prismql.server.config import ServerConfig, build_engine
+
+    df = embed(_stream(), text="text", model="m", prompt="doc: ")
+    path = write(df, tmp_path / "e.parquet", embed_model="m", embed_doc_prompt="doc: ")
+    build_engine(ServerConfig(data=str(path)))
+    out = capsys.readouterr().out
+    assert "doc_prompt" in out and "query_prompt" in out

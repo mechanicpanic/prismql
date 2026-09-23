@@ -1,14 +1,14 @@
 ## Unreleased
 
 ### Added (search and similar from the board's editor)
-- The board's editor runs a *Search* (tantivy syntax) and a *Similar* (a sentence, optional threshold) as well as a query, each with *top*, the number of ranked hits kept; the answer opens in the Request tab, and the recent list keeps all three kinds (graph @aleph/prismql, #111).
+- The board's editor runs a *Search* (tantivy syntax) and a *Similar* (a sentence, optional threshold) as well as a query; the answer opens in the Request tab, the recent list keeps all three kinds, and *Open in editor* / *Fix in editor* are offered for every kind (graph @aleph/prismql, #111).
 
 ### Fixed (the board)
 - The journal survives a server restart when file output is on: `activity.jsonl` is read back at start and numbering goes on from its last entry; repeated numbers left by earlier restarts load as strictly rising ones (#113).
 - A request without `X-PrismQL-Client` is labelled *unnamed client*, not *person*: an agent's `curl` without the header was shown as a person (#112).
 
 ### Added (query and document prompts for embeddings)
-- `prismql ingest … --embed COL --doc-prompt P --query-prompt Q`: asymmetric models (embeddinggemma, Qwen3) encode documents with `P`; both prompts are stamped into the Parquet metadata (`prismql.embed_doc_prompt`, `prismql.embed_query_prompt`) and the server encodes `similar_to()` and `/similar` query text with `Q` (graph @aleph/prismql, #96). `SentenceTransformerEmbedder` takes `prompt=`. `load_corpus` returns `(documents, vectors, EmbedStamp | None)` instead of a four-tuple.
+- `prismql ingest … --embed COL --doc-prompt P --query-prompt Q`: asymmetric models (embeddinggemma, Qwen3) encode documents with `P`; both prompts are stamped into the Parquet metadata (`prismql.embed_doc_prompt`, `prismql.embed_query_prompt`) and the server encodes `similar_to()` and `/similar` query text with `Q` (graph @aleph/prismql, #96). `SentenceTransformerEmbedder` takes `prompt=`. `load_corpus` returns `(documents, vectors, EmbedStamp | None)` instead of a four-tuple. The prompts without `--embed` are refused; a file stamped with a document prompt but no query prompt loads with a warning. The `semantic`/`ingest` extras need sentence-transformers ≥ 2.4 (`encode(prompt=)`).
 
 ### Removed (breaking — text annotation moved to ingest)
 - `NLPBackend`, `SpacyBackend` and the engine's `nlp_backend` parameter are gone, as is a config's `nlp_backend` section (it now fails with how to annotate instead). Annotation is a step of layer 1: `prismql ingest … --annotate questions,entities` writes `is_question` and `entities` columns, and the server reads them as `PrecomputedIndexes` (graph @aleph/prismql, #106).

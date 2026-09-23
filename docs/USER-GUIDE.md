@@ -506,8 +506,8 @@ highlighted in the text; a plain value for an aggregate; a `GROUP BY`
 count; and a runtime or syntax error with its line/column when the query
 has one. The same pane has an **Editor** tab — the picked query,
 highlighted, a corpus picker, a Run button. "Open in editor" is offered
-only for an `evaluate` request (search/similar have no editor surface of
-their own); "Run again" replays a request by its own kind instead — an
+for every request — the editor runs queries, searches and similars alike;
+"Run again" replays a request by its own kind — an
 `evaluate` entry through the editor, a `search`/`similar` entry straight to
 its own endpoint (`POST /search`/`POST /similar`), never through
 `/evaluate`. Either way, a request that carried its own request-scoped
@@ -562,9 +562,9 @@ looks exactly like a person's. The board's own editor sets it to `board`.
 The editor runs all three kinds of request: *Query* (the language,
 highlighted, with *Format*), *Search* (tantivy syntax — words, `"a
 phrase"`, `field:term`, `prefix*`, `AND`/`OR`/`NOT`) and *Similar* (a
-sentence, ranked by meaning). A search or similar takes *top*, how many
-ranked hits to keep (50 when left empty), and a similar an optional
-*threshold*; either answer opens in the Request tab like a query's.
+sentence, ranked by meaning, with an optional *threshold*). Either answer
+opens in the Request tab like a query's and pages through everything the
+server kept (`[server] scout_depth`, 1000 by default).
 
 Keyboard: ↑/↓ moves through the journal, Enter opens the selected row full
 screen, Esc leaves the full view, ←/→ steps to the neighbouring request

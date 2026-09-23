@@ -304,23 +304,23 @@ test("buildRunBody: a query goes to /evaluate as before", () => {
     { endpoint: "evaluate", body: { query: "SELECT $a", corpus: "v" } });
 });
 
-test("buildRunBody: a search posts its text as query with a top", () => {
-  assert.deepEqual(K.buildRunBody({ kind: "search", query: "sign in", corpus: "v", top: "30" }),
-    { endpoint: "search", body: { query: "sign in", limit: 30, corpus: "v" } });
+test("buildRunBody: a search posts its text as query, no limit", () => {
+  // the server keeps its scout depth either way; the board pages what it
+  // kept, so a limit would only size a first page nobody sees (#65)
+  assert.deepEqual(K.buildRunBody({ kind: "search", query: "sign in", corpus: "v" }),
+    { endpoint: "search", body: { query: "sign in", corpus: "v" } });
 });
 
-test("buildRunBody: similar posts text, top and an optional threshold", () => {
-  assert.deepEqual(K.buildRunBody({ kind: "similar", query: "stuck", corpus: "v", top: "", threshold: "0.6" }),
-    { endpoint: "similar", body: { text: "stuck", limit: K.DEFAULT_TOP, threshold: 0.6, corpus: "v" } });
-  assert.deepEqual(K.buildRunBody({ kind: "similar", query: "stuck", top: "10", threshold: " " }),
-    { endpoint: "similar", body: { text: "stuck", limit: 10 } });
+test("buildRunBody: similar posts text and an optional threshold", () => {
+  assert.deepEqual(K.buildRunBody({ kind: "similar", query: "stuck", corpus: "v", threshold: "0.6" }),
+    { endpoint: "similar", body: { text: "stuck", threshold: 0.6, corpus: "v" } });
+  assert.deepEqual(K.buildRunBody({ kind: "similar", query: "stuck", threshold: " " }),
+    { endpoint: "similar", body: { text: "stuck" } });
 });
 
-test("buildRunBody: an unreadable number is an error, never a silent default", () => {
+test("buildRunBody: an unreadable threshold is an error, never a silent default", () => {
   assert.equal(K.buildRunBody({ kind: "similar", query: "x", threshold: "high" }).error,
     "threshold must be a number between -1 and 1");
-  assert.equal(K.buildRunBody({ kind: "search", query: "x", top: "0" }).error,
-    "top must be a whole number of at least 1");
 });
 
 test("buildRunBody: an empty search or similar text is refused before the POST", () => {
@@ -345,6 +345,16 @@ test("loadQuery: a similar entry loads as a similar, threshold and all", () => {
   assert.equal(state.editor.kind, "similar");
   assert.equal(state.editor.query, "stuck");
   assert.equal(state.editor.threshold, "0.6");
+});
+
+test("setKind: waits out a running request and drops a loaded query's dictionary note", () => {
+  const state = { editor: { kind: "evaluate", query: "SELECT ", running: true, rev: 0, dictNote: "n" } };
+  A.setKind(state, () => {}, "search");
+  assert.equal(state.editor.kind, "evaluate");
+  state.editor.running = false;
+  A.setKind(state, () => {}, "search");
+  assert.equal(state.editor.kind, "search");
+  assert.equal(state.editor.dictNote, null);
 });
 
 test("setKind: swaps an untouched start, keeps typed text", () => {
