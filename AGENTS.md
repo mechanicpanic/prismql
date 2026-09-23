@@ -14,9 +14,10 @@ Answers stand as a table, not prose: slot, value, source. Source is `derived` (f
 | Owner role | `#2 «👤 Владелец языка»` — svatantra, `posed_to` address beyond the mandate | derived |
 | Stack | Python ≥ 3.12 (uv); ANTLR4 grammar + hand-written pipe parser over one frozen-dataclass IR; one operator layer as a Polars plan (core dependency); Rust only in `rust_memory` (search-only) and tantivy; FastAPI server extra | derived |
 | Gate | `make check` (`make check-fast` skips `slow`) | derived |
-| Consumers | paper EDBT'27 EA&B (benchmark numbers), public demo (Railway, deploy on the owner's word), swarmchasing hackathon, the owner via REPL/MCP; breakage shows as wrong query results, not crashes | agreed: owner |
+| Consumers | paper EDBT'27 EA&B (benchmark numbers), the web demo (`demo/`, run locally; no public deploy — graph #75), swarmchasing hackathon, the owner via REPL/MCP; breakage shows as wrong query results, not crashes | agreed: owner |
 | Cost of breakage | a construct that runs without error and returns wrong or empty results silently corrupts paper and benchmark claims — worse than downtime | agreed: owner |
 | Reality | table in the *Reality* section | agreed: owner |
+| Layout | code map: the *Project structure* section; environment gotchas: the graph (nodes on the repo contour). A run projects into this layout, not over it | derived |
 | Cross-project memory | personal graph `@aleph/mind` — exists, no question; no global instructions file; never a memory directory | derived |
 | Feedback reflection | yes | agreed: owner |
 | Workflow-suite interop | full (superpowers 6.3.0) | agreed: owner |
@@ -143,7 +144,7 @@ Someone else's API, SDK, CLI, protocol, vendor schema. The agent **guesses** the
 - **Keep in step.** Found a divergence or the vendor raised a version — fix the node in the same move you found it, and lower the epistemics if you did not observe the new. A silently diverging node is worse than a missing one: people act on it.
 - **The reference works both ways, and the second way matters more here.** The source working with an external surface carries `(graph @aleph/prismql, node #N)` — and you **read that node before the work**. Here the reference is not a footnote for posterity: it is your own first move against guessing.
 
-Surfaces this repo leans on today: Polars (`join_asof`, lazy plans — spike-verified, `prismql-research/experiments/polars-spike/RESULTS.md`), pyarrow, tantivy 0.26 (stemmed tokens, quoted `parse_query`), the `mcp` SDK ≥ 2 (`MCPServer`), Railway's proxy headers (unverified live — see *Reality* ceiling).
+Surfaces this repo leans on today: Polars (`join_asof`, lazy plans — spike-verified, `prismql-research/experiments/polars-spike/RESULTS.md`), pyarrow, tantivy 0.26 (stemmed tokens, quoted `parse_query`), the `mcp` SDK ≥ 2 (`MCPServer`).
 
 ## Reality — what a claim is checked against
 | Claim class | Canonical carrier | How to observe | Who can |
@@ -152,10 +153,11 @@ Surfaces this repo leans on today: Polars (`join_asof`, lazy plans — spike-ver
 | Benchmark claim (speed, tuple counts) | Chicago crime tiers in `prismql-research/benchmarks/chicago-crime/data/` (`tier_100k`, `tier_1m`, `tier_full`), the 372-match reference | spike runners in `prismql-research/experiments/polars-spike/` and the benchmark runners; 100k and 1m freely; **full tier only on the owner's word** under the thermal watchdog (graph #27) | agent (100k/1m); user (full) |
 | Demo works (examples, server) | the running server on the demo config | `uv run prismql-server --config demo/prismql.toml` then `uv run python demo/verify_examples.py` | agent |
 | Demo container / deploy artifact | the built image | `docker build -t prismql-demo . && uv run python demo/e2e_container.py` | agent (docker present) |
+| Board looks and behaves right (`/board/`) | the board served by a running server (it serves the repo's files, so a page reload shows a change) | headless Chrome via Playwright — `uv run --no-project --with playwright python <script>` with `chromium.launch(channel="chrome")`; abort non-localhost requests (the Google Fonts link otherwise blocks page load); screenshot plus measured element boxes for alignment. The owner's live server on 8931 is read-only for agents: never restart or bind it | agent |
 | MCP surface | a live stdio client against `prismql-mcp` | the stdio client test in the suite (`build_server()` + tool listing); manual: run `prismql-mcp` and list tools | agent |
 | Paper / benchmark numbers | committed `results-*.json` in the research repo and `STATE.md` | re-run the runner that produced the file; never edit a number by hand | agent |
 
-**Ceiling**: the live Railway deployment (proxy headers, rate-limit identity) — no deploy without the owner; the LLM eval (#17) — needs API keys the agent does not hold; anything about the swarmchasing dataset before access is granted. These close only by the owner's observation or by convergence of independent sources, never as "verified".
+**Ceiling**: the LLM eval (#17) — needs API keys the agent does not hold. These close only by the owner's observation or by convergence of independent sources, never as "verified".
 
 **The table grows by use.** The interview only seeds it. The moment a session taught you what the table does not hold — a carrier no one named; an observation that turned out reachable; one that turned out unreachable (→ *Ceiling*); a wrong command here — write the row *then*, in that session, before closing the work that taught it. (why: an unrecorded carrier is the one the next agent will not find, and the same claim is next accepted on weaker evidence.)
 
@@ -201,10 +203,11 @@ Untracked `HANDOFF-*.md` at the repo root are legacy drafts from before the grap
 - `src/prismql/visitors/` — legacy parse-tree executor (`use_ir=False`); shared helpers live here, `IRExecutor` inherits them.
 - `src/prismql/plan/` — the operator layer: `primitives.py` (P2 primitives + group-level links), `operators.py` (Leg → result frames, bindings inside selection), `frames.py` (per-query frame from the order axis), `bridge.py` (executor state → operators). Both executors call only `bridge`.
 - `src/prismql/processors/`, `aggregators/` — window merging, temporal filtering, aggregation.
-- `src/prismql/backends/` — memory, rust_memory, tantivy, opensearch, spacy + factory; `order.py` = the order axis (`OrderIndex`).
+- `src/prismql/backends/` — memory, rust_memory, tantivy, spacy, semantic (embedding index) + factory; `order.py` = the order axis (`OrderIndex`).
 - `src/prismql/loaders.py` — corpus as an ordered Arrow table (`load_table`).
-- `src/prismql/server/` — FastAPI app (multi-corpus, static mount, rate limit), MCP, config.
-- `demo/` — live web demo (web/, data/, prismql.toml, verify/e2e scripts) + legacy Streamlit app.
+- `src/prismql/server/` — FastAPI app (multi-corpus, static mount, rate limit), result store and pages (`results.py`, `pages.py`), MCP, config; `board/` — the board at `/board/` (plain JS, pure modules tested by `node --test` through `tests/test_board_js.py`).
+- `src/prismql/ingest/` — `prismql ingest`: tables, Claude Code and Codex logs → ordered Parquet (layer 1).
+- `demo/` — web demo (web/, data/, prismql.toml, verify/e2e scripts).
 - `docs/superpowers/` — specs and plans (draft views; the graph is the record). `PIPE_REFERENCE.md` / `LANGUAGE_REFERENCE.md` at root are the LLM-facing dialect references (symlinked into the research repo's eval). `STATE.md`, `PROJECT.md`, `ARCHITECTURE.md` — state and orientation.
 - `.claude/agents/` — role sub-agents reader / worker / verifier / reviewer (iskronify projection).
 - Sibling repos: `../prismql-rust` (search backend + benchmark baseline; its operator kernels are no longer called), `~/Projects/research/prismql-research` (benchmarks, paper, eval, diary, spike), `../prismql-mcp` (superseded by the `[mcp]` extra), `Chat-Corpora-Annotator` (original 2020 C# — `Infrastructure/Helpers/WindowIndexer.cs`, `Model/Parsers/Macther/`).
@@ -217,7 +220,7 @@ Untracked `HANDOFF-*.md` at the repo root are legacy drafts from before the grap
 - Language invariants a linter cannot express: `INWINDOW` is UNORDERED co-occurrence; `FOLLOWED_BY`/`PRECEDED_BY` are ordered and return complete sequences; boolean ops need sets (AND/OR on a completed sequence is an error); the final link of a chain must carry a window, one trailing window distributes per link; quantifiers cannot appear inside chains; `contains(x)` resolves `x` as a dictionary name; stream order is the load order, ids are unique labels (spec `docs/superpowers/specs/2026-09-18-ordinal-axis-design.md`). These hold by construction in the operator layer and stand as contract tests (`tests/test_ordinal_axis_contract.py` and kin); a new divergence is pinned `xfail(strict)` and recorded in the graph before anything else.
 - **Test discipline**: unit + integration (backend matrix); dialect equivalence via node-for-node IR equality; new plan primitives against the engine where it is a valid oracle and against brute-force oracles elsewhere; coverage uploaded to Codecov (no enforced threshold). Zero new mypy errors is the bar (`make check` is clean).
 - Stage commits with explicit paths only — never `git add -A` (untracked drafts live at the repo root). `uv.lock` is gitignored here; dependency changes are carried by `pyproject.toml`.
-- **Gotchas do not live here**: runtime traps past types and the linter are graph nodes on the repo contour (`attrs.kind=gotcha`: #24 Rust toolchain PATH, #25 mypy baseline, #26 extras, #27 heavy benchmarks, #28 demo dictionary collisions); in code and here only the reference `(graph, #N)`.
+- **Gotchas do not live here**: runtime traps past types and the linter are graph nodes on the repo contour (`attrs.kind=gotcha`: #24 Rust toolchain PATH, #25 mypy baseline, #26 extras, #27 heavy benchmarks); in code and here only the reference `(graph, #N)`.
 
 ## What to update when
 - `AGENTS.md` — by the inverted default: **if it can be learned by reading a graph node, it is not here.** The file holds only what is needed BEFORE the agent reaches the graph: commands, the orientation entry, code invariants a linter cannot express, forks that must stop before action — and is updated when THIS changes (commands, stack, conventions, reachability of a reality carrier). "The structure changed" is not a reason for a paragraph here: the address space lives in the graph. Cleaning already-written prose is a reconcile tact with a move into carrying nodes, never a deletion.
@@ -233,4 +236,4 @@ Untracked `HANDOFF-*.md` at the repo root are legacy drafts from before the grap
 - **Definition of done**: work lands on `main` locally; **the owner pushes** (`gp`) — never `git push`, tag, create a GitHub release or upload to PyPI without an explicit go-ahead in the same conversation. "Prepare a release" means do the prep and **stop before** any public artifact; a CHANGELOG entry framed as a release is a draft, not authorization. Shipped = on `origin/main`.
 - **Never** `--no-verify`, `--force`, `--no-gpg-sign`, `git reset --hard` or history rewrites without the user's explicit instruction.
 
-*(iskronify: contract `11`, stamp `2026-09-19` — propose a re-run when the installed iskronify's description names a higher contract or when the sources this file is derived from moved after this date.)*
+*(iskronify: contract `13`, stamp `2026-09-23` — propose a re-run when the installed iskronify's description names a higher contract or when the sources this file is derived from moved after this date.)*

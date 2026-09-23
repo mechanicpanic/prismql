@@ -127,9 +127,21 @@ def test_round_trip_against_app(tmp_path):
     unknown = evaluate_via_http(
         "SELECT from(a)", corpus="nope", base_url="http://127.0.0.1:8929"
     )
-    server.should_exit = True
     assert unknown["ok"] is False
     assert "nope" in unknown["error"]["message"]
+
+    # a GROUP BY ... AGGREGATE answer is stored as a "rows" result; the
+    # shim's result_page is generic JSON passthrough and copes with it
+    # unchanged (graph @aleph/prismql, #90).
+    grouped = evaluate_via_http(
+        "SELECT from(a) GROUP BY user AGGREGATE count()",
+        base_url="http://127.0.0.1:8929",
+    )
+    assert grouped["ok"] is True and grouped["grouped_values"] == {"a": 2}
+    rows_page = page_via_http(grouped["result_id"], base_url="http://127.0.0.1:8929")
+    server.should_exit = True
+    assert rows_page["kind"] == "rows"
+    assert rows_page["rows"] == [{"key": "a", "value": 2}]
 
 
 def test_server_object_registers_tool_and_resource():

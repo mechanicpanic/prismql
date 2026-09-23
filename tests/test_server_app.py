@@ -131,6 +131,93 @@ def test_evaluate_aggregate(client):
     assert body["value"] == 3
 
 
+def test_group_by_aggregate_is_stored_as_a_pageable_rows_result(client):
+    # GROUP BY ... AGGREGATE folds to an AggregateResult with grouped_values
+    # (graph @aleph/prismql, #90, extends #65): the inline payload is
+    # unchanged apart from result_id/total, and the same answer is kept as
+    # a "rows" result the board can page.
+    r = client.post(
+        "/evaluate",
+        json={
+            "query": "SELECT from(tick_a) OR from(tick_b) GROUP BY user AGGREGATE count()"
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["kind"] == "aggregate"
+    assert body["function"] == "count" and body["field"] is None
+    assert body["grouped_values"] == {"tick_a": 3, "tick_b": 1}
+    assert body["total"] == 2
+    rid = body["result_id"]
+    assert rid
+
+    entry = client.get("/activity").json()["entries"][-1]
+    assert entry["result_id"] == rid and entry["total"] == 2
+
+    page = client.get(f"/results/{rid}").json()
+    assert page["kind"] == "rows"
+    assert page["function"] == "count" and page["field"] is None
+    assert page["total"] == 2 and page["count"] == 2 and page["truncated"] is False
+    assert page["rows"] == [
+        {"key": "tick_a", "value": 3},
+        {"key": "tick_b", "value": 1},
+    ]
+
+
+def test_group_by_aggregate_rows_page_and_clamp(client):
+    r = client.post(
+        "/evaluate",
+        json={
+            "query": "SELECT from(tick_a) OR from(tick_b) GROUP BY user AGGREGATE count()"
+        },
+    )
+    rid = r.json()["result_id"]
+    page = client.get(f"/results/{rid}?offset=0&limit=1").json()
+    assert page["count"] == 1 and page["truncated"] is True
+    assert page["rows"] == [{"key": "tick_a", "value": 3}]
+
+
+def test_group_by_aggregate_rows_jsonl(client):
+    r = client.post(
+        "/evaluate",
+        json={
+            "query": "SELECT from(tick_a) OR from(tick_b) GROUP BY user AGGREGATE count()"
+        },
+    )
+    rid = r.json()["result_id"]
+    resp = client.get(f"/results/{rid}.jsonl")
+    assert resp.status_code == 200
+    assert resp.headers["x-prismql-total"] == "2"
+    lines = [json.loads(line) for line in resp.text.splitlines()]
+    assert lines == [
+        {"key": "tick_a", "value": 3},
+        {"key": "tick_b", "value": 1},
+    ]
+
+
+def test_group_by_aggregate_rows_reload_is_gone(tmp_path):
+    c = _make_client(tmp_path, enable_reload=True)
+    rid = c.post(
+        "/evaluate",
+        json={
+            "query": "SELECT from(tick_a) OR from(tick_b) GROUP BY user AGGREGATE count()"
+        },
+    ).json()["result_id"]
+    assert c.get(f"/results/{rid}").status_code == 200
+    c.post("/reload")
+    r = c.get(f"/results/{rid}")
+    assert r.status_code == 404 and r.json()["error"]["type"] == "gone"
+
+
+def test_plain_aggregate_is_not_stored(client):
+    # A plain (non-grouped) aggregate keeps today's shape: no result_id.
+    r = client.post(
+        "/evaluate", json={"query": "SELECT from(tick_a) AGGREGATE count()"}
+    )
+    body = r.json()
+    assert "result_id" not in body and "total" not in body
+
+
 def test_evaluate_named(client):
     r = client.post(
         "/evaluate",

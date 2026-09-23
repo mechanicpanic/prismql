@@ -3,7 +3,7 @@
 import re
 
 from prismql.backends.memory import MemoryBackend
-from prismql.server.pages import page_payload
+from prismql.server.pages import page_payload, rows_page_payload
 from prismql.server.results import ResultStore, StoredResult
 
 
@@ -18,6 +18,41 @@ def test_hits_keep_scores_and_the_true_total() -> None:
     r = StoredResult.from_hits("c", [(4, 0.9), (1, 0.5)], total=17)
     assert len(r) == 2 and r.total == 17 and r.kind == "hits"
     assert r.window(0, 1) == [([4], 0.9)]
+
+
+def test_rows_are_kept_in_the_engine_order_with_function_and_field() -> None:
+    r = StoredResult.from_rows(
+        "c", [("alice", 3), ("bob", 1)], function="count", field_name=None
+    )
+    assert len(r) == 2 and r.total == 2 and r.kind == "rows"
+    assert r.function == "count" and r.field_name is None
+    assert r.rows_window(0, 1) == [("alice", 3)]
+    assert r.rows_window(1, 5) == [("bob", 1)]
+    assert r.rows_window(5, 5) == []
+
+
+def test_rows_nbytes_is_a_reasonable_estimate() -> None:
+    small = StoredResult.from_rows("c", [("a", 1)], "count", None)
+    big = StoredResult.from_rows(
+        "c", [(f"key{i}", i) for i in range(50)], "count", None
+    )
+    assert 0 < small.nbytes < big.nbytes
+
+
+def test_rows_page_payload_pages_and_reports_total() -> None:
+    r = StoredResult.from_rows(
+        "c",
+        [("a", 3), ("b", [1, 2]), ("c", 0)],
+        function="distinct",
+        field_name="agent",
+    )
+    p = rows_page_payload(r, offset=0, limit=2)
+    assert p["kind"] == "rows"
+    assert p["function"] == "distinct" and p["field"] == "agent"
+    assert p["total"] == 3 and p["count"] == 2 and p["truncated"] is True
+    assert p["rows"] == [{"key": "a", "value": 3}, {"key": "b", "value": [1, 2]}]
+    tail = rows_page_payload(r, offset=2, limit=2)
+    assert tail["rows"] == [{"key": "c", "value": 0}] and tail["truncated"] is False
 
 
 def test_store_evicts_oldest_over_budget_but_keeps_the_newest() -> None:

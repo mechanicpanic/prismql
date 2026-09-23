@@ -7,17 +7,19 @@ results go first, their journal summaries stay.
 
 from __future__ import annotations
 
+import json
 import secrets
 import threading
 from array import array
 from collections import OrderedDict
 from dataclasses import dataclass
 from itertools import count
+from typing import Any
 
 
 @dataclass
 class StoredResult:
-    kind: str  # "groups" | "named" | "hits"
+    kind: str  # "groups" | "named" | "hits" | "rows"
     corpus: str
     offsets: array[int]  # item i spans positions[offsets[i]:offsets[i + 1]]
     positions: array[int]
@@ -25,6 +27,44 @@ class StoredResult:
     labels: list[str | None] | None = None
     total: int = 0  # found; exceeds len() when scouting kept only a depth
     load: int = 0  # the corpus load generation these positions were computed on
+    # rows only (a GROUP BY ... AGGREGATE answer, graph @aleph/prismql, #90):
+    # (key, value) pairs in the engine's order; value is a number or a list
+    # (distinct). offsets/positions/scores are unused for this kind.
+    rows: list[tuple[str, Any]] | None = None
+    function: str | None = None
+    field_name: str | None = None
+    _rows_nbytes: int = 0
+
+    @classmethod
+    def from_rows(
+        cls,
+        corpus: str,
+        rows: list[tuple[str, Any]],
+        function: str | None,
+        field_name: str | None,
+        load: int = 0,
+    ) -> StoredResult:
+        # An estimate is enough for the byte budget (graph #90): the exact
+        # JSON size of a row varies with its value's own encoding.
+        nbytes = len(
+            json.dumps([{"key": k, "value": v} for k, v in rows], default=str).encode(
+                "utf-8"
+            )
+        )
+        return cls(
+            "rows",
+            corpus,
+            array("q", [0]),
+            array("q"),
+            None,
+            None,
+            len(rows),
+            load,
+            rows=rows,
+            function=function,
+            field_name=field_name,
+            _rows_nbytes=nbytes,
+        )
 
     @classmethod
     def from_groups(
@@ -55,15 +95,24 @@ class StoredResult:
         return cls("hits", corpus, offsets, positions, scores, None, total, load)
 
     def __len__(self) -> int:
+        if self.kind == "rows":
+            return len(self.rows) if self.rows is not None else 0
         return len(self.offsets) - 1
 
     @property
     def nbytes(self) -> int:
+        if self.kind == "rows":
+            return self._rows_nbytes
         size = self.offsets.itemsize * len(self.offsets)
         size += self.positions.itemsize * len(self.positions)
         if self.scores is not None:
             size += self.scores.itemsize * len(self.scores)
         return size
+
+    def rows_window(self, offset: int, limit: int) -> list[tuple[str, Any]]:
+        assert self.rows is not None
+        end = min(len(self), max(0, offset) + max(0, limit))
+        return self.rows[max(0, offset) : end]
 
     def window(self, offset: int, limit: int) -> list[tuple[list[int], float | None]]:
         end = min(len(self), offset + limit)

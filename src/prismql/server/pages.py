@@ -82,3 +82,20 @@ def page_payload(
         if result.labels is not None:
             payload["labels"] = result.labels
     return payload
+
+
+def rows_page_payload(result: StoredResult, offset: int, limit: int) -> dict[str, Any]:
+    """A window of a "rows" result (GROUP BY ... AGGREGATE answer, graph
+    @aleph/prismql, #90): no backend, no ids/times — just key/value pairs in
+    the engine's order. ``hydrate``/``fields`` do not apply to this kind."""
+    window = result.rows_window(offset, limit)
+    return {
+        "kind": "rows",
+        "function": result.function,
+        "field": result.field_name,
+        "total": result.total,
+        "offset": offset,
+        "count": len(window),
+        "truncated": offset + len(window) < len(result),
+        "rows": [{"key": k, "value": v} for k, v in window],
+    }

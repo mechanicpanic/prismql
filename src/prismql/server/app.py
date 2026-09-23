@@ -29,7 +29,7 @@ from .config import (
     compute_schema,
     load_config,
 )
-from .pages import page_payload
+from .pages import page_payload, rows_page_payload
 from .results import ResultStore, StoredResult
 
 
@@ -506,8 +506,24 @@ def create_app(config: ServerConfig) -> FastAPI:
             stored: StoredResult | None = None
             if folded is None:
                 # Aggregates/grouped results are small by construction —
-                # answered inline, never stored, never file mode.
+                # answered inline, never stored, never file mode. A GROUP BY
+                # ... AGGREGATE answer (grouped_values) is additionally kept
+                # as a pageable "rows" result so the board can page/table it
+                # (graph @aleph/prismql, #90, extends #65); the inline
+                # payload itself is unchanged apart from result_id/total.
                 payload = _small_payload(result)
+                if isinstance(result, AggregateResult) and result.is_grouped():
+                    rows = list(result.grouped_values.items())
+                    stored = StoredResult.from_rows(
+                        req.corpus or config.default_corpus,
+                        rows,
+                        result.function.value if result.function else None,
+                        result.field,
+                        load=load,
+                    )
+                    rid = state.results.put(stored)
+                    payload["result_id"] = rid
+                    payload["total"] = len(rows)
             else:
                 kind, groups, labels = folded
                 try:
@@ -965,6 +981,12 @@ def create_app(config: ServerConfig) -> FastAPI:
         args = _page_args(hydrate, fields)
 
         def lines() -> Any:
+            if stored.kind == "rows":
+                for offset in range(0, len(stored), 1000):
+                    page = rows_page_payload(stored, offset, 1000)
+                    for item in page["rows"]:
+                        yield json.dumps(item, ensure_ascii=False, default=str) + "\n"
+                return
             for offset in range(0, len(stored), 1000):
                 page = page_payload(
                     stored,
@@ -1002,6 +1024,14 @@ def create_app(config: ServerConfig) -> FastAPI:
         if isinstance(kept, JSONResponse):
             return kept
         stored, engine, corpus_cfg = kept
+        if stored.kind == "rows":
+            # hydrate/fields do not apply: rows carry no ids to fetch.
+            payload = rows_page_payload(
+                stored,
+                offset=max(0, offset),
+                limit=max(1, min(limit, config.max_results)),
+            )
+            return {"ok": True, "result_id": rid, **payload}
         payload = page_payload(
             stored,
             engine.search_backend,

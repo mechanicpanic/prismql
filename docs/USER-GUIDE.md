@@ -415,25 +415,38 @@ rather than as an empty list. `AGGREGATE count()` answers as
 can also pass word lists per request — `"dictionaries": {"undo": ["restored","back"]}` — which
 is the fast way to try a vocabulary before writing it into the config.
 
-**A match result is kept, not just returned.** Anything that is not an
-aggregate or `GROUP BY` answer — those stay small and inline, no id — is
-held on the server under the `result_id` you see above, in memory only. The
-id is opaque (treat it as an unparsed token, not "r" plus a counter): the
-hex suffix is what keeps an id held from before a restart from matching a
-different result on the new process, where the counter alone would repeat
-from 1. `max_results` is the size of that first page; `count` is how many
-groups this response carries, `total` is how many the query found, and
-`truncated` means paging further would return more. Fetch the rest with
-`GET /results/r12-3fa9c1d0?offset=5&limit=5` (same `hydrate` and `fields`
-knobs as `/evaluate`), or stream every kept group at once with `GET
-/results/r12-3fa9c1d0.jsonl` — its response carries an `X-PrismQL-Total`
-header with the number of lines the stream will send. Both `/results/{id}`
-routes are rate-limited the same way `/evaluate` is. Kept results do not
-survive `/reload` or a restart, and the oldest are dropped first once
-`[server] results_memory_mb` (default 256 MB) fills up; either way a stale
-id comes back as
+**A match result is kept, not just returned.** Anything that is not a plain
+aggregate or a `GROUP BY` answer without `AGGREGATE` — those stay small and
+inline, no id — is held on the server under the `result_id` you see above,
+in memory only. The id is opaque (treat it as an unparsed token, not "r"
+plus a counter): the hex suffix is what keeps an id held from before a
+restart from matching a different result on the new process, where the
+counter alone would repeat from 1. `max_results` is the size of that first
+page; `count` is how many groups this response carries, `total` is how many
+the query found, and `truncated` means paging further would return more.
+Fetch the rest with `GET /results/r12-3fa9c1d0?offset=5&limit=5` (same
+`hydrate` and `fields` knobs as `/evaluate`), or stream every kept group at
+once with `GET /results/r12-3fa9c1d0.jsonl` — its response carries an
+`X-PrismQL-Total` header with the number of lines the stream will send.
+Both `/results/{id}` routes are rate-limited the same way `/evaluate` is.
+Kept results do not survive `/reload` or a restart, and the oldest are
+dropped first once `[server] results_memory_mb` (default 256 MB) fills up;
+either way a stale id comes back as
 `{"ok":false,"error":{"type":"gone","message":"...run the query again"}}`
 — not silently empty.
+
+**`GROUP BY ... AGGREGATE` is the one exception that gets both.** The
+answer still comes back inline as today —
+`{"kind":"aggregate","function":"count","field":null,"grouped_values":{"tick_a":3,"tick_b":1},"result_id":"r13-...","total":2}`
+— and the same key/value pairs, in the engine's order, are also kept under
+that `result_id` as a `"rows"` result: `GET /results/{id}` answers
+`{"kind":"rows","function":"count","field":null,"total":2,"offset":0,"count":2,"truncated":false,"rows":[{"key":"tick_a","value":3},{"key":"tick_b","value":1}]}`,
+and `GET /results/{id}.jsonl` streams one `{"key":...,"value":...}` per
+line, same `X-PrismQL-Total` header as any other kind. `hydrate`/`fields`
+do not apply — there is nothing to hydrate. A `distinct` aggregate's value
+is a list, carried as-is in `value`. A plain aggregate (no `GROUP BY`) and
+a `GROUP BY` without `AGGREGATE` are unchanged: no `result_id`, nothing
+kept.
 
 `/board/` on the same server is the board: a live journal of every
 `/evaluate`, `/search` and `/similar` the server has answered — yours,
