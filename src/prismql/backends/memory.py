@@ -12,7 +12,6 @@ from disk.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable, Sequence
 from typing import Any
 
@@ -22,9 +21,6 @@ from ..types import Document, MessageId
 from .base import SearchBackend
 from .order import OrderIndex, epoch_micros
 from .semantic import SemanticIndex
-
-# '?' followed by the end, whitespace or closing punctuation: '?id=7' is not.
-_QUESTION_MARK = re.compile(r"\?(?=$|[\s)\]}\"'»”’.,;:!?])")
 
 
 def _stemmer(language: str) -> Any:
@@ -100,7 +96,6 @@ class MemoryBackend(SearchBackend):
             str, set[MessageId]
         ] = {}  # Token index using configured tokenizer
         self._ngram_indexes: dict[int, dict[str, set[MessageId]]] = {}  # N-gram indexes
-        self._question_ids: set[MessageId] = set()
 
         # Collect tokens for n-gram building
         doc_tokens: dict[MessageId, list[str]] = {}
@@ -139,10 +134,6 @@ class MemoryBackend(SearchBackend):
                     # Store tokens for n-gram building
                     if self.config.enable_ngrams:
                         doc_tokens[doc_id] = tokens
-
-                    # Check for questions
-                    if self._is_question(str_value):
-                        self._question_ids.add(doc_id)
 
         # Build n-gram indexes with frequency filtering
         if self.config.enable_ngrams:
@@ -366,10 +357,6 @@ class MemoryBackend(SearchBackend):
                 docs.append(self._id_to_doc[doc_id].copy())
         return docs
 
-    def get_questions(self) -> set[MessageId]:
-        """Get IDs of messages that contain questions."""
-        return set(self._question_ids)
-
     def search_stems(
         self,
         terms: Sequence[str],
@@ -560,36 +547,3 @@ class MemoryBackend(SearchBackend):
 
             # Store the filtered index
             self._ngram_indexes[n] = ngram_to_docs
-
-    def _is_question(self, text: str) -> bool:
-        """Check if text contains a question."""
-        # A '?' that ends a clause (end of text, a space, closing punctuation),
-        # not one inside a URL or query string (graph @aleph/prismql, #94)
-        if _QUESTION_MARK.search(text):
-            return True
-
-        # Check for question words at the beginning
-        text_lower = text.lower().strip()
-        question_words = [
-            "what",
-            "who",
-            "when",
-            "where",
-            "why",
-            "how",
-            "which",
-            "can",
-            "could",
-            "would",
-            "should",
-            "do",
-            "does",
-            "did",
-            "is",
-            "are",
-            "was",
-            "were",
-            "will",
-        ]
-
-        return any(text_lower.startswith(word + " ") for word in question_words)

@@ -236,16 +236,6 @@ class RustMemoryBackend(SearchBackend):
             [i for i in ids if self._valid_id(i)]
         )
 
-    def get_questions(self) -> set[MessageId]:
-        """
-        Get IDs of messages that contain questions.
-
-        Returns:
-            Set of message IDs that are questions
-        """
-        result_list = self._backend.get_questions()
-        return set(result_list)
-
     def search_phrase(self, phrase: str, field: str = "text") -> set[MessageId]:
         """
         Search for documents containing a phrase.

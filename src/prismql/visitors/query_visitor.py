@@ -1052,19 +1052,33 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # must not fall through to the backend heuristic.
         if self.precomputed_indexes.has_questions_index:
             return self.precomputed_indexes.questions
+        # Not annotated at ingest: the ingest layer's one question rule runs
+        # once over the backend's documents (graph @aleph/prismql, #106) —
+        # never a backend's own heuristic, so every backend agrees.
+        cached = getattr(self, "_annotated_questions", None)
+        if cached is None:
+            cached = self._annotate_questions()
+            self._annotated_questions = cached
+        return cached
 
-        # Check if backend supports question detection
-        if hasattr(self.search_backend, "get_questions"):
-            result = self.search_backend.get_questions()
-            return set(result) if result is not None else set()
+    def _annotate_questions(self) -> set[MessageId]:
+        from ..ingest.annotate import question_ids
 
-        raise PrismQLRuntimeError(
-            "is_question() has no backing here: this backend builds no "
-            "question index and none was precomputed. Provide "
-            "PrecomputedIndexes(questions={...}) at engine construction — "
-            "question detection is vocabulary, not grammar; any "
-            "ingestion-time annotator (heuristic, spaCy, LLM) can supply it."
+        backend = self.search_backend
+        docs = getattr(backend, "documents", None)
+        if not isinstance(docs, list):
+            if getattr(backend, "stores_documents", True) is False:
+                raise PrismQLRuntimeError(
+                    "is_question() has no backing here: this index stores no "
+                    "documents to annotate. Annotate at ingest (prismql ingest "
+                    "… --annotate questions) or pass PrecomputedIndexes(questions=…)."
+                )
+            docs = backend.get_documents(list(backend.get_all_document_ids()))
+        fields = getattr(backend, "text_fields", None) or getattr(
+            getattr(backend, "config", None), "text_fields", ["text"]
         )
+        id_field = getattr(backend, "id_field", "id")
+        return question_ids(docs, id_field=id_field, text_fields=list(fields))
 
     def _get_ner_messages(self, ner_label: str) -> set[MessageId]:
         """Get messages containing specific NER type."""

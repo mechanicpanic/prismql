@@ -162,14 +162,6 @@ class TestRustMemoryBackend:
         assert rust_docs == python_docs
         assert rust_docs == []
 
-    def test_get_questions(self, python_backend, rust_backend):
-        """Test question detection."""
-        python_questions = python_backend.get_questions()
-        rust_questions = rust_backend.get_questions()
-        assert rust_questions == python_questions
-        # Messages 2, 5, 6 contain questions
-        assert rust_questions == {2, 5, 6}
-
     def test_case_insensitive_search(self, python_backend, rust_backend):
         """Test that searches are case-insensitive."""
         # Search for "HELLO" (uppercase)

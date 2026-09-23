@@ -59,8 +59,8 @@ def test_partial_entity_backing_lists_available_labels():
 
 
 class TestQuestionIndex:
-    def test_backend_heuristic_still_works(self, bare_engine):
-        # memory/rust backends build a question index at ingestion
+    def test_unannotated_documents_are_annotated_once(self, bare_engine):
+        # no index: the ingest layer's question rule runs over the documents
         assert bare_engine.execute("SELECT is_question()") == [[1]]
 
     def test_computed_empty_index_is_authoritative(self):
@@ -80,14 +80,11 @@ class TestQuestionIndex:
         assert engine.execute("SELECT is_question()") == [[2]]
 
     def test_unbacked_backend_raises_teachable(self):
-        class NoQuestionsBackend(MemoryBackend):
-            """A backend that, unlike MemoryBackend, has no question index."""
+        # a text index stores no documents: nothing to annotate, say how to fix
+        pytest.importorskip("tantivy")
+        from prismql.backends.tantivy import TantivyBackend
 
-        # Hide the inherited method from hasattr without touching the parent.
-        NoQuestionsBackend.get_questions = property()  # type: ignore[assignment]
-        backend = NoQuestionsBackend(documents=DOCS)
-        assert not hasattr(backend, "get_questions")
-        engine = PrismQLEngine(backend)
+        engine = PrismQLEngine(TantivyBackend(DOCS, store_documents=False))
         with pytest.raises(PrismQLRuntimeError, match="PrecomputedIndexes"):
             engine.execute("SELECT is_question()")
 
