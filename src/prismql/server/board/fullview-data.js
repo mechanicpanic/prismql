@@ -2,59 +2,22 @@
 // the shared fetch cache (inspector-fetch.js), the filtered/loaded sets and
 // the summary tiles for groups and hits (task-7 brief; graph @aleph/prismql,
 // node #76). Not pure (it calls PF.fetchPage), so kept apart from
-// fullview-logic.js/fullview-rows.js, which stay node-testable.
+// fullview-logic.js/fullview-rows.js, which stay node-testable. Paging and
+// the shared blocked-view context live in fullview-load.js; the "rows" kind
+// (GROUP BY ... AGGREGATE, #90) lives in fullview-rows-context.js — both
+// split out to keep this file under 150 lines (fix round 1, #6).
 (function (root) {
   "use strict";
   var PL = window.PrismQLInspectorPageLogic;
-  var PF = window.PrismQLInspectorFetch;
   var FL = window.PrismQLFullLogic;
   var F = window.PrismQLFormat;
+  var PFLoad = typeof module === "object" && module.exports
+    ? require("./fullview-load.js") : window.PrismQLFullLoad;
+  var RowsContext = typeof module === "object" && module.exports
+    ? require("./fullview-rows-context.js") : window.PrismQLFullRowsContext;
 
-  var PAGE = FL.PAGE; // fix round 1, #8: one shared constant, not a literal per file
-
-  // Fix round 1, #2: a fetch that turned up nothing has nothing real to
-  // show — "the corpus's whole story" would be an invented one. Fix round
-  // 2, #4: a blocked view has nothing to filter either — canFilter false
-  // hides the filter box and chips (the view switch itself is trimmed to
-  // Summary/Raw by the caller, fullview.js).
-  var GONE_NOTE = "result no longer kept";
-  function blockedContext(kind, res) {
-    return {
-      kind: kind, loaded: [], filtered: [], pending: false, blocker: res.blocker, gone: res.gone,
-      loadBound: res.loadBound, total: null, tiles: [], canFilter: false, agents: [],
-      note: res.gone ? GONE_NOTE : "",
-    };
-  }
-
-  // Pages through vs.loadTo, never past what the store kept (`kept` can be
-  // less than `total` when scouting capped the depth). Finding 1: a page
-  // can hold fewer than PAGE items (max_results < PAGE caps every page),
-  // so the offset advances by the page's own returned count, stopping on
-  // an empty page or loadBound.
-  function loadPaged(entry, fields, loadTo, actions, listKey) {
-    var items = [], pending = false, blocker = null, gone = false, loadBound = entry.total || 0;
-    var labels = null; // finding 5: a named result's slot labels
-    for (var o = 0; o < loadTo && o < loadBound && !blocker; ) {
-      var rec = PF.fetchPage(entry.result_id, o, PAGE, fields);
-      if (rec.status === "loading") { pending = true; break; }
-      // "Run again" must leave the full view first (goneBlock only calls
-      // actions.rerun — a local stand-in closes #full before it).
-      if (rec.data.gone) {
-        var rerunActions = { rerun: function (e) { actions.closeFull(); actions.rerun(e); } };
-        blocker = PF.goneBlock(rerunActions, entry);
-        gone = true;
-        break;
-      }
-      if (rec.data.error) { blocker = PF.errorBlock(rec.data.error.message); break; }
-      if (rec.data.kept != null) loadBound = Math.min(loadBound, rec.data.kept);
-      if (rec.data.labels != null) labels = rec.data.labels;
-      var page = rec.data[listKey] || [];
-      page.forEach(function (x) { items.push(x); });
-      if (page.length === 0) break;
-      o += page.length;
-    }
-    return { items: items, pending: pending, blocker: blocker, gone: gone, loadBound: loadBound, labels: labels };
-  }
+  var loadPaged = PFLoad.loadPaged;
+  var blockedContext = PFLoad.blockedContext;
 
   function groupsContext(entry, board, vs, actions, idField) {
     var fields = PL.fieldsFor(board);
@@ -113,29 +76,6 @@
     };
   }
 
-  // A "rows" result (GROUP BY ... AGGREGATE, graph #90): flat key/value
-  // pairs, no board fields — loadPaged's paging already covers it.
-  function rowsContext(entry, vs, actions) {
-    var res = loadPaged(entry, [], vs.loadTo, actions, "rows");
-    if (res.blocker) return blockedContext("rows", res);
-    var rows = res.items;
-    var q = vs.q.trim().toLowerCase();
-    // Filter on exactly the text the cell shows (fix round 1, #5) — a
-    // list renders joined with ", " and null renders "—", never
-    // String(r.value)'s "x,y" or the literal "null".
-    var filtered = !q ? rows : rows.filter(function (r) {
-      return String(r.key).toLowerCase().indexOf(q) >= 0
-        || PL.rowValueText(r.value).toLowerCase().indexOf(q) >= 0;
-    });
-    var tiles = rows.length === 0 ? [] : [{ v: rows.length + " / " + entry.total, l: "groups loaded" }];
-    return {
-      kind: "rows", loaded: rows, filtered: filtered,
-      pending: res.pending, blocker: res.blocker, loadBound: res.loadBound, total: entry.total,
-      canFilter: true, agents: [], tiles: tiles,
-      note: FL.loadNote(rows.length, entry.total, filtered.length < rows.length ? filtered.length : null),
-    };
-  }
-
   // Fix round 1, #7: the canvas's own summary-note wording, verbatim.
   var SUMMARY_NOTES = {
     aggregate: "single value", error: "the request failed before producing output",
@@ -151,7 +91,7 @@
   function buildContext(entry, board, outputKind, vs, actions, idField) {
     if (outputKind === "groups") return groupsContext(entry, board, vs, actions, idField);
     if (outputKind === "hits") return hitsContext(entry, board, vs, actions);
-    if (outputKind === "rows") return rowsContext(entry, vs, actions);
+    if (outputKind === "rows") return RowsContext.rowsContext(entry, vs, actions);
     return summaryContext(outputKind);
   }
 
