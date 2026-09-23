@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (GROUP BY ... AGGREGATE answers page)
+- A `GROUP BY ... AGGREGATE` answer (`grouped_values`) is now additionally kept on the server as a pageable `"rows"` result (graph @aleph/prismql, node #90, extends #65): the inline `/evaluate` response is unchanged apart from a new `result_id`/`total`, and `GET /results/{id}` (and `.jsonl`) page the same key/value pairs, in the engine's order. Plain aggregates and a `GROUP BY` without `AGGREGATE` are unchanged — still small and inline, no id. The board's inspector and full view show these as a two-column, paged table instead of the "per group" placeholder; old journal entries without a `result_id` keep the placeholder.
+
 ### Fixed (the board, final fix wave)
 - The full view's paging skipped groups whenever `[server] max_results` capped a page below 50: it advanced the offset by a fixed 50 instead of the page's own returned count. It now advances by what each page actually returned, so every kept group loads, correctly numbered, even under a low cap.
 - "Capped" now means cut off, not "there are more pages": the journal's new `capped` field is true only when scouting kept fewer hits than it found, or file output holds fewer than what was kept — an inline `/evaluate` page is never capped by itself, since the board can still page through the rest of what the store kept. The board's status pill and result label read this field instead of a page's own `truncated` bit.
