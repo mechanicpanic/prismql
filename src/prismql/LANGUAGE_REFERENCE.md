@@ -524,6 +524,10 @@ temporal one, ties by stream position. With positional windows all of this is
 stream order; it differs only when timestamps run backwards in load order, and
 the engine warns when they do.
 
+A result of one condition (`SELECT from(alice)`, `SELECT contains(x) OR
+field(k, v)`) lists one message per group in stream order — ids are labels,
+never the order, so any mix of id types works.
+
 ## Syntax Decision Tree
 
 **Need same user/field value across restrictions?**

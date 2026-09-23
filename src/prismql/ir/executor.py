@@ -360,7 +360,7 @@ class IRExecutor(PrismQLVisitor):
                         self.pattern_names.append(pattern_name)
                         self.current_restriction_position += 1
             else:
-                sorted_result = sorted(result)
+                sorted_result = self._in_stream_order(result)
                 if min_count > 1:
                     for i in range(min_count):
                         restriction_results.append(sorted_result)

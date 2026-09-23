@@ -466,9 +466,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
                         self.pattern_names.append(pattern_name)
                         self.current_restriction_position += 1
             else:
-                # Result is a set of message IDs (normal restriction)
-                # Convert set to sorted list
-                sorted_result = sorted(result)
+                # Result is a set of message IDs (normal restriction), as a
+                # list in stream order
+                sorted_result = self._in_stream_order(result)
 
                 # Apply quantifier by expanding the restriction
                 # For now, we use min_count (exact or minimum)
@@ -1510,6 +1510,15 @@ class PrismQLVisitor(BasePrismQLVisitor):
             key=lambda group: group[0] if group else 0,
             reverse=reverse,
         )
+
+    def _in_stream_order(self, ids: Any) -> list[MessageId]:
+        """Ids in load order: ids are labels, the stream is the order
+        (graph @aleph/prismql, #104). A backend without an order axis keeps
+        the old id sort — it has no stream order to give."""
+        backend = self.search_backend
+        if getattr(backend, "has_order_axis", lambda: False)():
+            return list(backend.ids_at(backend.sorted_positions(ids)))
+        return sorted(ids)
 
     def _apply_limit(self, results: QueryResult, ctx: Any) -> QueryResult:
         """
