@@ -7,14 +7,36 @@ results go first, their journal summaries stay.
 
 from __future__ import annotations
 
-import json
 import secrets
+import sys
 import threading
 from array import array
 from collections import OrderedDict
 from dataclasses import dataclass
 from itertools import count
 from typing import Any
+
+
+def _value_nbytes(value: Any) -> int:
+    # A distinct aggregate's value is a list; sys.getsizeof on the list
+    # alone ignores what it points to, so recurse into it (graph
+    # @aleph/prismql, #90 fix round 1, #4).
+    if isinstance(value, list):
+        return sys.getsizeof(value) + sum(_value_nbytes(v) for v in value)
+    return sys.getsizeof(value)
+
+
+def _rows_nbytes_estimate(rows: list[tuple[str, Any]]) -> int:
+    # The resident size of the Python objects themselves, not a JSON
+    # length: a JSON estimate undercounts by ~4x for plain (str, int) rows
+    # (measured on 381k rows, ~59 MB resident vs ~15 MB estimated) because
+    # it never accounts for CPython's per-object header overhead — worse
+    # still for distinct rows, whose values are lists (graph
+    # @aleph/prismql, #90 fix round 1, #4).
+    total = sys.getsizeof(rows)
+    for key, value in rows:
+        total += sys.getsizeof((key, value)) + sys.getsizeof(key) + _value_nbytes(value)
+    return total
 
 
 @dataclass
@@ -44,13 +66,7 @@ class StoredResult:
         field_name: str | None,
         load: int = 0,
     ) -> StoredResult:
-        # An estimate is enough for the byte budget (graph #90): the exact
-        # JSON size of a row varies with its value's own encoding.
-        nbytes = len(
-            json.dumps([{"key": k, "value": v} for k, v in rows], default=str).encode(
-                "utf-8"
-            )
-        )
+        nbytes = _rows_nbytes_estimate(rows)
         return cls(
             "rows",
             corpus,

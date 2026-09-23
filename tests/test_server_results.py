@@ -1,6 +1,9 @@
 """The server's result store: folded results under ids (graph #65)."""
 
 import re
+import tracemalloc
+from collections.abc import Callable
+from typing import Any
 
 from prismql.backends.memory import MemoryBackend
 from prismql.server.pages import page_payload, rows_page_payload
@@ -31,12 +34,43 @@ def test_rows_are_kept_in_the_engine_order_with_function_and_field() -> None:
     assert r.rows_window(5, 5) == []
 
 
-def test_rows_nbytes_is_a_reasonable_estimate() -> None:
-    small = StoredResult.from_rows("c", [("a", 1)], "count", None)
-    big = StoredResult.from_rows(
-        "c", [(f"key{i}", i) for i in range(50)], "count", None
+def _measure_build_bytes(build: Callable[[], list[Any]]) -> int:
+    # tracemalloc's own delta around building the rows list, the canonical
+    # carrier for "how much memory these rows really hold" (graph
+    # @aleph/prismql, #90 fix round 1, #4: a JSON-length estimate undercounts
+    # by ~4x for (str, int) rows — CPython object headers cost bytes JSON
+    # never serializes).
+    tracemalloc.start()
+    try:
+        before = tracemalloc.get_traced_memory()[0]
+        built = build()
+        after = tracemalloc.get_traced_memory()[0]
+        assert built  # keep it alive until measured
+        return after - before
+    finally:
+        tracemalloc.stop()
+
+
+def test_rows_nbytes_is_within_2x_of_a_tracemalloc_measurement_str_int() -> None:
+    n = 2000
+    rows = [(f"user{i}", i + 10_000) for i in range(n)]
+    measured = _measure_build_bytes(
+        lambda: [(f"user{i}", i + 10_000) for i in range(n)]
     )
-    assert 0 < small.nbytes < big.nbytes
+    estimate = StoredResult.from_rows("c", rows, "count", None).nbytes
+    assert measured / 2 <= estimate <= measured * 2, (measured, estimate)
+
+
+def test_rows_nbytes_is_within_2x_of_a_tracemalloc_measurement_distinct_lists() -> None:
+    # Distinct list values are the case the brief calls out as worse for a
+    # JSON-length estimate.
+    n = 500
+    rows = [(f"user{i}", [f"v{i}-{j}" for j in range(5)]) for i in range(n)]
+    measured = _measure_build_bytes(
+        lambda: [(f"user{i}", [f"v{i}-{j}" for j in range(5)]) for i in range(n)]
+    )
+    estimate = StoredResult.from_rows("c", rows, "distinct", "agent").nbytes
+    assert measured / 2 <= estimate <= measured * 2, (measured, estimate)
 
 
 def test_rows_page_payload_pages_and_reports_total() -> None:
