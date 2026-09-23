@@ -130,3 +130,28 @@ def test_a_term_the_tokenizer_splits_is_matched_as_its_phrase(mode):
         assert mem["signin"] == [[1], [2], [3], [4]]  # "signing" stems to "sign"
     else:
         assert mem["signin"] == [[1], [2], [3]]
+
+
+def test_a_missing_text_is_no_word_on_either_backend():
+    docs = [{"id": 1, "text": None}, {"id": 2, "text": "none of it"}]
+    dicts = {"none": ["none"]}
+    mem = _sets(MemoryBackend(docs), dicts)
+    assert mem == _sets(TantivyBackend(docs), dicts)
+    assert mem["none"] == [[2]]  # the null text is not the word "none"
+
+
+# Known divergences of the two tokenizers (graph @aleph/prismql, the vimarsha
+# on #60): Python lowercases a final sigma to "ς" and tantivy to "σ"; a
+# superscript digit is part of a word for one and a separator for the other.
+@pytest.mark.xfail(strict=True, reason="final sigma lowercases differently")
+def test_greek_final_sigma_agrees():
+    docs = [{"id": 1, "text": "ΟΔΟΣ"}, {"id": 2, "text": "οδος"}]
+    dicts = {"road": ["οδος"]}
+    assert _sets(MemoryBackend(docs), dicts) == _sets(TantivyBackend(docs), dicts)
+
+
+@pytest.mark.xfail(strict=True, reason="superscript digits split differently")
+def test_superscript_digits_agree():
+    docs = [{"id": 1, "text": "x² grows"}, {"id": 2, "text": "x grows"}]
+    dicts = {"x": ["x"]}
+    assert _sets(MemoryBackend(docs), dicts) == _sets(TantivyBackend(docs), dicts)

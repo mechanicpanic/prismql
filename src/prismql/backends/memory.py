@@ -123,7 +123,7 @@ class MemoryBackend(SearchBackend):
 
                 # Also index individual tokens for text fields — unless a
                 # full-text index answers them (the bulk of the start-up cost)
-                if field in self.config.text_fields:
+                if field in self.config.text_fields and value is not None:
                     if text_index is None or self.config.enable_ngrams:
                         tokens = self._tokenize(str_value)
                     if text_index is None:
@@ -208,6 +208,16 @@ class MemoryBackend(SearchBackend):
             return out
         return set().union(*sets)
 
+    def _whole_word_ids(self, term_lower: str) -> set[MessageId]:
+        """Exact word matches in every text field (substring mode's first half)."""
+        if self.text_index is None:
+            return set(self._text_index.get(term_lower, ()))
+        # the index holds the tokens; only a term that is one token could have
+        # been a key of the Python token index
+        if self._tokenize(term_lower) == [term_lower]:
+            return self._routed_terms("search_tokens", [term_lower], "OR")
+        return set()
+
     def search_text(
         self, terms: Sequence[str], field: str = "text", operator: str = "OR"
     ) -> set[MessageId]:
@@ -222,9 +232,7 @@ class MemoryBackend(SearchBackend):
             term_lower = term.lower()
             matching_ids: set[MessageId] = set()
 
-            # Check exact word matches
-            if term_lower in self._text_index:
-                matching_ids.update(self._text_index[term_lower])
+            matching_ids |= self._whole_word_ids(term_lower)
 
             # Also check if term appears as substring in field values
             if field in self._field_indexes:

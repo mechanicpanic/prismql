@@ -113,3 +113,14 @@ def test_a_text_only_index_holds_no_documents():
     assert index.search_stems(["fail"]) == {1, 2}
     with pytest.raises(ValueError, match="text only"):
         index.get_documents([1])
+
+
+def test_substring_mode_still_sees_every_text_field():
+    """substring = whole word in any text field, or substring of the field;
+    the whole-word half must not vanish with the Python token index."""
+    plain, routed = _backends(TWO_FIELDS)
+    dicts = {"roll": {"terms": ["rollback"], "match": "substring"}}
+    expected = _sets(plain, dicts, ["SELECT contains(roll)"])
+    assert expected[True]["SELECT contains(roll)"] == [[1], [2], [3]]
+    assert _sets(routed, dicts, ["SELECT contains(roll)"]) == expected
+    assert routed.search_text(["rollback"]) == plain.search_text(["rollback"])
