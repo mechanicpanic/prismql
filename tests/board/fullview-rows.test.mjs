@@ -36,6 +36,10 @@ test("tableHeadsFor: hits columns say 'score' when scored, 'match' otherwise, an
 test("tableHeadsFor: hits drops the kind/source columns the corpus doesn't set", () => {
   assert.deepEqual(FR.tableHeadsFor("hits", true, {}).heads, ["score", "time", "text"]);
 });
+test("tableHeadsFor: rows are just key/value, never board-dependent (graph @aleph/prismql, #90)", () => {
+  assert.deepEqual(FR.tableHeadsFor("rows", false, board).heads, ["key", "value"]);
+  assert.deepEqual(FR.tableHeadsFor("rows", false, {}).heads, ["key", "value"]);
+});
 
 // --- groupTableRows ---
 
@@ -109,6 +113,21 @@ test("hitTableRows: highlight parts come from the search terms", () => {
   const hits = [{ score: 1, time: "t1", event: { text: "the password field" } }];
   const rows = FR.hitTableRows(hits, board, ["password"], false);
   assert.equal(rows[0].parts.some((p) => p.m && p.t === "password"), true);
+});
+
+// --- rowTableRows (graph @aleph/prismql, #90) ---
+
+test("rowTableRows: key as-is, a plain value stringified", () => {
+  const rows = FR.rowTableRows([{ key: "tick_a", value: 3 }]);
+  assert.deepEqual(rows, [{ key: "tick_a", value: "3" }]);
+});
+test("rowTableRows: a distinct list value joins with ', '", () => {
+  const rows = FR.rowTableRows([{ key: "tick_a", value: ["x", "y"] }]);
+  assert.deepEqual(rows, [{ key: "tick_a", value: "x, y" }]);
+});
+test("rowTableRows: no rows loaded yet", () => {
+  assert.deepEqual(FR.rowTableRows([]), []);
+  assert.deepEqual(FR.rowTableRows(undefined), []);
 });
 
 // --- timelineItems ---

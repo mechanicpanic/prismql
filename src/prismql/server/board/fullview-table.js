@@ -34,6 +34,16 @@
     tr.appendChild(mk("span", "x", r.text != null ? String(r.text) : "—"));
     return tr;
   }
+  // A rows result's table row: just key/value, no board-dependent columns
+  // (graph @aleph/prismql, #90) — there is no event to draw kind/actor from.
+  function rowRow(cols, r) {
+    var tr = mk("div", "tr");
+    tr.setAttribute("role", "row");
+    tr.style.gridTemplateColumns = cols;
+    tr.appendChild(mk("span", "k", r.key));
+    tr.appendChild(mk("span", "v", r.value));
+    return tr;
+  }
   function hitRow(cols, r, board) {
     var tr = mk("div", "tr");
     tr.setAttribute("role", "row");
@@ -68,7 +78,12 @@
       el.appendChild(empty);
       return;
     }
-    rows.forEach(function (r) { el.appendChild(kind === "groups" ? groupRow(cols, r, board) : hitRow(cols, r, board)); });
+    rows.forEach(function (r) {
+      var row = kind === "groups" ? groupRow(cols, r, board)
+        : kind === "rows" ? rowRow(cols, r)
+        : hitRow(cols, r, board);
+      el.appendChild(row);
+    });
   }
 
   function rawLine(no, obj) {

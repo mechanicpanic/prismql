@@ -58,6 +58,9 @@ test("viewsFor: groups get timeline/table/raw", () => {
 test("viewsFor: hits get table/raw only", () => {
   assert.deepEqual(FL.viewsFor("hits"), ["table", "raw"]);
 });
+test("viewsFor: rows (GROUP BY ... AGGREGATE, graph @aleph/prismql, #90) get table/raw only", () => {
+  assert.deepEqual(FL.viewsFor("rows"), ["table", "raw"]);
+});
 test("viewsFor: aggregate/grouped/file/error/empty get summary/raw", () => {
   ["aggregate", "grouped", "file", "error", "empty"].forEach((k) => {
     assert.deepEqual(FL.viewsFor(k), ["summary", "raw"]);

@@ -79,6 +79,7 @@
 .tr .a{color:var(--k-similar);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tr .g{font:600 12px/1.6 "JetBrains Mono",monospace;color:var(--k-evaluate)}
 .tr .x{color:var(--text-2);line-height:1.55}
+.tr .v{font:12px/1.6 "JetBrains Mono",monospace;color:var(--text-2)}
 .tr .sbar{height:3px;border-radius:2px;background:var(--line-2);margin-top:6px;overflow:hidden;width:72px}
 .tr .sbar i{display:block;height:3px;background:var(--k-similar)}
 .raw{overflow:auto;min-height:0;padding:12px 0;font:12.5px/1.7 "JetBrains Mono",monospace;background:var(--sunken)}

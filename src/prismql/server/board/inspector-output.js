@@ -13,7 +13,7 @@
 
   var TITLE = {
     error: "Error", file: "Output", aggregate: "Value",
-    groups: "Groups", hits: "Hits", grouped: "Groups", empty: "Result",
+    groups: "Groups", hits: "Hits", grouped: "Groups", rows: "Groups", empty: "Result",
   };
 
   function big(value, label) {
@@ -73,6 +73,7 @@
   function bodyFor(kind, entry, state, actions) {
     if (kind === "groups") return window.PrismQLInspectorGroups.render(entry, state, actions);
     if (kind === "hits") return window.PrismQLInspectorHits.render(entry, state, actions);
+    if (kind === "rows") return window.PrismQLInspectorRows.render(entry, state, actions);
     if (kind === "aggregate") return big(PL.aggregateValueText(entry.value));
     if (kind === "grouped") return big(typeof entry.count === "number" ? String(entry.count) : "—", "groups");
     if (kind === "file") return renderFile(entry);

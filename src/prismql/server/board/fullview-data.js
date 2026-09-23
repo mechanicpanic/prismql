@@ -113,6 +113,26 @@
     };
   }
 
+  // A "rows" result (GROUP BY ... AGGREGATE, graph #90): flat key/value
+  // pairs, no board fields — loadPaged's paging already covers it.
+  function rowsContext(entry, vs, actions) {
+    var res = loadPaged(entry, [], vs.loadTo, actions, "rows");
+    if (res.blocker) return blockedContext("rows", res);
+    var rows = res.items;
+    var q = vs.q.trim().toLowerCase();
+    var filtered = !q ? rows : rows.filter(function (r) {
+      return String(r.key).toLowerCase().indexOf(q) >= 0
+        || String(r.value).toLowerCase().indexOf(q) >= 0;
+    });
+    var tiles = rows.length === 0 ? [] : [{ v: rows.length + " / " + entry.total, l: "groups loaded" }];
+    return {
+      kind: "rows", loaded: rows, filtered: filtered,
+      pending: res.pending, blocker: res.blocker, loadBound: res.loadBound, total: entry.total,
+      canFilter: true, agents: [], tiles: tiles,
+      note: FL.loadNote(rows.length, entry.total, filtered.length < rows.length ? filtered.length : null),
+    };
+  }
+
   // Fix round 1, #7: the canvas's own summary-note wording, verbatim.
   var SUMMARY_NOTES = {
     aggregate: "single value", error: "the request failed before producing output",
@@ -128,6 +148,7 @@
   function buildContext(entry, board, outputKind, vs, actions, idField) {
     if (outputKind === "groups") return groupsContext(entry, board, vs, actions, idField);
     if (outputKind === "hits") return hitsContext(entry, board, vs, actions);
+    if (outputKind === "rows") return rowsContext(entry, vs, actions);
     return summaryContext(outputKind);
   }
 
@@ -139,7 +160,7 @@
   // shows the journal entry itself — its real fields, nothing invented.
   function rawItemsFor(ctx, entry) {
     if (ctx.kind === "groups") return ctx.filtered.map(function (g) { return g.raw; });
-    if (ctx.kind === "hits") return ctx.filtered;
+    if (ctx.kind === "hits" || ctx.kind === "rows") return ctx.filtered;
     return [entry];
   }
 

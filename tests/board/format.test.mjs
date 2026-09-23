@@ -112,10 +112,19 @@ test("resultLabel: aggregate", () => {
   );
 });
 
-test("resultLabel: aggregate with a null value (GROUP BY) reads 'per group'", () => {
+test("resultLabel: aggregate with a null value and no total (an old journal entry) reads 'per group'", () => {
   assert.equal(
     F.resultLabel({ ok: true, result: "aggregate", value: null }),
     "= per group",
+  );
+});
+
+// A GROUP BY ... AGGREGATE answer now carries a result_id and total (graph
+// @aleph/prismql, #90): the kv label says how many groups.
+test("resultLabel: aggregate with a null value and a known total reads '<total> groups'", () => {
+  assert.equal(
+    F.resultLabel({ ok: true, result: "aggregate", value: null, total: 2 }),
+    "2 groups",
   );
 });
 

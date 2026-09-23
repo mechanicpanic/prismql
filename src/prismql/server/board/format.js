@@ -28,8 +28,14 @@
       return ERR_WORDS[etype] || etype || "error";
     }
     var r = entry.result, label;
-    if (r === "aggregate") label = entry.value == null ? "= per group" : "= " + entry.value;
-    else if (r === "groups" || r === "named") {
+    // A GROUP BY ... AGGREGATE answer carries a result_id and total (graph
+    // @aleph/prismql, #90): the kv label says how many groups, not the
+    // placeholder — an old journal entry with no total keeps the
+    // placeholder (it predates the "rows" store).
+    if (r === "aggregate") {
+      label = entry.value != null ? "= " + entry.value
+        : typeof entry.total === "number" ? entry.total + " groups" : "= per group";
+    } else if (r === "groups" || r === "named") {
       label = entry.total + " groups" + (entry.capped ? " · capped" : "");
     } else if (r === "hits") {
       label = entry.total + " hits" + (entry.threshold != null ? " ≥ " + entry.threshold : "");

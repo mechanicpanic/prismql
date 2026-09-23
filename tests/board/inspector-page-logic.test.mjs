@@ -41,6 +41,10 @@ test("isValidPage: a groups/named page (results array, even empty)", () => {
 test("isValidPage: a hits page", () => {
   assert.equal(PL.isValidPage({ hits: [] }), true);
 });
+test("isValidPage: a rows page (GROUP BY ... AGGREGATE, graph @aleph/prismql, #90)", () => {
+  assert.equal(PL.isValidPage({ rows: [] }), true);
+  assert.equal(PL.isValidPage({ rows: [{ key: "a", value: 1 }] }), true);
+});
 test("isValidPage: a gone page", () => {
   assert.equal(PL.isValidPage({ gone: true }), true);
 });
@@ -86,6 +90,17 @@ test("aggregateValueText: a real value", () => {
 test("aggregateValueText: null (a per-group aggregate) reads 'per group', not '—'", () => {
   assert.equal(PL.aggregateValueText(null), "per group");
   assert.equal(PL.aggregateValueText(undefined), "per group");
+});
+
+// --- rowValueText (graph @aleph/prismql, #90) ---
+
+test("rowValueText: a number renders as-is", () => {
+  assert.equal(PL.rowValueText(3), "3");
+  assert.equal(PL.rowValueText(0), "0");
+});
+test("rowValueText: a distinct list joins with ', '", () => {
+  assert.equal(PL.rowValueText(["a", "b", "c"]), "a, b, c");
+  assert.equal(PL.rowValueText([]), "");
 });
 
 // --- pairEventsToSlots (fix round 1, #7) ---

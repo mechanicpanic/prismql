@@ -22,15 +22,17 @@
     return rid + "|" + offset + "|" + limit + "|" + sorted;
   }
 
-  // A real page: {gone:true}, a groups/named page ({results:[...]}), or a
-  // hits page ({hits:[...]}). Anything else — a network error, a 429/5xx
-  // body, an unrelated FastAPI {"detail":...} — is not a page and must
-  // never be cached as one (fix round 1, #2).
+  // A real page: {gone:true}, a groups/named page ({results:[...]}), a
+  // hits page ({hits:[...]}), or a rows page ({rows:[...]}) — a GROUP BY
+  // ... AGGREGATE answer (graph @aleph/prismql, #90). Anything else — a
+  // network error, a 429/5xx body, an unrelated FastAPI {"detail":...} —
+  // is not a page and must never be cached as one (fix round 1, #2).
   function isValidPage(data) {
     if (!data) return false;
     if (data.gone === true) return true;
     if (Array.isArray(data.results)) return true;
     if (Array.isArray(data.hits)) return true;
+    if (Array.isArray(data.rows)) return true;
     return false;
   }
 
@@ -78,11 +80,17 @@
     return (ids || []).map(function (id) { return byId[id] || null; });
   }
 
+  // A rows result's value is a number, or a list for `distinct` — joined
+  // with ", " for display (graph @aleph/prismql, #90); never JSON.
+  function rowValueText(value) {
+    return Array.isArray(value) ? value.join(", ") : String(value);
+  }
+
   var api = {
     fieldsFor: fieldsFor, cacheKey: cacheKey, isValidPage: isValidPage,
     errorMessageFor: errorMessageFor, groupsMoreLabel: groupsMoreLabel,
     hitsNote: hitsNote, isScored: isScored, aggregateValueText: aggregateValueText,
-    pairEventsToSlots: pairEventsToSlots,
+    pairEventsToSlots: pairEventsToSlots, rowValueText: rowValueText,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLInspectorPageLogic = api;

@@ -203,3 +203,47 @@ test("fix round 2, #4: a blocked (gone) result hides the filter box and chips", 
   assert.equal(ctx.canFilter, false);
   assert.deepEqual(ctx.agents, []);
 });
+
+// --- rows (GROUP BY ... AGGREGATE answer, graph @aleph/prismql, #90) ---
+
+test("rowsContext: loads the flat key/value list and reports it as groups loaded/total", async () => {
+  const Data = freshModules(async () => ({
+    kind: "rows", function: "count", field: null, total: 2, offset: 0,
+    count: 2, truncated: false,
+    rows: [{ key: "tick_a", value: 3 }, { key: "tick_b", value: 1 }],
+  }));
+  const entry = { result_id: "r9", total: 2, kind: "evaluate", result: "aggregate" };
+  Data.buildContext(entry, board, "rows", vs(), actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "rows", vs(), actions);
+  assert.equal(ctx.kind, "rows");
+  assert.deepEqual(ctx.loaded, [{ key: "tick_a", value: 3 }, { key: "tick_b", value: 1 }]);
+  assert.deepEqual(ctx.filtered, ctx.loaded);
+  assert.deepEqual(ctx.tiles, [{ v: "2 / 2", l: "groups loaded" }]);
+  assert.equal(ctx.note, "2 of 2 loaded");
+  assert.equal(ctx.canFilter, true);
+});
+
+test("rowsContext: the text filter matches the key or the value", async () => {
+  const Data = freshModules(async () => ({
+    kind: "rows", total: 2, offset: 0, count: 2, truncated: false,
+    rows: [{ key: "tick_a", value: 3 }, { key: "tick_b", value: 1 }],
+  }));
+  const entry = { result_id: "r10", total: 2, kind: "evaluate", result: "aggregate" };
+  const filterVs = vs();
+  filterVs.q = "tick_a";
+  Data.buildContext(entry, board, "rows", filterVs, actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "rows", filterVs, actions);
+  assert.deepEqual(ctx.filtered, [{ key: "tick_a", value: 3 }]);
+});
+
+test("rowsContext: a gone result renders no tiles and the canvas's own note", async () => {
+  const Data = freshModules(async () => ({ gone: true }));
+  const entry = { result_id: "r11", total: 2, kind: "evaluate", result: "aggregate" };
+  Data.buildContext(entry, board, "rows", vs(), actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "rows", vs(), actions);
+  assert.deepEqual(ctx.tiles, []);
+  assert.equal(ctx.note, "result no longer kept");
+});

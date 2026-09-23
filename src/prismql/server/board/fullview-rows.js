@@ -13,12 +13,20 @@
   var IF = typeof module === "object" && module.exports
     ? require("./inspector-format.js")
     : root.PrismQLInspectorFormat;
+  var PL = typeof module === "object" && module.exports
+    ? require("./inspector-page-logic.js")
+    : root.PrismQLInspectorPageLogic;
 
   // Fix round 1, #6: the kind/actor columns appear only when the corpus
   // board config sets that field — same rule the timeline cards already
   // follow (never a guessed or empty-but-present column).
   function tableHeadsFor(kind, scored, board) {
     board = board || {};
+    // A rows result (GROUP BY ... AGGREGATE, graph @aleph/prismql, #90) has
+    // its own two columns — no time/kind/actor/text, there is no event.
+    if (kind === "rows") {
+      return { cols: "minmax(0,320px) minmax(0,1fr)", heads: ["key", "value"] };
+    }
     var heads = [], cols = [];
     if (kind === "groups") {
       heads.push("group", "#", "time"); cols.push("56px", "44px", "168px");
@@ -57,6 +65,15 @@
       });
     });
     return rows;
+  }
+
+  // A rows result's table row: key as-is, value joined with ", " when it
+  // is a `distinct` list (graph @aleph/prismql, #90; inspector-page-logic
+  // carries the shared join so the inspector and this view agree).
+  function rowTableRows(rows) {
+    return (rows || []).map(function (r) {
+      return { key: String(r.key), value: PL.rowValueText(r.value) };
+    });
   }
 
   // BM25 never surfaces as a "score" for search — an unscored cell reads
@@ -131,6 +148,7 @@
 
   var api = {
     tableHeadsFor: tableHeadsFor, groupTableRows: groupTableRows, hitTableRows: hitTableRows,
+    rowTableRows: rowTableRows,
     timelineItems: timelineItems, navItemFor: navItemFor, groupHeaderInfo: groupHeaderInfo,
   };
   if (typeof module === "object" && module.exports) module.exports = api;

@@ -21,6 +21,23 @@ test("outputKind: aggregate", () => {
   assert.equal(IF.outputKind({ ok: true, result: "aggregate", value: 5 }), "aggregate");
 });
 
+// A GROUP BY ... AGGREGATE answer carries a result_id (graph @aleph/prismql,
+// #90) and pages as a table; an old journal entry (no result_id) keeps the
+// single-value tile.
+test("outputKind: aggregate with a result_id (GROUP BY ... AGGREGATE) is rows", () => {
+  assert.equal(
+    IF.outputKind({ ok: true, result: "aggregate", value: null, result_id: "r1-abc" }),
+    "rows",
+  );
+});
+
+test("outputKind: aggregate without a result_id stays aggregate", () => {
+  assert.equal(
+    IF.outputKind({ ok: true, result: "aggregate", value: null }),
+    "aggregate",
+  );
+});
+
 test("outputKind: hits with count 0 is empty, not hits", () => {
   assert.equal(IF.outputKind({ ok: true, result: "hits", count: 0, total: 12 }), "empty");
 });

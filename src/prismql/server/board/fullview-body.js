@@ -21,7 +21,7 @@
   // says "<loaded> of <total> loaded" (plus "kept K" for hits), so this
   // row only ever needs to say whether more can be asked for.
   function appendLoadMore(container, ctx, vs, onMore) {
-    if (ctx.kind !== "groups" && ctx.kind !== "hits") return;
+    if (ctx.kind !== "groups" && ctx.kind !== "hits" && ctx.kind !== "rows") return;
     if (ctx.loaded.length >= ctx.loadBound) return;
     var wrap = mk("div", "more");
     if (ctx.pending) {
@@ -35,7 +35,7 @@
     container.appendChild(wrap);
   }
   function attachInfiniteScroll(container, ctx, vs, onMore) {
-    if (ctx.kind !== "groups" && ctx.kind !== "hits") return;
+    if (ctx.kind !== "groups" && ctx.kind !== "hits" && ctx.kind !== "rows") return;
     if (ctx.pending || ctx.loaded.length >= ctx.loadBound) return;
     container.addEventListener("scroll", function onScroll() {
       if (container.scrollTop + container.clientHeight >= container.scrollHeight - 40) {
@@ -69,8 +69,8 @@
     wrap.setAttribute("role", "table");
     wrap.setAttribute("aria-label", "Output as a table");
     var heads = FR.tableHeadsFor(outputKind, ctx.scored, board);
-    var rows = outputKind === "groups"
-      ? FR.groupTableRows(ctx.filtered, board)
+    var rows = outputKind === "groups" ? FR.groupTableRows(ctx.filtered, board)
+      : outputKind === "rows" ? FR.rowTableRows(ctx.filtered)
       : FR.hitTableRows(ctx.filtered, board, ctx.terms, ctx.scored);
     Table.renderTable(wrap, outputKind, heads.cols, heads.heads, rows, board);
     loadable(wrap, ctx, vs, onMore);

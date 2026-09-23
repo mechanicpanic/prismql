@@ -49,6 +49,11 @@
 .hit .bar i{display:block;height:3px;background:var(--k-similar)}
 .hit .x{font-size:13px;line-height:1.5;color:var(--text-2);margin-top:3px}
 mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
+.rows-table{width:100%;border-collapse:collapse;font-size:13px}
+.rows-table td{padding:7px 10px;border-bottom:1px solid var(--line);color:var(--text-2)}
+.rows-table tr:last-child td{border-bottom:0}
+.rows-table .k{font:12px "JetBrains Mono",monospace;color:var(--text)}
+.rows-table .v{text-align:right;font:12px "JetBrains Mono",monospace}
 .big{display:flex;align-items:baseline;gap:10px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .big b{font:600 32px "JetBrains Mono",monospace;color:var(--text)}
 .big > span{font-size:13px;color:var(--muted)}

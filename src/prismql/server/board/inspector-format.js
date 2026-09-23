@@ -40,7 +40,11 @@
   function outputKind(entry) {
     if (entry.ok === false) return "error";
     if (entry.output === "file") return "file";
-    if (entry.result === "aggregate") return "aggregate";
+    // A GROUP BY ... AGGREGATE answer carries a result_id (graph
+    // @aleph/prismql, #90) and pages as a table; a plain aggregate (or an
+    // old journal entry from before this) has none and stays the single
+    // "aggregate" value tile.
+    if (entry.result === "aggregate") return entry.result_id != null ? "rows" : "aggregate";
     if (entry.result === "hits") return entry.count === 0 ? "empty" : "hits";
     if (entry.result === "groups" || entry.result === "named") {
       return entry.total === 0 ? "empty" : "groups";

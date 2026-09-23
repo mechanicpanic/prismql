@@ -10,7 +10,7 @@
   "use strict";
 
   var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  var VIEWS = { groups: ["timeline", "table", "raw"], hits: ["table", "raw"] };
+  var VIEWS = { groups: ["timeline", "table", "raw"], hits: ["table", "raw"], rows: ["table", "raw"] };
   // The one page size every loader/Load-more/scroll-to-end site reads (fix
   // round 1, #8) — fullview-data.js, fullview-body.js and fullview.js all
   // read this instead of each carrying its own literal 50.
