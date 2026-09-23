@@ -43,6 +43,9 @@ class CorpusConfig:
     timestamp_field: str = "timestamp"
     text_match: str = "stem"
     text_language: str = "english"
+    # "tantivy" | "memory"; None = tantivy when installed (graph #91)
+    text_index: str | None = None
+    text_index_path: str | None = None
     quantifier_ceiling: int | None = None
     dictionaries: dict[str, Any] = field(default_factory=dict)
     # [corpora.<name>.semantic]: embedding model backing similar_to()
@@ -69,6 +72,8 @@ class ServerConfig:
     timestamp_field: str = "timestamp"
     text_match: str = "stem"
     text_language: str = "english"
+    text_index: str | None = None  # see CorpusConfig.text_index
+    text_index_path: str | None = None
     quantifier_ceiling: int | None = None
     results_dir: str | None = None
     static_dir: str | None = None
@@ -114,6 +119,8 @@ class ServerConfig:
                 timestamp_field=self.timestamp_field,
                 text_match=self.text_match,
                 text_language=self.text_language,
+                text_index=self.text_index,
+                text_index_path=self.text_index_path,
                 quantifier_ceiling=self.quantifier_ceiling,
                 dictionaries=self.dictionaries,
                 semantic_model=self.semantic_model,
@@ -172,6 +179,8 @@ def load_config(path: str | Path) -> ServerConfig:
             timestamp_field=section.get("timestamp_field", "timestamp"),
             text_match=section.get("text_match", "stem"),
             text_language=section.get("text_language", "english"),
+            text_index=section.get("text_index"),
+            text_index_path=_resolve(base, section.get("text_index_path")),
             quantifier_ceiling=section.get("quantifier_ceiling"),
             dictionaries=dict(section.get("dictionaries", {})),
             semantic_model=semantic_section.get("model"),
@@ -214,6 +223,8 @@ def load_config(path: str | Path) -> ServerConfig:
         timestamp_field=engine.get("timestamp_field", "timestamp"),
         text_match=engine.get("text_match", "stem"),
         text_language=engine.get("text_language", "english"),
+        text_index=backend.get("text_index"),
+        text_index_path=_resolve(base, backend.get("text_index_path")),
         quantifier_ceiling=engine.get("quantifier_ceiling"),
         results_dir=results_dir,
         static_dir=static_dir,
@@ -362,6 +373,12 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
     if config.backend_type == "tantivy" and config.index_path:
         backend_config["index_path"] = config.index_path
     backend_config["timestamp_fields"] = config.timestamp_fields
+    if config.backend_type == "memory" and "documents" in backend_config:
+        from .text_index import build_text_index
+
+        backend_config["text_index"] = build_text_index(
+            config, backend_config["documents"]
+        )
 
     index = _semantic_index(
         config, backend_config.get("documents"), vectors, embedded_model, embedded_text
@@ -377,6 +394,13 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         text_match=config.text_match,
         quantifier_ceiling=config.quantifier_ceiling,
     )
+
+
+def _text_search(backend: Any) -> str:
+    """Which index answers text predicates: a full-text one or Python's."""
+    if getattr(backend, "text_index", None) is not None:
+        return "tantivy"
+    return "tantivy" if type(backend).__name__ == "TantivyBackend" else "memory"
 
 
 SCHEMA_SAMPLE_CAP = 1000
@@ -428,6 +452,7 @@ def compute_schema(
         "id_field": config.id_field,
         "timestamp_field": config.timestamp_field,
         "text_match": config.text_match,
+        "text_search": _text_search(backend),
         "text_language": config.text_language,
         "quantifier_ceiling": config.quantifier_ceiling,
         "fields": fields,

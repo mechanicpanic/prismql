@@ -178,6 +178,18 @@ empty, check this first.
 Relative paths inside the file resolve against the file's own directory, so
 you can keep config and data together and point at them from anywhere.
 
+**Text search goes through a full-text index.** A `memory` corpus answers
+`contains()`, phrases and `/search` from a tantivy index built over the same
+events (`text_index = "tantivy"`, the default when the `tantivy` extra is
+installed); `text_index = "memory"` keeps Python's own index, and
+`text_match = "substring"` always does, since tantivy matches whole words.
+The sets are the same either way; the speed is not (Village, 381k events: a
+phrase query 10 s → 0.2 s, a dictionary with two phrases 20 s → 0.07 s). Add
+`text_index_path = "index/text"` under `[backend]` (or `[corpora.<name>]`) to
+keep the index on disk: the next start opens it instead of rebuilding
+(Village: 99 s → 33 s), and it is rebuilt — never reused — when the data file
+changes. `/schema` reports which one a corpus runs as `text_search`.
+
 ---
 
 ## 4. The first query
@@ -571,7 +583,9 @@ language is the corpus's `text_language` (`english` unless you set it;
 exist and are chosen explicitly, per corpus (`text_match`) or per dictionary
 (`match`): `token` (whole words, no stemming) and `substring` (`ERR` finds
 `ERR_TIMEOUT`, and `hi` finds `this` — right for logs and identifiers, wrong
-for prose). Multi-word entries always match as a phrase, in that order.
+for prose). Multi-word entries always match as a phrase, in that order — and
+so does an entry the tokenizer cuts into pieces: `sign-in` is the phrase
+`sign in`, `hello!` is the word `hello`.
 
 Text matching here has no ranking and no scores: a set of events in, a set
 of events out. (With the `semantic` extra installed and a model configured,

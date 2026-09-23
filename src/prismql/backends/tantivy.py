@@ -133,6 +133,7 @@ class TantivyBackend(SearchBackend):
         text_language: str = "english",
         semantic_index: Any | None = None,
         timestamp_fields: Sequence[str] | None = None,
+        source: dict[str, Any] | None = None,
     ) -> None:
         if not _TANTIVY_AVAILABLE:
             raise ImportError(
@@ -145,6 +146,9 @@ class TantivyBackend(SearchBackend):
         # similar_to(): the vector index is independent of the text index
         # (built from documents or read from an ingested emb column).
         self.semantic_index = semantic_index
+        # What the index was built from, kept in its meta so a caller can
+        # refuse to reopen it for other data (graph @aleph/prismql, #91).
+        self.source = source
         self.timestamp_fields = list(
             dict.fromkeys([*(timestamp_fields or []), "timestamp"])
         )
@@ -267,6 +271,7 @@ class TantivyBackend(SearchBackend):
                         "meta_fields": sorted(self._meta_fields),
                         "text_language": self.text_language,
                         "schema_version": _SCHEMA_VERSION,
+                        "source": self.source,
                     }
                 ),
                 encoding="utf-8",
@@ -283,6 +288,7 @@ class TantivyBackend(SearchBackend):
             )
         self._index = tantivy.Index.open(str(index_path))
         self.text_language = meta.get("text_language", self.text_language)
+        self.source = meta.get("source")
         _register_analyzers(self._index, self.text_language)
         order = _read_order(Path(index_path))
         if order is not None:

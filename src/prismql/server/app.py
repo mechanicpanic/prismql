@@ -202,6 +202,11 @@ class ServerState:
         backend = engine.search_backend
         if getattr(backend, "rank", None) is not None:
             return backend
+        # A memory corpus with a full-text index ranks from that same index:
+        # one tantivy index per corpus serves the language and scouting (#91).
+        text_index = getattr(backend, "text_index", None)
+        if text_index is not None:
+            return text_index
         with exec_lock:
             cached = self.scouts.get(resolved)
             if cached is not None and cached[0] is engine:

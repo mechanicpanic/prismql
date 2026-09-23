@@ -1,5 +1,13 @@
 ## Unreleased
 
+### Changed (text search runs on a full-text index)
+- A `memory` corpus answers `contains()`, phrases and `/search` from one tantivy index per corpus (graph @aleph/prismql, #91): `[corpora.<name>] text_index = "tantivy" | "memory"` (default tantivy when the extra is installed; `text_match = "substring"` stays in Python), `text_index_path` keeps it on disk with a fingerprint of the data it was built from and rebuilds it when the data changes. Same sets as before, verified on Village: a phrase query 10 s → 0.18 s, `contains(outreach)` in a chain 20 s → 0.07 s, `/search` on a memory corpus no longer builds a second index (75 s on first use → 1.5 ms). `/schema` reports `text_search`.
+- `TantivyBackend` reads match sets from a position fast field instead of each hit's stored document (index layout 3; an index of layout 2 is refused with rebuild instructions): a common word 1.2 s → 81 ms on Village.
+
+### Fixed (text)
+- A dictionary term the tokenizer splits (`sign-in`, `hello!`) matched nothing on the memory backend; it now matches the phrase of its tokens, as on tantivy (Village `contains(signin)`: 9,561 → 10,350 events).
+- `contains_phrase` and multi-word dictionary entries on memory without n-grams no longer re-tokenize the whole corpus per call.
+
 ### Added (GROUP BY ... AGGREGATE answers page)
 - A `GROUP BY ... AGGREGATE` answer (`grouped_values`) is now additionally kept on the server as a pageable `"rows"` result (graph @aleph/prismql, node #90, extends #65): the inline `/evaluate` response is unchanged apart from a new `result_id`/`total`, and `GET /results/{id}` (and `.jsonl`) page the same key/value pairs, in the engine's order. Plain aggregates and a `GROUP BY` without `AGGREGATE` are unchanged — still small and inline, no id. The board's inspector and full view show these as a two-column, paged table instead of the "per group" placeholder; old journal entries without a `result_id` keep the placeholder.
 
