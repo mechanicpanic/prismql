@@ -40,7 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
         "(column entities, spaCy); the engine reads them as its indexes",
     )
     parser.add_argument(
-        "--text", default="text", help="text column --annotate reads (default text)"
+        "--text",
+        help="the one text column --annotate reads (default: every text field "
+        "present — text, content, message — as the server does at load)",
     )
     parser.add_argument(
         "--spacy-model", default="en_core_web_sm", help="spaCy model for entities"
@@ -76,10 +78,10 @@ def run(argv: Sequence[str] | None = None) -> int:
 
         df = read_codex(Path(args.src))
 
-    if args.annotate:
+    kinds = [k for k in (args.annotate or "").split(",") if k]
+    if kinds:
         from .annotate import annotate
 
-        kinds = [k for k in args.annotate.split(",") if k]
         try:
             df = annotate(df, kinds, text=args.text, spacy_model=args.spacy_model)
         except ValueError as e:
@@ -92,6 +94,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         args.dst,
         embed_model=args.model if args.embed else None,
         embed_text=args.embed,
+        annotations=kinds,
     )
     info = core.describe(df)
     print(f"{path}: {info['rows']} rows, {info['first']} … {info['last']}")

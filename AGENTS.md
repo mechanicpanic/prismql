@@ -203,7 +203,7 @@ Untracked `HANDOFF-*.md` at the repo root are legacy drafts from before the grap
 - `src/prismql/visitors/` — legacy parse-tree executor (`use_ir=False`); shared helpers live here, `IRExecutor` inherits them.
 - `src/prismql/plan/` — the operator layer: `primitives.py` (P2 primitives + group-level links), `operators.py` (Leg → result frames, bindings inside selection), `frames.py` (per-query frame from the order axis), `bridge.py` (executor state → operators). Both executors call only `bridge`.
 - `src/prismql/processors/`, `aggregators/` — window merging, temporal filtering, aggregation.
-- `src/prismql/backends/` — memory, rust_memory, tantivy, spacy, semantic (embedding index) + factory; `order.py` = the order axis (`OrderIndex`).
+- `src/prismql/backends/` — memory, rust_memory, tantivy, semantic (embedding index) + factory; `order.py` = the order axis (`OrderIndex`).
 - `src/prismql/loaders.py` — corpus as an ordered Arrow table (`load_table`).
 - `src/prismql/server/` — FastAPI app (multi-corpus, static mount, rate limit), result store and pages (`results.py`, `pages.py`), MCP, config; `board/` — the board at `/board/` (plain JS, pure modules tested by `node --test` through `tests/test_board_js.py`).
 - `src/prismql/ingest/` — `prismql ingest`: tables, Claude Code and Codex logs → ordered Parquet (layer 1).

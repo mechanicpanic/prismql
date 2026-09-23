@@ -1060,7 +1060,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         return cached
 
     def _annotate_questions(self) -> set[MessageId]:
-        from ..ingest.annotate import question_ids
+        from ..ingest.annotate import TEXT_FIELDS, question_ids
 
         backend = self.search_backend
         docs = getattr(backend, "documents", None)
@@ -1072,11 +1072,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
                     "… --annotate questions) or pass PrecomputedIndexes(questions=…)."
                 )
             docs = backend.get_documents(list(backend.get_all_document_ids()))
-        fields = getattr(backend, "text_fields", None) or getattr(
-            getattr(backend, "config", None), "text_fields", ["text"]
-        )
+        # one field set for every backend and for ingest (never a backend's
+        # own text fields), or the same corpus answers differently
         id_field = getattr(backend, "id_field", "id")
-        return question_ids(docs, id_field=id_field, text_fields=list(fields))
+        return question_ids(docs, id_field=id_field, text_fields=TEXT_FIELDS)
 
     def _get_ner_messages(self, ner_label: str) -> set[MessageId]:
         """Get messages containing specific NER type."""

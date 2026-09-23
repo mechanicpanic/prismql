@@ -142,7 +142,6 @@ ignore = [
 "src/prismql/visitors/*" = ["N802", "C901", "E501"]  # ANTLR patterns, complexity, long lines
 "src/prismql/engine.py" = ["N802", "N803", "ARG002", "E501"]  # ANTLR interface requirements, long deprecation msg
 "src/prismql/backends/factory.py" = ["C901"]  # Complexity - future refactor candidate
-"src/prismql/backends/spacy.py" = ["S110", "C901"]  # Intentional except pass, complexity
 "src/prismql/processors/window.py" = ["C901", "ANN001", "ANN202", "SIM102"]  # Complexity, helper-closure annotations
 "src/prismql/highlighting/pygments_lexer.py" = ["E501"]  # Long regex strings
 "tests/test_quantifier_fix.py" = ["E501"]  # Long query strings

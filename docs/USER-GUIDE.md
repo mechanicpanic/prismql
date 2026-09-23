@@ -140,12 +140,14 @@ also carries one embedding per row; the server then answers
 which model to encode the query with because the file says so.
 
 Add `--annotate questions` and the file carries an `is_question` column; the
-server reads it as the answer to `is_question()` on any backend. Without the
-column the same rule runs once over the events at load (a '?' that ends a
-clause, or a question word first — a '?' inside a URL does not count).
-`--annotate entities` (extra `nlp`, a spaCy model, `--spacy-model`) adds the
-labels spaCy finds, for `mentions_org()` and its kin. `--text` names the
-column both read (default `text`).
+server reads it as the answer to `is_question()` on any backend. Without it
+the same rule runs once over the events at load (a '?' that ends a clause, or
+a question word first — a '?' inside a URL does not count). Both read every
+text field present (`text`, `content`, `message`); `--text COL` narrows the
+ingest to one column. `--annotate entities` (extra `nlp`, a spaCy model,
+`--spacy-model`) adds the labels spaCy finds, for `mentions_org()` and its
+kin. Only a file the ingest stamped counts: a column that merely shares the
+name `is_question` or `entities` stays an ordinary field.
 
 The same command reads a Claude Code project's transcripts —
 `prismql ingest claude-code ~/.claude/projects/<your-project> sessions.parquet`

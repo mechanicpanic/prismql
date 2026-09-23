@@ -407,11 +407,13 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
     backend = BackendFactory._create_search_backend(backend_config)
     # Annotation columns an ingest wrote become the engine's indexes (#106).
     indexes = None
-    if "documents" in backend_config:
-        from ..ingest.annotate import indexes_from_columns
+    if "documents" in backend_config and config.data:
+        from ..ingest.annotate import indexes_from_columns, stamped_kinds
 
         indexes = indexes_from_columns(
-            backend_config["documents"], id_field=config.id_field
+            backend_config["documents"],
+            id_field=config.id_field,
+            kinds=stamped_kinds(config.data),
         )
     return PrismQLEngine(
         backend,

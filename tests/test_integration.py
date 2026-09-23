@@ -82,7 +82,7 @@ class TestPrismQLEngineIntegration:
         assert len(results) == 1
         assert [2] in results
 
-    def test_from_config_spacy_backend(self):
+    def test_from_config_with_an_nlp_backend_section_is_refused(self):
         """nlp_backend was removed (graph @aleph/prismql #106): annotate at
         ingest time or pass precomputed_indexes."""
         config = {

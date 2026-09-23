@@ -200,6 +200,7 @@ def write(
     *,
     embed_model: str | None = None,
     embed_text: str | None = None,
+    annotations: Sequence[str] = (),
 ) -> Path:
     """Write the stream as Parquet; ``emb`` lands as FixedSizeList<float32, d>.
 
@@ -212,11 +213,14 @@ def write(
     p = Path(dst)
     p.parent.mkdir(parents=True, exist_ok=True)
     table = df.to_arrow()
+    meta = dict(table.schema.metadata or {})
     if embed_model:
-        meta = dict(table.schema.metadata or {})
         meta[EMBED_MODEL_KEY] = embed_model.encode()
         meta[EMBED_TEXT_KEY] = (embed_text or "text").encode()
-        table = table.replace_schema_metadata(meta)
+    if annotations:
+        # which columns are annotations, not fields that share their names
+        meta[b"prismql.annotations"] = ",".join(annotations).encode()
+    table = table.replace_schema_metadata(meta or None)
     pq.write_table(table, p)
     return p
 

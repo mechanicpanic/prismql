@@ -60,58 +60,18 @@ def example_memory_only():
 
 
 def example_spacy_nlp():
-    """Configuration with spaCy NLP processing."""
+    """Entities from spaCy: annotate once at ingest, not per query.
 
-    # Note: This requires spaCy installation
-    # import spacy
-    # nlp = spacy.load("en_core_web_sm")
+    The engine has no NLP backend; spaCy runs at ingest and writes an
+    `entities` column that the server reads as the engine's index:
 
-    config = {
-        "search_backend": {
-            "type": "memory",
-            "documents": [
-                {
-                    "id": 1,
-                    "text": "John Doe visited New York last Tuesday",
-                    "user": "reporter",
-                },
-                {
-                    "id": 2,
-                    "text": "Apple Inc. announced new products",
-                    "user": "tech_news",
-                },
-                {"id": 3, "text": "The meeting is scheduled for 3pm", "user": "admin"},
-            ],
-        },
-        "nlp_backend": {
-            "type": "spacy",
-            "model": "en_core_web_sm",  # Or pass loaded nlp object
-            "entity_mappings": {
-                # Map spaCy labels to your preferred labels
-                "PERSON": "PERSON",
-                "GPE": "LOCATION",
-                "ORG": "ORGANIZATION",
-                "DATE": "DATE",
-                "TIME": "TIME",
-                "CARDINAL": "NUMBER",
-            },
-            "question_patterns": [
-                r"\\?$",  # Ends with ?
-                r"^(what|who|when|where|why|how|which)\\b",  # Question words
-                r"^(can|could|would|should|do|does|did)\\b",  # Auxiliary verbs
-            ],
-            "batch_size": 50,
-        },
-    }
+        prismql ingest table events.csv events.parquet --id id --time ts \\
+            --annotate questions,entities --spacy-model en_core_web_sm
 
-    print("spaCy NLP configuration:")
-    print(f"  Model: {config['nlp_backend']['model']}")
-    print(f"  Entity mappings: {list(config['nlp_backend']['entity_mappings'].keys())}")
-
-    # Uncomment when you have spaCy installed:
-    # engine = PrismQLEngine.from_config(config)
-    # print(f"  Entity extraction test: {engine.nlp_backend.extract_entities('John lives in Paris')}")
-    # return engine
+    Then point the server at events.parquet; `mentions_org()` and its kin
+    answer from that column (extra `nlp`).
+    """
+    print("spaCy runs at ingest: prismql ingest ... --annotate entities")
 
 
 def example_precomputed_indexes():
@@ -184,16 +144,6 @@ def example_full_stack():
                     "channel": "internal",
                 },
             ],
-        },
-        "nlp_backend": {
-            "type": "spacy",
-            "model": "en_core_web_sm",
-            "entity_mappings": {
-                "PERSON": "PERSON",
-                "ORG": "ORGANIZATION",
-                "DATE": "DATE",
-                "TIME": "TIME",
-            },
         },
         "precomputed_indexes": {
             "questions": [4],

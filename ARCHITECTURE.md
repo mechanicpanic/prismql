@@ -152,7 +152,6 @@ reproduces, not as code.
 | `tantivy` | Lucene-style, Rust | **yes** (`index_path`, opens without re-indexing) | Python fallback | **stemmed** (`work` finds `working`; `hi` does not find `this`) | tokenizers are per field: raw / simple / n-gram / language stemmer — substring mode is an n-gram field |
 | `opensearch` / `elasticsearch` | remote FTS | remote | Python | analyzer-dependent | client-side search only |
 | `postgres`, `duckdb` | FTS in the DB | in the DB | Python | FTS | **not** used as a store with joins; only as an id-set oracle |
-| `spacy` | NLP backend (entities), not a search backend | — | — | — | feeds `mentions_*` |
 
 Order contract (P1a, every backend): `positions / sorted_positions / ids_at /
 timestamps_at / has_order_axis`; a backend without an axis raises
