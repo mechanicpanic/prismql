@@ -435,13 +435,71 @@ id comes back as
 `{"ok":false,"error":{"type":"gone","message":"...run the query again"}}`
 — not silently empty.
 
-`/board/` on the same server is the board: a live feed of everything the
-server was asked — by you, by a script, by an agent — with the query
-highlighted and the outcome beside it, an editor to re-run or change any of
-it, and the results of your own runs. It stores summaries, not results, so
-nothing on it gets large. It reads an event's `kind` and `actor` from the
-fields you name under `[corpora.<name>.board]` in the config (`[board]` on
-a single-corpus file); `GET /corpora` echoes that mapping back.
+`/board/` on the same server is the board: a live journal of every
+`/evaluate`, `/search` and `/similar` the server has answered — yours,
+a script's, an agent's — as it happens. It stores summaries, not results,
+so nothing on it gets large.
+
+The layout is four parts. On the left, **filters** — time range, kind
+(evaluate/search/similar), source (who asked), corpus, status
+(ok/capped/empty/error) — each with a live count, and "reset all filters"
+once any is set. In the middle, the **journal**, newest first, grouped by
+day, one row per request: time, kind, source, corpus, a one-line result
+("6 groups", "1 hit", "= 181", "capped at 3", "syntax error") and how long
+it took. On the right, the **Request pane**, showing the selected row's
+real output — not just its summary: a match's groups as chains, each pair
+of events joined by a gap line ("+3m12s · 2 events between", from the
+positions and times in between, either half dropped when it has nothing to
+show); a search or similar's hits with their score and a bar, and, for
+search, the matched terms highlighted in the text; a plain value for an
+aggregate; a `GROUP BY` count; and a runtime or syntax error with its
+line/column when the query has one. The same pane has an **Editor** tab —
+the picked query, highlighted, a corpus picker, a Run button — which reruns
+or edits any request; a run from here reaches the server exactly like any
+other client, identifying itself as `board` (see below). Double-click a row,
+or press Enter on the selected one, for the **full view**: the same output
+at full size, in Timeline, Table or Raw JSON, paged 50 at a time.
+
+The board reads an event's `kind` and `actor` from the fields you name
+under `[corpora.<name>.board]` in the config (`[board]` on a single-corpus
+file):
+
+```toml
+[corpora.village.board]
+kind = "kind"
+actor = "agent"
+```
+
+Leave it unset for a corpus and the board still shows the request and its
+output — just the event text, with no kind/actor line on each one. `GET
+/corpora` echoes the mapping back per corpus, so you can check what the
+board will show without opening it.
+
+Where the data comes from: the journal itself (`GET /activity?since=` for a
+backfill, `GET /activity/stream` for the live feed by server-sent events),
+plus `GET /results/{id}` for the full groups/hits behind a kept request and
+`GET /corpora` for the board-field mapping and the known corpus names.
+
+A request is attributed by the `X-PrismQL-Client` header — an agent that
+sets it shows up under that name; anything that does not (a person's
+`curl`, a browser) shows as its IP address. The board's own editor sets it
+to `board`.
+
+Keyboard: ↑/↓ moves through the journal, Enter opens the selected row full
+screen, Esc leaves the full view, ←/→ steps to the neighbouring request
+from there, and ⌘⏎ (Ctrl⏎ on other keyboards) runs the query while the
+editor has focus. The theme toggle (top right) remembers dark or light
+across visits.
+
+Honest limits: the journal is a ring of `[server] activity_max` entries
+(500 by default) — older requests simply are not there any more. A kept
+result (what the Request pane and the full view page through) does not
+survive `/reload` or a server restart; ask for it after either and the
+board says plainly that it is "no longer kept" rather than showing nothing.
+While the server is down the board backs off and retries on its own; when
+it comes back — including after a restart, which the board notices even
+across a plain page reload — the journal rebases onto the new process
+instead of mixing the two.
 
 Two more endpoints are for looking around, not for asking: `POST /search`
 with `{"query": "restored OR \"put back\""}` returns the best-matching

@@ -21,6 +21,18 @@
 ### Added (the board)
 - `/board/`: a page served by the server itself (whatever `static_dir` says) with a live feed of every request — `/evaluate`, `/search`, `/similar`, successes and errors — as `{who, corpus, query, outcome, elapsed, label, file}` summaries, the query highlighted, and an editor to re-run or change any of them with a chosen `max_results` and hydration. Backed by `GET /activity?since=` and the event stream `GET /activity/stream`; a ring of `[server] activity_max` entries (500) in memory and `activity.jsonl` beside the results when file output is on. Clients name themselves with the `X-PrismQL-Client` header. The demo page now loads the same lexer (`/board/prismql-lexer.js`).
 
+### Changed (the board, rebuilt from the design canvas)
+- The board was rebuilt end to end (graph @aleph/prismql, node #76): rail filters (time/kind/source/corpus/status) with live counts, a day-grouped journal, a Request pane showing each request's real output — chains with "+Δt · K events between" gap lines from the positions and times between two matched events, scored hits with a bar for `/similar` and highlighted matched terms for `/search`, plain aggregate values, and errors with their line/column — an Editor tab that reruns or edits any request (identifying itself as `board`), and a full view (Timeline/Table/Raw JSON, paged 50 at a time). Keyboard: ↑/↓, Enter, Esc, ←/→, ⌘⏎; dark/light theme is remembered per browser. The board notices a stopped server and rebases its journal after a restart instead of mixing the two.
+
+### Added
+- `[corpora.<name>.board]` (`[board]` on a single-corpus file) names which fields the board reads as an event's `kind` and `actor`; `GET /corpora` echoes the mapping back per corpus. Left unset, the board still shows the request and its output, just without a kind/actor line on each event.
+
+### Changed (kept groups, board journal fields)
+- Kept groups from `/evaluate` now come back in stream order (by each group's first matched position), not the engine's own internal order (graph @aleph/prismql, node #73). The scouting journal (`/search`, `/similar`) now records the request's `threshold`; every `/activity` entry carries the server's `boot` id, so a client can tell a restarted process from the one it was already following.
+
+### Fixed
+- A plain `GROUP BY` (no `AGGREGATE`) journaled its `count` as the raw groups dict, not a number — the board (and anything else reading `/activity`) now sees the group count like every other kind of result.
+
 ### Added (scouting)
 - `POST /search` (ranked full-text hits in tantivy query syntax over the corpus's text fields; an in-process tantivy index is built once per corpus on first use when the query backend is not tantivy) and `POST /similar` (ranked nearest events by cosine over the embedding index). Both take `corpus`, `limit`, `hydrate` and `output: "file"` like `/evaluate`; `limit` is capped by `max_results` (inline) or `file_output_max_groups` (file) and `truncated` says when the cap bit; hits are `{id, score[, event]}`. Ranking lives only here; the language stays set-in, set-out.
 
