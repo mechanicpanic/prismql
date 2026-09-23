@@ -58,11 +58,11 @@ test("rerun(): a search entry posts straight to /search, never the editor", () =
   };
   const A = freshActions();
   const state = freshState({ tab: "details" });
-  const entry = { kind: "search", query: "spike", corpus: "wiki", total: 4 };
+  const entry = { kind: "search", query: "spike", corpus: "wiki", total: 4, seq: 9 };
 
   A.rerun(state, function () {}, entry);
 
-  assert.deepEqual(calls, [["search", { query: "spike", corpus: "wiki", limit: 4 }]]);
+  assert.deepEqual(calls, [["search", { query: "spike", corpus: "wiki" }]]);
   assert.equal(state.tab, "details", "a search rerun never flips the tab to the editor");
 });
 
@@ -77,11 +77,11 @@ test("rerun(): a similar entry posts straight to /similar, never the editor", ()
   };
   const A = freshActions();
   const state = freshState({ tab: "details" });
-  const entry = { kind: "similar", query: "calm seas", corpus: null, total: 2, threshold: 0.6 };
+  const entry = { kind: "similar", query: "calm seas", corpus: null, total: 2, threshold: 0.6, seq: 8 };
 
   A.rerun(state, function () {}, entry);
 
-  assert.deepEqual(calls, [["similar", { text: "calm seas", threshold: 0.6, limit: 2 }]]);
+  assert.deepEqual(calls, [["similar", { text: "calm seas", threshold: 0.6 }]]);
 });
 
 test("rerun(): an entry with request dictionaries is not replayed at all", () => {
@@ -99,4 +99,57 @@ test("rerun(): an entry with request dictionaries is not replayed at all", () =>
   A.rerun(state, function () {}, entry);
 
   assert.equal(state.tab, "details", "the editor is never opened for a blocked rerun");
+});
+
+// --- finding 3 round 2, #4: a search/similar rerun surfaces its failure ---
+
+test("rerun(): a 403 (file output disabled) response lands in state.rerunError, keyed by the entry's seq", async () => {
+  globalThis.window = {
+    PrismQLApi: {
+      search: () => Promise.resolve({
+        status: 403,
+        body: { ok: false, error: { type: "forbidden", message: "output='file' is disabled on this server" } },
+      }),
+    },
+  };
+  const A = freshActions();
+  const state = freshState();
+  const entry = { kind: "search", query: "spike", corpus: "wiki", output: "file", seq: 7 };
+  let rendered = 0;
+
+  A.rerun(state, function () { rendered++; }, entry);
+  await flush();
+
+  assert.equal(state.rerunError.seq, 7);
+  assert.match(state.rerunError.message, /output='file' is disabled/);
+  assert.ok(rendered >= 1, "a render must follow the failure so the error actually shows");
+});
+
+test("rerun(): a rejected promise (network failure) is caught, never left unhandled, and surfaces a message", async () => {
+  globalThis.window = {
+    PrismQLApi: { similar: () => Promise.reject(new Error("network down")) },
+  };
+  const A = freshActions();
+  const state = freshState();
+  const entry = { kind: "similar", query: "calm seas", corpus: "wiki", seq: 11 };
+
+  A.rerun(state, function () {}, entry);
+  await flush();
+
+  assert.equal(state.rerunError.seq, 11);
+  assert.match(state.rerunError.message, /network down/);
+});
+
+test("rerun(): a successful rerun leaves no error behind", async () => {
+  globalThis.window = {
+    PrismQLApi: { search: () => Promise.resolve({ status: 200, body: { ok: true, result_id: "r1" } }) },
+  };
+  const A = freshActions();
+  const state = freshState();
+  const entry = { kind: "search", query: "spike", corpus: "wiki", seq: 3 };
+
+  A.rerun(state, function () {}, entry);
+  await flush();
+
+  assert.equal(state.rerunError, null);
 });

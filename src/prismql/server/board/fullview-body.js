@@ -10,6 +10,7 @@
   var FR = window.PrismQLFullRows;
   var Data = window.PrismQLFullData;
   var Header = window.PrismQLFullHeader;
+  var Fcenter = window.PrismQLFullFcenter;
   var Timeline = window.PrismQLFullTimeline;
   var Table = window.PrismQLFullTable;
   var FL = window.PrismQLFullLogic;
@@ -100,7 +101,7 @@
     } else if (vs.view === "raw") {
       buildRaw(body, entry, ctx, vs, onMore);
     } else {
-      body.appendChild(Header.buildFcenter(entry, outputKind, actions));
+      body.appendChild(Fcenter.build(entry, outputKind, actions));
     }
     el.appendChild(body);
     return filteredGroups;

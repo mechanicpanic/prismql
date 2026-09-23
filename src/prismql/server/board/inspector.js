@@ -114,7 +114,7 @@
     }
     buildHeader(pane, entry, nowMs);
     buildCode(pane, entry);
-    window.PrismQLInspectorDetail.buildActs(pane, entry, actions);
+    window.PrismQLInspectorDetail.buildActs(pane, entry, actions, state);
     window.PrismQLInspectorDetail.buildKv(pane, entry);
     window.PrismQLInspectorOutput.render(pane, entry, state, actions);
   }

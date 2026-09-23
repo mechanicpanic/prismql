@@ -1,7 +1,6 @@
 // PrismQLFull: the #full overlay — wires `state.full` to the header, the
-// summary/view-bar, the per-view body and data assembly; owns keyboard
-// (Esc/←→/↑↓), focus/scroll preservation, and its own ephemeral view
-// state (task-7 brief; graph @aleph/prismql, node #76).
+// summary/view-bar and the per-view body; owns keyboard, focus/scroll
+// preservation and its own ephemeral view state (graph @aleph/prismql, node #76).
 (function (root) {
   "use strict";
   var mk = window.PrismQLBoardUtil.mk;
@@ -56,8 +55,7 @@
       var gi = Math.min(vs.group, lastFiltered.length - 1);
       vs.group = e.key === "ArrowDown" ? Math.min(lastFiltered.length - 1, gi + 1) : Math.max(0, gi - 1);
       render(state, actions);
-      // Focus and scroll follow the selection to the new nav button.
-      var full = document.getElementById("full");
+      var full = document.getElementById("full"); // focus/scroll follow the new nav button
       var current = full && full.querySelector(".gnav .gitem.on");
       if (current) {
         current.focus({ preventScroll: true });
@@ -97,6 +95,13 @@
     var outputKind = IF.outputKind(entry);
     // ctx before the header: a gone result must never offer a download.
     var ctx = bf.blocked ? null : Data.buildContext(entry, bf.board, outputKind, vs, actions, bf.idField);
+    // vs.view resolved (null -> allowed[0]) BEFORE bodySig, not after — else
+    // the sig stored on the build that resolved it ("null") never matches
+    // the next render's sig (now resolved), forcing a spurious rebuild on
+    // the first live arrival after opening. A blocked (gone/error) body
+    // only ever allows Summary/Raw.
+    var allowed = bf.blocked ? null : (ctx.blocker ? ["summary", "raw"] : FL.viewsFor(outputKind));
+    if (allowed && allowed.indexOf(vs.view) < 0) vs.view = allowed[0];
     // Finding 5: a live arrival elsewhere changes visible/idx but not the
     // body's own inputs — patch the header's nav and stop.
     var bodySig = [
@@ -116,11 +121,6 @@
       el.appendChild(loading);
       lastFiltered = [];
     } else {
-      // Fix round 2, #4: a blocked (gone/error) body has no timeline/table
-      // to show — the switch only ever offers Summary/Raw, whatever the
-      // result kind would otherwise allow.
-      var allowed = ctx.blocker ? ["summary", "raw"] : FL.viewsFor(outputKind);
-      if (allowed.indexOf(vs.view) < 0) vs.view = allowed[0];
       Summary.buildSum(el, entry, ctx.tiles);
       Summary.buildBar(el, allowed, vs.view, ctx, vs, function () { render(state, actions); });
       lastFiltered = Body.build(el, entry, ctx, outputKind, bf.board, vs, actions,

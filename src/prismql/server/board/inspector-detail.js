@@ -28,7 +28,7 @@
   // board never held their terms), so "Run again" is disabled with a
   // visible note; "Open in editor" stays offered, with the same note, so
   // the query text is still reachable.
-  function buildActs(wrap, entry, actions) {
+  function buildActs(wrap, entry, actions, state) {
     var acts = mk("div", "acts");
     acts.appendChild(actBtn("Full view", UI.ICON_FULL, function () { actions.openFull(entry.seq); }, "Open the output full screen (Enter)"));
     var dictBlocked = L.hasRequestDictionaries(entry);
@@ -49,6 +49,11 @@
     }
     wrap.appendChild(acts);
     if (dictBlocked) wrap.appendChild(mk("div", "dict-note", L.DICT_NOTE));
+    // Round 2, #4: a search/similar rerun's failure, surfaced — never
+    // fire-and-forget. Keyed by seq so it only shows for the entry it
+    // actually answers, and clears itself once that stops matching.
+    var err = state && state.rerunError;
+    if (err && err.seq === entry.seq) wrap.appendChild(mk("div", "inline-err", err.message));
   }
 
   function addKv(dl, label, fill, cls) {

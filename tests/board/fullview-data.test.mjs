@@ -16,6 +16,7 @@ const BoardUtil = require("../../src/prismql/server/board/board-util.js");
 const PageLogic = require("../../src/prismql/server/board/inspector-page-logic.js");
 const FullLogic = require("../../src/prismql/server/board/fullview-logic.js");
 const Format = require("../../src/prismql/server/board/format.js");
+const EditorLogic = require("../../src/prismql/server/board/editor-logic.js");
 
 // dispatch() lets a test fire the click a real goneBlock button wired via
 // addEventListener; emptyBlock's stub actually appends `opts.action` (the
@@ -44,6 +45,7 @@ function freshModules(pageImpl) {
     PrismQLInspectorPageLogic: PageLogic,
     PrismQLFullLogic: FullLogic,
     PrismQLFormat: Format,
+    PrismQLEditorLogic: EditorLogic,
     PrismQLApi: { page: pageImpl },
     PrismQLBoard: { render: function () {} },
   };
@@ -179,6 +181,17 @@ test("finding 4: buildContext threads idField through to pairEventsToSlots for g
   await flush();
   const ctx = Data.buildContext(entry, board, "groups", vs(), actions, "event_id");
   assert.equal(ctx.loaded[0].slots[0].agent, "A", "the event must be paired by event_id, not the default 'id'");
+});
+
+test("finding 3 round 2, #5: goneBlock disables Run again (with the dictionaries note) for an entry that carried request dictionaries", async () => {
+  const Data = freshModules(async () => ({ gone: true }));
+  const entry = { result_id: "r8", total: 5, kind: "evaluate", result: "groups", dictionaries: ["spikes"] };
+  Data.buildContext(entry, board, "groups", vs(), actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "groups", vs(), actions);
+
+  const btn = ctx.blocker.children[0].children.find((c) => c.textContent === "Run again");
+  assert.equal(btn.disabled, true, "Run again must be disabled — the board never held the request's dictionary terms");
 });
 
 test("fix round 2, #4: a blocked (gone) result hides the filter box and chips", async () => {

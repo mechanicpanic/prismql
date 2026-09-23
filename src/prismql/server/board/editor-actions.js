@@ -40,11 +40,22 @@
   // runs at all when the entry used request-scoped dictionaries; the
   // board never held their terms to resend (inspector-detail.js disables
   // the button and shows L.DICT_NOTE before this is ever reached).
+  // Round 2, #4: never fire-and-forget — a failure (422/429/403/network)
+  // lands in state.rerunError, keyed by the entry's own seq, and the
+  // promise is always caught, never left to reject unhandled.
   function rerun(state, render, entry) {
     if (L.hasRequestDictionaries(entry)) return;
     if (entry.kind !== "evaluate") {
-      var api = entry.kind === "search" ? window.PrismQLApi.search : window.PrismQLApi.similar;
-      api(L.rerunBody(entry));
+      var apiFn = entry.kind === "search" ? window.PrismQLApi.search : window.PrismQLApi.similar;
+      state.rerunError = null;
+      apiFn(L.rerunBody(entry)).then(function (res) {
+        var outcome = L.rerunOutcome(res);
+        if (!outcome.ok) state.rerunError = { seq: entry.seq, message: outcome.error.message };
+        render();
+      }).catch(function (e) {
+        state.rerunError = { seq: entry.seq, message: (e && e.message) || "request failed" };
+        render();
+      });
       return;
     }
     loadQuery(state, entry);
@@ -57,6 +68,7 @@
     var ed = ensureEditorState(state);
     ed.query = "SELECT ";
     ed.error = null;
+    ed.dictNote = null;
     ed.rev++;
     ed.focus = true;
     state.tab = "editor";

@@ -87,10 +87,12 @@
 
   // The last 5 journal entries this editor itself sent (who === "board"),
   // newest first — `state.entries` is already newest-first.
+  // Finding 3 round 2, #2: only evaluate — a board-run search/similar
+  // rerun has no query text to load into the editor.
   function recentQueries(entries) {
     var out = [];
     for (var i = 0; i < entries.length && out.length < 5; i++) {
-      if (entries[i].who === "board") out.push(entries[i]);
+      if (entries[i].who === "board" && entries[i].kind === "evaluate") out.push(entries[i]);
     }
     return out;
   }
@@ -106,20 +108,33 @@
   // against their own endpoints. A request that used request-scoped
   // dictionaries can't be replayed: the board never held their terms.
   var DICT_NOTE = "used request dictionaries — the board can't replay them";
-  var DEFAULT_LIMIT = 20;
 
   function hasRequestDictionaries(entry) {
     return !!(entry.dictionaries && entry.dictionaries.length);
   }
 
+  // Finding 3 round 2, #3: replay exactly what the journal has — the
+  // journal never carried a `limit`, so none is invented; the server's own
+  // default (/search, /similar) applies. A file-mode scout reruns as
+  // file-mode (output+label carried along); an inline one carries neither,
+  // since "inline"/no label are the server's own defaults too.
   function rerunBody(entry) {
     if (entry.kind !== "search" && entry.kind !== "similar") return null;
-    var limit = entry.total > 0 ? entry.total : DEFAULT_LIMIT;
     var body = entry.kind === "search" ? { query: entry.query } : { text: entry.query };
     if (entry.corpus) body.corpus = entry.corpus;
     if (entry.kind === "similar" && entry.threshold != null) body.threshold = entry.threshold;
-    body.limit = limit;
+    if (entry.output === "file") body.output = "file";
+    if (entry.label) body.label = entry.label;
     return body;
+  }
+
+  // Finding 3 round 2, #4: the dispatch/error decision for a search/similar
+  // rerun — never fire-and-forget. `res` is api.search/.similar's own
+  // {status, body} shape; null/undefined (a rejected promise, no response
+  // at all) describes itself instead of throwing.
+  function rerunOutcome(res) {
+    if (res && res.body && res.body.ok) return { ok: true };
+    return { ok: false, error: describeError(res && res.status, res && res.body) };
   }
 
   var api = {
@@ -127,6 +142,7 @@
     findPendingMatch: findPendingMatch, resolvePendingRun: resolvePendingRun,
     unknownCorpus: unknownCorpus, recentQueries: recentQueries, singleLine: singleLine,
     hasRequestDictionaries: hasRequestDictionaries, rerunBody: rerunBody, DICT_NOTE: DICT_NOTE,
+    rerunOutcome: rerunOutcome,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLEditorLogic = api;

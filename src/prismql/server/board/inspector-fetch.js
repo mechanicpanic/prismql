@@ -11,6 +11,7 @@
   var mk = window.PrismQLBoardUtil.mk;
   var UI = window.PrismQLInspectorUI;
   var PL = window.PrismQLInspectorPageLogic;
+  var L = window.PrismQLEditorLogic;
 
   var FAIL_TTL_MS = 5000;
   var pageCache = {}; // cacheKey -> {status:"loading"} | {status:"done", data}
@@ -92,15 +93,21 @@
     return { board: {}, idField: "id", blocked: true };
   }
 
+  // Round 2, #5: same dictionaries gate as the inspector's own Run again
+  // (inspector-detail.js) — a gone result whose request used request-scoped
+  // dictionaries can't be replayed either; disable, don't wire the click.
   function goneBlock(actions, entry) {
+    var blocked = L.hasRequestDictionaries(entry);
     var btn = mk("button", "ghost", "Run again");
     btn.type = "button";
-    btn.addEventListener("click", function () { actions.rerun(entry); });
+    if (blocked) { btn.disabled = true; btn.title = L.DICT_NOTE; }
+    else btn.addEventListener("click", function () { actions.rerun(entry); });
     var wrap = document.createElement("div");
     wrap.appendChild(UI.emptyBlock(
       "This result is no longer kept", "(evicted, reloaded or restarted)",
       { compact: true, action: btn },
     ));
+    if (blocked) wrap.appendChild(mk("div", "dict-note", L.DICT_NOTE));
     return wrap;
   }
   function errorBlock(message) {

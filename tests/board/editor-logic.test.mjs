@@ -137,11 +137,25 @@ test("unknownCorpus: true once /corpora has loaded and the corpus isn't in it", 
 
 test("recentQueries: only who === board, newest first, capped at 5", () => {
   const entries = [
-    { who: "board", seq: 6 }, { who: "agent-1", seq: 5 }, { who: "board", seq: 4 },
-    { who: "board", seq: 3 }, { who: "board", seq: 2 }, { who: "board", seq: 1 }, { who: "board", seq: 0 },
+    { who: "board", kind: "evaluate", seq: 6 }, { who: "agent-1", kind: "evaluate", seq: 5 },
+    { who: "board", kind: "evaluate", seq: 4 }, { who: "board", kind: "evaluate", seq: 3 },
+    { who: "board", kind: "evaluate", seq: 2 }, { who: "board", kind: "evaluate", seq: 1 },
+    { who: "board", kind: "evaluate", seq: 0 },
   ];
   const rec = L.recentQueries(entries);
   assert.deepEqual(rec.map((e) => e.seq), [6, 4, 3, 2, 1]);
+});
+
+// Finding 3 round 2, #2: a board-run search/similar rerun must not land in
+// "Your recent queries" — clicking one would load non-PrismQL text (or a
+// scout's raw text) into the query editor.
+test("recentQueries: excludes the board's own search/similar reruns — evaluate only", () => {
+  const entries = [
+    { who: "board", kind: "search", seq: 3 }, { who: "board", kind: "evaluate", seq: 2 },
+    { who: "board", kind: "similar", seq: 1 },
+  ];
+  const rec = L.recentQueries(entries);
+  assert.deepEqual(rec.map((e) => e.seq), [2]);
 });
 
 test("singleLine: collapses a multi-line query for the compact list", () => {
@@ -232,22 +246,65 @@ test("rerunBody: evaluate has no rerun body — it goes through the editor inste
   assert.equal(L.rerunBody({ kind: "evaluate", query: "SELECT from(a)" }), null);
 });
 
-test("rerunBody: search reruns via POST /search {query, corpus, limit}", () => {
+// Finding 3 round 2, #3: replay exactly what the journal has — no invented
+// limit (the journal never carried one; the server's own default applies).
+test("rerunBody: search reruns via POST /search {query, corpus} — no invented limit", () => {
   const body = L.rerunBody({ kind: "search", query: "spike OR calm", corpus: "village", total: 7 });
-  assert.deepEqual(body, { query: "spike OR calm", corpus: "village", limit: 7 });
+  assert.deepEqual(body, { query: "spike OR calm", corpus: "village" });
 });
 
-test("rerunBody: search without a total falls back to a sane default limit", () => {
+test("rerunBody: search with no corpus omits it", () => {
   const body = L.rerunBody({ kind: "search", query: "spike", corpus: null, total: 0 });
-  assert.deepEqual(body, { query: "spike", limit: 20 });
+  assert.deepEqual(body, { query: "spike" });
 });
 
-test("rerunBody: similar reruns via POST /similar {text, corpus, threshold, limit}", () => {
+test("rerunBody: similar reruns via POST /similar {text, corpus, threshold} — no invented limit", () => {
   const body = L.rerunBody({ kind: "similar", query: "calm seas", corpus: "village", total: 3, threshold: 0.5 });
-  assert.deepEqual(body, { text: "calm seas", corpus: "village", threshold: 0.5, limit: 3 });
+  assert.deepEqual(body, { text: "calm seas", corpus: "village", threshold: 0.5 });
 });
 
 test("rerunBody: similar without a threshold omits it", () => {
   const body = L.rerunBody({ kind: "similar", query: "calm seas", corpus: null, total: 3 });
-  assert.deepEqual(body, { text: "calm seas", limit: 3 });
+  assert.deepEqual(body, { text: "calm seas" });
+});
+
+test("rerunBody: a file-mode scout replays output and label — reruns as file-mode", () => {
+  const body = L.rerunBody({ kind: "search", query: "spike", corpus: "village", output: "file", label: "scout" });
+  assert.deepEqual(body, { query: "spike", corpus: "village", output: "file", label: "scout" });
+});
+
+test("rerunBody: an inline entry with no label carries neither output nor label", () => {
+  const body = L.rerunBody({ kind: "search", query: "spike", corpus: null, output: "inline" });
+  assert.deepEqual(body, { query: "spike" });
+});
+
+// Finding 3 round 2, #4: search/similar reruns surface a failure instead of
+// firing and forgetting — rerunOutcome is the pure dispatch/error decision.
+test("rerunOutcome: a successful response is ok, no error", () => {
+  const outcome = L.rerunOutcome({ status: 200, body: { ok: true, result_id: "r1" } });
+  assert.deepEqual(outcome, { ok: true });
+});
+
+test("rerunOutcome: a 403 (file output disabled) surfaces the server's own message", () => {
+  const outcome = L.rerunOutcome({
+    status: 403,
+    body: { ok: false, error: { type: "forbidden", message: "output='file' is disabled on this server" } },
+  });
+  assert.equal(outcome.ok, false);
+  assert.match(outcome.error.message, /output='file' is disabled/);
+});
+
+test("rerunOutcome: a 429 rate-limit surfaces its own message", () => {
+  const outcome = L.rerunOutcome({
+    status: 429,
+    body: { ok: false, error: { type: "rate_limit", message: "Too many queries — try again in a minute." } },
+  });
+  assert.equal(outcome.ok, false);
+  assert.match(outcome.error.message, /Too many queries/);
+});
+
+test("rerunOutcome: a network failure (no response) surfaces a generic message, never throws", () => {
+  const outcome = L.rerunOutcome(null);
+  assert.equal(outcome.ok, false);
+  assert.ok(outcome.error.message);
 });
