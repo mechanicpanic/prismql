@@ -86,11 +86,38 @@
     return Array.isArray(value) ? value.join(", ") : String(value);
   }
 
+  // Pages a rows result in fixed-size steps from growing offsets, like
+  // inspector-groups.js's chain view, instead of a single fetch whose
+  // `limit` grows unbounded — the server caps `limit` at `max_results`
+  // regardless of what is requested, so a growing-limit fetch stuck at
+  // that cap forever (fix round 1, #1). `fetchFn(offset, step)` must
+  // return an inspector-fetch.js record ({status:"loading"} or
+  // {status:"done", data:{rows:[...]}|{gone:true}|{error:{...}}}).
+  // The next offset advances by the count the page actually returned,
+  // never by `step` itself, so a page capped below `step` never skips or
+  // repeats rows.
+  function collectRowPages(total, target, step, fetchFn) {
+    var rows = [];
+    var offset = 0;
+    while (offset < target && offset < total) {
+      var page = fetchFn(offset, step);
+      if (page.status === "loading") return { rows: rows, pending: true };
+      if (page.data.gone) return { rows: rows, pending: false, gone: true };
+      if (page.data.error) return { rows: rows, pending: false, error: page.data.error };
+      var got = page.data.rows || [];
+      if (got.length === 0) break; // nothing more to get — never loop forever
+      rows = rows.concat(got);
+      offset += got.length;
+    }
+    return { rows: rows, pending: false };
+  }
+
   var api = {
     fieldsFor: fieldsFor, cacheKey: cacheKey, isValidPage: isValidPage,
     errorMessageFor: errorMessageFor, groupsMoreLabel: groupsMoreLabel,
     hitsNote: hitsNote, isScored: isScored, aggregateValueText: aggregateValueText,
     pairEventsToSlots: pairEventsToSlots, rowValueText: rowValueText,
+    collectRowPages: collectRowPages,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLInspectorPageLogic = api;

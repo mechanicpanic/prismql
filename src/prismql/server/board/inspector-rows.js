@@ -1,7 +1,10 @@
 // PrismQLInspectorRows: the table view for a GROUP BY ... AGGREGATE answer
 // kept as a "rows" result (graph @aleph/prismql, #90, extends #63) — a flat
-// key/value table, paged like inspector-groups.js's chain view ("Show N
-// more"). No hydrate, no board fields: a rows page carries no ids to fetch.
+// key/value table, paged in fixed steps from growing offsets like
+// inspector-groups.js's chain view ("Show N more"): PrismQLInspectorPageLogic
+// .collectRowPages advances by the count each page actually returned, never
+// past the server's own max_results cap (fix round 1, #1). No hydrate, no
+// board fields: a rows page carries no ids to fetch.
 (function (root) {
   "use strict";
   var mk = window.PrismQLBoardUtil.mk;
@@ -42,16 +45,18 @@
   function render(entry, state, actions) {
     var rid = entry.result_id, total = entry.total;
     var target = shownFor(entry.seq);
-    var rec = PF.fetchPage(rid, 0, target, []);
-    if (rec.status === "loading") return { note: "", body: PF.loadingBlock() };
-    if (rec.data.gone) return { note: "", body: PF.goneBlock(actions, entry) };
-    if (rec.data.error) return { note: "", body: PF.errorBlock(rec.data.error.message) };
-    var rows = rec.data.rows || [];
+    var res = PL.collectRowPages(total, target, PAGE, function (offset, limit) {
+      return PF.fetchPage(rid, offset, limit, []);
+    });
+    if (res.pending && res.rows.length === 0) return { note: "", body: PF.loadingBlock() };
+    if (res.gone) return { note: "", body: PF.goneBlock(actions, entry) };
+    if (res.error) return { note: "", body: PF.errorBlock(res.error.message) };
+    var rows = res.rows;
     var body = document.createElement("div");
     body.appendChild(tableFor(rows));
     var more = mk("div", "more");
-    more.appendChild(mk("span", null, PL.groupsMoreLabel(rows.length, total)));
-    if (rows.length < total) {
+    more.appendChild(mk("span", null, res.pending ? "loading…" : PL.groupsMoreLabel(rows.length, total)));
+    if (!res.pending && rows.length < total) {
       var btn = mk("button", "ghost", "Show " + PAGE + " more");
       btn.type = "button";
       btn.addEventListener("click", function () { bumpShown(entry.seq); });
