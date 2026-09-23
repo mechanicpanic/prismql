@@ -534,6 +534,29 @@ def test_corpora_names_board_fields(tmp_path):
     assert body["board"] == {"v": {"actor": "user"}}
 
 
+def test_corpora_reports_id_field_per_corpus(tmp_path):
+    # Finding 4: the board pairs events to slots by the corpus's own id
+    # field, not a hardcoded "id" — /corpora must carry it.
+    data = tmp_path / "e.jsonl"
+    docs = [{**d, "event_id": d["id"]} for d in DOCS]
+    for d in docs:
+        del d["id"]
+    data.write_text("\n".join(json.dumps(d) for d in docs))
+    from prismql.server.config import CorpusConfig
+
+    cfg = ServerConfig(
+        corpora={"v": CorpusConfig(data=str(data), id_field="event_id")},
+        default_corpus="v",
+    )
+    body = TestClient(create_app(cfg)).get("/corpora").json()
+    assert body["id_field"] == {"v": "event_id"}
+
+
+def test_corpora_id_field_defaults_to_id(client):
+    body = client.get("/corpora").json()
+    assert body["id_field"]["default"] == "id"
+
+
 class TestMultiCorpus:
     @pytest.fixture
     def client(self, tmp_path):
@@ -562,6 +585,7 @@ class TestMultiCorpus:
             "corpora": ["chat", "events"],
             "default": "chat",
             "board": {"chat": {}, "events": {}},
+            "id_field": {"chat": "id", "events": "id"},
         }
 
     def test_evaluate_picks_corpus(self, client):
@@ -1203,3 +1227,56 @@ data = {str(data)!r}
         with contextlib.suppress(ProcessLookupError):
             proc.terminate()
         proc.wait(timeout=10)
+
+
+# --- finding 2: "capped" means cut off, not "more pages" ---------------------
+
+
+def test_evaluate_inline_journal_is_never_capped_even_when_the_page_is_short(client):
+    # 3 tick_a groups exist, max_results=50 keeps them all in the store, but
+    # a request page smaller than that still must not mark the journal
+    # capped — the board can always page for the rest (finding 2).
+    r = client.post(
+        "/evaluate", json={"query": "SELECT from(tick_a)", "max_results": 1}
+    )
+    assert r.status_code == 200 and r.json()["truncated"] is True
+    entry = client.get("/activity").json()["entries"][-1]
+    assert entry["capped"] is False
+
+
+def test_evaluate_file_output_capped_when_the_file_cap_bit_is_set(tmp_path):
+    c = _make_client(
+        tmp_path,
+        enable_file_output=True,
+        file_output_max_groups=2,
+        results_dir=str(tmp_path / "out"),
+    )
+    c.post("/evaluate", json={"query": "SELECT from(tick_a)", "output": "file"})
+    entry = c.get("/activity").json()["entries"][-1]
+    assert entry["capped"] is True
+
+
+def test_evaluate_file_output_not_capped_when_the_file_holds_everything(tmp_path):
+    c = _make_client(
+        tmp_path,
+        enable_file_output=True,
+        results_dir=str(tmp_path / "out"),
+    )
+    c.post("/evaluate", json={"query": "SELECT from(tick_a)", "output": "file"})
+    entry = c.get("/activity").json()["entries"][-1]
+    assert entry["capped"] is False
+
+
+def test_search_journal_capped_when_scout_depth_kept_fewer_than_found(tmp_path):
+    pytest.importorskip("tantivy")
+    c = _make_client(tmp_path, scout_depth=1)
+    c.post("/search", json={"query": "spike OR reversal", "hydrate": False})
+    entry = c.get("/activity").json()["entries"][-1]
+    assert entry["capped"] is True
+
+
+def test_search_journal_not_capped_when_scouting_kept_everything_it_found(client):
+    pytest.importorskip("tantivy")
+    client.post("/search", json={"query": "spike", "hydrate": False})
+    entry = client.get("/activity").json()["entries"][-1]
+    assert entry["capped"] is False

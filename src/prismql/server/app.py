@@ -265,6 +265,19 @@ def _small_payload(result: Any) -> dict[str, Any]:
     return {"kind": "grouped", **result.to_dict()}
 
 
+def _capped(payload: dict[str, Any], output: str) -> bool:
+    """Finding 2: "capped" means cut off, not "more pages". True when
+    scouting kept fewer hits than it found (``kept`` < ``total``) or file
+    output holds fewer than what was kept (the file's own ``truncated``
+    bit). An inline evaluate/scout page is never capped by this flag on its
+    own — the store still holds the rest for the board to page through."""
+    kept = payload.get("kept")
+    total = payload.get("total")
+    scouting_capped = kept is not None and total is not None and kept < total
+    file_capped = output == "file" and payload.get("truncated", False)
+    return scouting_capped or file_capped
+
+
 def _journal_count(payload: dict[str, Any]) -> Any:
     """The journal's ``count``: a number or ``null``, never the GROUP BY
     groups dict itself. A "grouped" payload's ``to_dict()`` has no
@@ -558,6 +571,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                 "count": _journal_count(payload),
                 "value": payload.get("value"),
                 "truncated": payload.get("truncated", False),
+                "capped": _capped(payload, req.output),
                 "output": req.output,
                 "path": payload.get("path"),
                 "result_id": payload.get("result_id"),
@@ -603,6 +617,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                 "result": "hits",
                 "count": payload.get("count"),
                 "truncated": payload.get("truncated", False),
+                "capped": _capped(payload, req.output),
                 "output": req.output,
                 "path": payload.get("path"),
                 "result_id": payload.get("result_id"),
@@ -669,6 +684,7 @@ def create_app(config: ServerConfig) -> FastAPI:
             # the file holds every hit that was kept).
             payload["truncated"] = len(rows) < len(stored)
             payload["total"] = stored.total
+            payload["kept"] = len(stored)
         else:
             payload = page
         payload["result_id"] = rid
@@ -874,6 +890,11 @@ def create_app(config: ServerConfig) -> FastAPI:
             "default": config.default_corpus,
             "board": {
                 name: config.corpus(name).board_fields for name in config.corpus_names()
+            },
+            # Finding 4: the board pairs events to slots by the corpus's own
+            # id field, never a hardcoded "id" (default when unconfigured).
+            "id_field": {
+                name: config.corpus(name).id_field for name in config.corpus_names()
             },
         }
 
