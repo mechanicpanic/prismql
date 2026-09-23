@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Changed (the query frame reads by position)
+- The per-query frame no longer fetches whole documents it does not need (graph @aleph/prismql, #14): positions and times come from the order axis, field values from the backend's new `values_at(positions, field)`; only a field a backend cannot read by position falls back to documents. `TantivyBackend` keeps its metadata fields by position in a `fields.parquet` sidecar (index layout 4 — an index of layout 3 or older is refused with rebuild instructions; a text index at `text_index_path` rebuilds itself). Chicago demo (50k), tantivy backend, identical groups: a two-leg chain 44 → 10 ms, a chain with a `$k` variable 42 → 23 ms (memory: 16 / 15 ms).
+
 ### Added (the corpus on the board)
 - The board's rail lists every corpus with its event count and what it can answer; its card in the new *Corpus* tab shows each field's type, coverage and ten most frequent values with counts, the role fields and the dictionaries' words (graph @aleph/prismql, #86). `GET /schema` is computed once per load over every event (was: the first 1,000 on every call, behind the corpus lock) and gains `distinct`, `top`, `complete`, `capabilities`, `dictionary_terms`, `board` and `text_search`; the old keys keep their shape.
 - The inspector's header names a request by its `#seq`, the result id in the tooltip (as the full view already did).

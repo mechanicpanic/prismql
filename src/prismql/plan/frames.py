@@ -5,9 +5,11 @@ take part in one query — the union of the evaluated predicate sets — with
 their load-order ``position`` (the backend's order axis), the fields the
 query's variables correlate on, and the timestamp axis as UTC epoch
 microseconds (``<field>_us``, null when missing or unparseable). Built from
-``backend.positions`` + ``backend.get_documents``; no backend has to expose
-an Arrow table. Backends without an order axis raise
-``PositionalUnsupportedError`` here, before any operator runs.
+``backend.positions`` and, per field, ``backend.values_at`` where the backend
+reads values by position; whole documents are fetched only for what it
+cannot (graph @aleph/prismql, #14: on tantivy a fetch parses stored JSON).
+Backends without an order axis raise ``PositionalUnsupportedError`` here,
+before any operator runs.
 """
 
 from __future__ import annotations
@@ -44,9 +46,20 @@ def query_frame(
     id_list = [id_list[i] for i in order]
     positions = [positions[i] for i in order]
 
-    id_field = getattr(backend, "id_field", "id")
-    docs = backend.get_documents(id_list)
-    by_id = {doc[id_field]: doc for doc in docs if id_field in doc}
+    values_at = getattr(backend, "values_at", None)
+    by_id: dict[MessageId, Any] | None = None
+
+    def column(field: str) -> list[Any]:
+        nonlocal by_id
+        values = values_at(positions, field) if values_at is not None else None
+        if values is not None:
+            return list(values)
+        if by_id is None:  # fetched once, only for what positions cannot give
+            id_field = getattr(backend, "id_field", "id")
+            docs = backend.get_documents(id_list)
+            by_id = {doc[id_field]: doc for doc in docs if id_field in doc}
+        return [by_id.get(m, {}).get(field) for m in id_list]
+
     columns: dict[str, Any] = {
         "position": pl.Series("position", positions, dtype=pl.Int64),
         "id": pl.Series("id", id_list),
@@ -54,13 +67,13 @@ def query_frame(
     for f in fields:
         if f in ("position", "id"):
             continue
-        columns[f] = pl.Series(f, [by_id.get(m, {}).get(f) for m in id_list])
+        columns[f] = pl.Series(f, column(f))
     ts_col = f"{timestamp_field}_us"
     has_ts = getattr(backend, "has_timestamp_field", None)
     if has_ts is not None and has_ts(timestamp_field):
         micros = backend.timestamps_at(positions, timestamp_field)
     else:
-        micros = [epoch_micros(by_id.get(m, {}).get(timestamp_field)) for m in id_list]
+        micros = [epoch_micros(v) for v in column(timestamp_field)]
     columns[ts_col] = pl.Series(ts_col, micros, dtype=pl.Int64)
     return pl.DataFrame(columns).lazy()
 

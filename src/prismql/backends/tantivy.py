@@ -70,10 +70,13 @@ def _register_analyzers(index: Any, language: str) -> None:
 
 
 _ORDER_NAME = "order.parquet"  # the axis sidecar: id, <field>_us per position
+_FIELDS_NAME = "fields.parquet"  # metadata field values per position (#14)
+_JSON_SUFFIX = "__json"  # a column of mixed types, stored JSON-encoded
 _META_NAME = "_prismql_meta.json"  # sidecar recording field roles for reopen
 # Bumped when the index layout changes; an index from an older layout is
 # refused on open with rebuild instructions rather than failing mid-query.
-_SCHEMA_VERSION = 3  # 2: stemmed + plain twins, order sidecar; 3: _pos fast field
+# 2: stemmed + plain twins, order sidecar; 3: _pos fast field; 4: fields sidecar
+_SCHEMA_VERSION = 4
 _REGEX_SPECIAL = re.compile(r"([.^$*+?()\[\]{}|\\])")
 
 
@@ -101,6 +104,36 @@ def _write_order(index_path: Path, order: OrderIndex, fields: Sequence[str]) -> 
             order.timestamps_at(positions, f), type=pa.int64()
         )
     pq.write_table(pa.table(columns), index_path / _ORDER_NAME)
+
+
+def _column(values: list[Any]) -> tuple[str, Any]:
+    """An Arrow column of the values as they are; JSON only if types mix."""
+    import pyarrow as pa
+
+    try:
+        return "", pa.array(values)
+    except (pa.ArrowInvalid, pa.ArrowTypeError):
+        encoded = [None if v is None else json.dumps(v, default=str) for v in values]
+        return _JSON_SUFFIX, pa.array(encoded, type=pa.string())
+
+
+def _field_columns(docs: list[Document], fields: Iterable[str]) -> dict[str, Any]:
+    """{name or name__json: Arrow column} of the documents, in load order."""
+    out: dict[str, Any] = {}
+    for f in sorted(fields):
+        suffix, col = _column([doc.get(f) for doc in docs])
+        out[f + suffix] = col
+    return out
+
+
+def _read_fields(index_path: Path) -> dict[str, Any] | None:
+    path = index_path / _FIELDS_NAME
+    if not path.exists():
+        return None
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(path)
+    return {name: table.column(name) for name in table.column_names}
 
 
 def _read_order(index_path: Path) -> tuple[OrderIndex, list[str]] | None:
@@ -176,10 +209,24 @@ class TantivyBackend(SearchBackend):
                     for f in self.timestamp_fields
                 },
             )
+            # Metadata values by position feed the query frame without a
+            # stored-document read per row (graph #14).
+            self._columns: dict[str, Any] | None = (
+                _field_columns(with_id, self._meta_fields)
+                if self._store_documents
+                else None
+            )
             if index_path is not None:
                 # The axis travels with the index as a sidecar table, so an
                 # index opened from disk keeps it (graph #39).
                 _write_order(Path(index_path), self.order, self.timestamp_fields)
+                if self._columns is not None:
+                    import pyarrow as pa
+                    import pyarrow.parquet as pq
+
+                    pq.write_table(
+                        pa.table(self._columns), Path(index_path) / _FIELDS_NAME
+                    )
 
         self._index.reload()
         self._searcher = self._index.searcher()
@@ -301,6 +348,7 @@ class TantivyBackend(SearchBackend):
         order = _read_order(Path(index_path))
         if order is not None:
             self.order, self.timestamp_fields = order
+        self._columns = _read_fields(Path(index_path))
         self.id_field = meta["id_field"]
         self._id_is_int = meta["id_is_int"]
         self._text_fields = set(meta["text_fields"])
@@ -485,6 +533,22 @@ class TantivyBackend(SearchBackend):
         if not self.has_order_axis():
             raise self._no_axis()
         return self.order.timestamps_at(positions, field)
+
+    def values_at(self, positions: Sequence[int], field: str) -> list[Any] | None:
+        """The field's values at these positions, or None when this index does
+        not hold the field by position (a text field; a text-only index)."""
+        cols = self._columns
+        if cols is None:
+            return None
+        if field == self.id_field:
+            return self.order.ids_at(positions)
+        if field in cols:
+            return cast(list[Any], cols[field].take(list(positions)).to_pylist())
+        if field + _JSON_SUFFIX in cols:
+            raw = cols[field + _JSON_SUFFIX].take(list(positions)).to_pylist()
+            return [None if v is None else json.loads(v) for v in raw]
+        # a field no document carries is null everywhere
+        return None if field in self._text_fields else [None] * len(positions)
 
     def has_timestamp_field(self, field: str) -> bool:
         return self.has_order_axis() and self.order.has_timestamp_field(field)

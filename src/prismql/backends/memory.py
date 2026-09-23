@@ -170,6 +170,11 @@ class MemoryBackend(SearchBackend):
         if text_index is not None:
             self._check_text_index(text_index)
 
+    def values_at(self, positions: Sequence[int], field: str) -> list[Any]:
+        """The field's values at these load-order positions (None if absent)."""
+        docs = self.documents
+        return [docs[p].get(field) for p in positions]
+
     def _check_text_index(self, index: Any) -> None:
         """A text index must hold exactly these documents in this order and
         stem in this language, or it answers for another corpus silently."""
