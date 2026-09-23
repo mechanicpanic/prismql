@@ -94,9 +94,10 @@
     pane.appendChild(dictNote);
 
     buildOpts(pane, ed);
+    window.PrismQLEditorKindbar.build(pane, pane.querySelector(".opts"), ed);
     buildSkel(pane);
 
-    var sect = mk("div", "sect", "Your recent queries");
+    var sect = mk("div", "sect", "Your recent requests");
     sect.appendChild(mk("span", "push", "click to load"));
     pane.appendChild(sect);
     var recent = mk("div", "recent");
@@ -108,7 +109,7 @@
     // has actually changed (fix round 1, #4).
     textarea.addEventListener("input", function () {
       ed.query = textarea.value;
-      pre.innerHTML = window.PrismQLLexer.highlight(textarea.value);
+      pre.innerHTML = window.PrismQLEditorKindbar.paint(ed, textarea.value);
       if (ed.error) {
         ed.error = null;
         box.className = "editor";

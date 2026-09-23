@@ -68,8 +68,11 @@ test("srcKind: a non-board, non-IP who is an agent", () => {
   assert.equal(IF.srcKind("codex"), "agent");
 });
 
-test("srcKind: an IP address is a person, not an agent", () => {
-  assert.equal(IF.srcKind("10.0.0.1"), "person");
+test("srcKind: an address without a name is an unnamed client, not a person", () => {
+  // an agent's curl without X-PrismQL-Client arrives as a bare address too
+  // (graph @aleph/prismql, #112)
+  assert.equal(IF.srcKind("10.0.0.1"), "unnamed client");
+  assert.equal(IF.srcKind("::1"), "unnamed client");
 });
 
 test("gapText: both halves present", () => {

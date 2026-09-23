@@ -83,3 +83,8 @@ mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
 .recent .q{font:12px/1.5 "JetBrains Mono",monospace;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .skel{height:64px;border-radius:10px;background:linear-gradient(90deg,var(--skel) 30%,var(--skel-hi) 50%,var(--skel) 70%);background-size:300% 100%;animation:shimmer 1.3s linear infinite}
 @keyframes shimmer{from{background-position:100% 0}to{background-position:-200% 0}}
+/* the editor's kind switch and a scout's number fields (#111) */
+.seg.kinds{grid-template-columns:repeat(3,minmax(0,1fr));flex-shrink:0}
+.field.num{width:64px}
+.editor textarea::placeholder{color:var(--faint)}
+.recent .k{color:var(--faint);margin-right:8px}

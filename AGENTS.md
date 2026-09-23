@@ -194,6 +194,7 @@ Untracked `HANDOFF-*.md` at the repo root are legacy drafts from before the grap
 | Demo server | `uv run prismql-server --config demo/prismql.toml` → localhost:8901 |
 | Verify demo examples | `uv run python demo/verify_examples.py` |
 | Demo container E2E | `docker build -t prismql-demo . && uv run python demo/e2e_container.py` |
+| Call a running server by hand | `curl -H 'X-PrismQL-Client: <your standing or model name>' …` — without the header the board shows an unnamed client (graph #112) |
 | Owner's open items | `td task list --project prismql` |
 
 ## Project structure

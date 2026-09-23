@@ -555,9 +555,16 @@ same data is `GET /schema?corpus=<name>`, computed once per load over every
 event of a memory corpus.
 
 A request is attributed by the `X-PrismQL-Client` header — an agent that
-sets it shows up under that name; anything that does not (a person's
-`curl`, a browser) shows as its IP address. The board's own editor sets it
-to `board`.
+sets it shows up under that name; anything that does not shows as its IP
+address, labelled *unnamed client*: an agent's `curl` without the header
+looks exactly like a person's. The board's own editor sets it to `board`.
+
+The editor runs all three kinds of request: *Query* (the language,
+highlighted, with *Format*), *Search* (tantivy syntax — words, `"a
+phrase"`, `field:term`, `prefix*`, `AND`/`OR`/`NOT`) and *Similar* (a
+sentence, ranked by meaning). A search or similar takes *top*, how many
+ranked hits to keep (50 when left empty), and a similar an optional
+*threshold*; either answer opens in the Request tab like a query's.
 
 Keyboard: ↑/↓ moves through the journal, Enter opens the selected row full
 screen, Esc leaves the full view, ←/→ steps to the neighbouring request

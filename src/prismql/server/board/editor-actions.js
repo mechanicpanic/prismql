@@ -6,21 +6,24 @@
 // directly, so every run reaches the same render().
 (function (root) {
   "use strict";
-  var L = typeof module === "object" && module.exports
-    ? require("./editor-logic.js")
-    : root.PrismQLEditorLogic;
+  var node = typeof module === "object" && module.exports;
+  var L = node ? require("./editor-logic.js") : root.PrismQLEditorLogic;
+  var K = node ? require("./editor-kinds.js") : root.PrismQLEditorKinds;
 
   function ensureEditorState(state) {
     if (!state.editor) {
-      state.editor = { query: "SELECT ", corpus: null, running: false, error: null, rev: 0, focus: false, dictNote: null };
+      state.editor = { kind: "evaluate", query: "SELECT ", corpus: null, top: "", threshold: "",
+        running: false, error: null, rev: 0, focus: false, dictNote: null };
     }
     return state.editor;
   }
 
   function loadQuery(state, entry) {
     var ed = ensureEditorState(state);
+    ed.kind = L.KINDS.indexOf(entry.kind) >= 0 ? entry.kind : "evaluate";
     ed.query = entry.query || "";
     ed.corpus = entry.corpus || ed.corpus;
+    if (ed.kind === "similar") ed.threshold = entry.threshold != null ? String(entry.threshold) : "";
     ed.error = null;
     // Finding 3: "Open in editor" stays offered for an entry that used
     // request-scoped dictionaries, but the same note the inspector shows
@@ -64,8 +67,22 @@
     run(state, render);
   }
 
+  // Switching kind keeps typed text; only an untouched starting text
+  // ("SELECT " or empty) is swapped for the new kind's own start.
+  function setKind(state, render, kind) {
+    var ed = ensureEditorState(state);
+    if (ed.kind === kind) return;
+    if (ed.query.trim() === K.kindInfo(ed.kind).start.trim()) ed.query = K.kindInfo(kind).start;
+    ed.kind = kind;
+    ed.error = null;
+    ed.rev++;
+    ed.focus = true;
+    render();
+  }
+
   function newQuery(state, render) {
     var ed = ensureEditorState(state);
+    ed.kind = "evaluate";
     ed.query = "SELECT ";
     ed.error = null;
     ed.dictNote = null;
@@ -83,6 +100,12 @@
       render();
       return;
     }
+    var request = K.buildRunBody(ed);
+    if (request.error) {
+      ed.error = { pos: null, message: request.error };
+      render();
+      return;
+    }
     ed.running = true;
     ed.error = null;
     render();
@@ -94,7 +117,7 @@
     var sentCorpus = ed.corpus || (state.corpora && state.corpora.default) || null;
     var baselineSeq = state.seq; // no clocks in run<->entry matching (fix round 1, #2)
     var baselineBoot = state.boot; // a restart voids the baseline (fix round 2, #2)
-    window.PrismQLApi.evaluate(L.buildEvaluateBody(ed)).then(function (res) {
+    window.PrismQLApi[request.endpoint](request.body).then(function (res) {
       ed.running = false;
       if (res.status === 200 && res.body && res.body.ok) {
         state.editorPending = {
@@ -114,7 +137,7 @@
 
   var api = {
     ensureEditorState: ensureEditorState, loadQuery: loadQuery,
-    openInEditor: openInEditor, rerun: rerun, run: run, newQuery: newQuery,
+    openInEditor: openInEditor, rerun: rerun, run: run, newQuery: newQuery, setKind: setKind,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLEditorActions = api;

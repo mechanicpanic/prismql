@@ -24,12 +24,12 @@
     return F.dayLabel(iso, nowMs).sub + ", " + F.hms(iso);
   }
 
-  // "board" is a person via the board's own editor; any other non-agent
-  // "who" (an IP address) is a person reaching the server directly
-  // (global-constraints.md: "A human's source is board").
+  // "board" is a person via the board's own editor; a name is an agent; a
+  // bare address only says the client gave no name — an agent's curl
+  // looks the same as a person's, so it is not called either (#112).
   function srcKind(who) {
     if (who === "board") return "person, via board";
-    return F.isAgent(who) ? "agent" : "person";
+    return F.isAgent(who) ? "agent" : "unnamed client";
   }
 
   function statusLabel(status) { return STATUS_LABEL[status] || status; }

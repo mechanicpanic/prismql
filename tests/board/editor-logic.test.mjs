@@ -11,6 +11,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const L = require("../../src/prismql/server/board/editor-logic.js");
+const K = require("../../src/prismql/server/board/editor-kinds.js");
 
 test("buildEvaluateBody: just query when no corpus is set", () => {
   assert.deepEqual(L.buildEvaluateBody({ query: "SELECT $a", corpus: "" }), { query: "SELECT $a" });
@@ -144,18 +145,6 @@ test("recentQueries: only who === board, newest first, capped at 5", () => {
   ];
   const rec = L.recentQueries(entries);
   assert.deepEqual(rec.map((e) => e.seq), [6, 4, 3, 2, 1]);
-});
-
-// Finding 3 round 2, #2: a board-run search/similar rerun must not land in
-// "Your recent queries" — clicking one would load non-PrismQL text (or a
-// scout's raw text) into the query editor.
-test("recentQueries: excludes the board's own search/similar reruns — evaluate only", () => {
-  const entries = [
-    { who: "board", kind: "search", seq: 3 }, { who: "board", kind: "evaluate", seq: 2 },
-    { who: "board", kind: "similar", seq: 1 },
-  ];
-  const rec = L.recentQueries(entries);
-  assert.deepEqual(rec.map((e) => e.seq), [2]);
 });
 
 test("singleLine: collapses a multi-line query for the compact list", () => {
@@ -307,4 +296,64 @@ test("rerunOutcome: a network failure (no response) surfaces a generic message, 
   const outcome = L.rerunOutcome(null);
   assert.equal(outcome.ok, false);
   assert.ok(outcome.error.message);
+});
+
+// The editor runs all three kinds of request (graph @aleph/prismql, #111).
+test("buildRunBody: a query goes to /evaluate as before", () => {
+  assert.deepEqual(K.buildRunBody({ kind: "evaluate", query: "SELECT $a", corpus: "v" }),
+    { endpoint: "evaluate", body: { query: "SELECT $a", corpus: "v" } });
+});
+
+test("buildRunBody: a search posts its text as query with a top", () => {
+  assert.deepEqual(K.buildRunBody({ kind: "search", query: "sign in", corpus: "v", top: "30" }),
+    { endpoint: "search", body: { query: "sign in", limit: 30, corpus: "v" } });
+});
+
+test("buildRunBody: similar posts text, top and an optional threshold", () => {
+  assert.deepEqual(K.buildRunBody({ kind: "similar", query: "stuck", corpus: "v", top: "", threshold: "0.6" }),
+    { endpoint: "similar", body: { text: "stuck", limit: K.DEFAULT_TOP, threshold: 0.6, corpus: "v" } });
+  assert.deepEqual(K.buildRunBody({ kind: "similar", query: "stuck", top: "10", threshold: " " }),
+    { endpoint: "similar", body: { text: "stuck", limit: 10 } });
+});
+
+test("buildRunBody: an unreadable number is an error, never a silent default", () => {
+  assert.equal(K.buildRunBody({ kind: "similar", query: "x", threshold: "high" }).error,
+    "threshold must be a number between -1 and 1");
+  assert.equal(K.buildRunBody({ kind: "search", query: "x", top: "0" }).error,
+    "top must be a whole number of at least 1");
+});
+
+test("buildRunBody: an empty search or similar text is refused before the POST", () => {
+  assert.equal(K.buildRunBody({ kind: "search", query: "  " }).error, "type what to search for");
+});
+
+test("recentQueries: the board's own searches and similars are recent too", () => {
+  const entries = [
+    { seq: 4, who: "board", kind: "similar", query: "stuck" },
+    { seq: 3, who: "codex", kind: "search", query: "x" },
+    { seq: 2, who: "board", kind: "search", query: "sign in" },
+    { seq: 1, who: "board", kind: "evaluate", query: "SELECT $a" },
+  ];
+  assert.deepEqual(L.recentQueries(entries).map((e) => e.seq), [4, 2, 1]);
+});
+
+const A = require("../../src/prismql/server/board/editor-actions.js");
+
+test("loadQuery: a similar entry loads as a similar, threshold and all", () => {
+  const state = {};
+  A.loadQuery(state, { kind: "similar", query: "stuck", corpus: "v", threshold: 0.6 });
+  assert.equal(state.editor.kind, "similar");
+  assert.equal(state.editor.query, "stuck");
+  assert.equal(state.editor.threshold, "0.6");
+});
+
+test("setKind: swaps an untouched start, keeps typed text", () => {
+  const state = {};
+  A.setKind(state, () => {}, "search");
+  assert.equal(state.editor.query, "");
+  A.setKind(state, () => {}, "evaluate");
+  assert.equal(state.editor.query, "SELECT ");
+  state.editor.query = "SELECT contains(oil)";
+  A.setKind(state, () => {}, "similar");
+  assert.equal(state.editor.query, "SELECT contains(oil)");
 });

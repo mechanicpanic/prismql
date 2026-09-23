@@ -1,5 +1,11 @@
 ## Unreleased
 
+### Added (search and similar from the board's editor)
+- The board's editor runs a *Search* (tantivy syntax) and a *Similar* (a sentence, optional threshold) as well as a query, each with *top*, the number of ranked hits kept; the answer opens in the Request tab, and the recent list keeps all three kinds (graph @aleph/prismql, #111).
+
+### Fixed (the board)
+- A request without `X-PrismQL-Client` is labelled *unnamed client*, not *person*: an agent's `curl` without the header was shown as a person (#112).
+
 ### Added (query and document prompts for embeddings)
 - `prismql ingest … --embed COL --doc-prompt P --query-prompt Q`: asymmetric models (embeddinggemma, Qwen3) encode documents with `P`; both prompts are stamped into the Parquet metadata (`prismql.embed_doc_prompt`, `prismql.embed_query_prompt`) and the server encodes `similar_to()` and `/similar` query text with `Q` (graph @aleph/prismql, #96). `SentenceTransformerEmbedder` takes `prompt=`. `load_corpus` returns `(documents, vectors, EmbedStamp | None)` instead of a four-tuple.
 

@@ -86,16 +86,17 @@
   }
 
   // The last 5 journal entries this editor itself sent (who === "board"),
-  // newest first — `state.entries` is already newest-first.
-  // Finding 3 round 2, #2: only evaluate — a board-run search/similar
-  // rerun has no query text to load into the editor.
+  // newest first — `state.entries` is already newest-first. Searches and
+  // similars count too: the editor runs and reloads all three kinds (#111).
   function recentQueries(entries) {
     var out = [];
     for (var i = 0; i < entries.length && out.length < 5; i++) {
-      if (entries[i].who === "board" && entries[i].kind === "evaluate") out.push(entries[i]);
+      if (entries[i].who === "board" && KINDS.indexOf(entries[i].kind) >= 0) out.push(entries[i]);
     }
     return out;
   }
+
+  var KINDS = ["evaluate", "search", "similar"];
 
   // The recent list shows one line per query; a real multi-line query
   // collapses to spaces there (the full text still loads into the editor).
@@ -138,7 +139,7 @@
   }
 
   var api = {
-    buildEvaluateBody: buildEvaluateBody, describeError: describeError,
+    buildEvaluateBody: buildEvaluateBody, KINDS: KINDS, describeError: describeError,
     findPendingMatch: findPendingMatch, resolvePendingRun: resolvePendingRun,
     unknownCorpus: unknownCorpus, recentQueries: recentQueries, singleLine: singleLine,
     hasRequestDictionaries: hasRequestDictionaries, rerunBody: rerunBody, DICT_NOTE: DICT_NOTE,

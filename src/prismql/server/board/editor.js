@@ -13,6 +13,8 @@
   var L = window.PrismQLEditorLogic;
   var A = window.PrismQLEditorActions;
   var Build = window.PrismQLEditorBuild;
+  var Kindbar = window.PrismQLEditorKindbar;
+  var K = window.PrismQLEditorKinds;
   var mk = window.PrismQLBoardUtil.mk;
 
   // A run's own journal entry, live or still held in state.pending while
@@ -51,7 +53,10 @@
       btn.appendChild(mk("span", "t", window.PrismQLFormat.hms(entry.ts)));
       var q = mk("span", "q");
       if (entry.kind === "evaluate") q.innerHTML = window.PrismQLLexer.highlight(L.singleLine(entry.query || ""));
-      else q.textContent = L.singleLine(entry.query || "");
+      else {
+        q.appendChild(mk("span", "k", K.kindInfo(entry.kind).label.toLowerCase()));
+        q.appendChild(document.createTextNode(L.singleLine(entry.query || "")));
+      }
       btn.appendChild(q);
       btn.addEventListener("click", function () { A.loadQuery(state, entry); window.PrismQLBoard.render(); });
       recent.appendChild(btn);
@@ -92,7 +97,7 @@
     document.getElementById("editor-running").hidden = !ed.running;
     if (ed.running) {
       document.getElementById("editor-running-note").textContent =
-        "Evaluating on " + (ed.corpus || "the default corpus") + "…";
+        K.kindInfo(ed.kind).running + " on " + (ed.corpus || "the default corpus") + "…";
     }
     var err = document.getElementById("editor-error");
     err.hidden = !ed.error;
@@ -111,7 +116,7 @@
     var pre = document.getElementById("editor-pre");
     if (pre.dataset.rev === String(ed.rev)) return;
     textarea.value = ed.query;
-    pre.innerHTML = window.PrismQLLexer.highlight(ed.query);
+    pre.innerHTML = Kindbar.paint(ed, ed.query);
     pre.dataset.rev = String(ed.rev);
     if (ed.focus) {
       textarea.focus();
@@ -127,6 +132,7 @@
     if (!pane) return;
     var ed = A.ensureEditorState(state);
     if (!document.getElementById("editor-textarea")) Build.mount(pane, ed, actions);
+    Kindbar.patch(ed);
     patchCorpusSelect(ed, state.corpora);
     patchRunState(ed);
     patchDictNote(ed);
