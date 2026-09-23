@@ -412,6 +412,22 @@ class MemoryBackend(SearchBackend):
             return set()
         n = len(wanted)
         out: set[MessageId] = set()
+        if field in self.config.text_fields:
+            # The token index is over the same tokenizer: a phrase can only be
+            # in a document holding all its words, so order is checked on
+            # those alone, not by re-tokenizing the whole corpus per call.
+            postings = sorted(
+                (self._text_index.get(t, set()) for t in set(wanted)), key=len
+            )
+            candidates = set.intersection(*postings)
+            for doc_id in candidates:
+                value = self._id_to_doc[doc_id].get(field)
+                if value is None:
+                    continue
+                tokens = self._tokenize(str(value).lower())
+                if any(tokens[k : k + n] == wanted for k in range(len(tokens) - n + 1)):
+                    out.add(doc_id)
+            return out
         for value, ids in self._field_indexes[field].items():
             tokens = self._tokenize(value)
             for k in range(len(tokens) - n + 1):
