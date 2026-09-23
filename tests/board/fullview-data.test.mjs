@@ -238,6 +238,34 @@ test("rowsContext: the text filter matches the key or the value", async () => {
   assert.deepEqual(ctx.filtered, [{ key: "tick_a", value: 3 }]);
 });
 
+test("rowsContext: the filter matches the DISPLAYED text — a list joined with ', ', not String() of the array", async () => {
+  const Data = freshModules(async () => ({
+    kind: "rows", total: 2, offset: 0, count: 2, truncated: false,
+    rows: [{ key: "tick_a", value: ["x", "y"] }, { key: "tick_b", value: 3 }],
+  }));
+  const entry = { result_id: "r12", total: 2, kind: "evaluate", result: "aggregate" };
+  const filterVs = vs();
+  filterVs.q = "x, y";
+  Data.buildContext(entry, board, "rows", filterVs, actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "rows", filterVs, actions);
+  assert.deepEqual(ctx.filtered, [{ key: "tick_a", value: ["x", "y"] }]);
+});
+
+test("rowsContext: a null value is findable by '—', the text the cell actually shows", async () => {
+  const Data = freshModules(async () => ({
+    kind: "rows", total: 2, offset: 0, count: 2, truncated: false,
+    rows: [{ key: "tick_a", value: null }, { key: "tick_b", value: 3 }],
+  }));
+  const entry = { result_id: "r13", total: 2, kind: "evaluate", result: "aggregate" };
+  const filterVs = vs();
+  filterVs.q = "—";
+  Data.buildContext(entry, board, "rows", filterVs, actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "rows", filterVs, actions);
+  assert.deepEqual(ctx.filtered, [{ key: "tick_a", value: null }]);
+});
+
 test("rowsContext: a gone result renders no tiles and the canvas's own note", async () => {
   const Data = freshModules(async () => ({ gone: true }));
   const entry = { result_id: "r11", total: 2, kind: "evaluate", result: "aggregate" };

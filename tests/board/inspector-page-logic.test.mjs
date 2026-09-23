@@ -102,6 +102,12 @@ test("rowValueText: a distinct list joins with ', '", () => {
   assert.equal(PL.rowValueText(["a", "b", "c"]), "a, b, c");
   assert.equal(PL.rowValueText([]), "");
 });
+// Fix round 1, #5: a null value read as the literal string "null" —
+// render it as the board's own empty marker instead.
+test("rowValueText: null/undefined renders as '—', not the literal 'null'", () => {
+  assert.equal(PL.rowValueText(null), "—");
+  assert.equal(PL.rowValueText(undefined), "—");
+});
 
 // --- pairEventsToSlots (fix round 1, #7) ---
 

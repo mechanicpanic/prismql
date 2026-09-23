@@ -120,9 +120,12 @@
     if (res.blocker) return blockedContext("rows", res);
     var rows = res.items;
     var q = vs.q.trim().toLowerCase();
+    // Filter on exactly the text the cell shows (fix round 1, #5) — a
+    // list renders joined with ", " and null renders "—", never
+    // String(r.value)'s "x,y" or the literal "null".
     var filtered = !q ? rows : rows.filter(function (r) {
       return String(r.key).toLowerCase().indexOf(q) >= 0
-        || String(r.value).toLowerCase().indexOf(q) >= 0;
+        || PL.rowValueText(r.value).toLowerCase().indexOf(q) >= 0;
     });
     var tiles = rows.length === 0 ? [] : [{ v: rows.length + " / " + entry.total, l: "groups loaded" }];
     return {
