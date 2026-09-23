@@ -38,10 +38,13 @@ On multi-corpus servers pass corpus="name" to target a specific corpus
 Match results (FOLLOWED_BY/PRECEDED_BY chains, INWINDOW, etc.) are kept on
 the server: the reply carries `total`, the first `max_results` groups and a
 `result_id`. Page with result_page(result_id, offset, limit) while
-`truncated` is true; the server caps `limit`. Aggregate and GROUP BY
-answers are small and returned inline only — they carry no `result_id` and
-are not kept. For a whole result on disk pass output="file" (server-side
-[server] enable_file_output).
+`truncated` is true; the server caps `limit`. A plain aggregate (no GROUP
+BY, or GROUP BY without AGGREGATE) is small and returned inline only — no
+`result_id`, not kept. A GROUP BY ... AGGREGATE answer is the one
+exception that gets both: it is inline in full (`grouped_values`) AND kept
+as a "rows" result under a `result_id`/`total` — page it the same way
+(result_page(result_id, offset, limit)). For a whole result on disk pass
+output="file" (server-side [server] enable_file_output).
 Read the prismql://reference resource for the full language before
 writing complex queries. Returns JSON with matched event groups,
 hydrated with full event content.

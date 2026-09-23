@@ -99,9 +99,12 @@ same way.
    re-run it.** `result_id` is opaque — treat it as an unparsed token, not
    "r" plus a counter; the hex suffix is what keeps an id held from before a
    restart from matching a different result on the new process, where the
-   counter alone repeats from 1. Anything with a `result_id` (everything
-   except an aggregate or `GROUP BY` answer, which stay small and inline
-   with no id) is held on the server in memory. `count` is how many items
+   counter alone repeats from 1. A plain aggregate (no `GROUP BY`, or
+   `GROUP BY` without `AGGREGATE`) is small and returned inline only — no
+   `result_id`, not kept. `GROUP BY ... AGGREGATE` is the one exception
+   that gets both: it answers inline in full (its `grouped_values`) AND is
+   kept as a `"rows"` result with a `result_id`/`total`, pageable the same
+   way. `count` is how many items
    *this response* carries,
    `max_results` is the page size, `total` is how many the query found, and
    `"truncated": true` means paging further returns more. Fetch the rest

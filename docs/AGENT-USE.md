@@ -119,10 +119,13 @@ Can:
   for ids and scores only, or `output: "file"` to keep the hits out of its
   context entirely (scouting to a file writes up to `scout_depth` hits; the
   request's own `limit` no longer narrows that file);
-- page past the cap without re-running anything: a match response (not an
-  aggregate or `GROUP BY` answer — those carry no id) is kept server-side
-  under a `result_id`; `GET /results/{result_id}?offset=…&limit=…` fetches
-  more of it, `GET /results/{result_id}.jsonl` streams all of it.
+- page past the cap without re-running anything: a match response is kept
+  server-side under a `result_id`; `GET /results/{result_id}?offset=…&limit=…`
+  fetches more of it, `GET /results/{result_id}.jsonl` streams all of it. A
+  plain aggregate (no `GROUP BY`, or `GROUP BY` without `AGGREGATE`) carries
+  no id — it stays small and inline. `GROUP BY ... AGGREGATE` is the one
+  exception that gets both: inline in full AND kept as a `"rows"` result
+  with a `result_id`/`total`, pageable the same way.
 
 The request body is `query` plus, all optional, `max_results`, `hydrate`
 (ids without events when `false`), `fields` (project hydrated events down
