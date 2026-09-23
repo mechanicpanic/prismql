@@ -53,6 +53,7 @@ def _fingerprint(config: Any, docs: list[dict[str, Any]]) -> dict[str, Any]:
         "id_field": config.id_field,
         "text_language": config.text_language,
         "text_fields": list(DEFAULT_CONFIG.text_fields),
+        "text_only": True,
     }
 
 
@@ -95,6 +96,7 @@ def build_text_index(config: Any, docs: list[dict[str, Any]]) -> Any | None:
         "timestamp_fields": config.timestamp_fields,
         "num_threads": threads,
         "heap_size": 128_000_000 * threads,
+        "text_only": True,
     }
     if config.text_index_path is None:
         return TantivyBackend(docs, **kwargs)

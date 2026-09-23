@@ -32,7 +32,10 @@ TWO_FIELDS_DICTS = {"deploy": ["deploy"], "rollback": ["rollback"]}
 def _backends(docs: list, language: str = "english") -> tuple:
     plain = MemoryBackend(docs, text_language=language)
     index = TantivyBackend(
-        docs, text_fields=["text", "content", "message"], text_language=language
+        docs,
+        text_fields=["text", "content", "message"],
+        text_language=language,
+        text_only=True,  # what the server builds
     )
     routed = MemoryBackend(docs, text_language=language, text_index=index)
     return plain, routed
@@ -103,3 +106,10 @@ def test_a_text_index_in_another_language_is_refused():
     index = TantivyBackend(DE, text_language="german")
     with pytest.raises(ValueError, match="text index"):
         MemoryBackend(DE, text_language="english", text_index=index)
+
+
+def test_a_text_only_index_holds_no_documents():
+    index = TantivyBackend(EN, text_only=True)
+    assert index.search_stems(["fail"]) == {1, 2}
+    with pytest.raises(ValueError, match="text only"):
+        index.get_documents([1])

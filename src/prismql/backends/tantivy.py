@@ -134,6 +134,7 @@ class TantivyBackend(SearchBackend):
         semantic_index: Any | None = None,
         timestamp_fields: Sequence[str] | None = None,
         source: dict[str, Any] | None = None,
+        text_only: bool = False,
     ) -> None:
         if not _TANTIVY_AVAILABLE:
             raise ImportError(
@@ -149,6 +150,9 @@ class TantivyBackend(SearchBackend):
         # What the index was built from, kept in its meta so a caller can
         # refuse to reopen it for other data (graph @aleph/prismql, #91).
         self.source = source
+        # A text index for another backend (graph #91): only the text fields
+        # and positions, no metadata fields, no stored copy of each document.
+        self._text_only = text_only
         self.timestamp_fields = list(
             dict.fromkeys([*(timestamp_fields or []), "timestamp"])
         )
@@ -208,7 +212,7 @@ class TantivyBackend(SearchBackend):
             if "text" not in text:
                 text.insert(0, "text")
         text_set = set(text)
-        meta = sorted(observed - text_set)
+        meta = [] if self._text_only else sorted(observed - text_set)
 
         self._id_is_int = id_is_int
         self._text_fields = text_set
@@ -227,7 +231,8 @@ class TantivyBackend(SearchBackend):
         for f in meta:
             sb.add_text_field(f, stored=False, tokenizer_name=_RAW_TOKENIZER)
         sb.add_integer_field(_POS_FIELD, stored=False, indexed=False, fast=True)
-        sb.add_json_field(_DOC_FIELD, stored=True)
+        if not self._text_only:
+            sb.add_json_field(_DOC_FIELD, stored=True)
         schema = sb.build()
 
         if index_path is not None:
@@ -257,7 +262,8 @@ class TantivyBackend(SearchBackend):
             for f in self._meta_fields:
                 if f in doc and doc[f] is not None:
                     td.add_text(f, str(doc[f]).lower())
-            td.add_json(_DOC_FIELD, json.dumps(doc, default=str))
+            if not self._text_only:
+                td.add_json(_DOC_FIELD, json.dumps(doc, default=str))
             writer.add_document(td)
         writer.commit()
 
@@ -272,6 +278,7 @@ class TantivyBackend(SearchBackend):
                         "text_language": self.text_language,
                         "schema_version": _SCHEMA_VERSION,
                         "source": self.source,
+                        "text_only": self._text_only,
                     }
                 ),
                 encoding="utf-8",
@@ -289,6 +296,7 @@ class TantivyBackend(SearchBackend):
         self._index = tantivy.Index.open(str(index_path))
         self.text_language = meta.get("text_language", self.text_language)
         self.source = meta.get("source")
+        self._text_only = bool(meta.get("text_only", False))
         _register_analyzers(self._index, self.text_language)
         order = _read_order(Path(index_path))
         if order is not None:
@@ -482,18 +490,25 @@ class TantivyBackend(SearchBackend):
             return set()
         return self._ids_for(tantivy.Query.all_query(), limit)
 
+    def _id_values(self, ids: Sequence[MessageId]) -> list[Any]:
+        """The ids as the id field stores them; ids of the wrong type drop."""
+        if not self._id_is_int:
+            return [str(i) for i in ids]
+        values: list[Any] = []
+        for i in ids:
+            try:
+                values.append(int(i))
+            except (ValueError, TypeError):
+                continue
+        return values
+
     def get_documents(self, ids: Sequence[MessageId]) -> list[Document]:
-        if not ids:
-            return []
-        if self._id_is_int:
-            values: list[Any] = []
-            for i in ids:
-                try:
-                    values.append(int(i))
-                except (ValueError, TypeError):
-                    continue
-        else:
-            values = [str(i) for i in ids]
+        if self._text_only:
+            raise ValueError(
+                "this tantivy index holds text only; the documents live in the "
+                "backend it serves"
+            )
+        values = self._id_values(ids)
         if not values:
             return []
         query = tantivy.Query.term_set_query(self._schema, self.id_field, values)
