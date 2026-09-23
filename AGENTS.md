@@ -229,7 +229,7 @@ Untracked `HANDOFF-*.md` at the repo root are legacy drafts from before the grap
 
 ## Git workflow
 - Commit subjects: plain imperative sentence (house style — not conventional-commit prefixes). Body explains the why when non-obvious.
-- Trailer on every commit: `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` (project convention, owner's choice).
+- Trailer on every commit: `Co-Authored-By: <the model that actually did the work> <noreply@anthropic.com>` — its real name as the harness reports it (e.g. `Claude Opus 5.5 (1M context)`), never a fixed one (owner's word).
 - Forge: GitHub, CLI `gh` (installed, authenticated as `mechanicpanic`); the remote is private — `gh repo view --json isPrivate` answers "is it public".
 - **Local gate — one call, not a list**: `make check` runs the whole chain; call it by name, never assemble the steps by hand. CI calls the same target.
 - **Pre-commit** runs ruff format/check + mypy on staged files (`pre-commit`); CI (push + PR, Python 3.12/3.13) enforces the gate.
