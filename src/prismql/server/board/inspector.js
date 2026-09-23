@@ -100,8 +100,11 @@
     updateTabs(state);
     var pane = document.getElementById("inspector-pane");
     if (!pane) return;
+    // The Editor tab's content is editor.js's (Task 6): it owns #inspector-pane
+    // entirely while state.tab === "editor" and must not be nuked out from
+    // under it on every render — clearing only happens on the Details path.
+    if (state.tab !== "details") return;
     pane.innerHTML = "";
-    if (state.tab !== "details") return; // the Editor tab's content is editor.js's (Task 6)
     var entry = state.entries.filter(function (e) { return e.seq === state.sel; })[0] || null;
     if (!entry) {
       pane.appendChild(UI.emptyBlock("Nothing selected", "Pick a request in the journal to see its query, timing and results."));

@@ -26,6 +26,7 @@
     sel: null, tab: "details", theme: readTheme(),
     corpora: null, corporaFailed: false, // null = not loaded yet (fix round 1, #3)
     full: null,
+    editor: null, editorPending: null, // editor.js's own state (Task 6) — lazily built
   };
 
   // "·" is its own aria-hidden span, flex gap spaces it (fix round 2, #4).
@@ -64,7 +65,11 @@
     nowMs = nowMs || Date.now();
     updateTopbar(nowMs);
     if (window.PrismQLJournal) window.PrismQLJournal.render(state, actions, nowMs);
-    ["PrismQLInspector", "PrismQLEditor", "PrismQLFull"].forEach(function (name) {
+    // Editor before Inspector: a run's own journal entry arriving mid-render
+    // may flip state.tab to "details" (editor.js's checkPendingRun) — the
+    // Inspector pass right after must see that already, one clean render,
+    // no nested render() call (task-6 brief).
+    ["PrismQLEditor", "PrismQLInspector", "PrismQLFull"].forEach(function (name) {
       var mod = window[name];
       if (mod && typeof mod.render === "function") mod.render(state, actions, nowMs);
     });
@@ -88,10 +93,10 @@
     showPending: function () { window.PrismQLBoardStream.showPending(state, render); },
     setTab: function (tab) { state.tab = tab; render(); },
     reconnect: function () { window.PrismQLBoardStream.reconnect(state, render); },
-    openInEditor: function () {},
-    rerun: function () {},
-    run: function () {},
-    newQuery: function () {},
+    openInEditor: function (entry) { window.PrismQLEditor.openInEditor(state, render, entry); },
+    rerun: function (entry) { window.PrismQLEditor.rerun(state, render, entry); },
+    run: function () { window.PrismQLEditor.run(state, render); },
+    newQuery: function () { window.PrismQLEditor.newQuery(state, render); },
   };
 
   // Later tasks attach more actions here instead of editing this file.
