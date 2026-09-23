@@ -224,7 +224,7 @@ Click a row to see its label and file path, **open** to re-run it with your
 own `max` and with or without events, **edit** to change it and run it
 yourself; your runs land in the same feed as `board`. The server keeps
 summaries only (last 500 in memory; `results/activity.jsonl` when file
-output is on), never the results.
+output is on, read back after a restart), never the results.
 
 
 Save these 13 lines as `events.jsonl` and the config from section 2 beside

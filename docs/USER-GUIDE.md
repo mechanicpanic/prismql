@@ -573,7 +573,9 @@ editor has focus. The theme toggle (top right) remembers dark or light
 across visits.
 
 Honest limits: the journal is a ring of `[server] activity_max` entries
-(500 by default) — older requests simply are not there any more. A kept
+(500 by default) — older requests simply are not there any more. With file
+output on it survives a restart: the server reads `activity.jsonl` back at
+start and numbers on from its last entry. A kept
 result (what the Request pane and the full view page through) does not
 survive `/reload` or a server restart; ask for it after either and the
 board says plainly that it is "no longer kept" rather than showing nothing.

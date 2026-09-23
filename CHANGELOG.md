@@ -4,6 +4,7 @@
 - The board's editor runs a *Search* (tantivy syntax) and a *Similar* (a sentence, optional threshold) as well as a query, each with *top*, the number of ranked hits kept; the answer opens in the Request tab, and the recent list keeps all three kinds (graph @aleph/prismql, #111).
 
 ### Fixed (the board)
+- The journal survives a server restart when file output is on: `activity.jsonl` is read back at start and numbering goes on from its last entry; repeated numbers left by earlier restarts load as strictly rising ones (#113).
 - A request without `X-PrismQL-Client` is labelled *unnamed client*, not *person*: an agent's `curl` without the header was shown as a person (#112).
 
 ### Added (query and document prompts for embeddings)

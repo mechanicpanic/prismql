@@ -120,10 +120,12 @@ class ServerState:
         self.generation = 0
         # The board's journal (graph #63): one summary per request, never the
         # results themselves. A ring in memory; JSONL beside the results when
-        # file output is enabled, so the board survives a restart.
+        # file output is enabled, read back at start so the board survives a
+        # restart (graph @aleph/prismql, #113).
         self.activity: deque[dict[str, Any]] = deque(maxlen=config.activity_max)
         self.activity_seq = 0
         self.activity_lock = threading.Lock()
+        self._load_activity()
         # One id per process (graph @aleph/prismql, node #76): the board's
         # stream uses it to tell a restarted server (seq counter reset to 0)
         # apart from its own process just catching up.
@@ -152,6 +154,38 @@ class ServerState:
             self.results.clear()
             self.generation += 1
 
+    def _activity_path(self) -> Path | None:
+        if not self.config.enable_file_output:
+            return None
+        return Path(self.config.results_dir or "prismql-results") / "activity.jsonl"
+
+    def _load_activity(self) -> None:
+        """Read the journal file back into the ring and number on from it.
+
+        A file from before this, where each restart began again at 1, has
+        repeated numbers: an entry whose seq is not above the previous one's
+        gets the previous + 1, the same way on every start. A torn last line
+        (a crash mid-write) is skipped. Old entries keep their result_id,
+        but results never outlive their load: opening one says it is gone.
+        """
+        path = self._activity_path()
+        if path is None or not path.exists():
+            return
+        seq = 0
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+                stored = entry.get("seq")
+                seq = stored if isinstance(stored, int) and stored > seq else seq + 1
+                entry["seq"] = seq
+                self.activity.append(entry)
+        self.activity_seq = seq
+
     def record(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Append one request summary to the journal and return it with its seq."""
         with self.activity_lock:
@@ -162,10 +196,10 @@ class ServerState:
                 **entry,
             }
             self.activity.append(entry)
-        if self.config.enable_file_output:
-            results_dir = Path(self.config.results_dir or "prismql-results")
-            results_dir.mkdir(parents=True, exist_ok=True)
-            with (results_dir / "activity.jsonl").open("a", encoding="utf-8") as f:
+        path = self._activity_path()
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
         return entry
 
