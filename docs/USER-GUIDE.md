@@ -139,6 +139,14 @@ also carries one embedding per row; the server then answers
 `similar_to("…", 0.7)` without encoding the corpus at start, and it knows
 which model to encode the query with because the file says so.
 
+Add `--annotate questions` and the file carries an `is_question` column; the
+server reads it as the answer to `is_question()` on any backend. Without the
+column the same rule runs once over the events at load (a '?' that ends a
+clause, or a question word first — a '?' inside a URL does not count).
+`--annotate entities` (extra `nlp`, a spaCy model, `--spacy-model`) adds the
+labels spaCy finds, for `mentions_org()` and its kin. `--text` names the
+column both read (default `text`).
+
 The same command reads a Claude Code project's transcripts —
 `prismql ingest claude-code ~/.claude/projects/<your-project> sessions.parquet`
 — one event per prompt, thought, tool call and tool result, with `kind`,

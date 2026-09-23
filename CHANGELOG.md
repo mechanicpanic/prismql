@@ -1,5 +1,11 @@
 ## Unreleased
 
+### Removed (breaking — text annotation moved to ingest)
+- `NLPBackend`, `SpacyBackend` and the engine's `nlp_backend` parameter are gone, as is a config's `nlp_backend` section (it now fails with how to annotate instead). Annotation is a step of layer 1: `prismql ingest … --annotate questions,entities` writes `is_question` and `entities` columns, and the server reads them as `PrecomputedIndexes` (graph @aleph/prismql, #106).
+
+### Changed (one question rule for every backend)
+- `is_question()` no longer uses a backend's own heuristic (memory's, the Rust crate's; tantivy had none and refused): the engine reads the precomputed index or annotates the documents once with the rule in `prismql.ingest.annotate`, so memory and tantivy agree. A '?' inside a URL or query string does not count (collusion.wiki revisions: 10,781 → 3,565 of 14,591).
+
 ### Added (query line breaks)
 - The board shows a query with a line per link, window, clause and pipe stage (top level only; an author's own line breaks are kept), and the editor's *Format* button does the same on demand (graph @aleph/prismql, #84). Copy still copies the query as sent.
 

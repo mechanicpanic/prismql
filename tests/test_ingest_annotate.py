@@ -47,3 +47,60 @@ def test_every_backend_answers_is_question_the_same(use_ir):
     for backend in (MemoryBackend(DOCS), TantivyBackend(DOCS)):
         engine = PrismQLEngine(backend, use_ir=use_ir)
         assert engine.execute("SELECT is_question()") == [[2], [3]], type(backend)
+
+
+def _ingest(tmp_path, *extra: str) -> str:
+    from prismql.ingest.cli import run
+
+    src = tmp_path / "in.jsonl"
+    src.write_text(
+        '{"k": 1, "when": "2026-01-01 00:00:00", "text": "why is it slow"}\n'
+        '{"k": 2, "when": "2026-01-01 00:00:01", "text": "see a.org/p?id=7"}\n'
+        '{"k": 3, "when": "2026-01-01 00:00:02", "text": "done?"}\n'
+    )
+    dst = tmp_path / "out.parquet"
+    args = [
+        "table",
+        str(src),
+        str(dst),
+        "--id",
+        "k",
+        "--time",
+        "when",
+        "--keep",
+        "text",
+    ]
+    assert run([*args, *extra]) == 0
+    return str(dst)
+
+
+def test_ingest_writes_the_question_column(tmp_path):
+    import polars as pl
+
+    out = pl.read_parquet(_ingest(tmp_path, "--annotate", "questions"))
+    assert out.get_column("is_question").to_list() == [True, False, True]
+
+
+def test_the_server_reads_the_column_as_the_index(tmp_path):
+    import polars as pl
+
+    from prismql.server.config import ServerConfig, build_engine
+
+    path = _ingest(tmp_path, "--annotate", "questions")
+    # the column is authoritative: flip one row, the engine must follow it
+    df = pl.read_parquet(path).with_columns(
+        pl.Series("is_question", [False, False, True])
+    )
+    df.write_parquet(path)
+    engine = build_engine(ServerConfig(backend_type="memory", data=path))
+    assert engine.execute("SELECT is_question()") == [[3]]
+
+
+def test_an_unknown_annotation_is_refused(tmp_path, capsys):
+    from prismql.ingest.cli import run
+
+    src = tmp_path / "in.jsonl"
+    src.write_text('{"k": 1, "when": "2026-01-01 00:00:00", "text": "x"}\n')
+    rc = run(["table", str(src), str(tmp_path / "o.parquet"), "--id", "k",
+              "--time", "when", "--annotate", "moods"])  # fmt: skip
+    assert rc == 2 and "moods" in capsys.readouterr().err

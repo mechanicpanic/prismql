@@ -405,8 +405,17 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         backend_config["semantic_index"] = index
 
     backend = BackendFactory._create_search_backend(backend_config)
+    # Annotation columns an ingest wrote become the engine's indexes (#106).
+    indexes = None
+    if "documents" in backend_config:
+        from ..ingest.annotate import indexes_from_columns
+
+        indexes = indexes_from_columns(
+            backend_config["documents"], id_field=config.id_field
+        )
     return PrismQLEngine(
         backend,
+        precomputed_indexes=indexes,
         user_dictionaries=config.dictionaries or None,
         timestamp_field=config.timestamp_field,
         text_match=config.text_match,

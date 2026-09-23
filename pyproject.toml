@@ -225,6 +225,8 @@ module = [
     "polars.*",
     "prompt_toolkit",
     "prompt_toolkit.*",
+    "spacy",
+    "spacy.*",
 ]
 ignore_missing_imports = true
 

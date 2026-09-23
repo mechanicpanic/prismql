@@ -34,6 +34,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--keep", help="comma-separated extra columns to keep (table)")
     parser.add_argument("--embed", metavar="COL", help="text column to embed into emb")
     parser.add_argument(
+        "--annotate",
+        metavar="KINDS",
+        help="comma-separated: questions (column is_question), entities "
+        "(column entities, spaCy); the engine reads them as its indexes",
+    )
+    parser.add_argument(
+        "--text", default="text", help="text column --annotate reads (default text)"
+    )
+    parser.add_argument(
+        "--spacy-model", default="en_core_web_sm", help="spaCy model for entities"
+    )
+    parser.add_argument(
         "--model",
         default="all-MiniLM-L6-v2",
         help="sentence-transformers model for --embed",
@@ -64,6 +76,15 @@ def run(argv: Sequence[str] | None = None) -> int:
 
         df = read_codex(Path(args.src))
 
+    if args.annotate:
+        from .annotate import annotate
+
+        kinds = [k for k in args.annotate.split(",") if k]
+        try:
+            df = annotate(df, kinds, text=args.text, spacy_model=args.spacy_model)
+        except ValueError as e:
+            print(f"--annotate: {e}", file=sys.stderr)
+            return 2
     if args.embed:
         df = core.embed(df, text=args.embed, model=args.model)
     path = core.write(
