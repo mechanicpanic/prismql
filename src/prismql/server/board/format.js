@@ -28,13 +28,12 @@
       return ERR_WORDS[etype] || etype || "error";
     }
     var r = entry.result, label;
-    // A GROUP BY ... AGGREGATE answer carries a result_id and total (graph
-    // @aleph/prismql, #90): the kv label says how many groups, not the
-    // placeholder — an old journal entry with no total keeps the
-    // placeholder (it predates the "rows" store).
+    // A GROUP BY ... AGGREGATE answer always carries a total (graph
+    // @aleph/prismql, #90), even with no groups; without one the aggregate
+    // is plain and simply had nothing to compute (avg over no numbers).
     if (r === "aggregate") {
       label = entry.value != null ? "= " + entry.value
-        : typeof entry.total === "number" ? entry.total + " groups" : "= per group";
+        : typeof entry.total === "number" ? entry.total + " groups" : "= no value";
     } else if (r === "groups" || r === "named") {
       label = entry.total + " groups" + (entry.capped ? " · capped" : "");
     } else if (r === "hits") {

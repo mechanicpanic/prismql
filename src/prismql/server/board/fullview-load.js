@@ -31,28 +31,24 @@
   // so the offset advances by the page's own returned count, stopping on
   // an empty page or loadBound.
   function loadPaged(entry, fields, loadTo, actions, listKey) {
-    var items = [], pending = false, blocker = null, gone = false, loadBound = entry.total || 0;
-    var labels = null; // finding 5: a named result's slot labels
-    for (var o = 0; o < loadTo && o < loadBound && !blocker; ) {
-      var rec = PF.fetchPage(entry.result_id, o, PAGE, fields);
-      if (rec.status === "loading") { pending = true; break; }
-      // "Run again" must leave the full view first (goneBlock only calls
-      // actions.rerun — a local stand-in closes #full before it).
-      if (rec.data.gone) {
-        var rerunActions = { rerun: function (e) { actions.closeFull(); actions.rerun(e); } };
-        blocker = PF.goneBlock(rerunActions, entry);
-        gone = true;
-        break;
-      }
-      if (rec.data.error) { blocker = PF.errorBlock(rec.data.error.message); break; }
-      if (rec.data.kept != null) loadBound = Math.min(loadBound, rec.data.kept);
-      if (rec.data.labels != null) labels = rec.data.labels;
-      var page = rec.data[listKey] || [];
-      page.forEach(function (x) { items.push(x); });
-      if (page.length === 0) break;
-      o += page.length;
+    var got = window.PrismQLInspectorPageLogic.collectPages(
+      entry.total || 0, loadTo, PAGE,
+      function (o, n) { return PF.fetchPage(entry.result_id, o, n, fields); },
+      listKey,
+    );
+    var blocker = null;
+    // "Run again" must leave the full view first (goneBlock only calls
+    // actions.rerun — a local stand-in closes #full before it).
+    if (got.gone) {
+      var rerunActions = { rerun: function (e) { actions.closeFull(); actions.rerun(e); } };
+      blocker = PF.goneBlock(rerunActions, entry);
+    } else if (got.error) {
+      blocker = PF.errorBlock(got.error.message);
     }
-    return { items: items, pending: pending, blocker: blocker, gone: gone, loadBound: loadBound, labels: labels };
+    return {
+      items: got.items, pending: got.pending, blocker: blocker, gone: !!got.gone,
+      loadBound: got.bound, labels: got.labels,
+    };
   }
 
   var api = { loadPaged: loadPaged, blockedContext: blockedContext, GONE_NOTE: GONE_NOTE };

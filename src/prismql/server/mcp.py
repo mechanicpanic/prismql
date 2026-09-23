@@ -172,11 +172,13 @@ def build_server() -> Any:
 
     @server.tool(
         description=(
-            "Page a kept match result by the result_id an earlier evaluate() "
+            "Page a kept result by the result_id an earlier evaluate() "
             "call returned, while its `truncated` is true, instead of "
             "re-running the query. Returns one page: total, offset, count, "
-            "truncated and the page's results. A `gone` error means the "
-            "result was evicted or the corpus reloaded — re-run the query."
+            "truncated and the page's items — `results` (event groups) for a "
+            "match result, `rows` (key/value pairs) for a GROUP BY ... "
+            "AGGREGATE answer. A `gone` error means the result was evicted or "
+            "the corpus reloaded — re-run the query."
         )
     )
     def result_page(result_id: str, offset: int = 0, limit: int = 20) -> str:

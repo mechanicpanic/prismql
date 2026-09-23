@@ -112,10 +112,10 @@ test("resultLabel: aggregate", () => {
   );
 });
 
-test("resultLabel: aggregate with a null value and no total (an old journal entry) reads 'per group'", () => {
+test("resultLabel: a plain aggregate with nothing to compute reads 'no value', not 'per group'", () => {
   assert.equal(
     F.resultLabel({ ok: true, result: "aggregate", value: null }),
-    "= per group",
+    "= no value",
   );
 });
 

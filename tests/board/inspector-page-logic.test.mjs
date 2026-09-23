@@ -87,9 +87,9 @@ test("aggregateValueText: a real value", () => {
   assert.equal(PL.aggregateValueText(173493), "173493");
   assert.equal(PL.aggregateValueText(0), "0");
 });
-test("aggregateValueText: null (a per-group aggregate) reads 'per group', not '—'", () => {
-  assert.equal(PL.aggregateValueText(null), "per group");
-  assert.equal(PL.aggregateValueText(undefined), "per group");
+test("aggregateValueText: null (a plain aggregate over nothing) reads 'no value'", () => {
+  assert.equal(PL.aggregateValueText(null), "no value");
+  assert.equal(PL.aggregateValueText(undefined), "no value");
 });
 
 // --- rowValueText (graph @aleph/prismql, #90) ---
@@ -218,4 +218,16 @@ test("collectRowPages: an empty page before total is reached stops instead of lo
   const res = PL.collectRowPages(10, 10, 5, fetchFn);
   assert.equal(res.pending, false);
   assert.deepEqual(res.rows, []);
+});
+
+test("collectPages: kept narrows the bound, labels pass through, pages advance by their own count", () => {
+  const pages = {
+    0: { status: "done", data: { results: ["a", "b"], kept: 3, labels: ["x", null] } },
+    2: { status: "done", data: { results: ["c"], kept: 3 } },
+  };
+  const got = PL.collectPages(10, 50, 50, (o) => pages[o], "results");
+  assert.deepEqual(got.items, ["a", "b", "c"]);
+  assert.equal(got.bound, 3);
+  assert.deepEqual(got.labels, ["x", null]);
+  assert.equal(got.pending, false);
 });

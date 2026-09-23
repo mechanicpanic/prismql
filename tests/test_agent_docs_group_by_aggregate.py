@@ -33,3 +33,22 @@ def test_skill_doc_says_group_by_aggregate_is_kept():
 def test_agent_use_doc_says_group_by_aggregate_is_kept():
     text = _text("docs/AGENT-USE.md")
     assert "GROUP BY ... AGGREGATE" in text
+
+
+# The exact stale sentences each text carried before #90; the positive
+# checks above pass even if one of them comes back beside the new wording.
+STALE = {
+    "src/prismql/server/mcp.py": (
+        "Aggregate and GROUP BY\nanswers are small and returned inline only"
+    ),
+    "skills/prismql/SKILL.md": (
+        "except an aggregate or `GROUP BY` answer, which stay small and inline"
+    ),
+    "docs/AGENT-USE.md": "aggregate or `GROUP BY` answer — those carry no id",
+}
+
+
+def test_the_stale_claims_are_gone():
+    for path, sentence in STALE.items():
+        text = " ".join(_text(path).split())
+        assert " ".join(sentence.split()) not in text, path

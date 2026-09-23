@@ -113,3 +113,9 @@ test("requestId: a request is always named by its journal #seq, never its result
   });
   assert.deepEqual(IF.requestId({ seq: 2, result_id: null }), { text: "#2", title: "" });
 });
+
+test("outputKind: a GROUP BY aggregate that found no group is the shared empty state", () => {
+  assert.equal(IF.outputKind({ ok: true, result: "aggregate", result_id: "r1-a", total: 0 }), "empty");
+  assert.equal(IF.outputKind({ ok: true, result: "aggregate", result_id: "r1-a", total: 3 }), "rows");
+  assert.equal(IF.outputKind({ ok: true, result: "aggregate", result_id: null, value: 5 }), "aggregate");
+});

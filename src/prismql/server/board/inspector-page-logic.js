@@ -55,12 +55,11 @@
     return kind === "similar";
   }
 
-  // A per-group aggregate (AGGREGATE ... GROUP BY ...) never stores its
-  // breakdown in the journal — entry.value is null exactly then, and the
-  // kv row already reads "= per group" (format.js's resultLabel); the big
-  // tile must say the same thing, not "—" (fix round 1, #6).
+  // A grouped aggregate renders as rows (inspector-rows.js), so a null here
+  // is a plain aggregate with nothing to compute; the tile says so in the
+  // same words as the kv row (format.js's resultLabel).
   function aggregateValueText(value) {
-    return value != null ? String(value) : "per group";
+    return value != null ? String(value) : "no value";
   }
 
   // Slots come from ids/positions/times (always index-aligned); the
@@ -100,20 +99,31 @@
   // The next offset advances by the count the page actually returned,
   // never by `step` itself, so a page capped below `step` never skips or
   // repeats rows.
-  function collectRowPages(total, target, step, fetchFn) {
-    var rows = [];
+  // The one paging loop of the board: the inspector's rows and every full
+  // view kind use it (a second copy lived in fullview-load.js). `listKey`
+  // names the page's item list ("results", "hits", "rows"); a page's
+  // `kept` narrows the bound (scouting kept fewer than it found) and its
+  // `labels` (a named result's slot names) are passed through.
+  function collectPages(total, target, step, fetchFn, listKey) {
+    var out = { items: [], pending: false, bound: total, labels: null };
     var offset = 0;
-    while (offset < target && offset < total) {
+    while (offset < target && offset < out.bound) {
       var page = fetchFn(offset, step);
-      if (page.status === "loading") return { rows: rows, pending: true };
-      if (page.data.gone) return { rows: rows, pending: false, gone: true };
-      if (page.data.error) return { rows: rows, pending: false, error: page.data.error };
-      var got = page.data.rows || [];
+      if (page.status === "loading") { out.pending = true; return out; }
+      if (page.data.gone) { out.gone = true; return out; }
+      if (page.data.error) { out.error = page.data.error; return out; }
+      if (page.data.kept != null) out.bound = Math.min(out.bound, page.data.kept);
+      if (page.data.labels != null) out.labels = page.data.labels;
+      var got = page.data[listKey] || [];
       if (got.length === 0) break; // nothing more to get — never loop forever
-      rows = rows.concat(got);
+      out.items = out.items.concat(got);
       offset += got.length;
     }
-    return { rows: rows, pending: false };
+    return out;
+  }
+  function collectRowPages(total, target, step, fetchFn) {
+    var r = collectPages(total, target, step, fetchFn, "rows");
+    return { rows: r.items, pending: r.pending, gone: r.gone, error: r.error };
   }
 
   var api = {
@@ -121,7 +131,7 @@
     errorMessageFor: errorMessageFor, groupsMoreLabel: groupsMoreLabel,
     hitsNote: hitsNote, isScored: isScored, aggregateValueText: aggregateValueText,
     pairEventsToSlots: pairEventsToSlots, rowValueText: rowValueText,
-    collectRowPages: collectRowPages,
+    collectRowPages: collectRowPages, collectPages: collectPages,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLInspectorPageLogic = api;
