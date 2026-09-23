@@ -104,3 +104,29 @@ def test_the_one_line_regex_is_the_verbose_pattern():
     for doc in TRICKY + EN + DE:
         text = doc["text"]
         assert [t.lower() for t in one_line.findall(text)] == tokenize_unicode(text)
+
+
+# A dictionary term the tokenizer splits (a hyphen, trailing punctuation) is
+# matched as the phrase of its tokens on both backends — memory used to look
+# the whole string up as one token and silently found nothing.
+SPLIT = [
+    {"id": 1, "text": "please sign-in now"},
+    {"id": 2, "text": "please sign in now"},
+    {"id": 3, "text": "the sign, in the corner"},
+    {"id": 4, "text": "signing in again"},
+    {"id": 5, "text": "hello there"},
+    {"id": 6, "text": "in sign order"},
+]
+SPLIT_DICTS = {"signin": ["sign-in"], "hello": ["hello!"]}
+
+
+@pytest.mark.parametrize("mode", ["stem", "token"])
+def test_a_term_the_tokenizer_splits_is_matched_as_its_phrase(mode):
+    mem = _sets(MemoryBackend(SPLIT), SPLIT_DICTS, text_match=mode)
+    tan = _sets(TantivyBackend(SPLIT), SPLIT_DICTS, text_match=mode)
+    assert mem == tan
+    assert mem["hello"] == [[5]]
+    if mode == "stem":
+        assert mem["signin"] == [[1], [2], [3], [4]]  # "signing" stems to "sign"
+    else:
+        assert mem["signin"] == [[1], [2], [3]]

@@ -273,20 +273,10 @@ class MemoryBackend(SearchBackend):
         if self.text_index is not None:
             return self._routed_terms("search_tokens", terms, operator)
 
-        # Search in the text index (uses configured tokenizer)
-        result_sets = []
-
-        for term in terms:
-            term_lower = term.lower()
-            matching_ids: set[MessageId] = set()
-
-            # Exact token matches only. The tokenizer already preserves
-            # meaningful punctuation (C++, emails, contractions), so no
-            # substring fallback — that's what search_text is for.
-            if term_lower in self._text_index:
-                matching_ids.update(self._text_index[term_lower])
-
-            result_sets.append(matching_ids)
+        # Exact token matches only. The tokenizer already preserves
+        # meaningful punctuation (C++, emails, contractions), so no
+        # substring fallback — that's what search_text is for.
+        result_sets = [self._term_ids(t, stem=False) for t in terms]
 
         # Combine results based on operator
         if operator == "AND":
@@ -374,16 +364,43 @@ class MemoryBackend(SearchBackend):
             return set()
         if self.text_index is not None:
             return self._routed_terms("search_stems", terms, operator)
-        sets = [
-            set(self._stem_index.get(self._stemmer.stemWord(t.lower()), ()))
-            for t in terms
-        ]
+        sets = [self._term_ids(t, stem=True) for t in terms]
         if operator == "AND":
             out = sets[0]
             for s in sets[1:]:
                 out = out & s
             return out
         return set().union(*sets)
+
+    def _term_ids(self, term: str, *, stem: bool) -> set[MessageId]:
+        """One query term, cut by the documents' own tokenizer: one token is
+        a lookup; several (a hyphen, trailing punctuation) are the phrase of
+        those tokens — tantivy analyzes a term the same way (graph #59)."""
+        keys = self._tokenize(term.lower())
+        if stem:
+            keys = [self._stemmer.stemWord(k) for k in keys]
+        index = self._stem_index if stem else self._text_index
+        if len(keys) <= 1:
+            return set(index.get(keys[0], ())) if keys else set()
+        postings = sorted((index.get(k, set()) for k in set(keys)), key=len)
+        out: set[MessageId] = set()
+        n = len(keys)
+        stems: dict[str, str] = {}  # the same few words recur across documents
+        for doc_id in set.intersection(*postings):
+            doc = self._id_to_doc[doc_id]
+            for f in self.config.text_fields:
+                if doc.get(f) is None:
+                    continue
+                toks = self._tokenize(str(doc[f]).lower())
+                if stem:
+                    toks = [
+                        stems.get(t) or stems.setdefault(t, self._stemmer.stemWord(t))
+                        for t in toks
+                    ]
+                if any(toks[k : k + n] == keys for k in range(len(toks) - n + 1)):
+                    out.add(doc_id)
+                    break
+        return out
 
     def supports_match(self, mode: str) -> bool:
         return mode in ("stem", "token", "substring")
