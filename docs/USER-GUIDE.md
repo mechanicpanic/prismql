@@ -183,12 +183,17 @@ you can keep config and data together and point at them from anywhere.
 events (`text_index = "tantivy"`, the default when the `tantivy` extra is
 installed); `text_index = "memory"` keeps Python's own index, and
 `text_match = "substring"` always does, since tantivy matches whole words.
-The sets are the same either way; the speed is not (Village, 381k events: a
+The sets are the same either way on everything the two are tested on — two
+tokenizer differences are known and pinned (a Greek final sigma, superscript
+digits) — and the speed is not (Village, 381k events: a
 phrase query 10 s → 0.2 s, a dictionary with two phrases 20 s → 0.07 s). Add
 `text_index_path = "index/text"` under `[backend]` (or `[corpora.<name>]`) to
 keep the index on disk: the next start opens it instead of rebuilding
-(Village: 99 s → 33 s), and it is rebuilt — never reused — when the data file
-changes. `/schema` reports which one a corpus runs as `text_search`.
+(Village: 60 s → 43 s), and it is rebuilt — never reused — when the loaded
+text or the tokenizing code differs from what it was built from (a content
+fingerprint, 1.3 s on Village; a copy with the same size and time still
+counts as different text). A folder that is not a text index is never
+touched. `/schema` reports which one a corpus runs as `text_search`.
 
 ---
 

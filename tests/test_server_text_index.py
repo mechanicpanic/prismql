@@ -123,3 +123,73 @@ def test_search_ranks_from_the_corpus_text_index(tmp_path):
         engine, cfg, lock = state.engine_for(None)
         scout = state.scout_for(None, engine, cfg, lock)
         assert scout is engine.search_backend.text_index
+
+
+def test_a_same_size_same_mtime_rewrite_is_still_rebuilt(tmp_path):
+    """cp -p / rsync -a keep size and mtime; the fingerprint is the content."""
+    path = tmp_path / "textidx"
+    data = _data(tmp_path)
+    stat = os.stat(data)
+    build_engine(
+        ServerConfig(
+            backend_type="memory",
+            data=data,
+            dictionaries=DICTS,
+            text_index_path=str(path),
+        )
+    )
+    swapped = [dict(d, text=d["text"].replace("deploy", "zzzzzz")) for d in DOCS]
+    _data(tmp_path, swapped)  # same length: "deploy" and "zzzzzz" are 6 letters
+    assert os.stat(data).st_size == stat.st_size
+    os.utime(data, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    engine = build_engine(
+        ServerConfig(
+            backend_type="memory",
+            data=data,
+            dictionaries={"z": ["zzzzzz"]},
+            text_index_path=str(path),
+        )
+    )
+    assert engine.execute("SELECT contains(z)") == [["e1"], ["e3"]]
+
+
+def test_a_full_tantivy_index_is_never_deleted(tmp_path):
+    path = tmp_path / "full"
+    TantivyBackend(DOCS, index_path=str(path))  # a tantivy backend's own index
+    with pytest.raises(ValueError, match="not a text index"):
+        build_engine(_cfg(tmp_path, text_index_path=str(path)))
+    assert (path / "_prismql_meta.json").exists()
+
+
+def test_an_index_left_without_its_order_sidecar_is_rebuilt(tmp_path):
+    path = tmp_path / "textidx"
+    build_engine(_cfg(tmp_path, text_index_path=str(path)))
+    (path / "order.parquet").unlink()  # a crash between meta and sidecar
+    engine = build_engine(_cfg(tmp_path, text_index_path=str(path)))
+    assert _answers(engine)[0] == [["e1"], ["e3"]]
+
+
+def test_mixed_id_types_keep_the_index_in_memory(tmp_path, capsys):
+    docs = [{"id": 1, "text": "deploy one"}, {"id": "b", "text": "deploy two"}]
+    cfg = ServerConfig(
+        backend_type="memory",
+        data=_data(tmp_path, docs),
+        dictionaries=DICTS,
+        text_index_path=str(tmp_path / "textidx"),
+    )
+    backend = build_engine(cfg).search_backend
+    assert backend.search_stems(["deploy"]) == {1, "b"}
+    assert not (tmp_path / "textidx").exists()
+    assert "in memory" in capsys.readouterr().out
+
+
+def test_search_can_scope_to_a_metadata_field(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from prismql.server.app import create_app
+
+    docs = [{**d, "kind": "ops" if d["id"] != "e2" else "auth"} for d in DOCS]
+    cfg = ServerConfig(backend_type="memory", data=_data(tmp_path, docs))
+    with TestClient(create_app(cfg)) as client:
+        body = client.post("/search", json={"query": "kind:auth"}).json()
+        assert body["ok"] and body["total"] == 1

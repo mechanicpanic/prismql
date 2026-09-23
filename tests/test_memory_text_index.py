@@ -35,7 +35,7 @@ def _backends(docs: list, language: str = "english") -> tuple:
         docs,
         text_fields=["text", "content", "message"],
         text_language=language,
-        text_only=True,  # what the server builds
+        store_documents=False,  # what the server builds
     )
     routed = MemoryBackend(docs, text_language=language, text_index=index)
     return plain, routed
@@ -108,10 +108,10 @@ def test_a_text_index_in_another_language_is_refused():
         MemoryBackend(DE, text_language="english", text_index=index)
 
 
-def test_a_text_only_index_holds_no_documents():
-    index = TantivyBackend(EN, text_only=True)
+def test_a_text_index_stores_no_documents():
+    index = TantivyBackend(EN, store_documents=False)
     assert index.search_stems(["fail"]) == {1, 2}
-    with pytest.raises(ValueError, match="text only"):
+    with pytest.raises(ValueError, match="stores no documents"):
         index.get_documents([1])
 
 

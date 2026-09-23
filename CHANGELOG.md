@@ -1,7 +1,7 @@
 ## Unreleased
 
 ### Changed (text search runs on a full-text index)
-- A `memory` corpus answers `contains()`, phrases and `/search` from one tantivy index per corpus (graph @aleph/prismql, #91): `[corpora.<name>] text_index = "tantivy" | "memory"` (default tantivy when the extra is installed; `text_match = "substring"` stays in Python), `text_index_path` keeps it on disk with a fingerprint of the data it was built from and rebuilds it when the data changes. Same sets as before, verified on Village: a phrase query 10 s → 0.18 s, `contains(outreach)` in a chain 20 s → 0.07 s, `/search` on a memory corpus no longer builds a second index (75 s on first use → 1.5 ms). `/schema` reports `text_search`.
+- A `memory` corpus answers `contains()`, phrases and `/search` from one tantivy index per corpus (graph @aleph/prismql, #91): `[corpora.<name>] text_index = "tantivy" | "memory"` (default tantivy when the extra is installed; `text_match = "substring"` stays in Python), `text_index_path` keeps it on disk with a fingerprint of the loaded text and the tokenizing code and rebuilds it when either differs; a folder that is not a text index (including a tantivy backend's own index) is never overwritten. Same sets as before (two tokenizer differences, Greek final sigma and superscript digits, are pinned), verified on Village: a phrase query 10 s → 0.18 s, `contains(outreach)` in a chain 20 s → 0.07 s, `/search` on a memory corpus no longer builds a second index (75 s on first use → 1.5 ms). `/schema` reports `text_search`.
 - `TantivyBackend` reads match sets from a position fast field instead of each hit's stored document (index layout 3; an index of layout 2 is refused with rebuild instructions): a common word 1.2 s → 81 ms on Village.
 
 ### Fixed (text)
