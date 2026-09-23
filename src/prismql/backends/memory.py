@@ -52,6 +52,7 @@ class MemoryBackend(SearchBackend):
         semantic_index: SemanticIndex | None = None,
         text_language: str = "english",
         timestamp_fields: Sequence[str] | None = None,
+        text_index: Any | None = None,
     ) -> None:
         """
         Initialize the memory backend with documents.
@@ -66,6 +67,10 @@ class MemoryBackend(SearchBackend):
                 (the default ``contains()`` mode); the same name tantivy uses
             timestamp_fields: Fields parsed to UTC micros on the order axis
                 (``timestamps_at``); ``timestamp`` is always included
+            text_index: A full-text index over the same documents in the same
+                load order (a ``TantivyBackend``); stem, token and phrase
+                queries go to it and the Python token index is not built
+                (graph @aleph/prismql, #91). ``substring`` stays here.
         """
         # A corpus may arrive as an ordered Arrow table (spec, layer 1).
         # Row order is load order; to_pylist() preserves it. (Zero-copy
@@ -79,6 +84,7 @@ class MemoryBackend(SearchBackend):
         self.text_language = text_language
         self._stemmer = _stemmer(text_language)
         self.config.validate()
+        self.text_index = text_index
 
         # Resolve tokenizer once
         self._tokenize = self.config.get_tokenizer()
@@ -115,14 +121,16 @@ class MemoryBackend(SearchBackend):
 
                 self._field_indexes[field][str_value].add(doc_id)
 
-                # Also index individual tokens for text fields
+                # Also index individual tokens for text fields — unless a
+                # full-text index answers them (the bulk of the start-up cost)
                 if field in self.config.text_fields:
-                    # Tokenize using configured tokenizer
-                    tokens = self._tokenize(str_value)
-                    for token in tokens:
-                        if token not in self._text_index:
-                            self._text_index[token] = set()
-                        self._text_index[token].add(doc_id)
+                    if text_index is None or self.config.enable_ngrams:
+                        tokens = self._tokenize(str_value)
+                    if text_index is None:
+                        for token in tokens:
+                            if token not in self._text_index:
+                                self._text_index[token] = set()
+                            self._text_index[token].add(doc_id)
 
                     # Store tokens for n-gram building
                     if self.config.enable_ngrams:
@@ -159,6 +167,46 @@ class MemoryBackend(SearchBackend):
                 for f in self.timestamp_fields
             },
         )
+        if text_index is not None:
+            self._check_text_index(text_index)
+
+    def _check_text_index(self, index: Any) -> None:
+        """A text index must hold exactly these documents in this order and
+        stem in this language, or it answers for another corpus silently."""
+        ids = [doc[self.id_field] for doc in self.documents]
+        n = len(ids)
+        if (
+            index.get_total_documents() != n
+            or not index.has_order_axis()
+            or index.ids_at(range(n)) != ids
+        ):
+            raise ValueError(
+                "text index does not hold this corpus's documents in load order; "
+                "rebuild it from the same data"
+            )
+        if index.text_language != self.text_language:
+            raise ValueError(
+                f"text index stems in {index.text_language!r}, the corpus in "
+                f"{self.text_language!r}; rebuild it"
+            )
+
+    def _routed_terms(
+        self, method: str, terms: Sequence[str], operator: str
+    ) -> set[MessageId]:
+        """Per term, the union over the text fields (the Python token index
+        spans them the same way), then OR/AND across terms."""
+        assert self.text_index is not None
+        fields = [
+            f for f in self.config.text_fields if f in self.text_index.text_fields
+        ]
+        search = getattr(self.text_index, method)
+        sets = [set().union(*(search([t], field=f) for f in fields)) for t in terms]
+        if operator == "AND":
+            out = sets[0]
+            for s in sets[1:]:
+                out = out & s
+            return out
+        return set().union(*sets)
 
     def search_text(
         self, terms: Sequence[str], field: str = "text", operator: str = "OR"
@@ -222,6 +270,8 @@ class MemoryBackend(SearchBackend):
         """
         if not terms:
             return set()
+        if self.text_index is not None:
+            return self._routed_terms("search_tokens", terms, operator)
 
         # Search in the text index (uses configured tokenizer)
         result_sets = []
@@ -322,6 +372,8 @@ class MemoryBackend(SearchBackend):
         """Whole-word match on stems: the query term is stemmed the same way."""
         if not terms:
             return set()
+        if self.text_index is not None:
+            return self._routed_terms("search_stems", terms, operator)
         sets = [
             set(self._stem_index.get(self._stemmer.stemWord(t.lower()), ()))
             for t in terms
@@ -350,6 +402,8 @@ class MemoryBackend(SearchBackend):
         Returns:
             Set of matching message IDs
         """
+        if self.text_index is not None and field in self.config.text_fields:
+            return set(self.text_index.search_phrase(phrase, field=field))
         if not self.config.enable_ngrams:
             # Fallback: substring matching (slower but works)
             return self._search_phrase_substring(phrase, field)

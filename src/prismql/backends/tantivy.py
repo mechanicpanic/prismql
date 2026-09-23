@@ -292,6 +292,11 @@ class TantivyBackend(SearchBackend):
         self._text_fields = set(meta["text_fields"])
         self._meta_fields = set(meta["meta_fields"])
 
+    @property
+    def text_fields(self) -> frozenset[str]:
+        """The fields indexed as text (stemmed + plain twins)."""
+        return frozenset(self._text_fields)
+
     # ------------------------------------------------------------- internals
     def _coerce_id(self, raw: Any) -> MessageId:
         return int(raw) if self._id_is_int else str(raw)
