@@ -12,6 +12,7 @@ from disk.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from typing import Any
 
@@ -21,6 +22,9 @@ from ..types import Document, MessageId
 from .base import SearchBackend
 from .order import OrderIndex, epoch_micros
 from .semantic import SemanticIndex
+
+# '?' followed by the end, whitespace or closing punctuation: '?id=7' is not.
+_QUESTION_MARK = re.compile(r"\?(?=$|[\s)\]}\"'»”’.,;:!?])")
 
 
 def _stemmer(language: str) -> Any:
@@ -559,8 +563,9 @@ class MemoryBackend(SearchBackend):
 
     def _is_question(self, text: str) -> bool:
         """Check if text contains a question."""
-        # Check for question mark
-        if "?" in text:
+        # A '?' that ends a clause (end of text, a space, closing punctuation),
+        # not one inside a URL or query string (graph @aleph/prismql, #94)
+        if _QUESTION_MARK.search(text):
             return True
 
         # Check for question words at the beginning
