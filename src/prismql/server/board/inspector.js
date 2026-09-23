@@ -61,7 +61,9 @@
 
   function buildCode(wrap, entry) {
     var code = mk("div", "code");
-    if (entry.kind === "evaluate") code.innerHTML = window.PrismQLLexer.highlight(entry.query || "");
+    // shown with a line per link and clause (#84); Copy takes the query as sent
+    var shown = window.PrismQLQueryFormat.breakLines(entry.query || "");
+    if (entry.kind === "evaluate") code.innerHTML = window.PrismQLLexer.highlight(shown);
     else code.appendChild(document.createTextNode(entry.query || ""));
     var btn = mk("button", "iconbtn sm copy");
     btn.type = "button";

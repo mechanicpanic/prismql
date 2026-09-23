@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (query line breaks)
+- The board shows a query with a line per link, window, clause and pipe stage (top level only; an author's own line breaks are kept), and the editor's *Format* button does the same on demand (graph @aleph/prismql, #84). Copy still copies the query as sent.
+
 ### Fixed (memory)
 - An ingested `emb` column loads as one float32 numpy matrix, normalized in place, not as Python lists of floats: loading peaked at ~13x the matrix, now ~3x (20k x 64 test: 69 MB → 15 MB) (graph @aleph/prismql, #95).
 

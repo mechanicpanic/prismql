@@ -18,10 +18,23 @@
     corpusLabel.appendChild(select);
     opts.appendChild(corpusLabel);
 
+    var fmtBtn = mk("button", "ghost", "Format");
+    fmtBtn.type = "button";
+    fmtBtn.id = "editor-format";
+    fmtBtn.title = "Put each link, window and clause on its own line";
+    fmtBtn.style.marginLeft = "auto";
+    fmtBtn.addEventListener("click", function () {
+      var ta = document.getElementById("editor-textarea");
+      if (!ta) return;
+      ta.value = window.PrismQLQueryFormat.formatQuery(ta.value);
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+      ta.focus();
+    });
+    opts.appendChild(fmtBtn);
+
     var runBtn = mk("button", "primary");
     runBtn.type = "button";
     runBtn.id = "editor-run";
-    runBtn.style.marginLeft = "auto";
     runBtn.appendChild(mk("span", null, "Run"));
     runBtn.appendChild(mk("span", "kbd", "⌘⏎"));
     opts.appendChild(runBtn);
