@@ -50,6 +50,10 @@
     if (kind === "reset") {
       state.entries = []; state.pending = []; state.seq = 0; state.boot = bootId;
       state.sel = null; state.full = null; state.freshSeq = null;
+      // A pending run's own baseline belonged to the old boot's seq
+      // numbering — void it too, on top of editor.js's own boot check
+      // (fix round 2, #2).
+      if (state.editorPending) state.editorPending.baselineSeq = 0;
       // A restarted server's result store is empty too — every cached
       // page is stale (fix round 1, #3); its board config may also have
       // changed, so re-ask /corpora too (fix round 2, #5).

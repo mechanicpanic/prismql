@@ -24,7 +24,7 @@
   // flip here draws in the very same pass.
   function checkPendingRun(state) {
     var ed = state.editor;
-    var resolved = L.resolvePendingRun(state.entries, state.pending, state.editorPending, ed ? ed.query : "");
+    var resolved = L.resolvePendingRun(state.entries, state.pending, state.editorPending, ed ? ed.query : "", state.boot);
     if (!resolved) return false;
     state.editorPending = null;
     if (!resolved.select) return false;
@@ -34,11 +34,14 @@
   }
 
   // Redrawn only when the actual set of recent seqs changes, not on every
-  // beat/stream render (fix round 1, #6).
+  // beat/stream render (fix round 1, #6); state.boot is folded into the
+  // signature too — a reset restarts seq numbering, so a post-reset list
+  // could otherwise collide with the pre-reset one it must replace (fix
+  // round 2, #4).
   function patchRecent(state) {
     var recent = document.getElementById("editor-recent");
     var list = L.recentQueries(state.entries);
-    var sig = list.map(function (e) { return e.seq; }).join(",");
+    var sig = state.boot + "|" + list.map(function (e) { return e.seq; }).join(",");
     if (recent.dataset.sig === sig) return;
     recent.dataset.sig = sig;
     recent.innerHTML = "";

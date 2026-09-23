@@ -32,7 +32,22 @@
     return arr.length > CAP ? arr.slice(0, CAP) : arr;
   }
 
-  var api = { RANGES: RANGES, CAP: CAP, rangeSeconds: rangeSeconds, effFilters: effFilters, mk: mk, cap: cap };
+  // A selection (state.sel) can point at an entry that only ever landed
+  // in state.pending — a match found while paused never merges into
+  // entries (fix round 2, #1) — so every lookup by seq goes through this,
+  // never state.entries alone.
+  function findEntry(state, seq) {
+    if (seq == null) return null;
+    var i;
+    for (i = 0; i < state.entries.length; i++) if (state.entries[i].seq === seq) return state.entries[i];
+    for (i = 0; i < state.pending.length; i++) if (state.pending[i].seq === seq) return state.pending[i];
+    return null;
+  }
+
+  var api = {
+    RANGES: RANGES, CAP: CAP, rangeSeconds: rangeSeconds, effFilters: effFilters,
+    mk: mk, cap: cap, findEntry: findEntry,
+  };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLBoardUtil = api;
 })(typeof window !== "undefined" ? window : globalThis);

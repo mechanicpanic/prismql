@@ -147,3 +147,59 @@ test("recentQueries: only who === board, newest first, capped at 5", () => {
 test("singleLine: collapses a multi-line query for the compact list", () => {
   assert.equal(L.singleLine("SELECT $a\n  FOLLOWED_BY $b\nWITHIN 5m"), "SELECT $a FOLLOWED_BY $b WITHIN 5m");
 });
+
+// --- fix round 2 -----------------------------------------------------
+
+test("findPendingMatch: a restart before the POST resolved — old baseline (500) is void, a fresh low seq (3) matches", () => {
+  const entries = [{ who: "board", result_id: null, query: "SELECT $a", corpus: "village", seq: 3 }];
+  const pending = { resultId: null, query: "SELECT $a", corpus: "village", baselineSeq: 500, boot: "old-boot" };
+  const found = L.findPendingMatch(entries, pending, "new-boot");
+  assert.equal(found, entries[0], "boot mismatch -> baseline treated as 0, not the stale 500");
+});
+
+test("findPendingMatch: boot unchanged — the old baseline still applies normally", () => {
+  const entries = [{ who: "board", result_id: null, query: "SELECT $a", corpus: "village", seq: 3 }];
+  const pending = { resultId: null, query: "SELECT $a", corpus: "village", baselineSeq: 500, boot: "same-boot" };
+  assert.equal(L.findPendingMatch(entries, pending, "same-boot"), null, "seq 3 is below the still-valid baseline of 500");
+});
+
+test("findPendingMatch: a restart doesn't cause a late hijack — matching rules still apply past the reset baseline", () => {
+  // Two board entries land after a restart; only one carries the pending's
+  // own query — the reset baseline (now 0) must not make the OTHER one,
+  // which arrived first, match just because it's also above baseline 0.
+  const entries = [
+    { who: "board", result_id: null, query: "SELECT count(y)", corpus: "village", seq: 2 }, // unrelated, arrived first
+    { who: "board", result_id: null, query: "SELECT count(x)", corpus: "village", seq: 1 }, // ours, even though lower seq
+  ];
+  const pending = { resultId: null, query: "SELECT count(x)", corpus: "village", baselineSeq: 500, boot: "old-boot" };
+  const found = L.findPendingMatch(entries, pending, "new-boot");
+  assert.equal(found, entries[1], "still gated by query equality — the reset only changes the baseline, not the rules");
+});
+
+test("findPendingMatch: a result_id match also survives a boot mismatch", () => {
+  const entries = [{ who: "board", result_id: "r1", seq: 2 }];
+  const pending = { resultId: "r1", query: "x", baselineSeq: 500, boot: "old-boot" };
+  assert.equal(L.findPendingMatch(entries, pending, "new-boot"), entries[0]);
+});
+
+test("findPendingMatch: an aggregate match also requires the same corpus (fix round 2, #3)", () => {
+  const entries = [{ who: "board", result_id: null, query: "SELECT count($a)", corpus: "wiki", seq: 5 }];
+  const pending = { resultId: null, query: "SELECT count($a)", corpus: "village", baselineSeq: 0 };
+  assert.equal(L.findPendingMatch(entries, pending), null, "same query, different corpus — not a match");
+});
+
+test("findPendingMatch: an aggregate matches once both query and corpus agree", () => {
+  const entries = [
+    { who: "board", result_id: null, query: "SELECT count($a)", corpus: "wiki", seq: 4 },
+    { who: "board", result_id: null, query: "SELECT count($a)", corpus: "village", seq: 5 },
+  ];
+  const pending = { resultId: null, query: "SELECT count($a)", corpus: "village", baselineSeq: 0 };
+  assert.equal(L.findPendingMatch(entries, pending), entries[1]);
+});
+
+test("resolvePendingRun: threads currentBoot through to both the live and paused lookups", () => {
+  const pendingQueue = [{ who: "board", result_id: null, query: "x", corpus: "v", seq: 2 }];
+  const pending = { resultId: null, query: "x", corpus: "v", baselineSeq: 500, boot: "old" };
+  const r = L.resolvePendingRun([], pendingQueue, pending, "x", "new");
+  assert.equal(r.entry, pendingQueue[0]);
+});

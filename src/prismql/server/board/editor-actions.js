@@ -60,13 +60,15 @@
     ed.error = null;
     render();
     var sentQuery = ed.query;
+    var sentCorpus = ed.corpus;
     var baselineSeq = state.seq; // no clocks in run<->entry matching (fix round 1, #2)
+    var baselineBoot = state.boot; // a restart voids the baseline (fix round 2, #2)
     window.PrismQLApi.evaluate(L.buildEvaluateBody(ed)).then(function (res) {
       ed.running = false;
       if (res.status === 200 && res.body && res.body.ok) {
         state.editorPending = {
           resultId: res.body.result_id != null ? res.body.result_id : null,
-          query: sentQuery, baselineSeq: baselineSeq,
+          query: sentQuery, corpus: sentCorpus, baselineSeq: baselineSeq, boot: baselineBoot,
         };
       } else {
         ed.error = L.describeError(res.status, res.body);

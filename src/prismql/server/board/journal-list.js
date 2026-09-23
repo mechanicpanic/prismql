@@ -1,8 +1,7 @@
 // PrismQLJournalList: the journal's list — offline banner, the paused
 // "N new requests" pill, days newest-first, rows, the two empty states and
-// ↑/↓/Enter keyboard nav (graph @aleph/prismql, node #63). The periodic 5 s
-// refresh calls tick() instead of render(): a rebuild drops keyboard focus
-// to <body> (fix round 1, #2), tick() only patches ".rel" text in place.
+// ↑/↓/Enter keyboard nav (graph @aleph/prismql, node #63). tick(), the
+// periodic 5s refresh, only patches ".rel" — a rebuild drops focus (#2).
 (function (root) {
   "use strict";
 
@@ -91,8 +90,9 @@
     el.dataset.wired = "1";
     el.addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
-        // A reset can outlive the seq it pointed at (fix round 1, #3).
-        var exists = state.sel != null && state.entries.some(function (en) { return en.seq === state.sel; });
+        // A reset can outlive the seq it pointed at (fix round 1, #3); a
+        // paused run's own match lives only in pending (fix round 2, #1).
+        var exists = window.PrismQLBoardUtil.findEntry(state, state.sel) != null;
         if (exists) { e.preventDefault(); actions.openFull(state.sel); }
         return;
       }

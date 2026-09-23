@@ -159,6 +159,26 @@ test("a boot-mismatch reset clears sel, full, freshSeq and pending, then backfil
   assert.equal(firstStreamCall.closeSpy.closed, true, "the pre-reset handle was closed, not just abandoned");
 });
 
+test("fix round 2, #2: a reset also zeroes a pending run's own baseline, on top of editor.js's own boot check", async () => {
+  const api = fakeApi({ entries: [entry(1)] });
+  setWindow(api);
+  const stream = freshStream();
+  const state = freshState({
+    editorPending: { resultId: null, query: "x", corpus: "v", baselineSeq: 500, boot: "old-boot" },
+  });
+
+  let renders = 0;
+  await new Promise((resolve) => {
+    stream.connect(state, () => { renders++; if (renders === 1) resolve(); });
+  });
+  await flush();
+
+  api.streamCalls[0].onState("reset", "new-boot");
+  await flush();
+
+  assert.equal(state.editorPending.baselineSeq, 0);
+});
+
 // --- #4: one retry timer, a generation token, no overlap ---
 
 test("reconnect() cancels a pending 4s retry timer instead of layering a second attempt", async (t) => {

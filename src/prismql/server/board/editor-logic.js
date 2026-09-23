@@ -35,16 +35,26 @@
 
   // Which arrived journal entry answers a just-finished run — no clocks:
   // the run remembers state.seq as it stood before the POST
-  // (pending.baselineSeq); the answer is the lowest-seq board entry above
-  // that baseline carrying the run's own result_id, or — for an
-  // aggregate, which never gets one — the same query (fix round 1, #2).
-  function findPendingMatch(entries, pending) {
+  // (pending.baselineSeq) and state.boot (pending.boot); the answer is the
+  // lowest-seq board entry above that baseline carrying the run's own
+  // result_id, or — for an aggregate, which never gets one — the same
+  // query AND the same corpus (fix round 1, #2; fix round 2, #3). A
+  // server restart between the run and its answer changes state.boot and
+  // restarts its seq counter from a small number again — a baseline born
+  // under the old boot no longer means anything, so it's treated as 0
+  // instead (fix round 2, #2); the matching rules themselves (who, query,
+  // corpus, result_id) are unchanged — a restart never widens who a
+  // pending run is allowed to match, only resets where it starts looking.
+  function findPendingMatch(entries, pending, currentBoot) {
     if (!pending) return null;
+    var baseline = pending.boot === currentBoot ? pending.baselineSeq : 0;
     var best = null;
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
-      if (e.who !== "board" || e.seq == null || e.seq <= pending.baselineSeq) continue;
-      var matches = pending.resultId != null ? e.result_id === pending.resultId : e.query === pending.query;
+      if (e.who !== "board" || e.seq == null || e.seq <= baseline) continue;
+      var matches = pending.resultId != null
+        ? e.result_id === pending.resultId
+        : e.query === pending.query && e.corpus === pending.corpus;
       if (matches && (best == null || e.seq < best.seq)) best = e;
     }
     return best;
@@ -55,9 +65,9 @@
   // null while unresolved, else {entry, select}: select is false once the
   // user has edited the query since the run started — the marker still
   // clears, but nothing steals focus or flips the tab.
-  function resolvePendingRun(entries, pendingQueue, pending, currentQuery) {
+  function resolvePendingRun(entries, pendingQueue, pending, currentQuery, currentBoot) {
     if (!pending) return null;
-    var found = findPendingMatch(entries, pending) || findPendingMatch(pendingQueue, pending);
+    var found = findPendingMatch(entries, pending, currentBoot) || findPendingMatch(pendingQueue, pending, currentBoot);
     if (!found) return null;
     return { entry: found, select: pending.query === currentQuery };
   }

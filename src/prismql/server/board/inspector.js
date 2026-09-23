@@ -105,7 +105,9 @@
     // under it on every render — clearing only happens on the Details path.
     if (state.tab !== "details") return;
     pane.innerHTML = "";
-    var entry = state.entries.filter(function (e) { return e.seq === state.sel; })[0] || null;
+    // entries first, then pending — a paused run's own match never merges
+    // into entries (fix round 2, #1).
+    var entry = window.PrismQLBoardUtil.findEntry(state, state.sel);
     if (!entry) {
       pane.appendChild(UI.emptyBlock("Nothing selected", "Pick a request in the journal to see its query, timing and results."));
       return;
