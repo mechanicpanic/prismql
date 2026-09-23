@@ -46,6 +46,10 @@ _STEM_TOKENIZER = "prismql_stem"  # simple + lowercase + Snowball(text_language)
 _PLAIN_ANALYZER = "prismql_token"  # simple + lowercase, no stemming
 _RAW_TOKENIZER = "raw"  # whole value as a single token (exact field match)
 _PLAIN_SUFFIX = "__tok"  # twin of every text field, indexed without stemming
+# The event's stream position as a fast field: a set query reads positions
+# column-wise and maps them to ids through the order axis, never fetching a
+# stored document per hit (graph @aleph/prismql, #91).
+_POS_FIELD = "_pos"
 
 
 def _register_analyzers(index: Any, language: str) -> None:
@@ -69,7 +73,7 @@ _ORDER_NAME = "order.parquet"  # the axis sidecar: id, <field>_us per position
 _META_NAME = "_prismql_meta.json"  # sidecar recording field roles for reopen
 # Bumped when the index layout changes; an index from an older layout is
 # refused on open with rebuild instructions rather than failing mid-query.
-_SCHEMA_VERSION = 2  # 2: stemmed + plain twins per text field, order sidecar
+_SCHEMA_VERSION = 3  # 2: stemmed + plain twins, order sidecar; 3: _pos fast field
 _REGEX_SPECIAL = re.compile(r"([.^$*+?()\[\]{}|\\])")
 
 
@@ -156,7 +160,7 @@ class TantivyBackend(SearchBackend):
             self._build(docs, text_fields, index_path, heap_size, num_threads)
             # The order axis (spec layer 2b): load order of the documents we
             # were given, with the configured time fields as UTC micros.
-            with_id = [doc for doc in docs if self.id_field in doc]
+            with_id = [doc for doc in docs if doc.get(self.id_field) is not None]
             self.order = OrderIndex(
                 ids=[doc[self.id_field] for doc in with_id],
                 timestamps={
@@ -218,6 +222,7 @@ class TantivyBackend(SearchBackend):
             )
         for f in meta:
             sb.add_text_field(f, stored=False, tokenizer_name=_RAW_TOKENIZER)
+        sb.add_integer_field(_POS_FIELD, stored=False, indexed=False, fast=True)
         sb.add_json_field(_DOC_FIELD, stored=True)
         schema = sb.build()
 
@@ -229,11 +234,14 @@ class TantivyBackend(SearchBackend):
         _register_analyzers(self._index, self.text_language)
 
         writer = self._index.writer(heap_size=heap_size, num_threads=num_threads)
+        position = 0  # counts exactly the documents the order axis holds
         for doc in documents:
             td = tantivy.Document()
             raw_id = doc.get(self.id_field)
             if raw_id is None:
                 continue  # a document without an id cannot be addressed
+            td.add_integer(_POS_FIELD, position)
+            position += 1
             if id_is_int:
                 td.add_integer(self.id_field, int(raw_id))
             else:
@@ -288,13 +296,24 @@ class TantivyBackend(SearchBackend):
     def _coerce_id(self, raw: Any) -> MessageId:
         return int(raw) if self._id_is_int else str(raw)
 
+    def _ids_at_addresses(self, addrs: list[Any]) -> list[MessageId]:
+        if not addrs:
+            return []
+        if self.has_order_axis():
+            positions = self._searcher.fast_field_values(_POS_FIELD, addrs)
+            # every document carries _pos (layout 3), so no value is None
+            return self.order.ids_at(cast(list[int], positions))
+        # An index reopened without its order sidecar has no axis to map
+        # positions through; read the id from each stored document.
+        return [
+            self._coerce_id(self._searcher.doc(a).get_first(self.id_field))
+            for a in addrs
+        ]
+
     def _ids_for(self, query: Any, limit: int | None = None) -> set[MessageId]:
         n = limit if limit is not None else max(self._searcher.num_docs, 1)
-        result = self._searcher.search(query, n)
-        out: set[MessageId] = set()
-        for _score, addr in result.hits:
-            out.add(self._coerce_id(self._searcher.doc(addr).get_first(self.id_field)))
-        return out
+        result = self._searcher.search(query, n, count=False)
+        return set(self._ids_at_addresses([addr for _score, addr in result.hits]))
 
     def _analyzed(self, field: str, term: str) -> Any | None:
         term = term.strip()
@@ -364,12 +383,10 @@ class TantivyBackend(SearchBackend):
         fields = sorted(self._text_fields)
         parsed = self._index.parse_query(query, fields)
         result = self._searcher.search(parsed, limit, count=True)
+        ids = self._ids_at_addresses([addr for _score, addr in result.hits])
         hits = [
-            (
-                self._coerce_id(self._searcher.doc(addr).get_first(self.id_field)),
-                float(score),
-            )
-            for score, addr in result.hits
+            (i, float(score))
+            for i, (score, _addr) in zip(ids, result.hits, strict=True)
         ]
         # the installed tantivy .pyi stub predates `count=True` and only
         # declares `.hits`; `.count` exists at runtime (tantivy 0.26.2).
