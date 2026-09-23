@@ -52,6 +52,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="all-MiniLM-L6-v2",
         help="sentence-transformers model for --embed",
     )
+    parser.add_argument(
+        "--doc-prompt",
+        help="prefix for each embedded text (asymmetric models, e.g. "
+        "embeddinggemma 'title: none | text: '); stamped into the file",
+    )
+    parser.add_argument(
+        "--query-prompt",
+        help="prefix the server puts on query text (e.g. embeddinggemma "
+        "'task: search result | query: '); stamped into the file",
+    )
     return parser
 
 
@@ -88,12 +98,14 @@ def run(argv: Sequence[str] | None = None) -> int:
             print(f"--annotate: {e}", file=sys.stderr)
             return 2
     if args.embed:
-        df = core.embed(df, text=args.embed, model=args.model)
+        df = core.embed(df, text=args.embed, model=args.model, prompt=args.doc_prompt)
     path = core.write(
         df,
         args.dst,
         embed_model=args.model if args.embed else None,
         embed_text=args.embed,
+        embed_doc_prompt=args.doc_prompt,
+        embed_query_prompt=args.query_prompt,
         annotations=kinds,
     )
     info = core.describe(df)

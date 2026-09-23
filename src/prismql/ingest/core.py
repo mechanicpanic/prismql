@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -157,9 +158,15 @@ def _to_utc_micros(s: pl.Series, unit: str | None = None) -> pl.Series:
 
 
 def embed(
-    df: pl.DataFrame, *, text: str, model: str, batch_size: int = 256
+    df: pl.DataFrame,
+    *,
+    text: str,
+    model: str,
+    prompt: str | None = None,
+    batch_size: int = 256,
 ) -> pl.DataFrame:
-    """Add ``emb``: unit-normalized float32 vectors of ``text``.
+    """Add ``emb``: unit-normalized float32 vectors of ``text``, each text
+    encoded with the model's document ``prompt`` when it has one.
 
     A row whose text is null or blank gets an all-zero vector: it is not
     indexed (``SemanticIndex.from_vectors`` skips zero vectors), exactly as
@@ -171,7 +178,7 @@ def embed(
 
     if text not in df.columns:
         raise ValueError(f"text column {text!r} not in {df.columns}")
-    embedder = SentenceTransformerEmbedder(model)
+    embedder = SentenceTransformerEmbedder(model, prompt=prompt)
     raw = df.get_column(text).to_list()
     has_text = [t is not None and str(t).strip() != "" for t in raw]
     texts = [str(t) for t, ok in zip(raw, has_text, strict=True) if ok]
@@ -192,6 +199,34 @@ def embed(
 
 EMBED_MODEL_KEY = b"prismql.embed_model"
 EMBED_TEXT_KEY = b"prismql.embed_text"
+EMBED_DOC_PROMPT_KEY = b"prismql.embed_doc_prompt"
+EMBED_QUERY_PROMPT_KEY = b"prismql.embed_query_prompt"
+
+
+@dataclass(frozen=True)
+class EmbedStamp:
+    """What produced a file's ``emb`` column: the model, the text column and
+    the prompts it encoded documents with and expects queries with."""
+
+    model: str
+    text: str
+    doc_prompt: str | None = None
+    query_prompt: str | None = None
+
+    @classmethod
+    def from_metadata(cls, meta: dict[bytes, bytes]) -> EmbedStamp | None:
+        model = meta.get(EMBED_MODEL_KEY)
+        if not model:
+            return None
+        text = meta.get(EMBED_TEXT_KEY)
+        doc = meta.get(EMBED_DOC_PROMPT_KEY)
+        query = meta.get(EMBED_QUERY_PROMPT_KEY)
+        return cls(
+            model=model.decode(),
+            text=text.decode() if text else "text",
+            doc_prompt=doc.decode() if doc else None,
+            query_prompt=query.decode() if query else None,
+        )
 
 
 def write(
@@ -200,13 +235,15 @@ def write(
     *,
     embed_model: str | None = None,
     embed_text: str | None = None,
+    embed_doc_prompt: str | None = None,
+    embed_query_prompt: str | None = None,
     annotations: Sequence[str] = (),
 ) -> Path:
     """Write the stream as Parquet; ``emb`` lands as FixedSizeList<float32, d>.
 
     The model that produced ``emb`` is stamped into the file's schema
-    metadata so the server can encode query text with the same model
-    without being told again in its config.
+    metadata, with its document and query prompts, so the server can encode
+    query text as the model expects without being told again in its config.
     """
     import pyarrow.parquet as pq
 
@@ -217,6 +254,10 @@ def write(
     if embed_model:
         meta[EMBED_MODEL_KEY] = embed_model.encode()
         meta[EMBED_TEXT_KEY] = (embed_text or "text").encode()
+        if embed_doc_prompt:
+            meta[EMBED_DOC_PROMPT_KEY] = embed_doc_prompt.encode()
+        if embed_query_prompt:
+            meta[EMBED_QUERY_PROMPT_KEY] = embed_query_prompt.encode()
     if annotations:
         # which columns are annotations, not fields that share their names
         meta[b"prismql.annotations"] = ",".join(annotations).encode()

@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (query and document prompts for embeddings)
+- `prismql ingest … --embed COL --doc-prompt P --query-prompt Q`: asymmetric models (embeddinggemma, Qwen3) encode documents with `P`; both prompts are stamped into the Parquet metadata (`prismql.embed_doc_prompt`, `prismql.embed_query_prompt`) and the server encodes `similar_to()` and `/similar` query text with `Q` (graph @aleph/prismql, #96). `SentenceTransformerEmbedder` takes `prompt=`. `load_corpus` returns `(documents, vectors, EmbedStamp | None)` instead of a four-tuple.
+
 ### Removed (breaking — text annotation moved to ingest)
 - `NLPBackend`, `SpacyBackend` and the engine's `nlp_backend` parameter are gone, as is a config's `nlp_backend` section (it now fails with how to annotate instead). Annotation is a step of layer 1: `prismql ingest … --annotate questions,entities` writes `is_question` and `entities` columns, and the server reads them as `PrecomputedIndexes` (graph @aleph/prismql, #106).
 

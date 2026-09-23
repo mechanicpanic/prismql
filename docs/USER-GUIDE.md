@@ -138,6 +138,13 @@ Add `--embed text --model all-MiniLM-L6-v2` (extra `ingest`) and the file
 also carries one embedding per row; the server then answers
 `similar_to("…", 0.7)` without encoding the corpus at start, and it knows
 which model to encode the query with because the file says so.
+Models that encode a query and a document differently (embeddinggemma,
+Qwen3) take `--doc-prompt` and `--query-prompt`: documents are encoded with
+the first, both are stamped into the file, and the server puts the second in
+front of every query. For `google/embeddinggemma-300m` that is
+`--doc-prompt 'title: none | text: ' --query-prompt 'task: search result | query: '`.
+Leave them out and a query is encoded like a document — it still runs, it
+just ranks worse.
 
 Add `--annotate questions` and the file carries an `is_question` column; the
 server reads it as the answer to `is_question()` on any backend. Without it

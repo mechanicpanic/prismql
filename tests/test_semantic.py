@@ -190,7 +190,7 @@ class TestPrecomputedVectors:
         calls: list[list[str]] = []
 
         class CountingEmbedder(FakeEmbedder):
-            def __init__(self, model_name: str) -> None:
+            def __init__(self, model_name: str, **_kw: object) -> None:
                 self.model_name = model_name
 
             def encode(self, texts: Sequence[str]) -> list[list[float]]:
@@ -224,7 +224,9 @@ class TestPrecomputedVectors:
         from prismql.server.config import CorpusConfig, build_engine
 
         monkeypatch.setattr(
-            semantic_module, "SentenceTransformerEmbedder", lambda _name: FakeEmbedder()
+            semantic_module,
+            "SentenceTransformerEmbedder",
+            lambda _name, **_kw: FakeEmbedder(),
         )
         df = normalize(pl.DataFrame(DOCS), id_col="id", time_col="timestamp")
         df = df.with_columns(
@@ -303,7 +305,9 @@ class TestSemanticOnTantivy:
         from prismql.server.config import CorpusConfig, build_engine
 
         monkeypatch.setattr(
-            semantic_module, "SentenceTransformerEmbedder", lambda _name: FakeEmbedder()
+            semantic_module,
+            "SentenceTransformerEmbedder",
+            lambda _name, **_kw: FakeEmbedder(),
         )
         df = normalize(pl.DataFrame(DOCS), id_col="id", time_col="timestamp")
         df = df.with_columns(

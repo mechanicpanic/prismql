@@ -48,9 +48,13 @@ class SentenceTransformerEmbedder:
     """Embedder backed by a local sentence-transformers model.
 
     Requires the ``semantic`` extra: ``pip install 'prismql[semantic]'``.
+    ``prompt`` is prefixed to every text: asymmetric models (embeddinggemma,
+    Qwen3) encode a query and a document with different prompts.
     """
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
+    def __init__(
+        self, model_name: str = "all-MiniLM-L6-v2", prompt: str | None = None
+    ) -> None:
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as e:
@@ -60,11 +64,14 @@ class SentenceTransformerEmbedder:
                 "(or supply any other Embedder implementation)"
             ) from e
         self.model_name = model_name
+        self.prompt = prompt
         self.model = SentenceTransformer(model_name)
 
     def encode(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:
+        kwargs = {"prompt": self.prompt} if self.prompt else {}
+        rows = self.model.encode(list(texts), **kwargs)
         # ndarray rows -> lists at the boundary (also pins the Any away)
-        return [[float(x) for x in row] for row in self.model.encode(list(texts))]
+        return [[float(x) for x in row] for row in rows]
 
 
 class SemanticIndex:

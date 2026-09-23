@@ -151,7 +151,7 @@ def test_embed_gives_zero_vectors_to_rows_without_text(monkeypatch):
     from prismql.ingest.core import embed
 
     class Fake:
-        def __init__(self, name: str) -> None:
+        def __init__(self, name: str, prompt: str | None = None) -> None:
             pass
 
         def encode(self, texts: list[str]) -> list[list[float]]:
@@ -176,7 +176,7 @@ def test_embedded_stream_round_trips_through_parquet_with_textless_rows(
     from prismql.server.config import load_corpus
 
     class Fake:
-        def __init__(self, name: str) -> None:
+        def __init__(self, name: str, prompt: str | None = None) -> None:
             pass
 
         def encode(self, texts: list[str]) -> list[list[float]]:
@@ -191,8 +191,12 @@ def test_embedded_stream_round_trips_through_parquet_with_textless_rows(
     path = write(
         embed(df, text="text", model="fake"), tmp_path / "e.parquet", embed_model="fake"
     )
-    docs, vectors, model, _ = load_corpus(path)
-    assert model == "fake" and [d["id"] for d in docs] == [1, 2, 3]
+    docs, vectors, stamp = load_corpus(path)
+    assert (
+        stamp is not None
+        and stamp.model == "fake"
+        and [d["id"] for d in docs] == [1, 2, 3]
+    )
     index = semantic_module.SemanticIndex.from_vectors(Fake("fake"), [1, 2, 3], vectors)
     assert len(index) == 1
 

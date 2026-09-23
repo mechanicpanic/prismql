@@ -41,8 +41,8 @@ def _parquet(tmp_path) -> str:
 
 
 def test_the_emb_column_becomes_one_float32_matrix(tmp_path):
-    docs, vectors, model, _ = load_corpus(_parquet(tmp_path))
-    assert model == "fake" and len(docs) == N
+    docs, vectors, stamp = load_corpus(_parquet(tmp_path))
+    assert stamp is not None and stamp.model == "fake" and len(docs) == N
     assert isinstance(vectors, np.ndarray)
     assert vectors.shape == (N, D) and vectors.dtype == np.float32
     index = SemanticIndex.from_vectors(_Embedder(), [d["id"] for d in docs], vectors)
@@ -56,7 +56,7 @@ def test_loading_peaks_near_the_matrix_size(tmp_path):
     matrix_bytes = N * D * 4
     tracemalloc.start()
     try:
-        docs, vectors, _, _ = load_corpus(path)
+        docs, vectors, _ = load_corpus(path)
         SemanticIndex.from_vectors(_Embedder(), [d["id"] for d in docs], vectors)
         _, peak = tracemalloc.get_traced_memory()
     finally:

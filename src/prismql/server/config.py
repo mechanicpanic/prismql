@@ -12,6 +12,7 @@ from .schema import compute_schema  # noqa: F401  re-export: the REPL imports it
 
 if TYPE_CHECKING:
     from ..engine import PrismQLEngine
+    from ..ingest.core import EmbedStamp
 
 
 def _resolve(base: Path, value: str | None) -> str | None:
@@ -265,13 +266,15 @@ def _emb_matrix(column: Any) -> Any:
 
 def load_corpus(
     path: str | Path,
-) -> tuple[list[dict[str, Any]], list[Any] | None, str | None, str | None]:
+) -> tuple[list[dict[str, Any]], Any | None, EmbedStamp | None]:
     """Documents plus, for a Parquet stream written by ``prismql ingest
-    --embed``, its ``emb`` vectors (kept out of the documents) and the model
-    and text column stamped in the file's metadata."""
+    --embed``, its ``emb`` vectors (kept out of the documents) and the stamp
+    of what produced them: model, text column, prompts."""
+    from ..ingest.core import EmbedStamp
+
     p = Path(path)
     if p.suffix.lower() != ".parquet":
-        return load_documents(p), None, None, None
+        return load_documents(p), None, None
     try:
         import pyarrow.parquet as pq
     except ImportError as e:
@@ -279,9 +282,7 @@ def load_corpus(
             "Parquet data requires pyarrow: uv pip install pyarrow"
         ) from e
     table = pq.read_table(p)
-    meta = table.schema.metadata or {}
-    model = meta.get(b"prismql.embed_model")
-    text = meta.get(b"prismql.embed_text")
+    stamp = EmbedStamp.from_metadata(table.schema.metadata or {})
     vectors = None
     if "emb" in table.column_names:
         vectors = _emb_matrix(table.column("emb"))
@@ -295,12 +296,7 @@ def load_corpus(
             f"{p}: 'position' column must equal the row index (load order); "
             "re-run prismql ingest on the source"
         )
-    return (
-        table.to_pylist(),
-        vectors,
-        model.decode() if model else None,
-        text.decode() if text else None,
-    )
+    return table.to_pylist(), vectors, stamp
 
 
 def load_documents(path: str | Path) -> list[dict[str, Any]]:
@@ -377,11 +373,10 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         and config.index_path
         and Path(config.index_path).exists()
     )
-    vectors: list[Any] | None = None
-    embedded_model: str | None = None
-    embedded_text: str | None = None
+    vectors: Any | None = None
+    stamp: EmbedStamp | None = None
     if config.data:
-        docs, vectors, embedded_model, embedded_text = load_corpus(config.data)
+        docs, vectors, stamp = load_corpus(config.data)
         backend_config["documents"] = docs
     elif not opening_existing:
         raise ValueError(
@@ -398,9 +393,7 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
             config, backend_config["documents"]
         )
 
-    index = _semantic_index(
-        config, backend_config.get("documents"), vectors, embedded_model, embedded_text
-    )
+    index = _semantic_index(config, backend_config.get("documents"), vectors, stamp)
     if index is not None:
         backend_config["semantic_index"] = index
 
@@ -428,11 +421,11 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
 def _semantic_index(
     config: ServerConfig | CorpusConfig,
     documents: list[dict[str, Any]] | None,
-    vectors: list[Any] | None,
-    embedded_model: str | None,
-    embedded_text: str | None,
+    vectors: Any | None,
+    stamp: EmbedStamp | None,
 ) -> Any:
     """The index behind similar_to(), or None when nothing backs it."""
+    embedded_model = stamp.model if stamp else None
     semantic_model = config.semantic_model or embedded_model
     if semantic_model and config.backend_type not in ("memory", "tantivy"):
         if config.semantic_model:
@@ -454,7 +447,6 @@ def _semantic_index(
         return None
     from ..backends.semantic import SemanticIndex, SentenceTransformerEmbedder
 
-    embedder = SentenceTransformerEmbedder(semantic_model)
     if vectors is not None:
         # Precomputed by `prismql ingest --embed`: the model only encodes
         # query text; the corpus is never re-encoded at start.
@@ -469,14 +461,18 @@ def _semantic_index(
             raise ValueError(
                 f"{config.data}: row {missing[0]} has no '{config.id_field}' field"
             )
+        # the documents were encoded with the stamped doc prompt; the query
+        # must carry the matching query prompt (graph @aleph/prismql, #96)
         return SemanticIndex.from_vectors(
-            embedder,
+            SentenceTransformerEmbedder(
+                semantic_model, prompt=stamp.query_prompt if stamp else None
+            ),
             [d[config.id_field] for d in documents],
             vectors,
-            text_field=embedded_text or config.semantic_text_field,
+            text_field=stamp.text if stamp else config.semantic_text_field,
         )
     return SemanticIndex(
-        embedder,
+        SentenceTransformerEmbedder(semantic_model),
         documents,
         id_field=config.id_field,
         text_field=config.semantic_text_field,

@@ -2,12 +2,13 @@
 
 *The one place project state lives. Updated in the same commit as the change
 it describes. Agent memory points here; it does not duplicate this.*
-*Last update: 2026-09-23 (GROUP BY ... AGGREGATE rows; phrase search; board follow-ups in the graph).*
+*Last update: 2026-09-23 (embedding prompts for embeddinggemma; text annotation at ingest).*
 
 ## Shipped (newest first)
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-23 | **Embeddings carry their query and document prompts** (graph #96, owner's choice: embeddinggemma-300m, measured by the swarmchasing session in two modes): `prismql ingest … --embed COL --doc-prompt P --query-prompt Q` encodes documents with `P` and stamps both prompts beside the model; the server encodes query text with `Q`. Checked with the real model: the prompted query vector equals embeddinggemma's own `encode_query` (cosine 1.0) and differs from the unprompted one (0.85). The second, symmetric table for event-to-event `near` waits for `near` itself (#103). | `src/prismql/ingest/core.py` (`EmbedStamp`), `server/config.py`, `backends/semantic.py`, `tests/test_embed_prompts.py` |
 | 2026-09-23 | **Text annotation moved to ingest** (graph #106, owner's word): `is_question()` is one rule in `prismql.ingest.annotate` for every backend (tantivy answers it now); `prismql ingest … --annotate questions,entities` writes `is_question` / `entities` (spaCy, extra `nlp`) and the server reads them as `PrecomputedIndexes`. `NLPBackend`, `SpacyBackend` and the engine's `nlp_backend` are deleted (breaking, pre-0.1). | `src/prismql/ingest/annotate.py`, `ingest/cli.py`, `server/config.py`, `engine.py`, `backends/` |
 | 2026-09-23 | **`is_question()` ignores a '?' inside a URL or query string** (graph #94, owner's word; reported by the swarmchasing session): a '?' counts only when it ends a clause (end of text, a space, closing punctuation). collusion.wiki revisions: 10,781 → 3,565 of 14,591 events flagged. Memory backend; `rust_memory` keeps its own Rust heuristic (search-only, retiring). | `backends/memory.py`, `tests/test_is_question_url_pinned.py` |
 | 2026-09-23 | **A result of one condition is in stream order in the engine too** (graph #104, owner's word; finishes the ordinal-axis principle "ids are labels" — #29 fixed the order inside groups, #73 only the server's stored order): both execution paths list a single condition's messages by load position, not by id, so mixed id types no longer raise TypeError; both references say so. Found on the way and pinned `xfail(strict)`: ORDER BY ignores its documented field and sorts by the first id (silent-wrong). | `ir/executor.py`, `visitors/query_visitor.py`, `tests/test_stream_order_results.py`, `tests/test_order_by_pinned.py` |
