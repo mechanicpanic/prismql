@@ -27,7 +27,7 @@
 .achip{height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
 .achip:hover{color:var(--text)}
 .achip.on{border-color:var(--k-similar);color:var(--text);background:color-mix(in srgb,var(--k-similar) 14%,var(--surface))}
-.fnote{margin-left:auto;font-size:12px;color:var(--faint);white-space:nowrap}
+.fnote{margin-left:auto;font-size:12px;color:var(--faint);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .fbody{min-height:0;display:grid;grid-template-rows:minmax(0,1fr)}
 .tl{display:grid;grid-template-columns:340px minmax(0,1fr);min-height:0}
 .gnav{border-right:1px solid var(--line);overflow:auto;background:var(--panel)}

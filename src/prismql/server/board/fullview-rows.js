@@ -14,12 +14,23 @@
     ? require("./inspector-format.js")
     : root.PrismQLInspectorFormat;
 
-  var GROUP_COLS = "56px 44px 168px minmax(0,230px) 150px minmax(0,1fr)";
-  var HIT_COLS = "96px 168px minmax(0,170px) 150px minmax(0,1fr)";
-
-  function tableHeadsFor(kind, scored) {
-    if (kind === "groups") return { cols: GROUP_COLS, heads: ["group", "#", "time", "kind", "agent", "text"] };
-    return { cols: HIT_COLS, heads: [scored ? "score" : "match", "time", "kind", "agent", "text"] };
+  // Fix round 1, #6: the kind/actor columns appear only when the corpus
+  // board config sets that field — same rule the timeline cards already
+  // follow (never a guessed or empty-but-present column).
+  function tableHeadsFor(kind, scored, board) {
+    board = board || {};
+    var heads = [], cols = [];
+    if (kind === "groups") {
+      heads.push("group", "#", "time"); cols.push("56px", "44px", "168px");
+      if (board.kind) { heads.push("kind"); cols.push("minmax(0,230px)"); }
+      if (board.actor) { heads.push("agent"); cols.push("150px"); }
+    } else {
+      heads.push(scored ? "score" : "match", "time"); cols.push("96px", "168px");
+      if (board.kind) { heads.push("kind"); cols.push("minmax(0,170px)"); }
+      if (board.actor) { heads.push("source"); cols.push("150px"); }
+    }
+    heads.push("text"); cols.push("minmax(0,1fr)");
+    return { cols: cols.join(" "), heads: heads };
   }
 
   function fieldOf(event, key) {
@@ -48,14 +59,16 @@
     return rows;
   }
 
-  // BM25 never surfaces as a "score" for search — an unscored row reads
-  // "match", never a raw ranking number (global-constraints.md).
+  // BM25 never surfaces as a "score" for search — an unscored cell reads
+  // "exact" with a full bar, the canvas's own wording (fix round 1, #7);
+  // "match" is only the column HEADER's label (tableHeadsFor), never the
+  // cell's own value (global-constraints.md: never show BM25 as a score).
   function hitTableRows(hits, board, terms, scored) {
     return (hits || []).map(function (h) {
       var event = h.event || null;
       return {
-        score: scored ? Number(h.score).toFixed(3) : "match",
-        pct: scored ? Math.max(0, Math.min(1, h.score)) * 100 + "%" : null,
+        score: scored ? Number(h.score).toFixed(3) : "exact",
+        pct: scored ? Math.max(0, Math.min(1, h.score)) * 100 + "%" : "100%",
         ts: shortTime(h.time),
         kind: fieldOf(event, board.kind), actor: fieldOf(event, board.actor),
         parts: F.highlightParts((event && event.text) || "", terms || []),

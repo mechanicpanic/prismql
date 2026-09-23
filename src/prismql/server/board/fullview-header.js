@@ -31,7 +31,15 @@
     return btn;
   }
 
-  function build(el, entry, actions, nowMs, visible, idx) {
+  // Fix round 1, #3: opening the editor from the full view closes it first
+  // — otherwise the editor tab exists but sits behind the still-open #full
+  // overlay (z-index 20), invisible.
+  function goToEditor(actions, entry) {
+    actions.closeFull();
+    actions.openInEditor(entry);
+  }
+
+  function build(el, entry, actions, nowMs, visible, idx, hideDownload) {
     var head = mk("div", "fhead");
     head.appendChild(backBtn(actions));
     head.appendChild(mk("div", "vsep"));
@@ -61,9 +69,9 @@
     right.appendChild(mk("div", "vsep"));
     var editBtn = mk("button", "ghost", "Open in editor");
     editBtn.type = "button";
-    editBtn.addEventListener("click", function () { actions.openInEditor(entry); });
+    editBtn.addEventListener("click", function () { goToEditor(actions, entry); });
     right.appendChild(editBtn);
-    if (entry.result_id != null) {
+    if (entry.result_id != null && !hideDownload) {
       var a = document.createElement("a");
       a.className = "ghost";
       a.href = window.PrismQLApi.jsonlUrl(entry.result_id, true);
@@ -93,7 +101,7 @@
       box.appendChild(errbox);
       var fixBtn = mk("button", "primary", "Fix in editor");
       fixBtn.type = "button";
-      fixBtn.addEventListener("click", function () { actions.openInEditor(entry); });
+      fixBtn.addEventListener("click", function () { goToEditor(actions, entry); });
       box.appendChild(fixBtn);
     } else if (outputKind === "file") {
       var file = mk("div", "file");

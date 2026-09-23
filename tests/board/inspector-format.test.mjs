@@ -63,7 +63,7 @@ test("gapText: both halves present", () => {
 });
 
 test("gapText: null time drops the '+<Δt>' half", () => {
-  assert.equal(IF.gapText(1, 3, null, "2026-09-23T12:01:00Z"), "1 events between");
+  assert.equal(IF.gapText(1, 3, null, "2026-09-23T12:01:00Z"), "1 event between");
 });
 
 test("gapText: null position drops the 'events between' half", () => {

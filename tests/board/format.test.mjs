@@ -183,6 +183,12 @@ test("gapLabel: adjacent positions read 0 events between", () => {
   assert.equal(g.label, "0 events between");
 });
 
+// Fix round 1, #4: singular only at exactly one event between; 0 stays plural.
+test("gapLabel: exactly one event between is singular", () => {
+  const g = F.gapLabel(1, 3, null, null);
+  assert.equal(g.label, "1 event between");
+});
+
 test("gapLabel: the same position reads 'same event'", () => {
   const g = F.gapLabel(42, 42, null, null);
   assert.equal(g.label, "same event");

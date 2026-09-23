@@ -14,14 +14,27 @@ const board = { kind: "kind", actor: "agent" };
 
 // --- tableHeadsFor ---
 
-test("tableHeadsFor: groups columns", () => {
-  const t = FR.tableHeadsFor("groups", false);
+test("tableHeadsFor: groups columns, both kind and actor configured", () => {
+  const t = FR.tableHeadsFor("groups", false, board);
   assert.deepEqual(t.heads, ["group", "#", "time", "kind", "agent", "text"]);
   assert.match(t.cols, /^56px 44px/);
+  assert.equal(t.cols.split(" ").length, t.heads.length);
 });
-test("tableHeadsFor: hits columns say 'score' when scored, 'match' otherwise", () => {
-  assert.deepEqual(FR.tableHeadsFor("hits", true).heads, ["score", "time", "kind", "agent", "text"]);
-  assert.deepEqual(FR.tableHeadsFor("hits", false).heads, ["match", "time", "kind", "agent", "text"]);
+// Fix round 1, #6: kind/agent columns appear only when the corpus board
+// config sets that field — like the timeline cards already do.
+test("tableHeadsFor: groups drops the kind/agent columns the corpus doesn't set", () => {
+  assert.deepEqual(FR.tableHeadsFor("groups", false, {}).heads, ["group", "#", "time", "text"]);
+  assert.deepEqual(FR.tableHeadsFor("groups", false, { kind: "kind" }).heads, ["group", "#", "time", "kind", "text"]);
+  assert.deepEqual(FR.tableHeadsFor("groups", false, { actor: "agent" }).heads, ["group", "#", "time", "agent", "text"]);
+});
+test("tableHeadsFor: hits columns say 'score' when scored, 'match' otherwise, and the actor column reads 'source'", () => {
+  const t1 = FR.tableHeadsFor("hits", true, board);
+  assert.deepEqual(t1.heads, ["score", "time", "kind", "source", "text"]);
+  assert.equal(t1.cols.split(" ").length, t1.heads.length);
+  assert.deepEqual(FR.tableHeadsFor("hits", false, board).heads, ["match", "time", "kind", "source", "text"]);
+});
+test("tableHeadsFor: hits drops the kind/source columns the corpus doesn't set", () => {
+  assert.deepEqual(FR.tableHeadsFor("hits", true, {}).heads, ["score", "time", "text"]);
 });
 
 // --- groupTableRows ---
@@ -83,11 +96,14 @@ test("hitTableRows: scored hits carry a formatted score and a percent bar width"
   assert.equal(rows[0].actor, "a");
   assert.equal(rows[0].ts.indexOf("."), -1, "the table's ts is the short local form, not the raw ISO instant");
 });
-test("hitTableRows: unscored (search) hits never surface a BM25 number", () => {
+// Fix round 1, #7: the canvas's own wording for an unscored (search) row
+// is "exact" in the cell, with a full bar — "match" is only the column's
+// own header label (tableHeadsFor), never the cell's own value.
+test("hitTableRows: unscored (search) hits read 'exact' with a full bar, never a BM25 number", () => {
   const hits = [{ score: 5.4, time: "t1", event: { text: "abc" } }];
   const rows = FR.hitTableRows(hits, board, [], false);
-  assert.equal(rows[0].score, "match");
-  assert.equal(rows[0].pct, null);
+  assert.equal(rows[0].score, "exact");
+  assert.equal(rows[0].pct, "100%");
 });
 test("hitTableRows: highlight parts come from the search terms", () => {
   const hits = [{ score: 1, time: "t1", event: { text: "the password field" } }];

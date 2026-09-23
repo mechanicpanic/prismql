@@ -66,7 +66,7 @@
   function gapLabel(prevPos, pos, prevTime, time) { var label = "";
     if (prevPos != null && pos != null) {
       var dp = Math.abs(pos - prevPos);
-      label = dp === 0 ? "same event" : dp - 1 + " events between";
+      label = dp === 0 ? "same event" : (dp - 1) + " event" + (dp - 1 === 1 ? "" : "s") + " between";
     }
     var plus = "";
     if (prevTime != null && time != null) {

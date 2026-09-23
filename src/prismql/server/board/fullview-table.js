@@ -19,19 +19,22 @@
     });
     return tr;
   }
-  function groupRow(cols, r) {
+  // Fix round 1, #6: a kind/actor cell exists only when the column does
+  // (tableHeadsFor already dropped it) — never an empty cell standing in
+  // for a field the corpus doesn't set.
+  function groupRow(cols, r, board) {
     var tr = mk("div", "tr" + (r.cls ? " " + r.cls : ""));
     tr.setAttribute("role", "row");
     tr.style.gridTemplateColumns = cols;
     tr.appendChild(mk("span", "g", r.group !== "" ? String(r.group) : ""));
     tr.appendChild(mk("span", "m", String(r.n)));
     tr.appendChild(mk("span", "m", r.ts != null ? r.ts : ""));
-    tr.appendChild(mk("span", "k", r.kind != null ? String(r.kind) : ""));
-    tr.appendChild(mk("span", "a", r.actor != null ? String(r.actor) : ""));
+    if (board.kind) tr.appendChild(mk("span", "k", r.kind != null ? String(r.kind) : ""));
+    if (board.actor) tr.appendChild(mk("span", "a", r.actor != null ? String(r.actor) : ""));
     tr.appendChild(mk("span", "x", r.text != null ? String(r.text) : "—"));
     return tr;
   }
-  function hitRow(cols, r) {
+  function hitRow(cols, r, board) {
     var tr = mk("div", "tr");
     tr.setAttribute("role", "row");
     tr.style.gridTemplateColumns = cols;
@@ -45,8 +48,8 @@
     }
     tr.appendChild(scoreCell);
     tr.appendChild(mk("span", "m", r.ts != null ? r.ts : ""));
-    tr.appendChild(mk("span", "k", r.kind != null ? String(r.kind) : ""));
-    tr.appendChild(mk("span", "a", r.actor != null ? String(r.actor) : ""));
+    if (board.kind) tr.appendChild(mk("span", "k", r.kind != null ? String(r.kind) : ""));
+    if (board.actor) tr.appendChild(mk("span", "a", r.actor != null ? String(r.actor) : ""));
     var x = mk("span", "x");
     r.parts.forEach(function (p) {
       if (p.m) x.appendChild(mk("mark", null, p.t));
@@ -56,7 +59,8 @@
     return tr;
   }
 
-  function renderTable(el, kind, cols, heads, rows) {
+  function renderTable(el, kind, cols, heads, rows, board) {
+    board = board || {};
     el.appendChild(headerRow(cols, heads));
     if (!rows.length) {
       var empty = mk("div", "empty");
@@ -64,7 +68,7 @@
       el.appendChild(empty);
       return;
     }
-    rows.forEach(function (r) { el.appendChild(kind === "groups" ? groupRow(cols, r) : hitRow(cols, r)); });
+    rows.forEach(function (r) { el.appendChild(kind === "groups" ? groupRow(cols, r, board) : hitRow(cols, r, board)); });
   }
 
   function rawLine(no, obj) {

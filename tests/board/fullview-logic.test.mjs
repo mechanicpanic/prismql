@@ -134,17 +134,10 @@ test("agentChipList: null/undefined values are skipped", () => {
   assert.deepEqual(FL.agentChipList([null, "a", undefined], {}), [{ label: "a", on: false }]);
 });
 
-// --- countEvents / distinctActorCount / allTimes / topScore ---
+// --- countEvents / allTimes / topScore ---
 
 test("countEvents: sums each loaded group's slot count", () => {
   assert.equal(FL.countEvents([{ ids: ["a", "b"] }, { ids: ["c"] }]), 3);
-});
-test("distinctActorCount: unique actor values, null events skipped", () => {
-  const events = [{ agent: "a" }, null, { agent: "b" }, { agent: "a" }];
-  assert.equal(FL.distinctActorCount(events, { actor: "agent" }), 2);
-});
-test("distinctActorCount: 0 when the corpus has no actor field", () => {
-  assert.equal(FL.distinctActorCount([{ agent: "a" }], {}), 0);
 });
 test("allTimes: flattens every loaded group's times", () => {
   assert.deepEqual(FL.allTimes([{ times: ["t1", null] }, { times: ["t2"] }]), ["t1", null, "t2"]);
@@ -172,8 +165,11 @@ test("groupsTiles: the actors tile is omitted when the corpus has no actor field
   assert.equal(tiles.length, 3);
 });
 
+// Fix round 1, #12/13: at most 4 tiles (the canvas's fixed 4-column grid)
+// — a "kept" tile would make a 5th; "kept" moves to the note instead
+// (hitsNote, below), never a tile.
 test("hitsTiles: similar shows a top score, not BM25 for search", () => {
-  const tiles = FL.hitsTiles(3, 35, 35, true, 0.812, 3, true, "Jun 3–8");
+  const tiles = FL.hitsTiles(3, 35, true, 0.812, 3, true, "Jun 3–8");
   assert.deepEqual(tiles, [
     { v: "3 / 35", l: "hits loaded" },
     { v: "0.812", l: "top score" },
@@ -182,16 +178,44 @@ test("hitsTiles: similar shows a top score, not BM25 for search", () => {
   ]);
 });
 test("hitsTiles: search shows 'exact', never a score", () => {
-  const tiles = FL.hitsTiles(1, 1, 1, false, null, 1, true, "Jun 5");
+  const tiles = FL.hitsTiles(1, 1, false, null, 1, true, "Jun 5");
   assert.deepEqual(tiles[1], { v: "exact", l: "match type" });
 });
-test("hitsTiles: a 'kept' tile appears only when the store kept fewer than the total found", () => {
-  const capped = FL.hitsTiles(3, 181, 8, true, 0.9, 2, true, "Jun 3");
-  assert.equal(capped.some((t) => t.l === "kept" && t.v === "8"), true);
-  const uncapped = FL.hitsTiles(3, 8, 8, true, 0.9, 2, true, "Jun 3");
-  assert.equal(uncapped.some((t) => t.l === "kept"), false);
+test("hitsTiles: never a 'kept' tile, even when the store kept fewer than the total found", () => {
+  const tiles = FL.hitsTiles(3, 181, true, 0.9, 2, true, "Jun 3");
+  assert.equal(tiles.some((t) => t.l === "kept"), false);
+  assert.equal(tiles.length, 4);
 });
-test("hitsTiles: the sources tile is omitted without an actor field", () => {
-  const tiles = FL.hitsTiles(3, 35, 35, true, 0.8, 0, false, "Jun 3");
+test("hitsTiles: the sources tile is omitted without an actor field — never more than 3 tiles then", () => {
+  const tiles = FL.hitsTiles(3, 35, true, 0.8, 0, false, "Jun 3");
   assert.equal(tiles.some((t) => t.l === "sources"), false);
+  assert.equal(tiles.length, 3);
+});
+// Fix round 1, #2: topScore([]) is null — never render "0.000" as if it
+// were a real score.
+test("hitsTiles: a null top score (nothing scored yet) reads '—', never '0.000'", () => {
+  const tiles = FL.hitsTiles(0, 35, true, null, 0, true, "—");
+  assert.equal(tiles[1].v, "—");
+});
+
+// --- hitsNote (fix round 1, #5/#12: the Load-more row drops its own
+// count — "kept" lives in the note instead, never a 5th tile) ---
+
+test("hitsNote: no filter, kept === total", () => {
+  assert.equal(FL.hitsNote(50, 2735, null, 2735), "50 of 2735 loaded");
+});
+test("hitsNote: kept < total appends 'kept K'", () => {
+  assert.equal(FL.hitsNote(50, 2735, null, 1000), "50 of 2735 loaded · kept 1000");
+});
+test("hitsNote: a filter's match count still comes first", () => {
+  assert.equal(FL.hitsNote(50, 2735, 12, 1000), "12 of 50 match · 50 of 2735 loaded · kept 1000");
+});
+test("hitsNote: kept === null (groups have no kept concept) never appends anything", () => {
+  assert.equal(FL.hitsNote(50, 10764, null, null), "50 of 10764 loaded");
+});
+
+// --- PAGE (fix round 1, #8: one shared constant, not three literal 50s) ---
+
+test("PAGE is the one page-size constant the whole full view shares", () => {
+  assert.equal(FL.PAGE, 50);
 });

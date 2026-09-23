@@ -10,28 +10,40 @@
   var FL = window.PrismQLFullLogic;
   var F = window.PrismQLFormat;
 
-  var PAGE = 50;
+  var PAGE = FL.PAGE; // fix round 1, #8: one shared constant, not a literal per file
+
+  // Fix round 1, #2: a fetch that turned up nothing has nothing real to
+  // show — "the corpus's whole story" would be an invented one.
+  var GONE_NOTE = "result no longer kept";
+  function blockedContext(kind, res) {
+    return {
+      kind: kind, loaded: [], filtered: [], pending: false, blocker: res.blocker, gone: res.gone,
+      loadBound: res.loadBound, total: null, tiles: [], canFilter: true, agents: [],
+      note: res.gone ? GONE_NOTE : "",
+    };
+  }
 
   // Pages of PAGE through the offset the "Load more"/scroll-to-end action
   // asked for (vs.loadTo), never past what the store actually kept — a
   // hits page's own `kept` (page_payload: len(stored), graph #65) can be
   // smaller than `total` (the found count) when scouting capped the depth.
   function loadPaged(entry, fields, loadTo, actions, listKey) {
-    var items = [], pending = false, blocker = null, loadBound = entry.total || 0;
+    var items = [], pending = false, blocker = null, gone = false, loadBound = entry.total || 0;
     for (var o = 0; o < loadTo && o < loadBound && !blocker; o += PAGE) {
       var rec = PF.fetchPage(entry.result_id, o, PAGE, fields);
       if (rec.status === "loading") { pending = true; break; }
-      if (rec.data.gone) { blocker = PF.goneBlock(actions, entry); break; }
+      if (rec.data.gone) { blocker = PF.goneBlock(actions, entry); gone = true; break; }
       if (rec.data.error) { blocker = PF.errorBlock(rec.data.error.message); break; }
       if (rec.data.kept != null) loadBound = Math.min(loadBound, rec.data.kept);
       (rec.data[listKey] || []).forEach(function (x) { items.push(x); });
     }
-    return { items: items, pending: pending, blocker: blocker, loadBound: loadBound };
+    return { items: items, pending: pending, blocker: blocker, gone: gone, loadBound: loadBound };
   }
 
   function groupsContext(entry, board, vs, actions) {
     var fields = PL.fieldsFor(board);
     var res = loadPaged(entry, fields, vs.loadTo, actions, "results");
+    if (res.blocker) return blockedContext("groups", res);
     var groups = res.items.map(function (g, i) {
       return {
         n: i + 1, ids: g.ids, positions: g.positions, times: g.times,
@@ -41,18 +53,21 @@
     var q = vs.q.trim().toLowerCase();
     var filtered = groups.filter(function (g) { return FL.groupPassesFilter(g.slots, board, q, vs.agents); });
     var hasActor = !!board.actor;
-    var allEvents = [];
-    groups.forEach(function (g) { (g.slots || []).forEach(function (e) { allEvents.push(e); }); });
+    // Fix round 1, #1: the "actors" tile counts the SAME list the chips
+    // show — distinct first-slot actors of loaded groups — never a wider
+    // count over every event.
     var leadActors = groups.map(function (g) { return FL.actorOf(g.slots[0], board); });
+    var agents = FL.agentChipList(leadActors, vs.agents);
+    // Fix round 1, #2: nothing loaded yet (still pending) has no real
+    // numbers to show — an empty tiles array, not invented zeros.
+    var tiles = groups.length === 0 ? [] : FL.groupsTiles(
+      groups.length, entry.total, FL.countEvents(groups), agents.length, hasActor,
+      FL.timeRangeLabel(FL.allTimes(groups)),
+    );
     return {
       kind: "groups", loaded: groups, filtered: filtered,
       pending: res.pending, blocker: res.blocker, loadBound: res.loadBound, total: entry.total,
-      canFilter: true, agents: FL.agentChipList(leadActors, vs.agents),
-      tiles: FL.groupsTiles(
-        groups.length, entry.total, FL.countEvents(groups),
-        FL.distinctActorCount(allEvents, board), hasActor,
-        FL.timeRangeLabel(FL.allTimes(groups)),
-      ),
+      canFilter: true, agents: agents, tiles: tiles,
       note: FL.loadNote(groups.length, entry.total, filtered.length < groups.length ? filtered.length : null),
     };
   }
@@ -60,6 +75,7 @@
   function hitsContext(entry, board, vs, actions) {
     var fields = PL.fieldsFor(board);
     var res = loadPaged(entry, fields, vs.loadTo, actions, "hits");
+    if (res.blocker) return blockedContext("hits", res);
     var hits = res.items;
     var q = vs.q.trim().toLowerCase();
     var filtered = hits.filter(function (h) { return FL.hitPassesFilter(h, board, q, vs.agents); });
@@ -68,27 +84,35 @@
     var kept = res.loadBound < entry.total ? res.loadBound : null;
     var terms = entry.kind === "search" ? F.searchTerms(entry.query || "") : [];
     var actorVals = hits.map(function (h) { return FL.actorOf(h.event, board); });
+    var agents = FL.agentChipList(actorVals, vs.agents);
+    var tiles = hits.length === 0 ? [] : FL.hitsTiles(
+      hits.length, entry.total, scored, FL.topScore(hits), agents.length, hasActor,
+      FL.timeRangeLabel(hits.map(function (h) { return h.time; })),
+    );
     return {
       kind: "hits", loaded: hits, filtered: filtered,
       pending: res.pending, blocker: res.blocker, loadBound: res.loadBound, total: entry.total,
-      canFilter: true, agents: FL.agentChipList(actorVals, vs.agents), scored: scored, terms: terms,
-      tiles: FL.hitsTiles(
-        hits.length, entry.total, kept, scored, FL.topScore(hits),
-        FL.distinctActorCount(hits.map(function (h) { return h.event; }), board), hasActor,
-        FL.timeRangeLabel(hits.map(function (h) { return h.time; })),
-      ),
-      note: FL.loadNote(hits.length, entry.total, filtered.length < hits.length ? filtered.length : null),
+      canFilter: true, agents: agents, scored: scored, terms: terms, tiles: tiles,
+      note: FL.hitsNote(hits.length, entry.total, filtered.length < hits.length ? filtered.length : null, kept),
     };
   }
 
-  function summaryContext() {
-    return { kind: "summary", loaded: [], filtered: [], pending: false, blocker: null, tiles: [], canFilter: false, agents: [], note: "" };
+  // Fix round 1, #7: the canvas's own summary-note wording, verbatim.
+  var SUMMARY_NOTES = {
+    aggregate: "single value", error: "the request failed before producing output",
+    file: "output went to a file", empty: "empty result",
+  };
+  function summaryContext(outputKind) {
+    return {
+      kind: "summary", loaded: [], filtered: [], pending: false, blocker: null,
+      tiles: [], canFilter: false, agents: [], note: SUMMARY_NOTES[outputKind] || "",
+    };
   }
 
   function buildContext(entry, board, outputKind, vs, actions) {
     if (outputKind === "groups") return groupsContext(entry, board, vs, actions);
     if (outputKind === "hits") return hitsContext(entry, board, vs, actions);
-    return summaryContext();
+    return summaryContext(outputKind);
   }
 
   // The loaded items exactly as the server sent them — a group's `raw`

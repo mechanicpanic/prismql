@@ -12,17 +12,20 @@
   var Header = window.PrismQLFullHeader;
   var Timeline = window.PrismQLFullTimeline;
   var Table = window.PrismQLFullTable;
+  var FL = window.PrismQLFullLogic;
 
-  var PAGE = 50;
+  var PAGE = FL.PAGE; // fix round 1, #8: one shared constant, not a literal per file
 
+  // Fix round 1, #5: the count is dropped here — the fnote above already
+  // says "<loaded> of <total> loaded" (plus "kept K" for hits), so this
+  // row only ever needs to say whether more can be asked for.
   function appendLoadMore(container, ctx, vs, onMore) {
     if (ctx.kind !== "groups" && ctx.kind !== "hits") return;
     if (ctx.loaded.length >= ctx.loadBound) return;
     var wrap = mk("div", "more");
-    wrap.appendChild(mk("span", null, ctx.pending
-      ? "loading…"
-      : ctx.loaded.length + " of " + ctx.loadBound + " loaded so far"));
-    if (!ctx.pending) {
+    if (ctx.pending) {
+      wrap.appendChild(mk("span", null, "loading…"));
+    } else {
       var btn = mk("button", "ghost", "Load more");
       btn.type = "button";
       btn.addEventListener("click", function () { vs.loadTo += PAGE; onMore(); });
@@ -64,11 +67,11 @@
     var wrap = mk("div", "tbl");
     wrap.setAttribute("role", "table");
     wrap.setAttribute("aria-label", "Output as a table");
-    var heads = FR.tableHeadsFor(outputKind, ctx.scored);
+    var heads = FR.tableHeadsFor(outputKind, ctx.scored, board);
     var rows = outputKind === "groups"
       ? FR.groupTableRows(ctx.filtered, board)
       : FR.hitTableRows(ctx.filtered, board, ctx.terms, ctx.scored);
-    Table.renderTable(wrap, outputKind, heads.cols, heads.heads, rows);
+    Table.renderTable(wrap, outputKind, heads.cols, heads.heads, rows, board);
     loadable(wrap, ctx, vs, onMore);
     body.appendChild(wrap);
   }

@@ -18,7 +18,7 @@
   var Body = window.PrismQLFullBody;
   var Focus = window.PrismQLFullFocus;
 
-  var PAGE = 50;
+  var PAGE = FL.PAGE; // fix round 1, #8: one shared constant, not a literal per file
   var vs = { seq: null, view: null, group: 0, q: "", agents: {}, loadTo: PAGE };
   var wasOpen = false;
   var stateRef = null, actionsRef = null;
@@ -62,6 +62,11 @@
       var gi = Math.min(vs.group, lastFiltered.length - 1);
       vs.group = e.key === "ArrowDown" ? Math.min(lastFiltered.length - 1, gi + 1) : Math.max(0, gi - 1);
       render(state, actions);
+      // Fix round 1, #10: focus follows the selection to the newly
+      // current nav button, not left behind on the #full section.
+      var full = document.getElementById("full");
+      var current = full && full.querySelector(".gnav .gitem.on");
+      if (current) current.focus({ preventScroll: true });
     }
   }
   function wireKeys(el) {
@@ -94,9 +99,12 @@
     el.innerHTML = "";
     var visible = window.PrismQLJournal ? window.PrismQLJournal._visibleEntries(state, nowMs) : [];
     var idx = visible.findIndex(function (r) { return r.seq === entry.seq; });
-    Header.build(el, entry, actions, nowMs, visible, idx);
     var bf = PF.boardFieldsFor(state, entry.corpus);
     var outputKind = IF.outputKind(entry);
+    // ctx is built before the header (fix round 1, #9): a gone result must
+    // never offer "Download .jsonl" for a file the store no longer holds.
+    var ctx = bf.blocked ? null : Data.buildContext(entry, bf.board, outputKind, vs, actions);
+    Header.build(el, entry, actions, nowMs, visible, idx, !!(ctx && ctx.gone));
     if (bf.blocked) {
       el.appendChild(mk("div", "fsum"));
       var loading = mk("div", "fbody");
@@ -106,7 +114,6 @@
     } else {
       var allowed = FL.viewsFor(outputKind);
       if (allowed.indexOf(vs.view) < 0) vs.view = allowed[0];
-      var ctx = Data.buildContext(entry, bf.board, outputKind, vs, actions);
       Summary.buildSum(el, entry, ctx.tiles);
       Summary.buildBar(el, allowed, vs.view, ctx, vs, function () { render(state, actions); });
       lastFiltered = Body.build(el, entry, ctx, outputKind, bf.board, vs, actions,

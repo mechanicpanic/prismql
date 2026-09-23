@@ -11,6 +11,10 @@
 
   var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   var VIEWS = { groups: ["timeline", "table", "raw"], hits: ["table", "raw"] };
+  // The one page size every loader/Load-more/scroll-to-end site reads (fix
+  // round 1, #8) — fullview-data.js, fullview-body.js and fullview.js all
+  // read this instead of each carrying its own literal 50.
+  var PAGE = 50;
 
   function timeRangeLabel(times) {
     var ds = (times || []).filter(function (t) { return t != null; })
@@ -85,14 +89,6 @@
   function countEvents(groups) {
     return (groups || []).reduce(function (n, g) { return n + ((g.ids || []).length); }, 0);
   }
-  function distinctActorCount(events, board) {
-    if (!board || !board.actor) return 0;
-    var seen = {};
-    (events || []).forEach(function (e) {
-      if (e && e[board.actor] != null) seen[e[board.actor]] = true;
-    });
-    return Object.keys(seen).length;
-  }
   function allTimes(groups) {
     var out = [];
     (groups || []).forEach(function (g) { (g.times || []).forEach(function (t) { out.push(t); }); });
@@ -115,25 +111,38 @@
     tiles.push({ v: timeRange, l: "time range" });
     return tiles;
   }
-  // `kept` — page_payload's own field for a hits page (results.py: "found;
-  // exceeds len() when scouting kept only a depth") — is the retrievable
-  // bound; a "kept" tile appears only when it is smaller than `total`, the
-  // true count found (graph @aleph/prismql, node #65/#76).
-  function hitsTiles(loadedCount, total, kept, scored, topScoreVal, sourceCount, hasActor, timeRange) {
+  // At most 4 tiles — the canvas's fixed 4-column grid (fix round 1,
+  // #12/13). `kept` (page_payload's own field for a hits page: results.py,
+  // "found; exceeds len() when scouting kept only a depth") never gets a
+  // 5th tile here — it lives in hitsNote's fnote text instead. A null
+  // `topScoreVal` (nothing scored yet — topScore([]) === null) reads "—",
+  // never "0.000" (fix round 1, #2: no invented numbers).
+  function hitsTiles(loadedCount, total, scored, topScoreVal, sourceCount, hasActor, timeRange) {
     var tiles = [{ v: loadedCount + " / " + total, l: "hits loaded" }];
-    if (kept != null && kept < total) tiles.push({ v: String(kept), l: "kept" });
-    tiles.push(scored ? { v: Number(topScoreVal).toFixed(3), l: "top score" } : { v: "exact", l: "match type" });
+    tiles.push(scored
+      ? { v: topScoreVal != null ? Number(topScoreVal).toFixed(3) : "—", l: "top score" }
+      : { v: "exact", l: "match type" });
     if (hasActor) tiles.push({ v: String(sourceCount), l: "sources" });
     tiles.push({ v: timeRange, l: "time range" });
     return tiles;
   }
 
+  // The hits fnote: the load/match note plus "kept K" when the store could
+  // not retrieve every found hit (fix round 1, #5 — dropped from the
+  // Load-more row so it is said exactly once).
+  function hitsNote(loadedCount, total, matchedCount, kept) {
+    var note = loadNote(loadedCount, total, matchedCount);
+    if (kept != null && kept < total) note += " · kept " + kept;
+    return note;
+  }
+
   var api = {
-    timeRangeLabel: timeRangeLabel, loadNote: loadNote, viewsFor: viewsFor,
+    PAGE: PAGE,
+    timeRangeLabel: timeRangeLabel, loadNote: loadNote, hitsNote: hitsNote, viewsFor: viewsFor,
     fieldText: fieldText, actorOf: actorOf,
     groupPassesFilter: groupPassesFilter, hitPassesFilter: hitPassesFilter,
     agentChipList: agentChipList, countEvents: countEvents,
-    distinctActorCount: distinctActorCount, allTimes: allTimes, topScore: topScore,
+    allTimes: allTimes, topScore: topScore,
     groupsTiles: groupsTiles, hitsTiles: hitsTiles,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
