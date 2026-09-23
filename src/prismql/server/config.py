@@ -247,6 +247,22 @@ def load_config(path: str | Path) -> ServerConfig:
     )
 
 
+def _emb_matrix(column: Any) -> Any:
+    """The emb column as one (n, d) float32 numpy matrix — never as Python
+    lists of floats, which cost ~8x the matrix (graph @aleph/prismql, #95).
+    Without numpy, or with null vectors, the plain lists as before."""
+    try:
+        import numpy as np
+    except ImportError:
+        return column.to_pylist()
+    arr = column.combine_chunks()
+    width = getattr(arr.type, "list_size", None)
+    if width is None or arr.null_count:
+        return column.to_pylist()
+    flat = arr.flatten().to_numpy(zero_copy_only=False)
+    return np.asarray(flat, dtype=np.float32).reshape(len(arr), width)
+
+
 def load_corpus(
     path: str | Path,
 ) -> tuple[list[dict[str, Any]], list[Any] | None, str | None, str | None]:
@@ -268,7 +284,7 @@ def load_corpus(
     text = meta.get(b"prismql.embed_text")
     vectors = None
     if "emb" in table.column_names:
-        vectors = table.column("emb").to_pylist()
+        vectors = _emb_matrix(table.column("emb"))
         table = table.drop_columns(["emb"])
     if "position" in table.column_names and table.column(
         "position"

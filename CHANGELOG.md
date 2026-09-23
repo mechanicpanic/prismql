@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Fixed (memory)
+- An ingested `emb` column loads as one float32 numpy matrix, normalized in place, not as Python lists of floats: loading peaked at ~13x the matrix, now ~3x (20k x 64 test: 69 MB → 15 MB) (graph @aleph/prismql, #95).
+
 ### Changed (the query frame reads by position)
 - The per-query frame no longer fetches whole documents it does not need (graph @aleph/prismql, #14): positions and times come from the order axis, field values from the backend's new `values_at(positions, field)`; only a field a backend cannot read by position falls back to documents. `TantivyBackend` keeps its metadata fields by position in a `fields.parquet` sidecar (index layout 4 — an index of layout 3 or older is refused with rebuild instructions; a text index at `text_index_path` rebuilds itself). Chicago demo (50k), tantivy backend, identical groups: a two-leg chain 44 → 10 ms, a chain with a `$k` variable 42 → 23 ms (memory: 16 / 15 ms).
 

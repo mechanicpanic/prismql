@@ -127,13 +127,21 @@ class SemanticIndex:
         if have_numpy:
             # Vectorized: 381k rows normalize in well under a second, where
             # the per-row Python loop below takes tens of seconds.
-            width = next((len(v) for v in vectors if v is not None), 0)
-            rows = [v if v is not None else [0.0] * width for v in vectors]
-            arr = np.asarray(rows, dtype=np.float32) if rows else np.zeros((0, 0))
+            arr: Any
+            if isinstance(vectors, np.ndarray):
+                arr = vectors.astype(np.float32, copy=False)
+            else:
+                width = next((len(v) for v in vectors if v is not None), 0)
+                rows = [v if v is not None else [0.0] * width for v in vectors]
+                arr = np.asarray(rows, dtype=np.float32) if rows else np.zeros((0, 0))
             norms = np.linalg.norm(arr, axis=1) if len(arr) else np.zeros(0)
             keep = norms > 0
             index._ids = [i for i, k in zip(ids, keep, strict=True) if k]
-            index._matrix = (arr[keep] / norms[keep, None]).astype(np.float32)
+            # one writable copy of the kept rows, normalized in place: the
+            # caller's matrix may be a read-only view of an Arrow buffer
+            matrix = arr[keep] if not keep.all() else arr.copy()
+            matrix /= norms[keep, None].astype(np.float32)
+            index._matrix = matrix
             return index
         for doc_id, vector in zip(ids, vectors, strict=True):
             if vector is None or not any(vector):
