@@ -174,8 +174,14 @@ class SemanticIndex:
         row = rows.get(doc_id)
         if row is None:
             return None
-        vector = self._matrix[row] if self._matrix is not None else self._vectors[row]
-        return float(sum(q * float(v) for q, v in zip(query, vector, strict=False)))
+        if self._matrix is not None:
+            import numpy as np
+
+            # float32, as search() scores — a value at the threshold agrees
+            return float(self._matrix[row] @ np.asarray(query, dtype=np.float32))
+        return float(
+            sum(q * v for q, v in zip(query, self._vectors[row], strict=False))
+        )
 
     def _scores(self, text: str) -> Any:
         query = _normalize(self.embedder.encode([text])[0])

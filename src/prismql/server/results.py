@@ -126,6 +126,8 @@ class StoredResult:
         size += self.positions.itemsize * len(self.positions)
         if self.scores is not None:
             size += self.scores.itemsize * len(self.scores)
+        if self.explainer is not None:
+            size += self.explainer.nbytes
         return size
 
     def rows_window(self, offset: int, limit: int) -> list[tuple[str, Any]]:

@@ -39,3 +39,12 @@ test("scores and matches outside the text are listed", () => {
   assert.deepEqual(E.scores(why), ["0.612"]);
   assert.deepEqual(E.elsewhere(why), ["content: sign in"]);
 });
+
+test("offsets are characters: an emoji before a match does not shift it", () => {
+  const text = "🔥🔥 being tested";
+  const w = [{ matches: [{ field: "text", start: 9, end: 15 }] }];
+  assert.deepEqual(E.textParts(text, w), [
+    { t: "🔥🔥 being ", m: false },
+    { t: "tested", m: true },
+  ]);
+});

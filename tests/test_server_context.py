@@ -89,3 +89,11 @@ def test_numeric_ids_are_found_from_the_query_string(tmp_path):
     c = TestClient(create_app(ServerConfig(backend_type="memory", data=str(data))))
     body = c.get("/context", params={"id": "2", "before": 1, "after": 1}).json()
     assert _ids(body) == [1, 2, 3]
+
+
+def test_minutes_must_be_a_finite_positive_number(client):
+    for bad in ("0", "-1", "inf", "nan"):
+        assert (
+            client.get("/context", params={"id": "e1", "minutes": bad}).status_code
+            == 422
+        )

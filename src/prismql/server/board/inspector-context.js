@@ -24,16 +24,19 @@
     });
   }
 
+  var RETRY_MS = 10000; // a failure (429, network) is retried, not kept
+
   function load(p) {
     var k = C.key(p);
-    if (cache[k]) return cache[k];
+    var hit = cache[k];
+    if (hit && !(hit.status === "error" && Date.now() - hit.at > RETRY_MS)) return hit;
     var rec = { status: "loading" };
     cache[k] = rec;
     fetchContext(p).then(function (res) {
       if (res.status === 200 && res.body && res.body.ok) { rec.status = "done"; rec.body = res.body; }
-      else { rec.status = "error"; rec.error = (res.body && res.body.error && res.body.error.message) || "HTTP " + res.status; }
+      else { rec.status = "error"; rec.at = Date.now(); rec.error = (res.body && res.body.error && res.body.error.message) || "HTTP " + res.status; }
       rerender();
-    }).catch(function (e) { rec.status = "error"; rec.error = String((e && e.message) || e); rerender(); });
+    }).catch(function (e) { rec.status = "error"; rec.at = Date.now(); rec.error = String((e && e.message) || e); rerender(); });
     return rec;
   }
 
@@ -94,7 +97,8 @@
     return wrap;
   }
 
-  // A reload makes positions and ids of the old load meaningless.
+  // A server restart makes positions and ids of the old load meaningless
+  // (board-stream.js calls this when the boot id changes).
   function clear() { cache = {}; }
 
   var api = { button: button, block: block, clear: clear };

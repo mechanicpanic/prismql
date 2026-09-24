@@ -6,16 +6,20 @@
   "use strict";
 
   // The text split into {t, m} parts, m = inside a matched span. Spans come
-  // from the server's offsets on the `text` field; overlaps merge.
+  // from the server's offsets on the `text` field; overlaps merge. The
+  // server counts characters (code points), JS strings count UTF-16 units:
+  // the text is cut as an array of code points, or every emoji before a
+  // match would shift its mark.
   function textParts(text, why) {
-    text = text == null ? "" : String(text);
+    var chars = Array.from(text == null ? "" : String(text));
+    text = { length: chars.length, slice: function (a, b) { return chars.slice(a, b).join(""); } };
     var spans = [];
     (why || []).forEach(function (p) {
       (p.matches || []).forEach(function (m) {
         if (m.field === "text" && m.end > m.start && m.end <= text.length) spans.push([m.start, m.end]);
       });
     });
-    if (!spans.length) return [{ t: text, m: false }];
+    if (!spans.length) return [{ t: text.slice(0), m: false }];
     spans.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
     var merged = [spans[0].slice()];
     for (var i = 1; i < spans.length; i++) {

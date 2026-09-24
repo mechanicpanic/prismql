@@ -2,6 +2,8 @@
 terms, fields and offsets that matched, and the similarity score (graph
 @aleph/prismql, #119)."""
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -59,12 +61,15 @@ def test_token_mode_matches_whole_words_only():
     assert got[2] == []  # "evaluations" is not the token "evaluation"
 
 
-def test_phrases_and_split_terms_are_consecutive_tokens():
-    engine = _engine(user_dictionaries={"p": ["being tested", "sign-in"]})
+def test_phrases_are_plain_words_split_terms_follow_the_mode():
+    # a phrase (a space) matches unstemmed words, as the index does (#60)
+    engine = _engine(user_dictionaries={"p": ["being test", "sign-in"]})
     got = _explain(engine, "SELECT contains(p)")
-    assert _spans(got[1], 1) == ["being tested"]
-    # the index matches phrases on stems, so "Signing in" is "sign-in" too
+    assert _spans(got[1], 1) == []  # "being tested" is not the phrase "being test"
+    # a split term in stem mode is its stems, adjacent: "Signing in" is one
     assert _spans(got[3], 3) == ["Signing in", "sign-in"]
+    token = _engine(user_dictionaries={"p": {"terms": ["sign-in"], "match": "token"}})
+    assert _spans(_explain(token, "SELECT contains(p)")[3], 3) == ["sign-in"]
 
 
 def test_field_conditions_are_named_and_not_conditions_are_skipped():
@@ -86,7 +91,7 @@ class _Axis:
         return [[1.0, 0.0] if "test" in t else [0.6, 0.8] for t in texts]
 
 
-def test_similar_to_carries_its_score():
+def test_similar_to_carries_its_score_when_it_clears_the_threshold():
     backend = MemoryBackend(
         DOCS, semantic_index=SemanticIndex(_Axis(), DOCS, id_field="id")
     )
@@ -95,37 +100,78 @@ def test_similar_to_carries_its_score():
     assert got[1][0]["predicate"] == 'similar_to("a test", 0.5)'
     assert got[1][0]["score"] == pytest.approx(1.0)
     assert got[4][0]["score"] == pytest.approx(0.6)
+    got = _explain(engine, 'SELECT similar_to("a test", 0.9)')
+    assert got[4] == []  # 0.6 is below 0.9: not a reason
 
 
+def test_the_excluded_side_of_a_subquery_chain_is_no_reason():
+    engine = _engine(user_dictionaries={"evals": ["test"]})
+    q = (
+        "SELECT (SELECT field(kind, THOUGHT)) NOT_FOLLOWED_BY "
+        "(SELECT contains(evals)) INWINDOW 5"
+    )
+    assert [i["predicate"] for i in _explain(engine, q)[1]] == ["field(kind, THOUGHT)"]
+
+
+def test_offsets_count_characters_not_bytes():
+    docs = [{"id": 1, "text": "🔥🔥 we are being tested"}]
+    engine = PrismQLEngine(MemoryBackend(docs), user_dictionaries={"e": ["tested"]})
+    ex = Explainer.build(engine, engine.to_ir("SELECT contains(e)"))
+    m = ex.explain(docs[0])[0]["matches"][0]
+    assert docs[0]["text"][m["start"] : m["end"]] == "tested"
+
+
+FCC = Path(__file__).resolve().parent.parent / "demo" / "data" / "fcc.json"
+TERMS = [
+    "error",
+    "Error",
+    "install",
+    "installing",
+    "array",
+    "sign-in",
+    "log-in",
+    "c++",
+    "node.js",
+    "don't",
+    "thank you",
+    "the code",
+    "not working",
+    "free code camp",
+    "http",
+    "git",
+    "help",
+]
+
+
+def _fcc() -> list[dict]:
+    return json.loads(FCC.read_text())[:1500]
+
+
+@pytest.mark.parametrize("text_index", ["memory", "tantivy"])
 @pytest.mark.parametrize("mode", ["stem", "token", "substring"])
-def test_every_event_contains_finds_is_explained(mode):
-    """The explanation must agree with the index: every event a contains()
-    returns has at least one match, in every mode."""
-    words = ["test", "evaluation", "sign", "being tested", "sign-in", "page"]
-    engine = _engine(user_dictionaries={"words": {"terms": words, "match": mode}})
-    ids = {g[0] for g in engine.execute("SELECT contains(words)")}
-    ex = Explainer.build(engine, engine.to_ir("SELECT contains(words)"))
-    for doc in DOCS:
-        if doc["id"] in ids:
-            assert ex.explain(doc), (mode, doc)
+def test_each_term_is_explained_exactly_where_the_engine_finds_it(mode, text_index):
+    """Per term, per mode, per index: the events the explanation marks are
+    the events the engine returns — no more (a mark on something the index
+    never matched) and no fewer."""
+    docs = _fcc()
+    if text_index == "tantivy":
+        if mode == "substring":
+            pytest.skip("tantivy does not answer substring")
+        pytest.importorskip("tantivy")
+        from prismql.backends.tantivy import TantivyBackend
 
-
-@pytest.mark.parametrize("mode", ["stem", "token"])
-def test_explanation_agrees_with_the_tantivy_text_index(mode):
-    """The server answers text from a tantivy index (#91); the explanation,
-    cut in Python, must find a match in every event that index returns."""
-    pytest.importorskip("tantivy")
-    from prismql.backends.tantivy import TantivyBackend
-
-    words = ["test", "evaluation", "sign", "being tested", "sign-in", "page"]
-    backend = MemoryBackend(
-        DOCS, text_index=TantivyBackend(DOCS, store_documents=False)
-    )
-    engine = PrismQLEngine(
-        backend, user_dictionaries={"words": {"terms": words, "match": mode}}
-    )
-    ids = {g[0] for g in engine.execute("SELECT contains(words)")}
-    assert ids  # the index answered
-    ex = Explainer.build(engine, engine.to_ir("SELECT contains(words)"))
-    for doc in DOCS:
-        assert bool(ex.explain(doc)) == (doc["id"] in ids), (mode, doc)
+        backend = MemoryBackend(
+            docs, text_index=TantivyBackend(docs, store_documents=False)
+        )
+    else:
+        backend = MemoryBackend(docs)
+    by_id = {d["id"]: d for d in docs}
+    for term in TERMS:
+        engine = PrismQLEngine(
+            backend, user_dictionaries={"words": {"terms": [term], "match": mode}}
+        )
+        q = "SELECT contains(words)"
+        found = {g[0] for g in engine.execute(q)}
+        ex = Explainer.build(engine, engine.to_ir(q))
+        marked = {i for i, d in by_id.items() if ex.explain(d)}
+        assert marked == found, (term, mode, text_index, sorted(marked ^ found)[:5])

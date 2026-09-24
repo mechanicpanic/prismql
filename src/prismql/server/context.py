@@ -44,6 +44,22 @@ def _times(backend: Any, positions: list[int], field: str | None) -> list[Any]:
         return [None] * len(positions)
 
 
+def _values(backend: Any, positions: list[int], field: str) -> list[Any]:
+    """The field's values by position — documents only where the backend
+    cannot read by position (rust_memory, or a text field tantivy holds
+    only as an index)."""
+    values_at = getattr(backend, "values_at", None)
+    values = values_at(positions, field) if values_at is not None else None
+    if values is not None:
+        return list(values)
+    ids = backend.ids_at(positions)
+    id_field = getattr(backend, "id_field", "id")
+    by_id = {
+        d.get(id_field): d for d in backend.get_documents(list(dict.fromkeys(ids)))
+    }
+    return [by_id.get(i, {}).get(field) for i in ids]
+
+
 def _walk(
     backend: Any,
     start: int,
@@ -64,7 +80,7 @@ def _walk(
     while len(out) < want and 0 <= pos < n:
         stop = max(pos - _CHUNK + 1, 0) if step < 0 else min(pos + _CHUNK, n)
         chunk = list(range(pos, stop - 1, -1)) if step < 0 else list(range(pos, stop))
-        values = backend.values_at(chunk, same) if same else [None] * len(chunk)
+        values = _values(backend, chunk, same) if same else [None] * len(chunk)
         times = _times(backend, chunk, time_field) if bounds else [None] * len(chunk)
         any_inside = False
         for p, v, t in zip(chunk, values, times, strict=True):
@@ -97,7 +113,7 @@ def context_payload(
     center_id, center = _center(backend, raw_id)
     same_value = None
     if same:
-        same_value = backend.values_at([center], same)[0]
+        same_value = _values(backend, [center], same)[0]
         if same_value is None:
             raise ContextError(f"the event {raw_id!r} has no field {same!r}")
     bounds = None

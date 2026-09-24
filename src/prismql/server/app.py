@@ -614,7 +614,11 @@ def create_app(config: ServerConfig) -> FastAPI:
                     offset=0,
                     hydrate=hydrate,
                     fields=req.fields,
-                    explainer=stored.explainer if req.explain else None,
+                    # not for a file output: up to 100k groups under the
+                    # corpus lock; a kept result's pages explain on demand
+                    explainer=stored.explainer
+                    if req.explain and not file_mode
+                    else None,
                 )
                 if file_mode:
                     # Capped (was 2**31): a broad query against a large
@@ -988,8 +992,8 @@ def create_app(config: ServerConfig) -> FastAPI:
         after = side if after is None else after
         if not (0 <= before <= MAX_SIDE and 0 <= after <= MAX_SIDE):
             return refuse(f"before and after must be between 0 and {MAX_SIDE}")
-        if minutes is not None and minutes <= 0:
-            return refuse("minutes must be above 0")
+        if minutes is not None and not (0 < minutes < 1e6):
+            return refuse("minutes must be a number above 0")
         try:
             payload = context_payload(
                 engine.search_backend,
