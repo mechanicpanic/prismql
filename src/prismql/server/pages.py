@@ -47,6 +47,9 @@ def _documents(
             why[doc_id] = explainer.explain(doc, id_field)
         if fields is not None:
             doc = {k: doc[k] for k in [id_field, *fields] if k in doc}
+        elif any(k.startswith("_mentions:") for k in doc):
+            # found by the engine, not the user's data (graph #121)
+            doc = {k: v for k, v in doc.items() if not k.startswith("_mentions:")}
         by_id[doc_id] = doc
     return by_id, why
 

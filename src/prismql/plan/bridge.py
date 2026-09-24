@@ -91,11 +91,15 @@ def _result_from_groups(frame: Any, id_groups: Sequence[Sequence[MessageId]]) ->
 
 
 def _attach_leg_bindings(result: Any, frame: Any, legs: Sequence[Leg]) -> Any:
-    """Slot i of every group binds the variables of leg i."""
-    from .operators import _attach_bindings
+    """Slot i of every group binds the variables of leg i; a variable a
+    list slot bound (mentions) settles on what its later slots hold, as it
+    did while the chain was built (graph @aleph/prismql, #121)."""
+    from .operators import _attach_bindings, _list_columns, _narrow
 
+    lists = _list_columns(frame)
     for i, lg in enumerate(legs):
         result = _attach_bindings(result, frame, i, lg.equal)
+        result = _narrow(result, frame, i, lg.equal, lists)
     return result
 
 

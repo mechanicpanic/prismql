@@ -129,11 +129,9 @@ class FieldMatch:
 
 @dataclass(frozen=True)
 class MentionsUser:
-    """``mentions_user(x)`` / legacy ``hasusermentioned(x)``.
-
-    The raw argument text is preserved: the visitor never treated ``$var``
-    specially here (it fell through to a literal text search), only ``*``.
-    """
+    """``mentions_user(x)`` / legacy ``hasusermentioned(x)``: an @mention of
+    an author. The raw argument text is kept — a name, ``*``, or ``$var`` /
+    ``!$var``, which the executor binds to the mentioned names (#121)."""
 
     user: str
 

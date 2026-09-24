@@ -111,6 +111,7 @@ class PrismQLEngine:
         use_ir: bool = True,
         quantifier_ceiling: int | None = None,
         actor_field: str = "user",
+        mentions_column: str | None = None,
     ) -> None:
         """
         Initialize the PrismQL engine.
@@ -136,6 +137,8 @@ class PrismQLEngine:
             actor_field: The field naming each event's author; an @mention
                 is ``@`` and one of its values (``mentions_user``). The
                 language's own ``from()`` reads ``user``, hence the default.
+            mentions_column: An ingest-stamped column holding each event's
+                mentions; without one they are found once in the text.
             quantifier_ceiling: Upper bound that closes an open range {n,}
                 as {n,m}. None (default): an open range is an error — the
                 engine enumerates groups up to an explicit size and never
@@ -165,6 +168,7 @@ class PrismQLEngine:
             raise ValueError("quantifier_ceiling must be >= 1")
         self.quantifier_ceiling = quantifier_ceiling
         self.actor_field = actor_field
+        self.mentions_column = mentions_column
 
         # One instance serves both execution paths: IRExecutor subclasses
         # PrismQLVisitor, so visitor.visit(tree) (legacy path) and
@@ -180,6 +184,7 @@ class PrismQLEngine:
             dictionary_modes=self.dictionary_modes,
             quantifier_ceiling=quantifier_ceiling,
             actor_field=actor_field,
+            mentions_column=mentions_column,
         )
 
     def _check_match_support(self, mode: str, dictionary: str | None = None) -> None:

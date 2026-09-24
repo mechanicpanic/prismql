@@ -72,6 +72,14 @@ def _huser(ctx: Any) -> str:
     return text
 
 
+def _user_term(ctx: Any) -> Term:
+    """from()'s argument: a quoted one is always a name — ``from("*")`` is
+    the author called "*", as the pipe dialect reads it."""
+    if ctx.huser().QUOTED_STRING() is not None:
+        return Literal(_huser(ctx))
+    return _term(_huser(ctx))
+
+
 def _term(text: str) -> Term:
     if text == "*":
         return Wildcard()
@@ -120,7 +128,7 @@ def lower_condition(  # noqa: C901 - one branch per condition alternative
     if ctx.ContainsPhrase():
         return ContainsPhrase(ctx.QUOTED_STRING().getText()[1:-1])
     if ctx.From():
-        return FieldMatch("user", _term(_huser(ctx)), exact=True)
+        return FieldMatch("user", _user_term(ctx), exact=True)
     if ctx.MentionsUser():
         return MentionsUser(_huser(ctx))
     if ctx.IsQuestion():
@@ -176,7 +184,7 @@ def lower_condition(  # noqa: C901 - one branch per condition alternative
         return Contains(_term(ctx.hdict().getText()))
     if ctx.ByUser():
         _warn_deprecated("byuser", "from", "from(username)")
-        return FieldMatch("user", _term(_huser(ctx)), exact=True)
+        return FieldMatch("user", _user_term(ctx), exact=True)
     if ctx.HasUserMentioned():
         _warn_deprecated("hasusermentioned", "mentions_user", "mentions_user(username)")
         return MentionsUser(_huser(ctx))

@@ -56,11 +56,14 @@ class PrismQLVisitor(BasePrismQLVisitor):
         dictionary_modes: Mapping[str, str] | None = None,
         quantifier_ceiling: int | None = None,
         actor_field: str = "user",
+        mentions_column: str | None = None,
     ) -> None:
         self.search_backend = search_backend
         self.quantifier_ceiling = quantifier_ceiling
-        # whose names an @mention can be (graph @aleph/prismql, #121)
+        # whose names an @mention can be, and an ingest-stamped mentions
+        # column if the corpus has one (graph @aleph/prismql, #121)
         self.actor_field = actor_field
+        self.mentions_column = mentions_column
         self.user_dictionaries = user_dictionaries or {}
         self.text_match = text_match
         # Per-dictionary single-word match mode (overrides text_match)
@@ -781,6 +784,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # from(username) - same as byuser
         if ctx.From():
             username = _unquote(ctx.huser().getText())
+            if ctx.huser().QUOTED_STRING() is not None:
+                # a quoted argument is always a name, as the IR path reads it
+                return self.search_backend.search_by_field("user", username, exact=True)
 
             # Check if this is wildcard - match all users/messages
             if username == "*":
@@ -908,6 +914,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 stacklevel=2,
             )
             username = _unquote(ctx.huser().getText())
+            if ctx.huser().QUOTED_STRING() is not None:
+                # a quoted argument is always a name, as the IR path reads it
+                return self.search_backend.search_by_field("user", username, exact=True)
 
             # Check if this is wildcard - match all users/messages
             if username == "*":
@@ -1041,23 +1050,33 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _mentions_user(self, username: str) -> set[MessageId]:
         """mentions_user(name | $y | !$y | *): the events that @mention an
-        author (graph @aleph/prismql, #121). A variable binds each mentioned
-        name: the ``mentions`` field is a list, and the operator layer holds
-        a list equal to a value when it contains it."""
-        from ..mentions import MENTIONS_FIELD, mentions_of
-
-        if username in self.precomputed_indexes.user_mentions:
-            return self.precomputed_indexes.user_mentions[username]
+        author (graph @aleph/prismql, #121). A variable binds the mentioned
+        names; the operator layer settles each group on one of them."""
         from ..ingest.annotate import TEXT_FIELDS
+        from ..mentions import mentions_of
 
-        mentions = mentions_of(self.search_backend, self.actor_field, TEXT_FIELDS)
+        variable = username.lstrip("!").startswith("$")
+        given = self.precomputed_indexes.user_mentions
+        if given:
+            # a caller's own index: names only, no per-event lists to bind
+            if variable:
+                raise PrismQLRuntimeError(
+                    "mentions_user($var) cannot bind from a PrecomputedIndexes "
+                    "user_mentions index; annotate mentions instead"
+                )
+            if username == "*":
+                return set().union(*given.values())
+            return set(given.get(username, set()))
+        mentions = mentions_of(
+            self.search_backend, self.actor_field, TEXT_FIELDS, self.mentions_column
+        )
         if username == "*":
             return set(mentions.any)
-        if username.lstrip("!").startswith("$"):
+        if variable:
             self.variable_constraints.append(
                 VariableConstraint(
                     variable_name=username.lstrip("!")[1:],
-                    field_name=MENTIONS_FIELD,
+                    field_name=mentions.field,
                     position=self.current_restriction_position,
                     negated=username.startswith("!"),
                 )

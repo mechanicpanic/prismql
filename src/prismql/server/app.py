@@ -529,6 +529,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                     text_match=corpus_cfg.text_match,
                     quantifier_ceiling=corpus_cfg.quantifier_ceiling,
                     actor_field=actor_field(corpus_cfg),
+                    mentions_column=engine.mentions_column,
                 )
             try:
                 result = engine.execute(req.query)

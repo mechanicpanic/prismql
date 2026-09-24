@@ -20,6 +20,7 @@ from typing import Any
 from ..exceptions import PrismQLRuntimeError
 from ..types import MessageId
 from . import _pl
+from .bindings import _bound, _eq, _list_columns, _narrow, _neq, _share_one_value
 from .corpus import to_groups
 from .frames import leg_frame
 from .primitives import (
@@ -93,10 +94,6 @@ def variable_fields(legs: Iterable[Leg]) -> list[str]:
 # ------------------------------------------------------------- bindings
 
 
-def _bound(result: Any) -> set[str]:
-    return {c[3:] for c in result.collect_schema().names() if c.startswith("_v_")}
-
-
 def _attach_bindings(
     result: Any, frame: Any, slot: int | str, bindings: Sequence[Binding]
 ) -> Any:
@@ -121,26 +118,6 @@ def _attach_bindings(
         .select("group", *[pl.col(f).alias(f"_v_{v}") for v, f in new])
     )
     return result.join(values, on="group", how="left")
-
-
-def _list_columns(frame: Any) -> set[str]:
-    """Columns holding a list per row — ``mentions`` (graph #121)."""
-    pl = _pl()
-    return {n for n, dt in frame.collect_schema().items() if isinstance(dt, pl.List)}
-
-
-def _eq(a: str, b: str, lists: AbstractSet[str]) -> Any:
-    """Two columns agree: equal values, or a list that contains the other
-    side's value (``mentions_user($y)`` against ``field(agent, $y)``), or
-    two lists that share one (graph @aleph/prismql, #121)."""
-    pl = _pl()
-    if a in lists and b in lists:
-        return pl.col(a).list.set_intersection(pl.col(b)).list.len() > 0
-    if a in lists:
-        return pl.col(a).list.contains(pl.col(b))
-    if b in lists:
-        return pl.col(b).list.contains(pl.col(a))
-    return pl.col(a) == pl.col(b)
 
 
 def _self_consistency(
@@ -184,7 +161,7 @@ def _fresh_link_constraints(
                 f"!${v} refers to a variable no earlier leg binds"
             )
         for g in lhs_fields[v]:
-            conds.append(~_eq(f"r_{f}", f"l_{g}", lists))
+            conds.append(_neq(f"r_{f}", f"l_{g}", lists))
     return None, (pl.all_horizontal(conds) if conds else None)
 
 
@@ -203,7 +180,7 @@ def _extension_constraints(
             raise PrismQLRuntimeError(
                 f"!${v} refers to a variable no earlier leg binds"
             )
-        conds.append(~_eq(f"r_{f}", f"l__v_{v}", lists))
+        conds.append(_neq(f"r_{f}", f"l__v_{v}", lists))
     return None, (pl.all_horizontal(conds) if conds else None)
 
 
@@ -258,8 +235,10 @@ def link(
             eligible=eligible,
         )
         first, second = (lhs, rhs) if forward else (rhs, lhs)
+        lists = _list_columns(frame)
         res = _attach_bindings(res, frame, 0, first.equal)
-        return _attach_bindings(res, frame, 1, second.equal)
+        res = _attach_bindings(res, frame, 1, second.equal)
+        return _narrow(res, frame, 1, second.equal, lists)
     carry = [f"_v_{v}" for v in sorted(_bound(seqs))]
     res = extend_link(
         frame,
@@ -272,9 +251,9 @@ def link(
         eligible=eligible,
         carry=carry,
     )
-    if forward:
-        return _attach_bindings(res, frame, "last", rhs.equal)
-    return _attach_bindings(res, frame, 0, rhs.equal)
+    slot: int | str = "last" if forward else 0
+    res = _attach_bindings(res, frame, slot, rhs.equal)
+    return _narrow(res, frame, slot, rhs.equal, _list_columns(frame))
 
 
 def negative_link(
@@ -312,23 +291,27 @@ def _cooccur_constraints(
     fields: AbstractSet[str] = frozenset(),
 ) -> tuple[str | None, Any | None, dict[str, tuple[int, str]]]:
     """(key, eligible, bindings) for a comma list. ``key`` only when the
-    whole constraint is one variable on one field named exactly once by
-    every member; otherwise every equality/inequality is ``eligible`` over
-    the member-prefixed columns. ``bindings`` says which member's field
-    carries each variable's value."""
+    whole constraint is one variable on one scalar field named exactly once
+    by every member; otherwise every equality/inequality is ``eligible`` over
+    the member-prefixed columns. A variable's members share one value: the
+    scalars agree and every list contains it, or — lists only — one name
+    lies in all of them (graph #121). ``bindings`` says which member's field
+    carries each variable's value, a scalar one where there is one."""
     pl = _pl()
     lists = {f"f{i}_{f}" for i in range(len(legs)) for f in fields}
+    names: dict[str, list[str]] = {}  # var -> its member columns, in order
     first_leg: dict[str, tuple[int, str]] = {}
     conds: list[Any] = []
     for i, leg in enumerate(legs):
         conds += _self_consistency(f"f{i}_", leg, lists)
         for v, f in leg.equal:
-            if v in first_leg:
-                j, g = first_leg[v]
-                if j != i:
-                    conds.append(_eq(f"f{i}_{f}", f"f{j}_{g}", lists))
-            else:
+            names.setdefault(v, []).append(f"f{i}_{f}")
+            if v not in first_leg or (
+                f"f{first_leg[v][0]}_{first_leg[v][1]}" in lists and f not in fields
+            ):
                 first_leg[v] = (i, f)
+    for cols in names.values():
+        conds += _share_one_value(cols, lists)
     for i, leg in enumerate(legs):
         for v, f in leg.unequal:
             if v not in first_leg or first_leg[v][0] == i:
@@ -336,7 +319,7 @@ def _cooccur_constraints(
                     f"!${v} in a comma list needs another member binding ${v}"
                 )
             j, g = first_leg[v]
-            conds.append(~_eq(f"f{i}_{f}", f"f{j}_{g}", lists))
+            conds.append(_neq(f"f{i}_{f}", f"f{j}_{g}", lists))
     if (
         len(first_leg) == 1
         and all(len(leg.equal) == 1 and not leg.unequal for leg in legs)

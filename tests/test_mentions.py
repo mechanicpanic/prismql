@@ -8,6 +8,7 @@ import pytest
 
 from prismql.backends.memory import MemoryBackend
 from prismql.engine import PrismQLEngine
+from prismql.exceptions import PrismQLRuntimeError
 from prismql.mentions import find_mentions, mention_pattern
 
 DOCS = [
@@ -117,7 +118,9 @@ def test_an_ingested_mentions_column_is_the_answer():
     docs[0]["mentions"] = ["cy"]  # the column says cy, whatever the text says
     for d in docs[1:]:
         d["mentions"] = []
-    e = PrismQLEngine(MemoryBackend(docs), actor_field="agent")
+    e = PrismQLEngine(
+        MemoryBackend(docs), actor_field="agent", mentions_column="mentions"
+    )
     assert e.execute("SELECT mentions_user(cy)") == [[1]]
     assert e.execute("SELECT mentions_user(bob)") == []
 
@@ -149,3 +152,100 @@ def test_ingest_writes_mentions_and_the_server_reads_them(tmp_path):
     engine = build_engine(ServerConfig(data=str(path), board_fields={"actor": "agent"}))
     q = "SELECT mentions_user($y) FOLLOWED_BY field(agent, $y) INWINDOW 2"
     assert engine.execute(q) == [[1, 2]]
+
+
+# --- one name per group (cold review): $y is the name a group settles on,
+# not the whole list of names a message mentions
+
+
+@BOTH
+def test_a_chain_settles_on_one_addressed_name(use_ir):
+    # 4 addresses GPT-5 and Claude Opus 4.5; 5 (GPT-5) answers first, so
+    # $y is GPT-5 for the rest of the chain: Claude's 6 cannot be its third
+    q = (
+        "SELECT mentions_user($y) FOLLOWED_BY field(agent, $y) "
+        "FOLLOWED_BY field(agent, $y) INWINDOW 3"
+    )
+    assert _engine(use_ir).execute(q) == []
+
+
+@BOTH
+def test_a_row_shares_one_name_among_all_its_members(use_ir):
+    e = _engine(use_ir)
+    q = "SELECT mentions_user($y), field(agent, $y), field(agent, $y) INWINDOW 3"
+    assert e.execute(q) == []  # 5 and 6 are two different addressees
+    docs = [
+        {"id": 1, "agent": "a", "text": "@x @y"},
+        {"id": 2, "agent": "b", "text": "@x"},
+        {"id": 3, "agent": "c", "text": "@y"},
+        {"id": 4, "agent": "x", "text": "."},
+        {"id": 5, "agent": "y", "text": "."},
+    ]
+    # 1, 2 and 3 share no single name (x is not in 3, y is not in 2)
+    assert _engine(use_ir, docs).execute("SELECT mentions_user($y){3} INWINDOW 3") == []
+
+
+@BOTH
+def test_not_the_addressed_keeps_out_an_answer_with_no_author(use_ir):
+    docs = [
+        {"id": 1, "agent": "ada", "text": "@bob ?"},
+        {"id": 2, "text": "system notice"},
+        {"id": 3, "agent": "bob", "text": "hi"},
+    ]
+    q = "SELECT mentions_user($y) FOLLOWED_BY field(agent, !$y) INWINDOW 1"
+    assert _engine(use_ir, docs).execute(q) == []  # as for any field: null is no value
+
+
+def test_numeric_authors_are_names_too():
+    docs = [
+        {"id": 1, "agent": 7, "text": "@8 ping"},
+        {"id": 2, "agent": 8, "text": "pong"},
+    ]
+    q = "SELECT mentions_user($y) FOLLOWED_BY field(agent, $y) INWINDOW 2"
+    assert _engine(True, docs).execute(q) == [[1, 2]]
+
+
+def test_an_unstamped_mentions_field_is_the_users_own():
+    docs = [dict(d) for d in DOCS]
+    docs[0]["mentions"] = [101, 102]  # some other meaning of the word
+    e = PrismQLEngine(MemoryBackend(docs), actor_field="agent")
+    assert e.execute("SELECT mentions_user(bob)") == [[1], [6]]
+    assert docs[0]["mentions"] == [101, 102]  # left as it was
+
+
+def test_a_precomputed_index_answers_names_and_star_but_cannot_bind():
+    from prismql.backends.base import PrecomputedIndexes
+
+    e = PrismQLEngine(
+        MemoryBackend([dict(d) for d in DOCS]),
+        precomputed_indexes=PrecomputedIndexes(user_mentions={"bob": {1}}),
+        actor_field="agent",
+    )
+    assert e.execute("SELECT mentions_user(bob)") == [[1]]
+    assert e.execute("SELECT mentions_user(*)") == [[1]]
+    with pytest.raises(PrismQLRuntimeError, match="user_mentions"):
+        e.execute("SELECT mentions_user($y) FOLLOWED_BY field(agent, $y) INWINDOW 3")
+
+
+def test_a_backend_that_cannot_hold_them_says_so():
+    pytest.importorskip("tantivy")
+    from prismql.backends.tantivy import TantivyBackend
+
+    e = PrismQLEngine(TantivyBackend([dict(d) for d in DOCS]), actor_field="agent")
+    with pytest.raises(PrismQLRuntimeError, match="--annotate mentions"):
+        e.execute("SELECT mentions_user(bob)")
+
+
+@BOTH
+def test_a_quoted_from_is_always_a_name(use_ir):
+    docs = [{"id": 1, "user": "*", "text": "x"}, {"id": 2, "user": "ada", "text": "y"}]
+    e = PrismQLEngine(MemoryBackend(docs), use_ir=use_ir)
+    assert e.execute('SELECT from("*")') == [[1]]
+    assert e.execute("SELECT from(*)") == [[1], [2]]
+
+
+def test_quoted_from_lowers_alike_in_both_dialects():
+    from prismql.dialects.pipe import parse_pipe
+
+    e = _engine()
+    assert parse_pipe('from("*")') == e.to_ir('SELECT from("*")')

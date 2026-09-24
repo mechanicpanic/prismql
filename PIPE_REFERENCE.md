@@ -37,7 +37,7 @@ contains_tokens(dictionary_name)  -- Token-based matching (preserves C++, emails
 contains_phrase("phrase")         -- Exact phrase matching
 is_question()                     -- Messages that are questions
 has_feature(feature_name)         -- Messages with custom annotated feature
-mentions_user(name)               -- Messages that @mention an author (a $var binds each name)
+mentions_user(name)               -- Messages that @mention an author (a $var binds one of the names)
 mentions_date()                   -- Messages mentioning dates
 mentions_time()                   -- Messages mentioning times
 mentions_place()                  -- Messages mentioning locations
@@ -50,13 +50,16 @@ similar_to("text", threshold)     -- Semantically similar messages (embedding co
 of the corpus's authors has — the author field is the server's
 `board.actor` (in the engine, `actor_field`; default `user`) — the longest
 that fits, any case; an e-mail address (`cy@bob.org`) is not one. Names
-with spaces or dots go in quotes: `mentions_user("Claude Opus 4.5")`, and
-so may `from("GPT-5.4")`. `mentions_user(*)` is every message with a
-mention. `mentions_user($y)` binds `$y` to each name the message
-mentions, so a later link can ask for that author:
+with spaces or dots go in quotes: `mentions_user("Claude Opus 4.5")`,
+`field(agent, "GPT-5.4")` (`from()` reads the `user` field only; quote a
+name there too). `mentions_user(*)` is every message with a mention.
+`mentions_user($y)` binds `$y` to a name the message mentions — the group
+settles on the one a later link matches, so a later link can ask for that
+author:
 `mentions_user($y) ~> field(agent, $y) |> during(10m)`
 — a message addressing someone, answered by them; `field(agent, !$y)`
-asks for anyone else. Copies bound to one variable (`mentions_user($y){2}`,
+asks for anyone else (an event with no author is no one). Copies bound to
+one variable (`mentions_user($y){2}`,
 a `+` row) share a mentioned name. Mentions come from a `mentions`
 column (`prismql ingest … --annotate mentions --actor agent`) or are found
 once at load.

@@ -57,40 +57,65 @@ def find_mentions(text: str, names: Names) -> list[str]:
 
 
 class Mentions:
-    """Every event's mentions, and the events mentioning each name."""
+    """Every event's mentions, the column the operator layer reads them
+    from, and the events mentioning each name."""
 
-    def __init__(self, docs: Sequence[dict[str, Any]], id_field: str) -> None:
+    def __init__(
+        self, field: str, ids: Sequence[MessageId], lists: Sequence[Any]
+    ) -> None:
+        self.field = field
         self.by_name: dict[str, set[MessageId]] = {}
         self.any: set[MessageId] = set()
-        for doc in docs:
-            names = doc.get(MENTIONS_FIELD) or []
-            for name in names:
-                self.by_name.setdefault(str(name).lower(), set()).add(doc[id_field])
+        for doc_id, names in zip(ids, lists, strict=True):
+            for name in names or []:
+                self.by_name.setdefault(str(name).lower(), set()).add(doc_id)
             if names:
-                self.any.add(doc[id_field])
+                self.any.add(doc_id)
 
     def ids(self, name: str) -> set[MessageId]:
         return self.by_name.get(name.lower(), set())
 
 
-def mentions_of(backend: Any, actor_field: str, text_fields: Sequence[str]) -> Mentions:
-    """The corpus's mentions, found once and kept on the backend: events
-    that already carry a ``mentions`` list are taken as they are."""
+def _refuse(why: str) -> PrismQLRuntimeError:
+    return PrismQLRuntimeError(
+        f"mentions_user() has no backing here: {why}. Annotate at ingest "
+        "(prismql ingest … --annotate mentions --actor <author column>) and "
+        "load that file."
+    )
+
+
+def mentions_of(
+    backend: Any,
+    actor_field: str,
+    text_fields: Sequence[str],
+    column: str | None = None,
+) -> Mentions:
+    """The corpus's mentions, kept on the backend. ``column`` names an
+    ingest-stamped ``mentions`` column, read as it is; without one they are
+    found once in the text and written onto the events under a field of
+    their own (``_mentions:<actor field>``), never over the user's data —
+    which only a backend that reads fields from its events can hold."""
+    field = column or f"_mentions:{actor_field}"
     with _lock:
-        cached = getattr(backend, "_prismql_mentions", None)
-        if cached is not None and cached[0] == actor_field:
-            known: Mentions = cached[1]
-            return known
-        docs = getattr(backend, "documents", None)
-        if not isinstance(docs, list):
-            raise PrismQLRuntimeError(
-                "mentions_user() has no backing here: this index keeps no events "
-                "to read mentions from. Annotate at ingest (prismql ingest … "
-                "--annotate mentions --actor <author column>)."
-            )
-        id_field = getattr(backend, "id_field", "id")
-        if not any(isinstance(d.get(MENTIONS_FIELD), list) for d in docs):
-            pattern = mention_pattern(
+        cache: dict[str, Mentions] = backend.__dict__.setdefault(
+            "_prismql_mentions", {}
+        )
+        if field in cache:
+            return cache[field]
+        positions = list(range(backend.get_total_documents()))
+        ids = backend.ids_at(positions)
+        values_at = getattr(backend, "values_at", None)
+        if column is not None:
+            lists = values_at(positions, column) if values_at is not None else None
+            if lists is None:
+                raise _refuse(
+                    f"this backend cannot read the {column!r} column by position"
+                )
+        else:
+            docs = getattr(backend, "documents", None)
+            if not isinstance(docs, list) or values_at is None:
+                raise _refuse("this index keeps no events to write mentions onto")
+            names = mention_pattern(
                 str(d[actor_field]) for d in docs if d.get(actor_field) is not None
             )
             for d in docs:
@@ -98,11 +123,12 @@ def mentions_of(backend: Any, actor_field: str, text_fields: Sequence[str]) -> M
                 for f in text_fields:
                     if d.get(f) is not None:
                         found += [
-                            n
-                            for n in find_mentions(str(d[f]), pattern)
-                            if n not in found
+                            n for n in find_mentions(str(d[f]), names) if n not in found
                         ]
-                d[MENTIONS_FIELD] = found
-        result = Mentions(docs, id_field)
-        backend._prismql_mentions = (actor_field, result)
+                d[field] = found
+            lists = values_at(positions, field)
+            if lists is None or (docs and lists[0] != docs[0][field]):
+                raise _refuse("this backend does not read fields from its events")
+        result = Mentions(field, ids, lists)
+        cache[field] = result
         return result

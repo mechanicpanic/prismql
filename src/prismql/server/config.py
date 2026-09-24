@@ -462,7 +462,14 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         text_match=config.text_match,
         quantifier_ceiling=config.quantifier_ceiling,
         actor_field=actor_field(config),
+        mentions_column="mentions" if "mentions" in _stamped(config) else None,
     )
+
+
+def _stamped(config: ServerConfig | CorpusConfig) -> tuple[str, ...]:
+    from ..ingest.annotate import stamped_kinds
+
+    return stamped_kinds(config.data) if config.data else ()
 
 
 def actor_field(config: ServerConfig | CorpusConfig) -> str:
