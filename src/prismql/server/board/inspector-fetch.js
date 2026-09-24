@@ -65,7 +65,7 @@
     var rec = { status: "loading" };
     var gen = generation;
     pageCache[key] = rec;
-    window.PrismQLApi.page(rid, { offset: offset, limit: limit, hydrate: true, fields: fields.join(",") })
+    window.PrismQLApi.page(rid, { offset: offset, limit: limit, hydrate: true, fields: fields.join(","), explain: true })
       .then(function (data) { settle(key, rec, gen, data); })
       .catch(function (e) { markFailed(key, rec, gen, { message: String((e && e.message) || e) }); });
     return rec;

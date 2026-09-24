@@ -26,6 +26,31 @@ def _times(backend: Any, positions: list[int], field: str) -> list[str | None]:
     return [iso_micros(v) for v in raw]
 
 
+def _documents(
+    backend: Any,
+    ids: list[Any],
+    id_field: str,
+    fields: list[str] | None,
+    hydrate: bool,
+    explainer: Any,
+) -> tuple[dict[Any, dict[str, Any]], dict[Any, list[dict[str, Any]]]]:
+    """The page's events by id (projected to ``fields``) and, with an
+    explainer, why each is there — read from the whole event, since the
+    projection may leave its text out (graph @aleph/prismql, #119)."""
+    by_id: dict[Any, dict[str, Any]] = {}
+    why: dict[Any, list[dict[str, Any]]] = {}
+    if not ids or not (hydrate or explainer is not None):
+        return by_id, why
+    for doc in backend.get_documents(list(dict.fromkeys(ids))):
+        doc_id = doc.get(id_field)
+        if explainer is not None:
+            why[doc_id] = explainer.explain(doc, id_field)
+        if fields is not None:
+            doc = {k: doc[k] for k in [id_field, *fields] if k in doc}
+        by_id[doc_id] = doc
+    return by_id, why
+
+
 def page_payload(
     result: StoredResult,
     backend: Any,
@@ -36,17 +61,13 @@ def page_payload(
     limit: int,
     hydrate: bool,
     fields: list[str] | None,
+    explainer: Any = None,
 ) -> dict[str, Any]:
     window = result.window(offset, limit)
     flat = [p for positions, _ in window for p in positions]
     ids = backend.ids_at(flat)
     times = _times(backend, flat, time_field)
-    by_id: dict[Any, dict[str, Any]] = {}
-    if hydrate and ids:
-        for doc in backend.get_documents(list(dict.fromkeys(ids))):
-            if fields is not None:
-                doc = {k: doc[k] for k in [id_field, *fields] if k in doc}
-            by_id[doc.get(id_field)] = doc
+    by_id, why = _documents(backend, ids, id_field, fields, hydrate, explainer)
     payload: dict[str, Any] = {
         "kind": result.kind,
         "total": result.total,
@@ -73,6 +94,8 @@ def page_payload(
             item = {"ids": span_ids, "positions": positions, "times": span_times}
             if hydrate:
                 item["events"] = [by_id[i] for i in span_ids if i in by_id]
+            if explainer is not None:
+                item["explain"] = [why.get(i, []) for i in span_ids]
         items.append(item)
     if result.kind == "hits":
         payload["kept"] = len(result)

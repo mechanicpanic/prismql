@@ -121,6 +121,9 @@ Can:
   for ids and scores only, or `output: "file"` to keep the hits out of its
   context entirely (scouting to a file writes up to `scout_depth` hits; the
   request's own `limit` no longer narrows that file);
+- see why each event is there: `"explain": true` on `/evaluate` gives, per
+  event, the conditions it satisfies with the matched terms and their
+  offsets, and the `similar_to` score;
 - read around a finding: `GET /context?id=<id>&minutes=10&same=agent` gives
   the events before and after one event (the same agent's, or every event
   without `same`), so it can check a hit before calling it anything;

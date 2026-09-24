@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (why an event is in the result)
+- `"explain": true` on `/evaluate` and `?explain=true` on `GET /results/<id>` add, per event of each group, the query's conditions it satisfies: text conditions with the matched term, field and character offsets (cut and stemmed as the index does; checked against the tantivy index in tests), `similar_to` with its cosine, `field(…)` by name; conditions under `NOT` are left out. The explanation is kept with the result, so a later page is explained too, request dictionaries included. The board marks the matched words in an event's text (inspector and full view) and shows the similarity score (graph @aleph/prismql, #119). `SemanticIndex` gains `query_vector` and `cosine`.
+
 ### Added (the events around an event)
 - `GET /context?corpus=…&id=…` returns the events around one event in stream order, each with its offset, time and fields: `before`/`after` events (10 each, at most 200) or `minutes` either side, and `same=<field>` for only those sharing that field's value. Values are read by position, documents only for the events returned. On the board, *context* on an event (groups and hits) opens the same actor's neighbours within ten minutes, with a switch to every event (graph @aleph/prismql, #120).
 

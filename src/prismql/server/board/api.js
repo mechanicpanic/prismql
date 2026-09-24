@@ -93,6 +93,7 @@
     if (opts.limit != null) params.set("limit", opts.limit);
     if (opts.hydrate != null) params.set("hydrate", opts.hydrate);
     if (opts.fields != null) params.set("fields", opts.fields);
+    if (opts.explain) params.set("explain", "true"); // why each event is there (#119)
     const url = "/results/" + encodeURIComponent(rid) + "?" + params.toString();
     const r = await fetch(url);
     if (r.status === 404) return { gone: true };

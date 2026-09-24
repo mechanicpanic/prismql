@@ -31,7 +31,12 @@
     tr.appendChild(mk("span", "m", r.ts != null ? r.ts : ""));
     if (board.kind) tr.appendChild(mk("span", "k", r.kind != null ? String(r.kind) : ""));
     if (board.actor) tr.appendChild(mk("span", "a", r.actor != null ? String(r.actor) : ""));
-    tr.appendChild(mk("span", "x", r.text != null ? String(r.text) : "—"));
+    var x = mk("span", "x", r.parts ? null : r.text != null ? String(r.text) : "—");
+    // matched spans marked (#119)
+    (r.parts || []).forEach(function (p) {
+      x.appendChild(p.m ? mk("mark", null, p.t) : document.createTextNode(p.t));
+    });
+    tr.appendChild(x);
     return tr;
   }
   // A rows result's table row: just key/value, no board-dependent columns

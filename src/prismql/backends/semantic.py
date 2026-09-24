@@ -160,6 +160,23 @@ class SemanticIndex:
     def __len__(self) -> int:
         return len(self._ids)
 
+    def query_vector(self, text: str) -> list[float]:
+        """``text`` encoded and unit-normalized, as ``search`` scores it."""
+        return _normalize(self.embedder.encode([text])[0])
+
+    def cosine(self, query: Sequence[float], doc_id: MessageId) -> float | None:
+        """One event's cosine with an encoded query; None if not indexed.
+        For explaining a few events, not for scoring the corpus (#119)."""
+        rows: dict[MessageId, int] | None = getattr(self, "_row_of", None)
+        if rows is None:
+            rows = {i: r for r, i in enumerate(self._ids)}
+            self._row_of = rows
+        row = rows.get(doc_id)
+        if row is None:
+            return None
+        vector = self._matrix[row] if self._matrix is not None else self._vectors[row]
+        return float(sum(q * float(v) for q, v in zip(query, vector, strict=False)))
+
     def _scores(self, text: str) -> Any:
         query = _normalize(self.embedder.encode([text])[0])
         if self._matrix is not None:

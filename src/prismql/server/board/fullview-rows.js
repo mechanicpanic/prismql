@@ -61,6 +61,7 @@
           ts: shortTime((g.times || [])[j]),
           kind: fieldOf(ev, board.kind), actor: fieldOf(ev, board.actor),
           text: ev && ev.text != null ? ev.text : null,
+          parts: ev && ev.text != null ? EXF.textParts(ev.text, (g.explain || [])[j]) : null,
         });
       });
     });
@@ -93,6 +94,8 @@
     });
   }
 
+  var EXF = typeof module === "object" && module.exports
+    ? require("./explain-format.js") : root.PrismQLExplainFormat;
   // The timeline's shaping lives in fullview-timeline-logic.js; exported
   // here too so callers keep one name for the full view's row shaping.
   var TL = typeof module === "object" && module.exports

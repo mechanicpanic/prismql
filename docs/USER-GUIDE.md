@@ -571,6 +571,10 @@ sentence, ranked by meaning, with an optional *threshold*). Either answer
 opens in the Request tab like a query's and pages through everything the
 server kept (`[server] scout_depth`, 1000 by default).
 
+The words that made an event match are marked in its text — in the Request
+tab and in the full view — and a `similar_to` match shows its score next to
+the time. The same is `"explain": true` on `/evaluate`.
+
 *context* on an event in the Request tab lists what happened around it:
 the same actor's events within ten minutes before and after (or every
 event, one click away), the event itself highlighted. The same is

@@ -56,6 +56,9 @@ class StoredResult:
     function: str | None = None
     field_name: str | None = None
     _rows_nbytes: int = 0
+    # why each event is here (graph @aleph/prismql, #119): built from the
+    # query and the engine that ran it, request dictionaries included
+    explainer: Any = None
 
     @classmethod
     def from_rows(

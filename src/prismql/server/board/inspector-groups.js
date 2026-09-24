@@ -12,6 +12,7 @@
   var PL = window.PrismQLInspectorPageLogic;
   var PF = window.PrismQLInspectorFetch;
   var CTX = window.PrismQLInspectorContext;
+  var EX = window.PrismQLExplainFormat;
 
   // "Show 2 more" only advances how many groups THIS seq wants shown; a
   // fresh selection starts back at 2 (design canvas's `select()`).
@@ -29,7 +30,15 @@
     if (window.PrismQLBoard) window.PrismQLBoard.render();
   }
 
-  function evDiv(n, event, timeIso, board, corpus, id) {
+  function markedText(text, why) {
+    var x = mk("div", "x");
+    EX.textParts(text, why).forEach(function (part) {
+      x.appendChild(part.m ? mk("mark", null, part.t) : document.createTextNode(part.t));
+    });
+    return x;
+  }
+
+  function evDiv(n, event, timeIso, board, corpus, id, why) {
     var div = mk("div", "ev");
     var spine = mk("div", "spine");
     spine.appendChild(mk("div", "n", String(n)));
@@ -39,10 +48,12 @@
     var l = mk("div", "l");
     UI.kindActorSpans(l, event, board);
     l.appendChild(mk("span", "t", timeIso ? IF.localDateTime(timeIso) : ""));
+    EX.scores(why).forEach(function (s) { l.appendChild(mk("span", "why", "similar " + s)); });
+    EX.elsewhere(why).forEach(function (s) { l.appendChild(mk("span", "why", s)); });
     if (id != null) l.appendChild(CTX.button(corpus, id));
     right.appendChild(l);
     var text = event && event.text;
-    if (text) right.appendChild(mk("div", "x", String(text)));
+    if (text) right.appendChild(markedText(text, why));
     var around = id != null ? CTX.block(corpus, id, board) : null;
     if (around) right.appendChild(around);
     div.appendChild(right);
@@ -68,7 +79,7 @@
     var slots = PL.pairEventsToSlots(ids, g.events, idField);
     for (var j = 0; j < ids.length; j++) {
       if (j > 0) div.appendChild(gapDiv(positions[j - 1], positions[j], times[j - 1], times[j]));
-      div.appendChild(evDiv(j + 1, slots[j], times[j], board, corpus, ids[j]));
+      div.appendChild(evDiv(j + 1, slots[j], times[j], board, corpus, ids[j], (g.explain || [])[j]));
     }
     return div;
   }

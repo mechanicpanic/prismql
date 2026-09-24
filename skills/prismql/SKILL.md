@@ -92,6 +92,15 @@ real question with `/evaluate`. Hits are `{"id", "score"[, "event"]}`, kept
 server-side under a `result_id` exactly like a match result — page them the
 same way.
 
+**Ask why an event is there.** `"explain": true` on `/evaluate` (or
+`?explain=true` on `GET /results/<id>`) adds `explain` to each group: per
+event, the conditions it satisfies — `{"predicate": "contains(evalaware)",
+"matches": [{"term", "field", "start", "end"}]}` with character offsets
+into that field, `{"predicate": "similar_to(…)", "score": 0.61}`, or just
+the name for `field(…)`. Conditions under `NOT` never appear. Use it to
+tell a dictionary that is too broad from a hit whose word sits past what
+you read — before you narrow the dictionary.
+
 **Read around an event before you name what it is.** `GET /context?id=<id>&
 minutes=10&same=agent` returns the events around one event in stream order
 — within ten minutes before and after, only those with the same `agent` —

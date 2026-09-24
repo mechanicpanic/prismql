@@ -26,7 +26,7 @@
     var groups = res.items.map(function (g, i) {
       return {
         n: i + 1, ids: g.ids, positions: g.positions, times: g.times,
-        slots: PL.pairEventsToSlots(g.ids, g.events, idField), raw: g,
+        slots: PL.pairEventsToSlots(g.ids, g.events, idField), explain: g.explain, raw: g,
       };
     });
     var q = vs.q.trim().toLowerCase();

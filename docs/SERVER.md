@@ -11,7 +11,9 @@ What you get from `prismql-server --config prismql.toml`:
   full-text), `POST /similar` (ranked by meaning), `GET /schema`,
   `GET /corpora`, `GET /reference`, `GET /health`, result pages under
   `GET /results/<id>`, and `GET /context` — the events around one event
-  (`id`, `before`/`after` or `minutes`, `same=<field>`);
+  (`id`, `before`/`after` or `minutes`, `same=<field>`). `"explain": true`
+  on `/evaluate` (`?explain=true` on a result page) says per event which
+  conditions it satisfies: matched terms with offsets, similarity scores;
 - the board at `/board/` — every request anyone sends, live, with an editor;
 - any number of corpora, each loaded once at start and held in memory.
 

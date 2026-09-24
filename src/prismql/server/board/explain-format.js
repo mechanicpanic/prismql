@@ -1,0 +1,57 @@
+// PrismQLExplainFormat: an event's explanation (graph @aleph/prismql, #119)
+// as the board shows it — the matched spans of its text marked, the
+// similarity scores, and terms matched in fields the board does not show.
+// Pure, unit-tested under node.
+(function (root) {
+  "use strict";
+
+  // The text split into {t, m} parts, m = inside a matched span. Spans come
+  // from the server's offsets on the `text` field; overlaps merge.
+  function textParts(text, why) {
+    text = text == null ? "" : String(text);
+    var spans = [];
+    (why || []).forEach(function (p) {
+      (p.matches || []).forEach(function (m) {
+        if (m.field === "text" && m.end > m.start && m.end <= text.length) spans.push([m.start, m.end]);
+      });
+    });
+    if (!spans.length) return [{ t: text, m: false }];
+    spans.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+    var merged = [spans[0].slice()];
+    for (var i = 1; i < spans.length; i++) {
+      var last = merged[merged.length - 1];
+      if (spans[i][0] <= last[1]) last[1] = Math.max(last[1], spans[i][1]);
+      else merged.push(spans[i].slice());
+    }
+    var parts = [], at = 0;
+    merged.forEach(function (s) {
+      if (s[0] > at) parts.push({ t: text.slice(at, s[0]), m: false });
+      parts.push({ t: text.slice(s[0], s[1]), m: true });
+      at = s[1];
+    });
+    if (at < text.length) parts.push({ t: text.slice(at), m: false });
+    return parts;
+  }
+
+  // "0.612" for each similar_to the event satisfies.
+  function scores(why) {
+    return (why || []).filter(function (p) { return p.score != null; })
+      .map(function (p) { return Number(p.score).toFixed(3); });
+  }
+
+  // Terms that matched outside `text` ("content: sign in"), which the
+  // marked text cannot show.
+  function elsewhere(why) {
+    var out = [];
+    (why || []).forEach(function (p) {
+      (p.matches || []).forEach(function (m) {
+        if (m.field !== "text") out.push(m.field + ": " + m.term);
+      });
+    });
+    return out;
+  }
+
+  var api = { textParts: textParts, scores: scores, elsewhere: elsewhere };
+  if (typeof module === "object" && module.exports) module.exports = api;
+  else root.PrismQLExplainFormat = api;
+})(typeof window !== "undefined" ? window : globalThis);

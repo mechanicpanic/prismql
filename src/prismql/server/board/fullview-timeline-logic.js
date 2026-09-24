@@ -34,6 +34,7 @@
         hms: t != null ? F.hms(t) : "", date: t != null ? IF.localDateTime(t).split(" ")[0] : "",
         kind: fieldOf(ev, board.kind), actor: fieldOf(ev, board.actor),
         text: ev && ev.text != null ? ev.text : null,
+        why: (group.explain || [])[j] || null,
       });
     }
     return items;

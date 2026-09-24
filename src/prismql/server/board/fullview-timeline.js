@@ -38,7 +38,14 @@
     if (it.actor != null) l.appendChild(mk("span", "a", String(it.actor)));
     l.appendChild(mk("span", "e", it.label || "event " + it.n));
     card.appendChild(l);
-    if (it.text != null) card.appendChild(mk("div", "x", String(it.text)));
+    if (it.text != null) {
+      // matched spans marked (#119)
+      var x = mk("div", "x");
+      window.PrismQLExplainFormat.textParts(it.text, it.why).forEach(function (p) {
+        x.appendChild(p.m ? mk("mark", null, p.t) : document.createTextNode(p.t));
+      });
+      card.appendChild(x);
+    }
     row.appendChild(card);
     return row;
   }

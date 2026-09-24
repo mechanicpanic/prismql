@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from ..aggregators.types import AggregateResult, GroupedResult
 from ..exceptions import PrismQLRuntimeError, PrismQLSyntaxError
+from ..explain import Explainer
 from ..reference import load_reference
 from ..types import NamedQueryResult
 from .config import (
@@ -64,6 +65,8 @@ class SimilarRequest(BaseModel):
 
 class EvaluateRequest(BaseModel):
     query: str
+    # per event, the conditions it satisfies and what matched (#119)
+    explain: bool = False
     max_results: int | None = Field(default=None, ge=1)
     hydrate: bool | None = None
     # hydrate only these event fields (plus the id); None = all
@@ -598,6 +601,9 @@ def create_app(config: ServerConfig) -> FastAPI:
                     labels,
                     load=load,
                 )
+                # kept with the result: a later page can still be explained,
+                # request dictionaries included (graph @aleph/prismql, #119)
+                stored.explainer = Explainer.build(engine, engine.to_ir(req.query))
                 rid = state.results.put(stored)
                 page = partial(
                     page_payload,
@@ -608,6 +614,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                     offset=0,
                     hydrate=hydrate,
                     fields=req.fields,
+                    explainer=stored.explainer if req.explain else None,
                 )
                 if file_mode:
                     # Capped (was 2**31): a broad query against a large
@@ -1117,6 +1124,7 @@ def create_app(config: ServerConfig) -> FastAPI:
         limit: int = 20,
         hydrate: bool | None = None,
         fields: str | None = None,
+        explain: bool = False,
     ) -> Any:
         if _rate_limited(_client_ip(request)):
             return _rate_limit_response()
@@ -1139,6 +1147,7 @@ def create_app(config: ServerConfig) -> FastAPI:
             time_field=corpus_cfg.timestamp_field,
             offset=max(0, offset),
             limit=max(1, min(limit, config.max_results)),
+            explainer=stored.explainer if explain else None,
             **_page_args(hydrate, fields),
         )
         return {"ok": True, "result_id": rid, **payload}
