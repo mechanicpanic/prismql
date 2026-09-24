@@ -11,8 +11,8 @@ SELECT <restrictions>
     [INWINDOW N | DURING N <unit>]
     [BEFORE(ts) | AFTER(ts) | BETWEEN(ts, ts)]
     [GROUP BY field [, ...]]
-    [AGGREGATE func() [, ...]]
-    [ORDER BY field [ASC|DESC]]
+    [AGGREGATE func()]
+    [ORDER BY field [, ...] [ASC|DESC]]
     [LIMIT N [OFFSET M]]
 ```
 
@@ -245,6 +245,16 @@ Functions: `count()`, `count(DISTINCT field)`, `distinct(field)`,
 `AGGREGATE count()`, never `AGGREGATE count`. `GROUP BY` is supported,
 over plain fields and temporal units (`hour(ts)`, `day(ts)`, `week(ts)`,
 `month(ts)`, `year(ts)`).
+
+**One function per query**: `AGGREGATE count(), sum(x)` is an error — run
+one query per function.
+
+**ORDER BY** sorts groups by the fields' values on each group's first
+event: `SELECT from(alice) ORDER BY timestamp DESC`. Several fields sort by
+their values in order; one `ASC`/`DESC`, written once after the last field,
+applies to all of them (a mix is an error). A group whose first event lacks
+a field goes last; equal values keep stream order. A field no event in the
+result has, or values of mixed types, is an error.
 
 ### 8. Subqueries
 
