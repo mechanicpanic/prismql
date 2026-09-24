@@ -3,8 +3,8 @@
 ### Added (docs)
 - `docs/SERVER.md`: running the server on one page — extras, preparing a corpus with `prismql ingest` (annotations, embeddings with prompts, or outside vectors and the metadata contract they must carry), every `prismql.toml` key with its default (from `server/config.py`), start-up time and memory measured on Village, the board and client names, restart and reload, MCP, and a symptom table. Followed end to end on a five-event corpus (graph @aleph/prismql, #116).
 
-### Pinned (silent-wrong)
-- `DURING` on a corpus whose events lack the configured `timestamp_field` (default `timestamp`; `prismql ingest` writes `time`) returns an empty set with no error — `xfail(strict)` in `tests/test_during_missing_timestamp_pinned.py` (#117).
+### Fixed (time queries on a missing time field)
+- A query that measures time (`DURING`, `BEFORE`, `AFTER`, `BETWEEN`) on a corpus where no event has a time in `timestamp_field` is an error naming the columns that hold times; it used to return an empty set. `prismql.toml` without time keys takes `timestamp` if the file has it, else `time` (what `prismql ingest` writes); one of `timestamp_fields`/`timestamp_field` gives the other (#117). Queries that relied on the empty answer over timeless data now raise.
 
 ### Added (contains_link without an extractor)
 - `contains_link()` answers on any corpus: a link is the tokenizer's URL token (`http://`/`https://` up to whitespace, one rule in `prismql.tokenizers.URL_SHAPE`). `prismql ingest … --annotate links` writes a `has_link` column the server reads; without it the rule runs once at load, as for `is_question()`; an extractor's `URL` entities still count. It used to look up a URL entity label spaCy never sets, so it always refused (graph @aleph/prismql, #115). `PrecomputedIndexes` takes `links=`.

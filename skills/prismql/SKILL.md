@@ -38,11 +38,10 @@ outright:
   read from JSON or CSV shows as `"str"` even though the engine parsed it.
   That field does not tell you whether the time axis works.
 - the top-level `timestamp_field` is the axis `DURING` measures on, and it
-  must name a field that appears in `fields`. When it names one that is
-  absent — its default is `timestamp`, so a corpus whose column is `time`
-  plus a half-written config shows exactly that — every `DURING` query
-  answers zero groups and no error. Say that to the person rather than
-  reporting "no matches".
+  must name a field that appears in `fields`. When no event has a time in
+  it, a time query stops with an error that names the columns that do hold
+  times: say that to the person and fix the config, rather than rewriting
+  the query.
 
 ```bash
 curl -s -X POST localhost:8901/evaluate -H 'Content-Type: application/json' \
@@ -160,9 +159,10 @@ uv sync --extra server                  # from a clone; not on PyPI yet
 uv run --extra server prismql-server --config prismql.toml
 ```
 
-**Both timestamp keys are required.** Without `[engine].timestamp_field` a
-`DURING` query returns an empty result, not an error. Stream order is the
-file order; ids are labels and may be strings.
+One timestamp key is enough: the other follows, and with neither the server
+takes `timestamp` if the file has it, else `time`; a time query over a field
+without times is an error, not an empty answer. Stream order is the file
+order; ids are labels and may be strings.
 
 A table in the wrong order or shape, or a harness log folder, becomes that
 file through `prismql ingest`: `prismql ingest table SRC DST.parquet --id COL

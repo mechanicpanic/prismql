@@ -19,6 +19,7 @@ from .grammar.generated.PrismQLLexer import PrismQLLexer
 from .grammar.generated.PrismQLParser import PrismQLParser
 from .ir.executor import IRExecutor
 from .ir.lower import lower_query
+from .processors.time_field import has_time, measures_time, missing_time_error
 from .types import NamedQueryResult, QueryResult
 
 MATCH_MODES = ("stem", "token", "substring")
@@ -239,13 +240,17 @@ class PrismQLEngine:
         try:
             if resolved == "pipe":
                 # The pipe dialect exists only as an IR frontend.
-                result = self.visitor.execute(parse_pipe(query))
+                ir = parse_pipe(query)
+                self._check_time_field(ir)
+                result = self.visitor.execute(ir)
             else:
                 tree = self._parse_classic(query)
-                # Execute: lower to IR and run the executor (default), or
-                # walk the parse tree directly with the legacy visitor path.
+                ir = lower_query(tree)
+                self._check_time_field(ir)
+                # Execute: run the IR executor (default), or walk the parse
+                # tree directly with the legacy visitor path.
                 if self.use_ir:
-                    result = self.visitor.execute(lower_query(tree))
+                    result = self.visitor.execute(ir)
                 else:
                     result = self.visitor.visit(tree)
             # Return empty query result if None (shouldn't happen, but defensive)
@@ -263,6 +268,19 @@ class PrismQLEngine:
             raise PrismQLRuntimeError(
                 f"Error executing query: {str(e)}", query=query, cause=e
             ) from e
+
+    def _check_time_field(self, ir: Any) -> None:
+        """A query that measures time on a corpus with none in its time
+        field is refused, not answered empty (graph @aleph/prismql, #117).
+        Asked once per engine; the corpus does not change under it."""
+        if not measures_time(ir):
+            return
+        field = self.timestamp_field
+        known: dict[str, bool] = self.__dict__.setdefault("_time_present", {})
+        if field not in known:
+            known[field] = has_time(self.search_backend, field)
+        if not known[field]:
+            raise missing_time_error(self.search_backend, field)
 
     def to_ir(self, query: str, dialect: str = "auto") -> Any:
         """The query's IR (``ir.nodes.Query``) without executing it."""

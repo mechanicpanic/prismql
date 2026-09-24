@@ -127,8 +127,7 @@ results_dir = "results"
 
 [corpora.events]
 data = "events.parquet"
-timestamp_fields = ["time"]      # columns parsed as time
-timestamp_field = "time"         # the one DURING measures on — see below
+# timestamp_fields / timestamp_field: found in the file when left out (§3)
 text_index_path = "index/events" # keep the text index on disk
 
 [corpora.events.dictionaries]
@@ -140,12 +139,13 @@ kind = "kind"                    # the board shows these as an event's kind
 actor = "agent"                  # and who did it
 ```
 
-**Set both timestamp keys, and set them to the column that exists.** The
-default for both is `timestamp`; `prismql ingest` writes `time`. When no
-event has the `timestamp_field` column, every `DURING` query comes back
-**empty with no error**, while the same query with `INWINDOW` answers
-(pinned as a defect, graph @aleph/prismql #117). When a time query comes
-back empty, check this first.
+**The time keys.** `timestamp_fields` lists the columns parsed as time;
+`timestamp_field` is the one `DURING`, `BEFORE`, `AFTER` and `BETWEEN`
+measure on. Set neither and the server takes `timestamp` if the file has
+that column, else `time` (what `prismql ingest` writes). Set one and the
+other follows from it. A query that measures time on a corpus where no
+event has a time in that field is refused with an error naming the field
+and the columns that do hold times. It is never answered empty.
 
 ### `[server]`
 
@@ -175,8 +175,8 @@ back empty, check this first.
 | `type` | `memory` | `memory` (recommended), `tantivy` (a persisted tantivy backend; with `index_path`), `rust_memory` (needs the optional Rust build) |
 | `index_path` | none | `type = "tantivy"`: the index folder, opened if it exists |
 | `id_field` | `id` | the id column |
-| `timestamp_fields` | `["timestamp"]` | columns parsed as time |
-| `timestamp_field` | `timestamp` | the column `DURING` and time filters measure on |
+| `timestamp_fields` | `[timestamp_field]`, or `timestamp` / `time` from the file | columns parsed as time |
+| `timestamp_field` | the first of `timestamp_fields`, or `timestamp` / `time` from the file | the column `DURING` and time filters measure on |
 | `text_match` | `stem` | single-word `contains()`: `stem` (fail/failed/failing are one), `token` (whole word), `substring` |
 | `text_language` | `english` | stemmer language |
 | `text_index` | `tantivy` if installed | `tantivy` or `memory` (Python's own; the only one that answers `substring`) |
@@ -270,7 +270,7 @@ Restarting the process reloads every corpus. Two things differ:
 
 | You see | Likely cause |
 |---|---|
-| every `DURING` query is empty, `INWINDOW` answers | `timestamp_field` names a column the events do not have (§3) |
+| `This query measures time on the field '…', but no event in the corpus has a time there` | `timestamp_field` names a column without times; the message lists the ones that have them (§3) |
 | `similar_to()`: no semantic index | no stamped `emb` column and no `[corpora.<name>.semantic] model` |
 | `[prismql] … doc_prompt but no query_prompt` at start | the file was embedded with a document prompt only; re-ingest with `--query-prompt` |
 | `[semantic].model = … but the corpus was embedded with …` | the config names another model than the file's stamp; drop the config line |

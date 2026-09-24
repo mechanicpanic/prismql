@@ -139,6 +139,45 @@ class ServerConfig:
         return sorted(self.corpora) if self.corpora else [self.default_corpus]
 
 
+def _columns(data: str | None) -> set[str]:
+    """The field names of a corpus file, read from its header or first row."""
+    if data is None or not Path(data).exists():
+        return set()
+    p = Path(data)
+    suffix = p.suffix.lower()
+    if suffix == ".parquet":
+        import pyarrow.parquet as pq
+
+        return set(pq.read_schema(p).names)
+    with p.open(encoding="utf-8") as f:
+        if suffix == ".csv":
+            return set(f.readline().strip().split(","))
+        if suffix == ".jsonl":
+            first = next((line for line in f if line.strip()), "{}")
+            return set(json.loads(first))
+    if suffix == ".json":
+        rows = json.loads(p.read_text(encoding="utf-8"))
+        return set(rows[0]) if isinstance(rows, list) and rows else set()
+    return set()
+
+
+def _time_keys(
+    fields: list[str] | None, field_: str | None, data: str | None
+) -> tuple[list[str], str]:
+    """The corpus's time keys: given ones as given; one gives the other; with
+    neither, `timestamp` if the file has it, else `time` if it has that (as
+    prismql ingest writes it) (graph @aleph/prismql, #117)."""
+    if fields is not None and field_ is not None:
+        return list(fields), field_
+    if fields:
+        return list(fields), fields[0]
+    if field_ is not None:
+        return [field_], field_
+    columns = _columns(data)
+    name = "time" if "time" in columns and "timestamp" not in columns else "timestamp"
+    return [name], name
+
+
 def load_config(path: str | Path) -> ServerConfig:
     """Parse a prismql.toml file into a ServerConfig.
 
@@ -173,13 +212,17 @@ def load_config(path: str | Path) -> ServerConfig:
     corpora: dict[str, CorpusConfig] = {}
     for name, section in raw.get("corpora", {}).items():
         semantic_section = section.get("semantic", {})
+        corpus_data = _resolve(base, section.get("data"))
+        ts_fields, ts_field = _time_keys(
+            section.get("timestamp_fields"), section.get("timestamp_field"), corpus_data
+        )
         corpora[name] = CorpusConfig(
             backend_type=section.get("type", "memory").lower(),
-            data=_resolve(base, section.get("data")),
+            data=corpus_data,
             index_path=_resolve(base, section.get("index_path")),
             id_field=section.get("id_field", "id"),
-            timestamp_fields=list(section.get("timestamp_fields", ["timestamp"])),
-            timestamp_field=section.get("timestamp_field", "timestamp"),
+            timestamp_fields=ts_fields,
+            timestamp_field=ts_field,
             text_match=section.get("text_match", "stem"),
             text_language=section.get("text_language", "english"),
             text_index=section.get("text_index"),
@@ -213,6 +256,9 @@ def load_config(path: str | Path) -> ServerConfig:
     if scout_depth < 1:
         raise ValueError(f"[server].scout_depth must be >= 1; got {scout_depth}")
 
+    flat_ts_fields, flat_ts_field = _time_keys(
+        backend.get("timestamp_fields"), engine.get("timestamp_field"), data
+    )
     return ServerConfig(
         host=server.get("host", "127.0.0.1"),
         port=server.get("port", 8901),
@@ -222,8 +268,8 @@ def load_config(path: str | Path) -> ServerConfig:
         data=data,
         index_path=index_path,
         id_field=backend.get("id_field", "id"),
-        timestamp_fields=list(backend.get("timestamp_fields", ["timestamp"])),
-        timestamp_field=engine.get("timestamp_field", "timestamp"),
+        timestamp_fields=flat_ts_fields,
+        timestamp_field=flat_ts_field,
         text_match=engine.get("text_match", "stem"),
         text_language=engine.get("text_language", "english"),
         text_index=backend.get("text_index"),

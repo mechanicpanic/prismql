@@ -4,6 +4,7 @@ import pytest
 
 from prismql import AggregateResult, GroupedResult, PrismQLEngine
 from prismql.backends.memory import MemoryBackend
+from prismql.exceptions import PrismQLRuntimeError
 
 # Sample dataset for aggregation tests
 MESSAGES = [
@@ -205,19 +206,17 @@ class TestLimit:
 class TestTemporalWindows:
     """Test time-based window constraints."""
 
+    # These messages carry no time at all: a time window over them is
+    # refused, not answered empty (graph @aleph/prismql, #117).
     def test_within_minutes(self, engine):
         """Test WITHIN clause with minutes."""
-        # This should work syntactically even though it's converted to position-based
-        result = engine.execute("SELECT from(alice), from(bob) WITHIN 5 minutes")
-
-        # Should execute without error
-        assert isinstance(result, list)
+        with pytest.raises(PrismQLRuntimeError, match="measures time"):
+            engine.execute("SELECT from(alice), from(bob) WITHIN 5 minutes")
 
     def test_within_hours(self, engine):
         """Test WITHIN clause with hours."""
-        result = engine.execute("SELECT from(alice), from(bob) WITHIN 2 hours")
-
-        assert isinstance(result, list)
+        with pytest.raises(PrismQLRuntimeError, match="measures time"):
+            engine.execute("SELECT from(alice), from(bob) WITHIN 2 hours")
 
 
 class TestCombinedFeatures:

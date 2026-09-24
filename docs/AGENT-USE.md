@@ -43,10 +43,12 @@ timestamp_field = "time"     # the axis DURING measures on
 failures = ["failed", "error", "timeout"]
 ```
 
-**Both timestamp keys are needed.** `[backend].timestamp_fields` says what
-to parse; `[engine].timestamp_field` says which parsed field `DURING`
-measures on. Without the second one a `DURING` query returns an empty
-result rather than an error — the worst kind of wrong answer.
+**The time keys.** `[backend].timestamp_fields` says what to parse;
+`[engine].timestamp_field` says which parsed field `DURING` measures on.
+One is enough: the other follows, and with neither the server takes
+`timestamp` if the file has it, else `time`. A time query on a corpus with
+no time in that field stops with an error naming the columns that hold
+times — it is never answered empty.
 
 `GET /schema` shows what the server made of the config, and the check is
 one line: `timestamp_field` must name a field that appears in the same

@@ -4,6 +4,7 @@ import pytest
 
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
+from prismql.exceptions import PrismQLRuntimeError
 
 # Sample conversation data
 MESSAGES = [
@@ -283,18 +284,18 @@ class TestNotWithAggregation:
 class TestNotWithTemporalFilters:
     """Test NOT patterns with temporal filters."""
 
+    # These messages carry no time: a time filter over them is refused, not
+    # answered empty (graph @aleph/prismql, #117).
     def test_not_with_before(self, engine):
         """Test NOT pattern with BEFORE filter."""
-        result = engine.execute(
-            'SELECT from(alice), NOT from(bob) INWINDOW 5 BEFORE("2025-01-01")'
-        )
-
-        assert isinstance(result, list)
+        with pytest.raises(PrismQLRuntimeError, match="measures time"):
+            engine.execute(
+                'SELECT from(alice), NOT from(bob) INWINDOW 5 BEFORE("2025-01-01")'
+            )
 
     def test_not_with_between(self, engine):
         """Test NOT pattern with BETWEEN filter."""
-        result = engine.execute(
-            'SELECT from(alice), NOT from(bob) INWINDOW 5 BETWEEN("2020-01-01", "2025-01-01")'
-        )
-
-        assert isinstance(result, list)
+        with pytest.raises(PrismQLRuntimeError, match="measures time"):
+            engine.execute(
+                'SELECT from(alice), NOT from(bob) INWINDOW 5 BETWEEN("2020-01-01", "2025-01-01")'
+            )

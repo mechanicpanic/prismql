@@ -189,12 +189,12 @@ timestamp_field = "time"     # the axis DURING measures on
 removal = ["removed"]        # named word lists; see contains() below
 ```
 
-**Both timestamp keys are needed, and they are not the same key.**
-`[backend].timestamp_fields` says which columns to parse; `[engine].timestamp_field`
-says which parsed column time windows use. With the first and without the
-second, a `DURING` query returns **no results and no error** — verified:
-the identical `INWINDOW` query still answers. If a time query comes back
-empty, check this first.
+**Two timestamp keys, and one is enough.** `[backend].timestamp_fields`
+says which columns to parse; `[engine].timestamp_field` says which parsed
+column time windows use. Give one and the other follows; give neither and
+the server takes `timestamp` if your file has it, else `time`. A time query
+on a corpus with no time in that field stops with an error that names the
+field and the columns that do hold times.
 
 Relative paths inside the file resolve against the file's own directory, so
 you can keep config and data together and point at them from anywhere.

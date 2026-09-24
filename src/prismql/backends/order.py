@@ -78,6 +78,10 @@ class OrderIndex:
     def has_timestamp_field(self, field: str) -> bool:
         return field in self._ts
 
+    def time_fields(self) -> list[str]:
+        """The fields parsed as time, in configuration order."""
+        return list(self._ts)
+
     def timestamps_at(self, positions: Iterable[int], field: str) -> list[int | None]:
         col = self._ts[field]  # KeyError for an unknown field is the contract
         return [col[p] for p in positions]

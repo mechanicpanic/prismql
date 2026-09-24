@@ -62,9 +62,14 @@ def test_singleton_row_honours_same_row_variables_and_unbound_negation(use_ir):
 
 
 def test_singleton_during_rejects_missing_timestamps(use_ir):
-    docs = [{"id": 1, "user": "a", "text": "x"}, {"id": 2, "user": "b", "text": "x"}]
+    # an event without a time is not in a time window; a corpus with no time
+    # at all is refused outright (test_time_field.py, graph #117)
+    docs = [
+        {"id": 1, "user": "a", "text": "x", "timestamp": 1000},
+        {"id": 2, "user": "b", "text": "x"},
+    ]
     engine = PrismQLEngine(MemoryBackend(docs), use_ir=use_ir)
-    assert engine.execute("SELECT from(*) DURING 1 second") == []
+    assert engine.execute("SELECT from(*) DURING 1 second") == [[1]]
 
 
 def test_projected_groups_are_deduplicated(use_ir):

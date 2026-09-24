@@ -69,10 +69,10 @@ timestamp_field = "{{ts_col}}"        # the axis DURING measures on
 {{name}} = [{{terms}}]
 ```
 
-Both timestamp keys are needed: without `[engine].timestamp_field` a
-`DURING` query returns an empty result rather than an error. `GET /schema`
-is the check — its `timestamp_field` must name a field listed in the same
-response's `fields` block (the unset default is `timestamp`). Iterate on
+One timestamp key is enough (the other follows; with neither, `timestamp`
+if the file has it, else `time`); a time query over a field without times
+stops with an error. `GET /schema` is the check — its `timestamp_field` must
+name a field listed in the same response's `fields` block. Iterate on
 term lists in-band with `"dictionaries": {"{{name}}": ["term", …]}` in the
 request body (that query only), then persist the stable ones here.
 `max_results` caps the groups in a response — use `AGGREGATE count()` for a
