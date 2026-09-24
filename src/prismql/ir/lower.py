@@ -21,7 +21,7 @@ import warnings
 from typing import Any
 
 from ..aggregators.types import AggregationFunction
-from ..exceptions import PrismQLRuntimeError
+from ..exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from ..grammar.generated.PrismQLParser import PrismQLParser
 from .nodes import (
     AbsoluteTs,
@@ -425,9 +425,16 @@ def _order_by(ctx: Any) -> OrderBy:
     field_names = ctx.field_name()
     if not isinstance(field_names, list):
         field_names = [field_names]
+    # One direction sorts the whole key (graph @aleph/prismql, #105): the
+    # grammar lets each field carry its own, so a mix is refused rather
+    # than silently applied to every field.
+    if ctx.Asc() and ctx.Desc():
+        raise PrismQLSyntaxError(
+            "ORDER BY takes one direction for all its fields: write ASC or "
+            "DESC once, after the last field"
+        )
     return OrderBy(
         fields=tuple(f.getText() for f in field_names),
-        # Visitor semantics: reverse when ANY field carries DESC.
         reverse=bool(ctx.Desc()),
     )
 

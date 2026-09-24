@@ -316,8 +316,8 @@ class TemporalFilter:
 
 @dataclass(frozen=True)
 class OrderBy:
-    """ORDER BY clause. The executor (like the visitor) sorts by each group's
-    first message id; ``reverse`` is true when ANY field carries DESC."""
+    """ORDER BY clause: groups sorted by these fields' values on each group's
+    first event; one direction (``reverse``) for the whole key."""
 
     fields: tuple[str, ...]
     reverse: bool = False

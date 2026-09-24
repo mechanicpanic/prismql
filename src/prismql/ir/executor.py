@@ -20,6 +20,7 @@ from datetime import datetime
 from ..aggregators.types import AggregateResult, GroupedResult
 from ..exceptions import PrismQLRuntimeError
 from ..plan.bridge import run_body_span
+from ..processors.ordering import order_groups
 from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..types import (
     MessageGroup,
@@ -127,6 +128,7 @@ class IRExecutor(PrismQLVisitor):
     def execute_body(  # noqa: C901 - mirrors visitBody step-for-step
         self, q: Query
     ) -> QueryResult | NamedQueryResult | AggregateResult | GroupedResult:
+        self._one_aggregation(q.aggregations)
         # Reset per-body state (mirrors visitBody).
         self.variable_constraints = []
         self.current_restriction_position = 0
@@ -231,10 +233,8 @@ class IRExecutor(PrismQLVisitor):
 
         # Step 6: ORDER BY.
         if q.order_by is not None:
-            results = sorted(
-                results,
-                key=lambda group: group[0] if group else 0,
-                reverse=q.order_by.reverse,
+            results = order_groups(
+                self.search_backend, results, q.order_by.fields, q.order_by.reverse
             )
 
         # Step 7: LIMIT/OFFSET.

@@ -264,6 +264,12 @@ class PrismQLEngine:
                 f"Error executing query: {str(e)}", query=query, cause=e
             ) from e
 
+    def to_ir(self, query: str, dialect: str = "auto") -> Any:
+        """The query's IR (``ir.nodes.Query``) without executing it."""
+        if self._resolve_dialect(query, dialect) == "pipe":
+            return parse_pipe(query)
+        return lower_query(self._parse_classic(query))
+
     def validate(self, query: str, dialect: str = "auto") -> bool:
         """
         Validate a PrismQL query without executing it.

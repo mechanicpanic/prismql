@@ -228,6 +228,8 @@ Stages: `count()`, `count_distinct(field)`, `distinct(field)`, `sum(field)`,
 `avg(field)`, `min(field)`, `max(field)`.
 
 **Important**: stages always take parentheses — `|> count()`, never `|> count`.
+One aggregation stage per query: `|> count() |> sum(x)` is an error — run
+one query per function.
 `group()` accepts plain fields and time buckets (`hour(ts)`, `day(ts)`,
 `week(ts)`, `month(ts)`, `year(ts)`), and multiple fields: `group(user, day(ts))`.
 
@@ -296,8 +298,11 @@ Timestamps are quoted dates (`"2024-01-01"`) or relative spans (`2d ago`,
 from(*) |> sort(ts, desc) |> top(5) |> skip(2)
 ```
 
-`sort()` takes fields plus optional `asc`/`desc`; `skip(n)` requires a
-`top(n)` stage before it.
+`sort()` takes fields plus optional `asc`/`desc`, one direction for all of
+them; it sorts groups by the fields' values on each group's first event. A
+group whose first event lacks a field goes last; equal values keep stream
+order; a field no event in the result has, or values of mixed types, is an
+error. `skip(n)` requires a `top(n)` stage before it.
 
 ## Complete Examples
 

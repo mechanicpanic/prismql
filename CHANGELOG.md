@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Fixed (two queries that answered wrong without a word)
+- `ORDER BY field` sorts groups by the field's value on each group's first event, as documented; it used to sort by the first id and ignore the field (graph @aleph/prismql, #105). One `ASC`/`DESC` for all fields (a mix is an error); a group lacking the field goes last; a field no event has, or values of mixed types, is an error. The server keeps a query's own ORDER BY instead of putting kept groups back into stream order. `PrismQLEngine.to_ir(query)` returns a query's IR without running it.
+- `AGGREGATE count(), sum(x)` (and `|> count() |> sum(x)`) is refused: one function per query. It used to answer the first and drop the rest (#89).
+
 ### Added (search and similar from the board's editor)
 - The board's editor runs a *Search* (tantivy syntax) and a *Similar* (a sentence, optional threshold) as well as a query; the answer opens in the Request tab, the recent list keeps all three kinds, and *Open in editor* / *Fix in editor* are offered for every kind (graph @aleph/prismql, #111).
 

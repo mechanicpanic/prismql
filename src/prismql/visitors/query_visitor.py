@@ -8,7 +8,7 @@ from typing import Any
 from ..aggregators.aggregator import Aggregator
 from ..aggregators.types import AggregateResult, AggregationFunction, GroupedResult
 from ..backends.base import PrecomputedIndexes, SearchBackend
-from ..exceptions import PrismQLRuntimeError
+from ..exceptions import PrismQLRuntimeError, PrismQLSyntaxError
 from ..grammar.generated.PrismQLParser import PrismQLParser
 from ..grammar.generated.PrismQLVisitor import PrismQLVisitor as BasePrismQLVisitor
 from ..plan.bridge import (
@@ -20,6 +20,7 @@ from ..plan.bridge import (
     run_negative_link,
     run_single,
 )
+from ..processors.ordering import order_groups
 from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..processors.variables import VariableConstraint
 from ..types import (
@@ -239,6 +240,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # Step 4: Apply AGGREGATE if specified
         if ctx.aggregate_clause():
             aggregations = self._extract_aggregations(ctx.aggregate_clause())
+            self._one_aggregation(aggregations)
 
             # Apply each aggregation
             aggregate_results = []
@@ -252,7 +254,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
             if len(aggregate_results) == 1:
                 return aggregate_results[0]
             # For multiple aggregations, combine into a single result
-            # For now, just return the first one (TODO: support multiple)
             return aggregate_results[0]
 
         # Step 5: If GROUP BY without AGGREGATE, return grouped results
@@ -1491,36 +1492,21 @@ class PrismQLVisitor(BasePrismQLVisitor):
         return aggregations
 
     def _apply_ordering(self, results: QueryResult, ctx: Any) -> QueryResult:
-        """
-        Apply ORDER BY clause to results.
+        """ORDER BY: groups by their first event's field values (#105)."""
+        from ..ir.lower import _order_by
 
-        For now, this orders by the first message ID in each group.
-        In the future, this should support ordering by message fields.
+        order = _order_by(ctx)
+        return order_groups(self.search_backend, results, order.fields, order.reverse)
 
-        Args:
-            results: Query results to order
-            ctx: orderby_clause context from parser
-
-        Returns:
-            Ordered query results
-        """
-        # Get field names and sort directions
-        field_names = ctx.field_name()
-        if not isinstance(field_names, list):
-            field_names = [field_names]
-
-        # For now, simple ordering by first message ID
-        # TODO: Support ordering by actual message fields
-        reverse = False
-        if ctx.Desc():
-            reverse = True
-
-        # Sort by first message ID in each group
-        return sorted(
-            results,
-            key=lambda group: group[0] if group else 0,
-            reverse=reverse,
-        )
+    def _one_aggregation(self, aggregations: Sequence[Any]) -> None:
+        """AGGREGATE takes one function (graph @aleph/prismql, #89): a list
+        used to answer the first and drop the rest without a word."""
+        if len(aggregations) > 1:
+            names = ", ".join(f.value for f, _ in aggregations)
+            raise PrismQLSyntaxError(
+                f"AGGREGATE takes one function per query; got {names}. "
+                "Run one query per function."
+            )
 
     def _in_stream_order(self, ids: Any) -> list[MessageId]:
         """Ids in load order: ids are labels, the stream is the order
