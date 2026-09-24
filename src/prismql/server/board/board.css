@@ -8,14 +8,20 @@
 html, body { height: 100%; }
 .app {
   width: 100vw; height: 100vh; box-sizing: border-box;
-  display: grid; grid-template-columns: 232px minmax(0, 1fr) 520px;
+  display: grid; grid-template-columns: var(--rail-w, 232px) minmax(0, 1fr) var(--insp-w, 520px);
   grid-template-rows: 56px minmax(0, 1fr); position: relative;
   background: var(--bg); color: var(--text); overflow: hidden;
   font-family: "Instrument Sans", system-ui, sans-serif;
 }
+/* explicit places, counted from the right: with the rail hidden on a
+   narrow screen, auto-placement put the inspector first (#118) */
+.rail { grid-row: 2; grid-column: 1 / 2; }
+.journal { grid-row: 2; grid-column: -3 / -2; }
+.insp { grid-row: 2; grid-column: -2 / -1; }
 @media (max-width: 1099px) {
-  .app { grid-template-columns: minmax(0, 1fr) 520px; }
-  .rail { display: none; }
+  .app { grid-template-columns: minmax(0, 1fr) var(--insp-w, 520px); }
+  /* .app > … outranks the later .rail{display:flex} */
+  .app > .rail, .app > .colgrip[data-col="rail"] { display: none; }
 }
 /* [hidden] is a UA default (display:none) that .fv{display:grid} on #full
    would otherwise override once that class alone decides visibility —

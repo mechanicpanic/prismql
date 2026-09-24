@@ -88,3 +88,10 @@ mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
 .field.num{width:64px}
 .editor textarea::placeholder{color:var(--faint)}
 .recent .k{color:var(--faint);margin-right:8px}
+/* the grips between the columns (#118); board-resize.js sets the widths */
+.colgrip{position:absolute;top:56px;bottom:0;width:9px;z-index:5;cursor:col-resize;touch-action:none;outline:none}
+.colgrip[data-col=rail]{left:calc(var(--rail-w,232px) - 4px)}
+.colgrip[data-col=insp]{right:calc(var(--insp-w,520px) - 5px)}
+.colgrip::after{content:"";position:absolute;left:3px;top:0;bottom:0;width:3px;border-radius:2px;background:transparent;transition:background .12s}
+.colgrip:hover::after,.colgrip:focus-visible::after,.colgrip.on::after{background:var(--focus)}
+.app.resizing{cursor:col-resize;user-select:none}

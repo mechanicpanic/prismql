@@ -571,6 +571,10 @@ sentence, ranked by meaning, with an optional *threshold*). Either answer
 opens in the Request tab like a query's and pages through everything the
 server kept (`[server] scout_depth`, 1000 by default).
 
+The three columns resize: drag the line between two of them (or focus it
+and use ←/→, Shift for bigger steps); a double-click puts it back. The
+widths are remembered in your browser.
+
 Keyboard: ↑/↓ moves through the journal, Enter opens the selected row full
 screen, Esc leaves the full view, ←/→ steps to the neighbouring request
 from there, and ⌘⏎ (Ctrl⏎ on other keyboards) runs the query while the
