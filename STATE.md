@@ -66,7 +66,8 @@ it describes. Agent memory points here; it does not duplicate this.*
 ## Open
 
 **Blockers (silent-wrong class)**
-- None open. The audit defects A1–A10 and D2 (2026-09-18/21) are closed by the operator layer and stand as ordinary contract tests (`tests/test_ordinal_axis_contract.py`, `tests/test_engine_defects_pinned.py`, `tests/test_positional_path_parity.py`).
+- `mentions_user($y)` does not bind: it searches the text "$y" and answers empty, no error — pinned in `tests/test_mentions_user_variable_pinned.py`; the fix (mentions annotated against the corpus's actor names, `$y` bound per mentioned name) waits on the owner's word about what counts as a mention (graph #121).
+- Otherwise none open. The audit defects A1–A10 and D2 (2026-09-18/21) are closed by the operator layer and stand as ordinary contract tests (`tests/test_ordinal_axis_contract.py`, `tests/test_engine_defects_pinned.py`, `tests/test_positional_path_parity.py`).
 
 **Next work, in order**
 0. **P1b ingest toolkit, remaining stages** (plan `docs/superpowers/plans/2026-09-22-ingest-p1b.md`): Village through `table` in the hackathon workspace; `query_frame` from the Arrow table only if the frame cost shows on Village (#14). Then the semantic leg: similarity as `eligible` inside candidate selection, embeddings as a column, no pairwise matrix (graph: the vimarsha on #8; scope before the hackathon is the owner's).
