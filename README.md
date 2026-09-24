@@ -112,6 +112,9 @@ of encoding at start. Details in `docs/USER-GUIDE.md`, section 2.
   [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md): install, the config file, what
   your event file must look like, the first queries and the errors you will
   hit.
+- **Run the server** — [`docs/SERVER.md`](docs/SERVER.md): extras, preparing
+  a corpus (annotations, embeddings of your own or from elsewhere), every
+  config key with its default, start-up time and memory, the board, restart.
 - **Learn the language** — [`docs/MENTAL_MODEL.md`](docs/MENTAL_MODEL.md):
   two axes, three levels, twelve shapes to recognise on sight, with a
   self-test. One sitting. Exhaustive references: `LANGUAGE_REFERENCE.md`

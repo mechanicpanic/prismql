@@ -431,7 +431,8 @@ the names as slot numbers with words on them.
 ## 7. Out of the REPL: the server
 
 When something other than you is asking — a script, a notebook, an agent —
-run the same config as an HTTP server instead:
+run the same config as an HTTP server instead. Every config key, embeddings,
+memory and restarts: [SERVER.md](SERVER.md).
 
 ```bash
 prismql-server --config prismql.toml     # http://127.0.0.1:8901
