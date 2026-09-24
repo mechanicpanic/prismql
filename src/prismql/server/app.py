@@ -28,6 +28,7 @@ from .config import (
     build_engine,
     load_config,
 )
+from .context import MAX_SIDE, ContextError, context_payload
 from .pages import page_payload, rows_page_payload
 from .results import ResultStore, StoredResult
 from .schema import compute_schema
@@ -949,6 +950,54 @@ def create_app(config: ServerConfig) -> FastAPI:
         with state.lock:
             cached = state.schemas.get(corpus or config.default_corpus)
         return cached if cached is not None else compute_schema(engine, corpus_cfg)
+
+    @app.get("/context")
+    def context(
+        request: Request,
+        id: str,  # noqa: A002 - the query parameter's public name
+        corpus: str | None = None,
+        before: int | None = None,
+        after: int | None = None,
+        same: str | None = None,
+        minutes: float | None = None,
+    ) -> Any:
+        """The events around one event (graph @aleph/prismql, #120)."""
+        if _rate_limited(_client_ip(request)):
+            return _rate_limit_response()
+
+        def refuse(message: str) -> JSONResponse:
+            return JSONResponse(
+                status_code=422,
+                content={"ok": False, "error": {"type": "runtime", "message": message}},
+            )
+
+        try:
+            engine, corpus_cfg, _ = state.engine_for(corpus)
+        except KeyError as e:
+            return refuse(str(e.args[0]))
+        # with a time window the counts are only a cap
+        side = MAX_SIDE if minutes is not None else 10
+        before = side if before is None else before
+        after = side if after is None else after
+        if not (0 <= before <= MAX_SIDE and 0 <= after <= MAX_SIDE):
+            return refuse(f"before and after must be between 0 and {MAX_SIDE}")
+        if minutes is not None and minutes <= 0:
+            return refuse("minutes must be above 0")
+        try:
+            payload = context_payload(
+                engine.search_backend,
+                id,
+                id_field=corpus_cfg.id_field,
+                time_field=corpus_cfg.timestamp_field,
+                before=before,
+                after=after,
+                same=same,
+                minutes=minutes,
+            )
+        except ContextError as e:
+            return refuse(str(e))
+        payload["corpus"] = corpus or config.default_corpus
+        return payload
 
     @app.get("/corpora")
     def corpora() -> dict[str, Any]:

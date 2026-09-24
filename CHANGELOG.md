@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (the events around an event)
+- `GET /context?corpus=…&id=…` returns the events around one event in stream order, each with its offset, time and fields: `before`/`after` events (10 each, at most 200) or `minutes` either side, and `same=<field>` for only those sharing that field's value. Values are read by position, documents only for the events returned. On the board, *context* on an event (groups and hits) opens the same actor's neighbours within ten minutes, with a switch to every event (graph @aleph/prismql, #120).
+
 ### Added (the board)
 - The board's columns resize: drag the line between the filters, the journal and the inspector, or focus it and use the arrow keys; a double-click resets it; widths stay within bounds that keep the journal at least 360 px wide and are remembered in the viewer's browser (graph @aleph/prismql, #118). Fixed on the way: under 1100 px the filters were meant to hide but stayed, pushing the inspector into the first column.
 

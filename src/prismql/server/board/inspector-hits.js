@@ -12,7 +12,7 @@
   var PL = window.PrismQLInspectorPageLogic;
   var PF = window.PrismQLInspectorFetch;
 
-  function hitDiv(h, board, terms, scored) {
+  function hitDiv(h, board, terms, scored, corpus) {
     var div = mk("div", "hit" + (scored ? "" : " noscore"));
     if (scored) {
       var sc = document.createElement("div");
@@ -32,6 +32,7 @@
     var event = h.event || {};
     UI.kindActorSpans(l, event, board);
     l.appendChild(mk("span", "t", h.time ? IF.localDateTime(h.time) : ""));
+    if (h.id != null) l.appendChild(window.PrismQLInspectorContext.button(corpus, h.id));
     evWrap.appendChild(l);
     right.appendChild(evWrap);
     var x = mk("div", "x");
@@ -40,6 +41,8 @@
       else x.appendChild(document.createTextNode(p.t));
     });
     right.appendChild(x);
+    var around = h.id != null ? window.PrismQLInspectorContext.block(corpus, h.id, board) : null;
+    if (around) right.appendChild(around);
     div.appendChild(right);
     return div;
   }
@@ -54,7 +57,7 @@
     var scored = PL.isScored(entry.kind);
     var terms = entry.kind === "search" ? F.searchTerms(entry.query || "") : [];
     var body = document.createElement("div");
-    (rec.data.hits || []).forEach(function (h) { body.appendChild(hitDiv(h, bf.board, terms, scored)); });
+    (rec.data.hits || []).forEach(function (h) { body.appendChild(hitDiv(h, bf.board, terms, scored, entry.corpus)); });
     return { note: PL.hitsNote(rec.data.hits ? rec.data.hits.length : 0, entry.total), body: body };
   }
 

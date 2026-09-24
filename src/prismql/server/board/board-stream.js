@@ -58,6 +58,7 @@
       // page is stale (fix round 1, #3); its board config may also have
       // changed, so re-ask /corpora too (fix round 2, #5).
       if (window.PrismQLInspectorFetch) window.PrismQLInspectorFetch.clearCache();
+      if (window.PrismQLInspectorContext) window.PrismQLInspectorContext.clear();
       if (window.PrismQLInspectorCorpora) window.PrismQLInspectorCorpora.reset(state);
       if (window.PrismQLCorpusSchemas) window.PrismQLCorpusSchemas.reset(state);
       connect(state, render);

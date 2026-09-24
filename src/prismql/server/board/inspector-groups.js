@@ -11,6 +11,7 @@
   var UI = window.PrismQLInspectorUI;
   var PL = window.PrismQLInspectorPageLogic;
   var PF = window.PrismQLInspectorFetch;
+  var CTX = window.PrismQLInspectorContext;
 
   // "Show 2 more" only advances how many groups THIS seq wants shown; a
   // fresh selection starts back at 2 (design canvas's `select()`).
@@ -28,7 +29,7 @@
     if (window.PrismQLBoard) window.PrismQLBoard.render();
   }
 
-  function evDiv(n, event, timeIso, board) {
+  function evDiv(n, event, timeIso, board, corpus, id) {
     var div = mk("div", "ev");
     var spine = mk("div", "spine");
     spine.appendChild(mk("div", "n", String(n)));
@@ -38,9 +39,12 @@
     var l = mk("div", "l");
     UI.kindActorSpans(l, event, board);
     l.appendChild(mk("span", "t", timeIso ? IF.localDateTime(timeIso) : ""));
+    if (id != null) l.appendChild(CTX.button(corpus, id));
     right.appendChild(l);
     var text = event && event.text;
     if (text) right.appendChild(mk("div", "x", String(text)));
+    var around = id != null ? CTX.block(corpus, id, board) : null;
+    if (around) right.appendChild(around);
     div.appendChild(right);
     return div;
   }
@@ -50,7 +54,7 @@
     div.appendChild(mk("span", null, IF.gapText(prevPos, pos, prevTime, time)));
     return div;
   }
-  function chainDiv(g, i, board, idField) {
+  function chainDiv(g, i, board, idField, corpus) {
     var div = mk("div", "chain");
     var title = mk("div", "gtitle");
     title.appendChild(mk("span", null, "group " + (i + 1)));
@@ -64,7 +68,7 @@
     var slots = PL.pairEventsToSlots(ids, g.events, idField);
     for (var j = 0; j < ids.length; j++) {
       if (j > 0) div.appendChild(gapDiv(positions[j - 1], positions[j], times[j - 1], times[j]));
-      div.appendChild(evDiv(j + 1, slots[j], times[j], board));
+      div.appendChild(evDiv(j + 1, slots[j], times[j], board, corpus, ids[j]));
     }
     return div;
   }
@@ -95,7 +99,7 @@
     if (blocker) return { note: "", body: blocker };
     if (pending && groups.length === 0) return { note: "", body: PF.loadingBlock() };
     var body = mk("div", "chains");
-    groups.forEach(function (g, i) { body.appendChild(chainDiv(g, i, bf.board, bf.idField)); });
+    groups.forEach(function (g, i) { body.appendChild(chainDiv(g, i, bf.board, bf.idField, entry.corpus)); });
     var more = mk("div", "more");
     more.appendChild(mk("span", null, pending ? "loading…" : PL.groupsMoreLabel(groups.length, total)));
     if (!pending && groups.length < total) {

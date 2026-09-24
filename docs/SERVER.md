@@ -10,7 +10,8 @@ What you get from `prismql-server --config prismql.toml`:
 - an HTTP API — `POST /evaluate` (the language), `POST /search` (ranked
   full-text), `POST /similar` (ranked by meaning), `GET /schema`,
   `GET /corpora`, `GET /reference`, `GET /health`, result pages under
-  `GET /results/<id>`;
+  `GET /results/<id>`, and `GET /context` — the events around one event
+  (`id`, `before`/`after` or `minutes`, `same=<field>`);
 - the board at `/board/` — every request anyone sends, live, with an editor;
 - any number of corpora, each loaded once at start and held in memory.
 
@@ -228,7 +229,9 @@ Encoding the query dominates `/similar` (under 1 s on a laptop CPU).
 ## 5. The board, and who is asking
 
 Open `http://127.0.0.1:8901/board/`. Every request anyone sends appears
-there. The editor runs a query, a search or a similar.
+there. The editor runs a query, a search or a similar. *context* on an
+event lists its neighbours within ten minutes, the same actor's (the
+corpus's `board.actor` field) or every event.
 
 A client names itself with the header `X-PrismQL-Client: <name>`. The
 board's own editor sends `board`. A request without the header shows as its

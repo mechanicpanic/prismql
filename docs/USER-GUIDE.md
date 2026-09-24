@@ -571,6 +571,11 @@ sentence, ranked by meaning, with an optional *threshold*). Either answer
 opens in the Request tab like a query's and pages through everything the
 server kept (`[server] scout_depth`, 1000 by default).
 
+*context* on an event in the Request tab lists what happened around it:
+the same actor's events within ten minutes before and after (or every
+event, one click away), the event itself highlighted. The same is
+`GET /context?id=…&minutes=10&same=agent`.
+
 The three columns resize: drag the line between two of them (or focus it
 and use ←/→, Shift for bigger steps); a double-click puts it back. The
 widths are remembered in your browser.

@@ -92,6 +92,13 @@ real question with `/evaluate`. Hits are `{"id", "score"[, "event"]}`, kept
 server-side under a `result_id` exactly like a match result — page them the
 same way.
 
+**Read around an event before you name what it is.** `GET /context?id=<id>&
+minutes=10&same=agent` returns the events around one event in stream order
+— within ten minutes before and after, only those with the same `agent` —
+each with its `offset` from the event (`0`), time and fields. Without
+`minutes` it takes `before`/`after` events (10 each, at most 200); `same` is
+any field. One call instead of two queries and a join.
+
 ### Four things about the server that will bite you
 
 1. **A match or scout result is kept, not just returned — page it, don't
