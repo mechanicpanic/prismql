@@ -29,7 +29,6 @@ ENTITY_OPERATORS = [
     ("mentions_time()", "TIME"),
     ("mentions_place()", "GPE"),
     ("mentions_org()", "ORG"),
-    ("contains_link()", "URL"),
     # legacy spellings route through the same helper
     ("hasdate()", "DATE"),
     ("hasorganization()", "ORG"),

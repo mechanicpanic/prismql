@@ -2,10 +2,10 @@
 @aleph/prismql, #106).
 
 A corpus is annotated once: at ingest (``prismql ingest … --annotate``
-writes the columns ``is_question`` and ``entities``) or, for questions only,
-once at load when the column is missing. The engine reads the result as
-``PrecomputedIndexes``, so every backend answers ``is_question()`` and the
-entity predicates the same way.
+writes the columns ``is_question``, ``has_link`` and ``entities``) or, for
+questions and links, once at load when the column is missing. The engine
+reads the result as ``PrecomputedIndexes``, so every backend answers
+``is_question()``, ``contains_link()`` and the entity predicates the same way.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from typing import Any
 
 from ..backends.base import PrecomputedIndexes
 from ..config import DEFAULT_CONFIG
+from ..tokenizers import URL_SHAPE
 from ..types import MessageId
 
 # The text fields every annotation reads — at ingest and at load, on every
@@ -43,6 +44,39 @@ def is_question(text: str) -> bool:
     return any(lowered.startswith(w + " ") for w in _QUESTION_WORDS)
 
 
+_LINK = re.compile(URL_SHAPE, re.IGNORECASE)
+
+
+def has_link(text: str) -> bool:
+    """A link as the tokenizer cuts one: a scheme and what follows up to
+    whitespace (graph @aleph/prismql, #115)."""
+    return _LINK.search(text) is not None
+
+
+def _matching_ids(
+    docs: Iterable[dict[str, Any]],
+    rule: Any,
+    *,
+    id_field: str,
+    text_fields: Sequence[str],
+) -> set[MessageId]:
+    return {
+        doc[id_field]
+        for doc in docs
+        if any(doc.get(f) is not None and rule(str(doc[f])) for f in text_fields)
+    }
+
+
+def link_ids(
+    docs: Iterable[dict[str, Any]],
+    *,
+    id_field: str,
+    text_fields: Sequence[str] = TEXT_FIELDS,
+) -> set[MessageId]:
+    """Ids of the documents any of whose text fields has a link."""
+    return _matching_ids(docs, has_link, id_field=id_field, text_fields=text_fields)
+
+
 def question_ids(
     docs: Iterable[dict[str, Any]],
     *,
@@ -50,11 +84,7 @@ def question_ids(
     text_fields: Sequence[str] = TEXT_FIELDS,
 ) -> set[MessageId]:
     """Ids of the documents any of whose text fields is a question."""
-    return {
-        doc[id_field]
-        for doc in docs
-        if any(doc.get(f) is not None and is_question(str(doc[f])) for f in text_fields)
-    }
+    return _matching_ids(docs, is_question, id_field=id_field, text_fields=text_fields)
 
 
 def indexes_from_columns(
@@ -68,6 +98,9 @@ def indexes_from_columns(
     questions = None
     if "questions" in kinds:
         questions = {d[id_field] for d in docs if d.get("is_question") is True}
+    links = None
+    if "links" in kinds:
+        links = {d[id_field] for d in docs if d.get("has_link") is True}
     entities: dict[str, set[MessageId]] | None = None
     if "entities" in kinds:
         entities = {}
@@ -76,7 +109,7 @@ def indexes_from_columns(
             if isinstance(labels, list | tuple):
                 for label in labels:
                     entities.setdefault(str(label), set()).add(doc[id_field])
-    return PrecomputedIndexes(entities=entities, questions=questions)
+    return PrecomputedIndexes(entities=entities, questions=questions, links=links)
 
 
 def stamped_kinds(path: str) -> tuple[str, ...]:
@@ -89,16 +122,17 @@ def stamped_kinds(path: str) -> tuple[str, ...]:
     return tuple(k for k in raw.decode().split(",") if k)
 
 
-ANNOTATIONS = ("questions", "entities")
+ANNOTATIONS = ("questions", "links", "entities")
 
 
 def annotate(
     df: Any, kinds: Sequence[str], *, text: str | None, spacy_model: str
 ) -> Any:
     """Add the annotation columns ``kinds`` name to a Polars frame: bool
-    ``is_question`` (the rule above) and/or ``entities`` (spaCy NER labels
-    present in the text, a sorted list). ``text`` names one column; without
-    it every column of ``TEXT_FIELDS`` present is read, as at load."""
+    ``is_question`` and ``has_link`` (the rules above) and/or ``entities``
+    (spaCy NER labels present in the text, a sorted list). ``text`` names one
+    column; without it every column of ``TEXT_FIELDS`` present is read, as at
+    load."""
     import polars as pl
 
     unknown = [k for k in kinds if k not in ANNOTATIONS]
@@ -117,6 +151,11 @@ def annotate(
             for r in rows
         ]
         df = df.with_columns(pl.Series("is_question", flags, dtype=pl.Boolean))
+    if "links" in kinds:
+        flags = [
+            any(r[f] is not None and has_link(str(r[f])) for f in fields) for r in rows
+        ]
+        df = df.with_columns(pl.Series("has_link", flags, dtype=pl.Boolean))
     texts = [
         "\n".join(str(r[f]) for f in fields if r[f] is not None) or None for r in rows
     ]

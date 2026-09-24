@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (contains_link without an extractor)
+- `contains_link()` answers on any corpus: a link is the tokenizer's URL token (`http://`/`https://` up to whitespace, one rule in `prismql.tokenizers.URL_SHAPE`). `prismql ingest … --annotate links` writes a `has_link` column the server reads; without it the rule runs once at load, as for `is_question()`; an extractor's `URL` entities still count. It used to look up a URL entity label spaCy never sets, so it always refused (graph @aleph/prismql, #115). `PrecomputedIndexes` takes `links=`.
+
 ### Fixed (two queries that answered wrong without a word)
 - `ORDER BY field` sorts groups by the field's value on each group's first event, as documented; it used to sort by the first id and ignore the field (graph @aleph/prismql, #105). One `ASC`/`DESC` for all fields (a mix is an error); a group lacking the field goes last; a field no event has, or values of mixed types, is an error. The server keeps a query's own ORDER BY instead of putting kept groups back into stream order. `PrismQLEngine.to_ir(query)` returns a query's IR without running it.
 - `AGGREGATE count(), sum(x)` (and `|> count() |> sum(x)`) is refused: one function per query. It used to answer the first and drop the rest (#89).

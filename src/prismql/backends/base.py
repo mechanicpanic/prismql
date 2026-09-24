@@ -253,6 +253,7 @@ class PrecomputedIndexes:
         questions: set[MessageId] | None = None,
         user_mentions: Mapping[str, set[MessageId]] | None = None,
         custom_features: Mapping[str, set[MessageId]] | None = None,
+        links: set[MessageId] | None = None,
     ) -> None:
         """
         Initialize precomputed indexes.
@@ -263,6 +264,8 @@ class PrecomputedIndexes:
             user_mentions: User mention indexes (e.g., {'alice': {3, 7}})
             custom_features: Arbitrary custom feature indexes
                            (e.g., {'action_items': {2}, 'sentiment_positive': {1, 5}})
+            links: Set of message IDs containing a link (contains_link());
+                   like questions, a computed empty set is authoritative
         """
         self.entities = entities or {}
         self.questions = questions if questions is not None else set()
@@ -270,6 +273,7 @@ class PrecomputedIndexes:
         # the former answers is_question() with "none", the latter must not
         # silently fall back to a backend heuristic that may contradict it.
         self.has_questions_index = questions is not None
+        self.links = links
         self.user_mentions = user_mentions or {}
         self.custom_features = custom_features or {}
 

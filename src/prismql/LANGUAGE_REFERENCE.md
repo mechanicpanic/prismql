@@ -38,7 +38,7 @@ mentions_date()                   -- Messages mentioning dates
 mentions_time()                   -- Messages mentioning times
 mentions_place()                  -- Messages mentioning locations
 mentions_org()                    -- Messages mentioning organizations
-contains_link()                   -- Messages containing URLs
+contains_link()                   -- Messages containing a link (http:// or https:// up to whitespace)
 similar_to("text", threshold)     -- Semantically similar messages (embedding cosine >= threshold)
 ```
 

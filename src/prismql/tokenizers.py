@@ -34,7 +34,10 @@ def tokenize_words(text: str) -> list[str]:
 # tokenizer (tantivy's ``Tokenizer.regex``): both backends must cut text
 # identically or one dictionary means two sets (graph #59). Kept in step
 # with the verbose pattern below by ``tests/test_text_mode_parity.py``.
-UNICODE_WORD_SHAPES = r"https?://\S+|\w+@\w+(?:\.\w+)+|\w[+#]+|\w+(?:'\w+)*|\w+"
+# What a link is: one token from the scheme to the next whitespace. The link
+# annotation (contains_link) uses the same shape (graph @aleph/prismql, #115).
+URL_SHAPE = r"https?://\S+"
+UNICODE_WORD_SHAPES = URL_SHAPE + r"|\w+@\w+(?:\.\w+)+|\w[+#]+|\w+(?:'\w+)*|\w+"
 
 # Unicode-aware tokenizer pattern
 # Preserves: emails, URLs, programming terms (C++, C#), contractions

@@ -4,6 +4,7 @@ import pytest
 
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
+from prismql.exceptions import PrismQLRuntimeError
 
 
 def test_fluent_vs_legacy_equivalence():
@@ -121,13 +122,12 @@ def test_fluent_ner_conditions():
     backend = MemoryBackend(messages)
     engine = PrismQLEngine(search_backend=backend)
 
-    # These should not fail (even if no NLP backend is configured)
-    # They should raise appropriate errors about missing NLP backend
-    with pytest.raises(Exception):  # Could be PrismQLRuntimeError
+    # an entity label needs an index; a link is the tokenizer's URL rule,
+    # annotated once at load (graph @aleph/prismql, #115)
+    with pytest.raises(PrismQLRuntimeError):
         engine.execute("SELECT mentions_date()")
 
-    with pytest.raises(Exception):  # Could be PrismQLRuntimeError
-        engine.execute("SELECT contains_link()")
+    assert engine.execute("SELECT contains_link()") == [[2]]
 
 
 def test_underscore_vs_no_underscore():

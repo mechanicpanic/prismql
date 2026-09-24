@@ -36,8 +36,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--annotate",
         metavar="KINDS",
-        help="comma-separated: questions (column is_question), entities "
-        "(column entities, spaCy); the engine reads them as its indexes",
+        help="comma-separated: questions (column is_question), links "
+        "(column has_link), entities (column entities, spaCy); the engine "
+        "reads them as its indexes",
     )
     parser.add_argument(
         "--text",
