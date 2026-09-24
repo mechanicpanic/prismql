@@ -122,6 +122,16 @@ EQUIVALENT = [
         "mentions_user(bob) + mentions_org()",
         "SELECT mentions_user(bob), mentions_org()",
     ),
+    # a quoted name (spaces, dots) and a bound mention (graph #121)
+    (
+        'mentions_user("Claude Opus 4.5") ~> from("GPT-5.4") |> within(3)',
+        'SELECT mentions_user("Claude Opus 4.5") FOLLOWED_BY from("GPT-5.4") '
+        "INWINDOW 3",
+    ),
+    (
+        "mentions_user($y) ~> field(agent, $y) |> during(10m)",
+        "SELECT mentions_user($y) FOLLOWED_BY field(agent, $y) DURING 10 minutes",
+    ),
     (
         "has_feature(action_items)",
         "SELECT has_feature(action_items)",

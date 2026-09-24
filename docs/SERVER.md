@@ -64,9 +64,11 @@ column is called **`time`**, which matters in the config (§3).
   `--annotate links` writes `has_link` for `contains_link()`: a link is
   `http://` or `https://` up to whitespace, the same rule that keeps a link
   one token in the text index. `--annotate entities` writes spaCy labels for
-  `mentions_org()` and kin. Without an annotation column, questions and
-  links are annotated once at load by the same rules. Entities are never
-  annotated at load.
+  `mentions_org()` and kin. `--annotate mentions --actor agent` writes
+  `mentions` for `mentions_user()`: `@` and a name from the `agent` column.
+  Without an annotation column, questions, links and mentions are
+  annotated once at load by the same rules (mentions against the corpus's
+  `board.actor` field). Entities are never annotated at load.
 - `prismql ingest claude-code <project dir> out.parquet` and
   `prismql ingest codex <sessions dir> out.parquet` read agent harness logs.
 
@@ -196,7 +198,7 @@ Sub-tables of a corpus:
   `text`). You need it only for a corpus without a stamped `emb` column; a
   model that differs from the file's stamp is an error.
 - `[corpora.<name>.board]` has `kind` and `actor`, the fields the board shows
-  for an event.
+  for an event; `actor` is also whose names an `@mention` can be.
 
 A single-corpus config may instead use the older flat form: `[backend]`
 (`type`, `data`, `index_path`, `id_field`, `timestamp_fields`,

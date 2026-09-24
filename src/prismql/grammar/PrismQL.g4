@@ -184,7 +184,7 @@ time_unit
 number : INTEGER;
 float_number : FLOAT | INTEGER;
 hdict : STRING | VARIABLE | WILDCARD;
-huser : STRING | VARIABLE | WILDCARD;
+huser : STRING | QUOTED_STRING | VARIABLE | WILDCARD;
 feature_name : STRING;
 field_name : STRING;
 field_value : STRING | QUOTED_STRING | VARIABLE | WILDCARD;

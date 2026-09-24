@@ -13,6 +13,7 @@ nearest candidate was chosen (audit A10). No backend access happens here.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import Any
 
@@ -122,20 +123,43 @@ def _attach_bindings(
     return result.join(values, on="group", how="left")
 
 
-def _self_consistency(prefix: str, leg: Leg) -> list[Any]:
+def _list_columns(frame: Any) -> set[str]:
+    """Columns holding a list per row — ``mentions`` (graph #121)."""
+    pl = _pl()
+    return {n for n, dt in frame.collect_schema().items() if isinstance(dt, pl.List)}
+
+
+def _eq(a: str, b: str, lists: AbstractSet[str]) -> Any:
+    """Two columns agree: equal values, or a list that contains the other
+    side's value (``mentions_user($y)`` against ``field(agent, $y)``), or
+    two lists that share one (graph @aleph/prismql, #121)."""
+    pl = _pl()
+    if a in lists and b in lists:
+        return pl.col(a).list.set_intersection(pl.col(b)).list.len() > 0
+    if a in lists:
+        return pl.col(a).list.contains(pl.col(b))
+    if b in lists:
+        return pl.col(b).list.contains(pl.col(a))
+    return pl.col(a) == pl.col(b)
+
+
+def _self_consistency(
+    prefix: str, leg: Leg, lists: AbstractSet[str] = frozenset()
+) -> list[Any]:
     """A variable named twice on one leg with different fields means those
     fields agree on that row (``field(user,$u) AND field(page,$u)``)."""
-    pl = _pl()
     first: dict[str, str] = {}
     conds: list[Any] = []
     for v, f in leg.equal:
         if v in first and first[v] != f:
-            conds.append(pl.col(f"{prefix}{f}") == pl.col(f"{prefix}{first[v]}"))
+            conds.append(_eq(f"{prefix}{f}", f"{prefix}{first[v]}", lists))
         first.setdefault(v, f)
     return conds
 
 
-def _fresh_link_constraints(lhs: Leg, rhs: Leg) -> tuple[str | None, Any | None]:
+def _fresh_link_constraints(
+    lhs: Leg, rhs: Leg, fields: set[str]
+) -> tuple[str | None, Any | None]:
     pl = _pl()
     if (
         len(lhs.equal) == 1
@@ -143,43 +167,48 @@ def _fresh_link_constraints(lhs: Leg, rhs: Leg) -> tuple[str | None, Any | None]
         and lhs.equal[0] == rhs.equal[0]
         and not rhs.unequal
         and not lhs.unequal
+        and rhs.equal[0][1] not in fields  # a list is no asof key
     ):
         return rhs.equal[0][1], None
-    conds = _self_consistency("l_", lhs) + _self_consistency("r_", rhs)
+    lists = {f"l_{f}" for f in fields} | {f"r_{f}" for f in fields}
+    conds = _self_consistency("l_", lhs, lists) + _self_consistency("r_", rhs, lists)
     lhs_fields: dict[str, list[str]] = {}
     for v, f in lhs.equal:
         lhs_fields.setdefault(v, []).append(f)
     for v, f in rhs.equal:
         for g in lhs_fields.get(v, []):
-            conds.append(pl.col(f"r_{f}") == pl.col(f"l_{g}"))
+            conds.append(_eq(f"r_{f}", f"l_{g}", lists))
     for v, f in rhs.unequal:
         if v not in lhs_fields:
             raise PrismQLRuntimeError(
                 f"!${v} refers to a variable no earlier leg binds"
             )
         for g in lhs_fields[v]:
-            conds.append(pl.col(f"r_{f}") != pl.col(f"l_{g}"))
+            conds.append(~_eq(f"r_{f}", f"l_{g}", lists))
     return None, (pl.all_horizontal(conds) if conds else None)
 
 
-def _extension_constraints(seqs: Any, rhs: Leg) -> tuple[str | None, Any | None]:
+def _extension_constraints(
+    seqs: Any, rhs: Leg, fields: set[str]
+) -> tuple[str | None, Any | None]:
     pl = _pl()
     bound = _bound(seqs)
-    conds = _self_consistency("r_", rhs)
+    lists = {f"r_{f}" for f in fields} | {f"l_{c}" for c in _list_columns(seqs)}
+    conds = _self_consistency("r_", rhs, lists)
     for v, f in rhs.equal:
         if v in bound:
-            conds.append(pl.col(f"r_{f}") == pl.col(f"l__v_{v}"))
+            conds.append(_eq(f"r_{f}", f"l__v_{v}", lists))
     for v, f in rhs.unequal:
         if v not in bound:
             raise PrismQLRuntimeError(
                 f"!${v} refers to a variable no earlier leg binds"
             )
-        conds.append(pl.col(f"r_{f}") != pl.col(f"l__v_{v}"))
+        conds.append(~_eq(f"r_{f}", f"l__v_{v}", lists))
     return None, (pl.all_horizontal(conds) if conds else None)
 
 
 def _link_constraints(
-    seqs: Any | None, lhs: Leg | None, rhs: Leg
+    seqs: Any | None, lhs: Leg | None, rhs: Leg, fields: set[str]
 ) -> tuple[str | None, Any | None]:
     """The (key, eligible) for one link. ``key`` (asof ``by=``) only when
     the link's whole constraint is one variable on one field, named once
@@ -189,8 +218,8 @@ def _link_constraints(
     columns, evaluated before the nearest candidate is chosen."""
     if seqs is None:
         assert lhs is not None
-        return _fresh_link_constraints(lhs, rhs)
-    return _extension_constraints(seqs, rhs)
+        return _fresh_link_constraints(lhs, rhs, fields)
+    return _extension_constraints(seqs, rhs, fields)
 
 
 # ------------------------------------------------------------- operators
@@ -215,7 +244,7 @@ def link(
     """
     axis, w = axis_and_window(window, timestamp_field)
     right = leg_frame(frame, rhs.ids)
-    key, eligible = _link_constraints(seqs, lhs, rhs)
+    key, eligible = _link_constraints(seqs, lhs, rhs, _list_columns(frame))
     if seqs is None:
         assert lhs is not None
         left = leg_frame(frame, lhs.ids)
@@ -280,6 +309,7 @@ def negative_link(
 
 def _cooccur_constraints(
     legs: Sequence[Leg],
+    fields: AbstractSet[str] = frozenset(),
 ) -> tuple[str | None, Any | None, dict[str, tuple[int, str]]]:
     """(key, eligible, bindings) for a comma list. ``key`` only when the
     whole constraint is one variable on one field named exactly once by
@@ -287,15 +317,16 @@ def _cooccur_constraints(
     the member-prefixed columns. ``bindings`` says which member's field
     carries each variable's value."""
     pl = _pl()
+    lists = {f"f{i}_{f}" for i in range(len(legs)) for f in fields}
     first_leg: dict[str, tuple[int, str]] = {}
     conds: list[Any] = []
     for i, leg in enumerate(legs):
-        conds += _self_consistency(f"f{i}_", leg)
+        conds += _self_consistency(f"f{i}_", leg, lists)
         for v, f in leg.equal:
             if v in first_leg:
                 j, g = first_leg[v]
                 if j != i:
-                    conds.append(pl.col(f"f{i}_{f}") == pl.col(f"f{j}_{g}"))
+                    conds.append(_eq(f"f{i}_{f}", f"f{j}_{g}", lists))
             else:
                 first_leg[v] = (i, f)
     for i, leg in enumerate(legs):
@@ -305,11 +336,12 @@ def _cooccur_constraints(
                     f"!${v} in a comma list needs another member binding ${v}"
                 )
             j, g = first_leg[v]
-            conds.append(pl.col(f"f{i}_{f}") != pl.col(f"f{j}_{g}"))
+            conds.append(~_eq(f"f{i}_{f}", f"f{j}_{g}", lists))
     if (
         len(first_leg) == 1
         and all(len(leg.equal) == 1 and not leg.unequal for leg in legs)
         and len({leg.equal[0] for leg in legs}) == 1
+        and legs[0].equal[0][1] not in fields
     ):
         return legs[0].equal[0][1], None, first_leg
     return None, (pl.all_horizontal(conds) if conds else None), first_leg
@@ -324,7 +356,7 @@ def single_row(frame: Any, leg: Leg) -> Any:
         v = leg.unequal[0][0]
         raise PrismQLRuntimeError(f"!${v} refers to a variable no earlier leg binds")
     rows = leg_frame(frame, leg.ids)
-    for cond in _self_consistency("", leg):
+    for cond in _self_consistency("", leg, _list_columns(frame)):
         rows = rows.filter(cond)
     rows = rows.sort("position").with_row_index("group")
     res = rows.select(
@@ -364,7 +396,7 @@ def cooccur_row(
         copies[lg] = copies.get(lg, 0) + 1
     if any(n > len(lg.ids) for lg, n in copies.items()):
         return _empty(frame)
-    key, eligible, bindings = _cooccur_constraints(legs)
+    key, eligible, bindings = _cooccur_constraints(legs, _list_columns(frame))
     # Consecutive copies of one leg (a quantified item) enumerate as
     # combinations: their positions must ascend.
     ascending = {i for i in range(1, len(legs)) if legs[i] == legs[i - 1]}
@@ -398,6 +430,10 @@ def quantified_row(
         return _empty(frame)
     n_max = min(n_max, len(leg.ids))
     key = leg.equal[0][1] if len(leg.equal) == 1 and not leg.unequal else None
+    if key is not None and key in _list_columns(frame):
+        # a list (mentions) is no key; copies of a leg go through cooccur,
+        # which holds them to a shared value (#121) — here there is one copy
+        key = None
     if len(leg.equal) > 1 or leg.unequal:
         raise PrismQLRuntimeError(
             "A quantified restriction may correlate on one variable only"

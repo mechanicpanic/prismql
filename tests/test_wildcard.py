@@ -103,7 +103,8 @@ def test_wildcard_with_and():
 
 
 def test_wildcard_mentions_user():
-    """Test mentions_user(*) matches all messages."""
+    """mentions_user(*): the messages that @mention any author (graph
+    @aleph/prismql, #121) — not every message, as it once was."""
     backend = MemoryBackend(
         documents=[
             {"id": 1, "user": "alice", "text": "Hello @bob"},
@@ -113,7 +114,6 @@ def test_wildcard_mentions_user():
     )
     engine = PrismQLEngine(search_backend=backend)
 
-    # mentions_user(*) should match all messages
     result = engine.execute("SELECT mentions_user(*)")
 
-    assert len(result) == 3
+    assert result == [[1], [2]]

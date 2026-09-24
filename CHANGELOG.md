@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Changed (mentions: who addresses whom)
+- `mentions_user()` now means an `@mention` of an author: `@` and a name some event's author has (the server's `board.actor`, the engine's new `actor_field`, default `user`), the longest that fits, any case — an e-mail address is not one. It used to search the name as a word in the text; `mentions_user(*)` used to mean every message and now means every message with a mention. `mentions_user($y)` binds each mentioned name, so `mentions_user($y) FOLLOWED_BY field(agent, $y)` is "addressed, then answered by the one addressed"; it used to search the text "$y" and answer empty (graph @aleph/prismql, #121). The operator layer holds a list-valued field equal to a value when it contains it. Names with spaces or dots may be quoted in `mentions_user()` and `from()`, in both dialects. `prismql ingest … --annotate mentions --actor COL` writes a `mentions` column; without it mentions are found once at load.
+
 ### Added (why an event is in the result)
 - `"explain": true` on `/evaluate` and `?explain=true` on `GET /results/<id>` add, per event of each group, the query's conditions it satisfies: text conditions with the matched term, field and character offsets (cut and stemmed as the index does; checked against the tantivy index in tests), `similar_to` with its cosine, `field(…)` by name; conditions under `NOT` are left out. The explanation is kept with the result, so a later page is explained too, request dictionaries included. The board marks the matched words in an event's text (inspector and full view) and shows the similarity score (graph @aleph/prismql, #119). `SemanticIndex` gains `query_vector` and `cosine`.
 

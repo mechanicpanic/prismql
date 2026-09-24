@@ -153,9 +153,12 @@ a question word first — a '?' inside a URL does not count).
 `--annotate links` does the same for `contains_link()` (column `has_link`):
 a link is what the tokenizer keeps as one token, `http://` or `https://` up
 to the next whitespace — so a bare `www.example.com` is not one, and the
-words inside a link are not found by `contains()` or search. All of these
-read every text field present (`text`, `content`, `message`); `--text COL`
-narrows the ingest to one column. `--annotate entities` (extra `nlp`, a spaCy model,
+words inside a link are not found by `contains()` or search. `--annotate mentions --actor agent` writes `mentions`: the
+authors each message addresses as `@name` (a name some event in the `agent`
+column has — so an e-mail address is not a mention), for
+`mentions_user(name)` and `mentions_user($y)`. All of these read every text
+field present (`text`, `content`, `message`); `--text COL` narrows the
+ingest to one column. `--annotate entities` (extra `nlp`, a spaCy model,
 `--spacy-model`) adds the labels spaCy finds, for `mentions_org()` and its
 kin. Only a file the ingest stamped counts: a column that merely shares the
 name `is_question`, `has_link` or `entities` stays an ordinary field.

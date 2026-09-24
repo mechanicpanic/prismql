@@ -533,12 +533,7 @@ class IRExecutor(PrismQLVisitor):
             )
 
         if isinstance(cond, MentionsUser):
-            username = cond.user
-            if username == "*":
-                return self._all_documents()
-            if username in self.precomputed_indexes.user_mentions:
-                return self.precomputed_indexes.user_mentions[username]
-            return self.search_backend.search_text([username], field="text")
+            return self._mentions_user(cond.user)
 
         if isinstance(cond, IsQuestion):
             return self._get_questions()

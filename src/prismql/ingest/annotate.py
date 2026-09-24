@@ -122,11 +122,16 @@ def stamped_kinds(path: str) -> tuple[str, ...]:
     return tuple(k for k in raw.decode().split(",") if k)
 
 
-ANNOTATIONS = ("questions", "links", "entities")
+ANNOTATIONS = ("questions", "links", "mentions", "entities")
 
 
 def annotate(
-    df: Any, kinds: Sequence[str], *, text: str | None, spacy_model: str
+    df: Any,
+    kinds: Sequence[str],
+    *,
+    text: str | None,
+    spacy_model: str,
+    actor: str = "user",
 ) -> Any:
     """Add the annotation columns ``kinds`` name to a Polars frame: bool
     ``is_question`` and ``has_link`` (the rules above) and/or ``entities``
@@ -159,6 +164,25 @@ def annotate(
     texts = [
         "\n".join(str(r[f]) for f in fields if r[f] is not None) or None for r in rows
     ]
+    if "mentions" in kinds:
+        # @ and a name some event's author has (graph @aleph/prismql, #121)
+        from ..mentions import find_mentions, mention_pattern
+
+        if actor not in df.columns:
+            raise ValueError(f"--actor column {actor!r} not in {df.columns}")
+        names = mention_pattern(str(v) for v in df.get_column(actor).drop_nulls())
+        found = [
+            list(
+                dict.fromkeys(
+                    n
+                    for f in fields
+                    if r[f] is not None
+                    for n in find_mentions(str(r[f]), names)
+                )
+            )
+            for r in rows
+        ]
+        df = df.with_columns(pl.Series("mentions", found, dtype=pl.List(pl.Utf8)))
     if "entities" in kinds:
         labels = _entity_labels(texts, spacy_model)
         df = df.with_columns(pl.Series("entities", labels, dtype=pl.List(pl.Utf8)))

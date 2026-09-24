@@ -25,7 +25,7 @@ Restrictions are conditions that messages must satisfy. Multiple restrictions ar
 ### 1. Basic Filtering
 
 ```prismql
-from(username)                    -- Events from a specific source (alias for field(user, ...))
+from(username)                    -- Events from a specific source (alias for field(user, ...)); quote a name with spaces
 field(name, value)                -- Events where a field equals a value (exact, case-insensitive)
 field(name, value, partial)       -- ... or contains it as a substring
 contains(dictionary_name)         -- Messages containing dictionary words
@@ -33,7 +33,7 @@ contains_tokens(dictionary_name)  -- Token-based matching (preserves C++, emails
 contains_phrase("phrase")         -- Exact phrase matching
 is_question()                     -- Messages that are questions
 has_feature(feature_name)         -- Messages with custom annotated feature
-mentions_user(username)           -- Messages mentioning a user
+mentions_user(name)               -- Messages that @mention an author (a $var binds each name)
 mentions_date()                   -- Messages mentioning dates
 mentions_time()                   -- Messages mentioning times
 mentions_place()                  -- Messages mentioning locations
@@ -41,6 +41,21 @@ mentions_org()                    -- Messages mentioning organizations
 contains_link()                   -- Messages containing a link (http:// or https:// up to whitespace)
 similar_to("text", threshold)     -- Semantically similar messages (embedding cosine >= threshold)
 ```
+
+**Mentions** (who addresses whom): a mention is `@` followed by a name one
+of the corpus's authors has — the author field is the server's
+`board.actor` (in the engine, `actor_field`; default `user`) — the longest
+that fits, any case; an e-mail address (`cy@bob.org`) is not one. Names
+with spaces or dots go in quotes: `mentions_user("Claude Opus 4.5")`, and
+so may `from("GPT-5.4")`. `mentions_user(*)` is every message with a
+mention. `mentions_user($y)` binds `$y` to each name the message
+mentions, so a later link can ask for that author:
+`SELECT mentions_user($y) FOLLOWED_BY field(agent, $y) DURING 10 minutes`
+— a message addressing someone, answered by them; `field(agent, !$y)`
+asks for anyone else. Copies bound to one variable (`mentions_user($y){2}`,
+a comma list) share a mentioned name. Mentions come from a `mentions`
+column (`prismql ingest … --annotate mentions --actor agent`) or are found
+once at load.
 
 **Semantic similarity**: `similar_to("oil sanctions", 0.7)` embeds the quoted
 text and matches messages whose embedding cosine similarity is at or above

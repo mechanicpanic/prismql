@@ -37,8 +37,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--annotate",
         metavar="KINDS",
         help="comma-separated: questions (column is_question), links "
-        "(column has_link), entities (column entities, spaCy); the engine "
-        "reads them as its indexes",
+        "(column has_link), mentions (column mentions: @ + an --actor name), "
+        "entities (column entities, spaCy); the engine reads them as its "
+        "indexes",
+    )
+    parser.add_argument(
+        "--actor",
+        default="user",
+        help="the column naming each event's author, for --annotate mentions",
     )
     parser.add_argument(
         "--text",
@@ -98,7 +104,13 @@ def run(argv: Sequence[str] | None = None) -> int:
         from .annotate import annotate
 
         try:
-            df = annotate(df, kinds, text=args.text, spacy_model=args.spacy_model)
+            df = annotate(
+                df,
+                kinds,
+                text=args.text,
+                spacy_model=args.spacy_model,
+                actor=args.actor,
+            )
         except ValueError as e:
             print(f"--annotate: {e}", file=sys.stderr)
             return 2

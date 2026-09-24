@@ -425,7 +425,8 @@ class _PipeParser:
             return ContainsPhrase(tok.text[1:-1])
 
         if name == "from":
-            term = self.parse_term()
+            # a quoted name ("GPT-5.4", "Claude Opus 4.5"), as classic takes (#121)
+            term = self.parse_term(allow_quoted=True)
             self.expect("RPAREN", "')'")
             return FieldMatch("user", term, exact=True)
 

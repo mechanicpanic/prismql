@@ -26,6 +26,7 @@ from ..types import NamedQueryResult
 from .config import (
     CorpusConfig,
     ServerConfig,
+    actor_field,
     build_engine,
     load_config,
 )
@@ -527,6 +528,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                     timestamp_field=corpus_cfg.timestamp_field,
                     text_match=corpus_cfg.text_match,
                     quantifier_ceiling=corpus_cfg.quantifier_ceiling,
+                    actor_field=actor_field(corpus_cfg),
                 )
             try:
                 result = engine.execute(req.query)

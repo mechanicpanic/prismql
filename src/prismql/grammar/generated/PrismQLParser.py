@@ -176,7 +176,7 @@ def serializedATN():
         3,46,23,0,451,449,1,0,0,0,451,452,1,0,0,0,452,41,1,0,0,0,453,454,
         3,46,23,0,454,455,3,44,22,0,455,43,1,0,0,0,456,457,7,3,0,0,457,45,
         1,0,0,0,458,459,5,69,0,0,459,47,1,0,0,0,460,461,7,4,0,0,461,49,1,
-        0,0,0,462,463,7,5,0,0,463,51,1,0,0,0,464,465,7,5,0,0,465,53,1,0,
+        0,0,0,462,463,7,5,0,0,463,51,1,0,0,0,464,465,7,6,0,0,465,53,1,0,
         0,0,466,467,5,70,0,0,467,55,1,0,0,0,468,469,5,70,0,0,469,57,1,0,
         0,0,470,471,7,6,0,0,471,59,1,0,0,0,472,473,5,70,0,0,473,61,1,0,0,
         0,35,70,73,83,86,89,92,95,98,106,128,137,142,146,163,177,188,199,
@@ -3025,6 +3025,9 @@ class PrismQLParser ( Parser ):
         def STRING(self):
             return self.getToken(PrismQLParser.STRING, 0)
 
+        def QUOTED_STRING(self):
+            return self.getToken(PrismQLParser.QUOTED_STRING, 0)
+
         def VARIABLE(self):
             return self.getToken(PrismQLParser.VARIABLE, 0)
 
@@ -3052,7 +3055,7 @@ class PrismQLParser ( Parser ):
             self.enterOuterAlt(localctx, 1)
             self.state = 464
             _la = self._input.LA(1)
-            if not(((((_la - 70)) & ~0x3f) == 0 and ((1 << (_la - 70)) & 13) != 0)):
+            if not(((((_la - 70)) & ~0x3f) == 0 and ((1 << (_la - 70)) & 15) != 0)):
                 self._errHandler.recoverInline(self)
             else:
                 self._errHandler.reportMatch(self)

@@ -55,9 +55,12 @@ class PrismQLVisitor(BasePrismQLVisitor):
         text_match: str = "stem",
         dictionary_modes: Mapping[str, str] | None = None,
         quantifier_ceiling: int | None = None,
+        actor_field: str = "user",
     ) -> None:
         self.search_backend = search_backend
         self.quantifier_ceiling = quantifier_ceiling
+        # whose names an @mention can be (graph @aleph/prismql, #121)
+        self.actor_field = actor_field
         self.user_dictionaries = user_dictionaries or {}
         self.text_match = text_match
         # Per-dictionary single-word match mode (overrides text_match)
@@ -777,7 +780,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # from(username) - same as byuser
         if ctx.From():
-            username = ctx.huser().getText()
+            username = _unquote(ctx.huser().getText())
 
             # Check if this is wildcard - match all users/messages
             if username == "*":
@@ -805,18 +808,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # mentions_user(username) - same as hasusermentioned
         if ctx.MentionsUser():
-            username = ctx.huser().getText()
-
-            # Check if this is wildcard - match all messages
-            if username == "*":
-                total_docs = self.search_backend.get_total_documents()
-                return self.search_backend.get_all_document_ids(limit=total_docs)
-
-            # First check precomputed index
-            if username in self.precomputed_indexes.user_mentions:
-                return self.precomputed_indexes.user_mentions[username]
-            # Otherwise search in text
-            return self.search_backend.search_text([username], field="text")
+            return self._mentions_user(_unquote(ctx.huser().getText()))
 
         # is_question() - same as hasquestion
         if ctx.IsQuestion():
@@ -915,7 +907,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 DeprecationWarning,
                 stacklevel=2,
             )
-            username = ctx.huser().getText()
+            username = _unquote(ctx.huser().getText())
 
             # Check if this is wildcard - match all users/messages
             if username == "*":
@@ -948,16 +940,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 DeprecationWarning,
                 stacklevel=2,
             )
-            username = ctx.huser().getText()
-
-            # Check if this is wildcard - match all messages
-            if username == "*":
-                total_docs = self.search_backend.get_total_documents()
-                return self.search_backend.get_all_document_ids(limit=total_docs)
-
-            if username in self.precomputed_indexes.user_mentions:
-                return self.precomputed_indexes.user_mentions[username]
-            return self.search_backend.search_text([username], field="text")
+            return self._mentions_user(_unquote(ctx.huser().getText()))
 
         if ctx.HasQuestion():
             warnings.warn(
@@ -1055,6 +1038,32 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # once over the backend's documents (graph @aleph/prismql, #106) —
         # never a backend's own heuristic, so every backend agrees.
         return self._annotated("questions")
+
+    def _mentions_user(self, username: str) -> set[MessageId]:
+        """mentions_user(name | $y | !$y | *): the events that @mention an
+        author (graph @aleph/prismql, #121). A variable binds each mentioned
+        name: the ``mentions`` field is a list, and the operator layer holds
+        a list equal to a value when it contains it."""
+        from ..mentions import MENTIONS_FIELD, mentions_of
+
+        if username in self.precomputed_indexes.user_mentions:
+            return self.precomputed_indexes.user_mentions[username]
+        from ..ingest.annotate import TEXT_FIELDS
+
+        mentions = mentions_of(self.search_backend, self.actor_field, TEXT_FIELDS)
+        if username == "*":
+            return set(mentions.any)
+        if username.lstrip("!").startswith("$"):
+            self.variable_constraints.append(
+                VariableConstraint(
+                    variable_name=username.lstrip("!")[1:],
+                    field_name=MENTIONS_FIELD,
+                    position=self.current_restriction_position,
+                    negated=username.startswith("!"),
+                )
+            )
+            return set(mentions.any)
+        return set(mentions.ids(username))
 
     def _get_links(self) -> set[MessageId]:
         """contains_link(): the ingest's link column, else an extractor's URL
@@ -1775,3 +1784,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         # Should not reach here with valid parse tree
         return (1, 1)
+
+
+def _unquote(text: str) -> str:
+    """A user argument as written, a quoted name without its quotes (#121)."""
+    if len(text) >= 2 and text[0] == text[-1] == '"':
+        return text[1:-1]
+    return text

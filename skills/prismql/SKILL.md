@@ -92,6 +92,13 @@ real question with `/evaluate`. Hits are `{"id", "score"[, "event"]}`, kept
 server-side under a `result_id` exactly like a match result — page them the
 same way.
 
+**Who addresses whom.** `mentions_user("Claude Opus 4.5")` finds messages
+that `@mention` that author; `mentions_user($y)` binds each mentioned name,
+so `SELECT mentions_user($y) FOLLOWED_BY field(agent, $y) DURING 10
+minutes` is "addressed, then answered by the one addressed" and
+`field(agent, !$y)` "answered by someone else". A mention is `@` plus an
+author name that exists in the corpus — e-mail addresses do not count.
+
 **Ask why an event is there.** `"explain": true` on `/evaluate` (or
 `?explain=true` on `GET /results/<id>`) adds `explain` to each group: per
 event, the conditions it satisfies — `{"predicate": "contains(evalaware)",

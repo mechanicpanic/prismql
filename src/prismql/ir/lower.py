@@ -63,6 +63,15 @@ from .nodes import (
 # ---------------------------------------------------------------------------
 
 
+def _huser(ctx: Any) -> str:
+    """A user argument as written, a quoted name without its quotes — names
+    like "Claude Opus 4.5" need them (graph @aleph/prismql, #121)."""
+    text: str = ctx.huser().getText()
+    if len(text) >= 2 and text[0] == text[-1] == '"':
+        return text[1:-1]
+    return text
+
+
 def _term(text: str) -> Term:
     if text == "*":
         return Wildcard()
@@ -111,9 +120,9 @@ def lower_condition(  # noqa: C901 - one branch per condition alternative
     if ctx.ContainsPhrase():
         return ContainsPhrase(ctx.QUOTED_STRING().getText()[1:-1])
     if ctx.From():
-        return FieldMatch("user", _term(ctx.huser().getText()), exact=True)
+        return FieldMatch("user", _term(_huser(ctx)), exact=True)
     if ctx.MentionsUser():
-        return MentionsUser(ctx.huser().getText())
+        return MentionsUser(_huser(ctx))
     if ctx.IsQuestion():
         return IsQuestion()
     if ctx.MentionsDate():
@@ -167,10 +176,10 @@ def lower_condition(  # noqa: C901 - one branch per condition alternative
         return Contains(_term(ctx.hdict().getText()))
     if ctx.ByUser():
         _warn_deprecated("byuser", "from", "from(username)")
-        return FieldMatch("user", _term(ctx.huser().getText()), exact=True)
+        return FieldMatch("user", _term(_huser(ctx)), exact=True)
     if ctx.HasUserMentioned():
         _warn_deprecated("hasusermentioned", "mentions_user", "mentions_user(username)")
-        return MentionsUser(ctx.huser().getText())
+        return MentionsUser(_huser(ctx))
     if ctx.HasQuestion():
         _warn_deprecated("hasquestion", "is_question", "is_question()")
         return IsQuestion()

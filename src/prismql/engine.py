@@ -110,6 +110,7 @@ class PrismQLEngine:
         text_match: str = "stem",
         use_ir: bool = True,
         quantifier_ceiling: int | None = None,
+        actor_field: str = "user",
     ) -> None:
         """
         Initialize the PrismQL engine.
@@ -132,6 +133,9 @@ class PrismQLEngine:
                 stemming for morphology-rich languages. "token": whole-token
                 matching via the tokenizer index (Lucene-era semantics).
                 contains_tokens() and contains_phrase() are unaffected.
+            actor_field: The field naming each event's author; an @mention
+                is ``@`` and one of its values (``mentions_user``). The
+                language's own ``from()`` reads ``user``, hence the default.
             quantifier_ceiling: Upper bound that closes an open range {n,}
                 as {n,m}. None (default): an open range is an error — the
                 engine enumerates groups up to an explicit size and never
@@ -160,6 +164,7 @@ class PrismQLEngine:
         if quantifier_ceiling is not None and quantifier_ceiling < 1:
             raise ValueError("quantifier_ceiling must be >= 1")
         self.quantifier_ceiling = quantifier_ceiling
+        self.actor_field = actor_field
 
         # One instance serves both execution paths: IRExecutor subclasses
         # PrismQLVisitor, so visitor.visit(tree) (legacy path) and
@@ -174,6 +179,7 @@ class PrismQLEngine:
             text_match=text_match,
             dictionary_modes=self.dictionary_modes,
             quantifier_ceiling=quantifier_ceiling,
+            actor_field=actor_field,
         )
 
     def _check_match_support(self, mode: str, dictionary: str | None = None) -> None:

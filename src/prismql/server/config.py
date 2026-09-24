@@ -461,7 +461,14 @@ def build_engine(config: ServerConfig | CorpusConfig) -> PrismQLEngine:
         timestamp_field=config.timestamp_field,
         text_match=config.text_match,
         quantifier_ceiling=config.quantifier_ceiling,
+        actor_field=actor_field(config),
     )
+
+
+def actor_field(config: ServerConfig | CorpusConfig) -> str:
+    """Whose names an @mention can be: the board's actor field, else the
+    language's own author field (graph @aleph/prismql, #121)."""
+    return config.board_fields.get("actor") or "user"
 
 
 def _semantic_index(
