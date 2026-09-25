@@ -175,6 +175,7 @@ SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 10 FOLLOWED_BY from(charlie) D
 - **Required**: the final link of a chain must have a window (INWINDOW or DURING)
 - **Chaining**: `A FOLLOWED_BY B FOLLOWED_BY C INWINDOW 10` - a trailing window applies to every windowless link (per link, not whole-chain span)
 - **Per-link**: `A FOLLOWED_BY B INWINDOW 10 FOLLOWED_BY C DURING 5 minutes` - links may carry individual windows; INWINDOW and DURING mix freely
+- **Whole group**: a second `DURING` after the chain's window bounds the span of the whole group: `A FOLLOWED_BY A FOLLOWED_BY A DURING 1 hour DURING 1 day` - each step within an hour, the whole group within a day. A chain of repeats still gives one group per starting event, not one per series
 - **Positional**: `INWINDOW N` - messages within N positions
 - **Temporal**: `DURING <time>` - messages within time duration
 
@@ -341,7 +342,12 @@ SELECT
    - A single parenthesized subquery is the identity: `SELECT (SELECT X)`
      returns exactly what `SELECT X` returns.
 
-3. **Do NOT flatten subqueries** - Grouping semantics matter!
+3. **Variables do not cross subqueries.** Each `(SELECT ...)` binds its own `$u`:
+   `(SELECT from($u)) FOLLOWED_BY (SELECT from($u)) INWINDOW 5` pairs *any* two
+   users, not the same one twice. For the same value across steps write one
+   flat chain: `SELECT from($u) FOLLOWED_BY from($u) INWINDOW 5`.
+
+4. **Do NOT flatten subqueries** - Grouping semantics matter!
 
 ```prismql
 -- ✅ CORRECT: Preserves grouping (alice+bob together, charlie separate)

@@ -166,6 +166,10 @@ from(alice) ~>(10) from(bob) ~>(5m) from(charlie)
   every windowless link (per link, not whole-chain span)
 - **Per-link**: `a ~>(10) b ~>(5m) c` — links may carry individual windows;
   positional and temporal mix freely
+- **Whole group**: a second `during(TIME)` after the chain's window bounds the
+  span of the whole group: `a ~> a ~> a |> during(1h) |> during(1d)` — each
+  step within an hour, the whole group within a day. A chain of repeats still
+  gives one group per starting event, not one per series
 - **Positional**: `within(N)` / `~>(N)` — messages within N positions
 - **Temporal**: `during(TIME)` / `~>(TIME)` — messages within a time span
 
@@ -289,7 +293,12 @@ precedence grouping only.
    (`~>(10)`) — a trailing `|> within(...)` cannot supply it. To bound the
    overall time span of matched groups, add `|> during(TIME)`.
 
-3. **Do NOT flatten subqueries** — grouping semantics matter!
+3. **Variables do not cross brackets.** Each `[...]` binds its own `$u`:
+   `[from($u)] ~>(5) [from($u)]` pairs *any* two users, not the same one twice.
+   For the same value across steps write one flat chain:
+   `from($u) ~> from($u) |> within(5)`.
+
+4. **Do NOT flatten subqueries** — grouping semantics matter!
 
 ```
 -- ✅ CORRECT: preserves grouping (alice+bob together, charlie separate)

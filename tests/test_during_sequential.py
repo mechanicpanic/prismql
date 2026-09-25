@@ -156,3 +156,20 @@ def test_followed_by_during_no_match(engine):
     result = engine.execute(query)
     # No bob is followed by charlie within 1 minute
     assert result == []
+
+
+@pytest.mark.parametrize("use_ir", [True, False])
+def test_second_during_bounds_the_whole_chain(engine, use_ir):
+    """A chain's trailing DURING bounds each step; a second one bounds the group."""
+    engine.use_ir = use_ir
+    steps = (
+        "SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(alice) "
+        "DURING 5 minutes"
+    )
+    # alice@0s → bob@5s → alice@10s; alice@10s → bob@15s → alice@5m10s
+    # (last step 4m55s, within 5 minutes per step, whole group 5m)
+    assert sorted(engine.execute(steps)) == [[1, 2, 3], [3, 4, 6]]
+    # The second DURING drops the group spanning 5 minutes.
+    assert sorted(engine.execute(steps + " DURING 1 minute")) == [[1, 2, 3]]
+    pipe = "from(alice) ~> from(bob) ~> from(alice) |> during(5m) |> during(1m)"
+    assert sorted(engine.execute(pipe)) == [[1, 2, 3]]
