@@ -193,8 +193,17 @@ file through `prismql ingest`: `prismql ingest table SRC DST.parquet --id COL
 `prismql ingest claude-code ~/.claude/projects/<project> DST.parquet` and
 `prismql ingest codex ~/.codex/sessions DST.parquet` give one event per
 prompt / thought / tool call / tool result (`kind`, `tool`, `error`,
-`session`, `model`, `text`). Point `data` at the Parquet, `time` is the
-timestamp field. With `--embed`, `similar_to()` works without any
+`session`, `model`, `text`). A call carries its structure and its end:
+`cmd` (the program a shell command runs: `git`, `curl`, `rm`), `path` (the
+file read or written), `host` (from a URL), `action` (`read`, `write`,
+`exec`, `network`, `destructive`), `outcome` (`ok`, `error`, `none` — no
+result), `duration_ms`, `output_chars` and the words `duration_bucket`
+(`instant` < 1s, `short` < 10s, `medium` < 1m, `long` < 10m, `very_long`)
+and `output_bucket` (`empty`, `small` < 1k chars, `medium`, `large`, `huge`
+≥ 100k); `call` joins a call to its result. Claude Code sub-agent events
+carry `agent`, and the call that started one carries it as `spawned`:
+`field(spawned, $g) FOLLOWED_BY field(agent, $g)`. Point `data` at the
+Parquet, `time` is the timestamp field. With `--embed`, `similar_to()` works without any
 `[semantic]` config: the file carries the vectors and the model name.
 
 Keep `--extra server` on `uv run` too: `uv run` re-syncs the environment to

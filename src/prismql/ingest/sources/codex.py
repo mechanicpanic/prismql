@@ -19,6 +19,7 @@ from typing import Any
 import polars as pl
 
 from ..core import normalize
+from .calls import attach_outcomes, call_id, describe_call
 from .claude_code import SCHEMA, TEXT_CAP, _cap
 
 # The exec tool's own header, at the start of its output — not a phrase
@@ -89,6 +90,7 @@ def _read_file(file: Path, skipped: Counter[str]) -> list[dict[str, Any]]:
                 }
             )
             out.append(row)
+    attach_outcomes(out)
     return out
 
 
@@ -130,6 +132,8 @@ def _item_row(
             "tool": name,
             "error": None,
             "text": _cap(payload),
+            "call": call_id(item.get("call_id")),
+            **describe_call(name, payload),
         }
     if itype == "web_search_call":
         action = item.get("action") or {}
@@ -139,6 +143,7 @@ def _item_row(
             "tool": "web_search",
             "error": None,
             "text": _cap(str(action.get("query") or json.dumps(action))),
+            **describe_call("web_search", action),
         }
     if itype in (
         "function_call_output",
@@ -158,6 +163,8 @@ def _item_row(
             "tool": call_names.get(str(item.get("call_id"))),
             "error": bool(exit_code and int(exit_code.group(1)) != 0),
             "text": _cap(output),
+            "call": call_id(item.get("call_id")),
+            "output_chars": len(output),
         }
     if itype == "compaction":
         return {

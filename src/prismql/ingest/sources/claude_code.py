@@ -17,6 +17,7 @@ from typing import Any
 import polars as pl
 
 from ..core import normalize
+from .calls import attach_outcomes, call_id, describe_call
 
 STREAM_TYPES = {"user", "assistant"}
 TEXT_CAP = 4000
@@ -35,6 +36,19 @@ SCHEMA = {
     "text": pl.Utf8,
     "uuid": pl.Utf8,
     "parent": pl.Utf8,
+    # The call as structure (graph #129) and the sub-agent it ran in (#131).
+    "call": pl.Utf8,
+    "cmd": pl.Utf8,
+    "path": pl.Utf8,
+    "host": pl.Utf8,
+    "action": pl.Utf8,
+    "outcome": pl.Utf8,
+    "duration_ms": pl.Int64,
+    "duration_bucket": pl.Utf8,
+    "output_chars": pl.Int64,
+    "output_bucket": pl.Utf8,
+    "agent": pl.Utf8,
+    "spawned": pl.Utf8,
 }
 
 
@@ -97,6 +111,7 @@ def _read_file(
                 "sidechain": bool(rec.get("isSidechain", False)),
                 "uuid": rec.get("uuid"),
                 "parent": rec.get("parentUuid"),
+                "agent": rec.get("agentId"),
             }
             content = msg.get("content")
             blocks = (
@@ -112,11 +127,17 @@ def _read_file(
                 row = _block_row(block, rtype, tool_names, f"{file}:{lineno}")
                 if row is None:
                     continue
+                if row["kind"] == "tool_result":
+                    spawned = rec.get("toolUseResult") or {}
+                    row["spawned"] = (
+                        spawned.get("agentId") if isinstance(spawned, dict) else None
+                    )
                 row.update(base)
                 # Not the record uuid: it repeats within a file (a sub-agent
                 # transcript replays records). File, line and block are unique.
                 row["id"] = f"{stem}:{lineno}:{i}"
                 out.append(row)
+    attach_outcomes(out)
     return out
 
 
@@ -141,7 +162,14 @@ def _block_row(
         name = str(block.get("name"))
         tool_names[str(block.get("id"))] = name
         payload = json.dumps(block.get("input"), ensure_ascii=False)
-        return {"kind": "tool_use", "tool": name, "error": None, "text": _cap(payload)}
+        return {
+            "kind": "tool_use",
+            "tool": name,
+            "error": None,
+            "text": _cap(payload),
+            "call": call_id(block.get("id")),
+            **describe_call(name, block.get("input")),
+        }
     if btype == "tool_result":
         result_tool = tool_names.get(str(block.get("tool_use_id")))
         content = block.get("content")
@@ -149,11 +177,14 @@ def _block_row(
             content = "\n".join(
                 str(c.get("text", "")) for c in content if isinstance(c, dict)
             )
+        text = str(content or "")
         return {
             "kind": "tool_result",
             "tool": result_tool,
             "error": bool(block.get("is_error", False)),
-            "text": _cap(str(content or "")),
+            "text": _cap(text),
+            "call": call_id(block.get("tool_use_id")),
+            "output_chars": len(text),
         }
     if btype == "fallback":
         # The harness switched models mid-turn: an event worth keeping.

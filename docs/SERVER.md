@@ -71,6 +71,10 @@ column is called **`time`**, which matters in the config (§3).
   `board.actor` field). Entities are never annotated at load.
 - `prismql ingest claude-code <project dir> out.parquet` and
   `prismql ingest codex <sessions dir> out.parquet` read agent harness logs.
+  A tool call is one event with its program, file, host, kind of action and
+  outcome (`cmd`, `path`, `host`, `action`, `outcome`, `duration_ms`,
+  `duration_bucket`, `output_chars`, `output_bucket`); the agent skill
+  (`skills/prismql/SKILL.md`) lists the values.
 
 ### Embeddings: `similar_to()` and `/similar`
 
