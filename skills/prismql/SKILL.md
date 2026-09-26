@@ -194,15 +194,22 @@ file through `prismql ingest`: `prismql ingest table SRC DST.parquet --id COL
 `prismql ingest codex ~/.codex/sessions DST.parquet` give one event per
 prompt / thought / tool call / tool result (`kind`, `tool`, `error`,
 `session`, `model`, `text`). A call carries its structure and its end:
-`cmd` (the program a shell command runs: `git`, `curl`, `rm`), `path` (the
-file read or written), `host` (from a URL), `action` (`read`, `write`,
-`exec`, `network`, `destructive`), `outcome` (`ok`, `error`, `none` — no
-result), `duration_ms`, `output_chars` and the words `duration_bucket`
-(`instant` < 1s, `short` < 10s, `medium` < 1m, `long` < 10m, `very_long`)
-and `output_bucket` (`empty`, `small` < 1k chars, `medium`, `large`, `huge`
-≥ 100k); `call` joins a call to its result. Claude Code sub-agent events
-carry `agent`, and the call that started one carries it as `spawned`:
-`field(spawned, $g) FOLLOWED_BY field(agent, $g)`. Point `data` at the
+`cmd` (the first program a shell command runs: `git`, `curl`, `rm` — past
+`cd`, `sudo`, assignments, loop headers; quoted text and heredocs are not
+programs), `path` (the file read or written), `host` (from a URL a network
+program or fetch is given), `action` (`read`, `write`, `exec`, `network`,
+`destructive` — recursive rm, `git reset --hard`, force push, `git clean
+-f`, `find -delete`, `dd of=`, DROP/TRUNCATE through a SQL client),
+`outcome` (`ok`, `error`, `none` — no result), `duration_ms` (call to
+result, so a wait for the user's approval counts), `output_chars`, and the
+words `duration_bucket` (`instant` < 1s, `short` < 10s, `medium` < 1m,
+`long` < 10m, `very_long`) and `output_bucket` (`empty`, `small` < 1k
+chars, `medium`, `large`, `huge` ≥ 100k); `call` joins a call to its
+result. Codex marks `error` only for a non-zero exit of its exec tool and
+reads files through the shell, so its failure and read counts are not
+comparable with Claude Code's. Claude Code sub-agent events carry `agent`,
+and the call that started one carries it as `spawned`:
+`field(spawned, $g) FOLLOWED_BY field(agent, $g) DURING 1 hour`. Point `data` at the
 Parquet, `time` is the timestamp field. With `--embed`, `similar_to()` works without any
 `[semantic]` config: the file carries the vectors and the model name.
 

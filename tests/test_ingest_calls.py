@@ -4,13 +4,15 @@
 import json
 from pathlib import Path
 
+import polars as pl
 import pytest
 
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
-from prismql.ingest.sources.calls import describe_call, duration_bucket, output_bucket
+from prismql.ingest.sources.calls import describe_call
 from prismql.ingest.sources.claude_code import read_claude_code
 from prismql.ingest.sources.codex import read_codex
+from prismql.ingest.sources.outcomes import duration_bucket, output_bucket
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -62,12 +64,60 @@ FIXTURES = Path(__file__).parent / "fixtures"
             {"path": "src/a.py", "action": "write"},
         ),
         ("send_message", {"message": "hi"}, {"action": None, "cmd": None}),
+        (
+            "apply_patch",
+            {"input": "*** Begin Patch\n*** Add File: b.py\n+x\n*** End Patch"},
+            {"path": "b.py", "action": "write"},
+        ),
+        (
+            "shell",
+            {"command": ["apply_patch", "*** Begin Patch\n*** Update File: c.py\n"]},
+            {"cmd": "apply_patch", "path": "c.py", "action": "write"},
+        ),
     ],
 )
 def test_describe_call(tool, args, expected):
     got = describe_call(tool, args)
     for key, value in expected.items():
         assert got[key] == value, key
+
+
+@pytest.mark.parametrize(
+    ("command", "cmd", "action"),
+    [
+        # What a command says is not what it runs (cold review, 2026-09-26).
+        ("git commit -m 'stop using rm -rf'", "git", "exec"),
+        ("git commit -m 'a; rm -rf x'", "git", "exec"),
+        ("grep -rn 'DROP TABLE' src", "grep", "exec"),
+        ("git rm -r --cached x", "git", "exec"),
+        ("git push --force-with-lease", "git", "exec"),
+        ("cat > s.sh <<'EOF'\nrm -rf /\nEOF\nchmod +x s.sh", "cat", "exec"),
+        ("rm -f -r build", "rm", "destructive"),
+        ("git -C sub push -f", "git", "destructive"),
+        ("git push origin +main", "git", "destructive"),
+        ("git reset --hard HEAD~1", "git", "destructive"),
+        ("git clean -fd", "git", "destructive"),
+        ("find . -name '*.pyc' -delete", "find", "destructive"),
+        ('psql -c "DROP TABLE users"', "psql", "destructive"),
+        ("(cd web && npm test)", "npm", "exec"),
+        ("# run the suite\nnpm test", "npm", "exec"),
+        ("ls  # list\nrm -rf tmp", "ls", "destructive"),
+        ("sudo -u pg psql", "psql", "exec"),
+        ("env -i PATH=/bin ls", "ls", "exec"),
+        ("FOO=$(git rev-parse HEAD) make", "make", "exec"),
+        ("if grep -q x f; then rm -r y; fi", "grep", "destructive"),
+        ("echo 'unbalanced", "echo", "exec"),
+        ('git commit -m "see https://example.com"', "git", "exec"),
+    ],
+)
+def test_shell_command_runs_what_it_runs(command, cmd, action):
+    got = describe_call("Bash", {"command": command})
+    assert (got["cmd"], got["action"]) == (cmd, action)
+
+
+def test_host_skips_user_info():
+    got = describe_call("Bash", {"command": "curl https://user@host.example.com/x"})
+    assert got["host"] == "host.example.com"
 
 
 def test_buckets_are_words_a_query_can_name():
@@ -191,9 +241,51 @@ def test_a_failed_command_retried(use_ir):
     engine = PrismQLEngine(MemoryBackend(docs), use_ir=use_ir, timestamp_field="time")
     q = (
         "SELECT field(kind, tool_use) AND field(outcome, error) AND field(cmd, $c)"
-        " FOLLOWED_BY field(kind, tool_use) AND field(cmd, $c) INWINDOW 5"
+        " AND field(session, $s) FOLLOWED_BY field(kind, tool_use)"
+        " AND field(cmd, $c) AND field(session, $s) INWINDOW 5"
     )
     assert engine.execute(q) == [["session:5:0", "session:7:0"]]
+
+
+def test_a_replayed_call_pairs_with_its_own_result(tmp_path):
+    use = {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "ls"}}
+    ok = {"type": "tool_result", "tool_use_id": "t1", "content": "a"}
+    bad = {"type": "tool_result", "tool_use_id": "t1", "content": "b", "is_error": True}
+    (tmp_path / "s.jsonl").write_text(
+        "\n".join(
+            [
+                _rec("assistant", 1, [use]),
+                _rec("user", 2, [ok]),
+                _rec("assistant", 10, [use]),
+                _rec("user", 49, [bad]),
+            ]
+        )
+        + "\n"
+    )
+    uses = read_claude_code(tmp_path).filter(pl.col("kind") == "tool_use")
+    assert uses.get_column("outcome").to_list() == ["ok", "error"]
+    assert uses.get_column("duration_ms").to_list() == [1000, 39000]
+
+
+def test_a_time_that_is_not_an_instant_does_not_abort(tmp_path):
+    use = {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "ls"}}
+    res = {"type": "tool_result", "tool_use_id": "t1", "content": "a"}
+    naive = json.loads(_rec("user", 2, [res]))
+    naive["timestamp"] = "2026-01-01T00:00:02"
+    (tmp_path / "s.jsonl").write_text(
+        _rec("assistant", 1, [use]) + "\n" + json.dumps(naive) + "\n"
+    )
+    uses = read_claude_code(tmp_path).filter(pl.col("kind") == "tool_use")
+    assert uses.get_column("outcome").to_list() == ["ok"]
+    assert uses.get_column("duration_ms").to_list() == [None]
+
+
+def test_a_result_without_its_call_keeps_no_spawned(tmp_path):
+    res = {"type": "tool_result", "tool_use_id": "gone", "content": "done"}
+    (tmp_path / "s.jsonl").write_text(
+        _rec("user", 2, [res], toolUseResult={"agentId": "ag9"}) + "\n"
+    )
+    assert read_claude_code(tmp_path).get_column("spawned").to_list() == [None]
 
 
 @pytest.mark.xfail(

@@ -19,8 +19,9 @@ from typing import Any
 import polars as pl
 
 from ..core import normalize
-from .calls import attach_outcomes, call_id, describe_call
+from .calls import describe_call
 from .claude_code import SCHEMA, TEXT_CAP, _cap
+from .outcomes import attach_outcomes, call_id
 
 # The exec tool's own header, at the start of its output — not a phrase
 # quoted somewhere inside a successful tool's output.

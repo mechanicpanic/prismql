@@ -17,7 +17,8 @@ from typing import Any
 import polars as pl
 
 from ..core import normalize
-from .calls import attach_outcomes, call_id, describe_call
+from .calls import describe_call
+from .outcomes import attach_outcomes, call_id
 
 STREAM_TYPES = {"user", "assistant"}
 TEXT_CAP = 4000
