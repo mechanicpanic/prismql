@@ -111,3 +111,4 @@ mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
 .ctxnote.err{color:var(--err)}
 /* why an event is in the result (#119) */
 .ev .l .why{font:11px "JetBrains Mono",monospace;color:var(--accent);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+.warn-line{color:var(--warn)}.warn-line+.warn-line{margin-top:6px}.warn-hint{margin-top:2px;color:var(--muted);font-size:12px}

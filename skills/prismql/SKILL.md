@@ -325,6 +325,13 @@ if not r.valid:
 Over HTTP the 422 body does the same job; feed the message back and retry,
 at most three attempts before asking the person.
 
+A query can also run and answer something else than you meant. The
+`/evaluate` answer then carries `warnings` (`code`, `message`,
+`suggestion`); `QueryValidator().validate(q).warnings` gives the same from
+Python. Read them before you report a number: `REPEATED_LINKS` (use
+`RUN`), `SUBQUERY_SHARED_VARIABLE` (one chain, not subqueries),
+`QUANTIFIER_COMBINATIONS` (count with `AGGREGATE count()`), `LARGE_WINDOW`.
+
 ## No server: inline Python
 
 From a clone `uv sync`, or in another project `uv add --editable

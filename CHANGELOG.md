@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (warnings: runs, but asks something else)
+- Every `/evaluate` answer carries `warnings` (`code`, `message`, `suggestion`), also through MCP, and the board shows them in the request's inspector; the journal keeps them. They name queries that run without an error and answer another question: `REPEATED_LINKS` (three or more identical links — one overlapping group per starting event, use `RUN`), `SUBQUERY_SHARED_VARIABLE` (each subquery binds its own `$k`), `QUANTIFIER_COMBINATIONS` (1,000 or more groups from a quantifier are combinations), `LARGE_WINDOW`. `QueryValidator.validate()` reports the first two for both dialects and `QueryValidator.warnings(ir, total=…)` gives what the server shows (graph @aleph/prismql, #128).
+
 ### Added (a variable on the excluded side of a negation)
 - `NOT_FOLLOWED_BY` / `NOT_PRECEDED_BY` (pipe `!~>` / `!<~`) take variables on the excluded side. They bind nothing — that event is not in the group — and narrow what counts as excluded: `$k` to an event with the left side's value, `!$k` to one with another value. "A tool failed and the same session never called it again" is `field(outcome, error) AND field(tool, $t) AND field(session, $s) NOT_FOLLOWED_BY field(tool, $t) AND field(session, $s) DURING 1 hour`. A variable the left side does not bind is an error. It used to be refused outright (graph @aleph/prismql, #130). The legacy path now passes the left side's variables to a negative link as the IR path did.
 

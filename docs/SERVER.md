@@ -252,6 +252,15 @@ curl -s -X POST localhost:8901/evaluate -H 'content-type: application/json' \
   -d '{"query": "SELECT contains(signin)", "corpus": "events"}'
 ```
 
+Every `/evaluate` answer carries `warnings`, a list that is usually empty.
+A warning names a query that runs without an error but answers another
+question than it seems to ask: a chain of three or more identical links
+(one overlapping group per starting event — `RUN` counts runs), one
+variable in sibling subqueries (each subquery binds its own), a quantifier
+answer of 1,000 groups or more (combinations, not a count), a very large
+window. Each has a `code`, a `message` and a `suggestion`; the board shows
+them in the request's inspector.
+
 ## 6. Restart and reload
 
 Restarting the process reloads every corpus. Two things differ:

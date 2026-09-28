@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..aggregators.types import AggregateResult, GroupedResult
-from ..exceptions import PrismQLRuntimeError, PrismQLSyntaxError
+from ..exceptions import PrismQLError, PrismQLRuntimeError, PrismQLSyntaxError
 from ..explain import Explainer
 from ..reference import load_reference
 from ..types import NamedQueryResult
@@ -638,9 +638,14 @@ def create_app(config: ServerConfig) -> FastAPI:
             payload["total"] = stored.total
         payload["ok"] = True
         payload["query"] = req.query
+        # Runs, but asks something else than meant: said beside the answer
+        # and kept in the journal for the board (graph @aleph/prismql, #128).
+        warnings = _query_warnings(engine, req.query, payload.get("total"))
+        payload["warnings"] = warnings
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
         state.record(
             {
+                **({"warnings": warnings} if warnings else {}),
                 "kind": "evaluate",
                 "corpus": req.corpus or config.default_corpus,
                 "who": _who(request),
@@ -661,6 +666,20 @@ def create_app(config: ServerConfig) -> FastAPI:
             }
         )
         return payload
+
+    def _query_warnings(
+        engine: Any, query: str, total: int | None
+    ) -> list[dict[str, Any]]:
+        from ..validator import QueryValidator
+
+        try:
+            issues = QueryValidator().warnings(engine.to_ir(query), total=total)
+        except PrismQLError:
+            return []  # the answer stands; a warning is never worth an error
+        return [
+            {"code": i.code, "message": i.message, "suggestion": i.suggestion}
+            for i in issues
+        ]
 
     def _record_failure(
         req: Any,

@@ -76,6 +76,17 @@
     addKv(dl, "Received", IF.localDateTime(entry.ts), "mono");
     addKv(dl, "Duration", F.dur(entry.elapsed_ms), "mono");
     addKv(dl, "Result", F.resultLabel(entry));
+    // Ran, but asked something else than meant (graph #128): the server's
+    // warnings, each with what to write instead.
+    if (entry.warnings && entry.warnings.length) {
+      addKv(dl, "Warnings", function (dd) {
+        entry.warnings.forEach(function (w) {
+          var line = mk("div", "warn-line", w.message);
+          if (w.suggestion) line.appendChild(mk("div", "warn-hint", w.suggestion));
+          dd.appendChild(line);
+        });
+      });
+    }
     wrap.appendChild(dl);
   }
 

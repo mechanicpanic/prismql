@@ -221,6 +221,7 @@ class QueryValidator:
             return ValidationResult(valid=False, issues=issues, query=query)
 
         issues.extend(self._check_ir_semantics(ir_query))
+        issues.extend(self._run_but_wrong(ir_query))
 
         has_errors = any(i.level == ValidationLevel.ERROR for i in issues)
         return ValidationResult(valid=not has_errors, issues=issues, query=query)
@@ -314,9 +315,11 @@ class QueryValidator:
                 issues.append(self._unbound_negated(m.group(1)))
         return issues
 
-    def _check_open_quantifiers(self, tree: Any) -> list[ValidationIssue]:
-        """The open-range check (graph #46) on the lowered query: a run's
-        length ``RUN(x){n,}`` is not a quantifier and needs no ceiling."""
+    def _check_lowered(self, tree: Any) -> list[ValidationIssue]:
+        """Checks on the lowered classic query: open ranges (graph #46; a
+        run's length ``RUN(x){n,}`` is not a quantifier and needs no
+        ceiling), a RUN's step, and queries that run but ask something else
+        than meant (#128)."""
         from .ir import nodes as ir
         from .ir.lower import lower_query
 
@@ -344,6 +347,7 @@ class QueryValidator:
             )
             return issues
         walk(lowered)
+        issues.extend(self._run_but_wrong(lowered))
         return issues
 
     @staticmethod
@@ -384,6 +388,101 @@ class QueryValidator:
                 code="OPEN_QUANTIFIER",
             )
         )
+
+    # A quantifier answer this large is almost surely read as a count or a
+    # run: say what its groups are.
+    COMBINATION_WARN = 1000
+
+    def warnings(
+        self, ir_query: Any, total: int | None = None
+    ) -> list[ValidationIssue]:
+        """What the server shows beside an answer (graph #128): the warnings
+        among the checks, and those about queries that run but ask something
+        else than meant. ``total`` is the answer's group count, when known.
+        Errors are left to the engine, which raises them itself."""
+        issues = [
+            i
+            for i in self._check_ir_semantics(ir_query)
+            if i.level == ValidationLevel.WARNING
+        ]
+        issues.extend(self._run_but_wrong(ir_query))
+        if total is not None:
+            issues.extend(self._combination_warnings(ir_query, total))
+        return issues
+
+    def _run_but_wrong(self, q: Any) -> list[ValidationIssue]:
+        """Shapes that run without an error and answer another question."""
+        from .ir import nodes as ir
+
+        issues: list[ValidationIssue] = []
+        if isinstance(q.source, ir.SubqueryChain):
+            stages = [q.source.head, *(c.query for c in q.source.continuations)]
+            counts: dict[str, int] = {}
+            for stage in stages:
+                for name in _variable_names(stage):
+                    counts[name] = counts.get(name, 0) + 1
+            for name in sorted(v for v, n in counts.items() if n > 1):
+                issues.append(
+                    ValidationIssue(
+                        level=ValidationLevel.WARNING,
+                        message=(
+                            f"${name} is a separate variable in each subquery: the "
+                            "subqueries do not have to agree on its value"
+                        ),
+                        suggestion=(
+                            f"For the same value across steps write one chain with "
+                            f"${name} on each link, not subqueries"
+                        ),
+                        code="SUBQUERY_SHARED_VARIABLE",
+                    )
+                )
+            for stage in stages:
+                issues.extend(self._run_but_wrong(stage))
+        elif isinstance(q.source, ir.RestrictionsRow):
+            for item in q.source.items:
+                n = _identical_links(item.expr)
+                if n:
+                    issues.append(
+                        ValidationIssue(
+                            level=ValidationLevel.WARNING,
+                            message=(
+                                f"A chain of {n} identical links gives one group per "
+                                "starting event, and the groups overlap — not one "
+                                "per series of repeats"
+                            ),
+                            suggestion=(
+                                f"For repeats in a row write RUN(X){{{n},}} with the "
+                                "step as its window: one group per maximal run"
+                            ),
+                            code="REPEATED_LINKS",
+                        )
+                    )
+        return issues
+
+    def _combination_warnings(self, q: Any, total: int) -> list[ValidationIssue]:
+        from .ir import nodes as ir
+
+        quantified = isinstance(q.source, ir.RestrictionsRow) and any(
+            item.min_count > 1 or (item.max_count or item.min_count) > 1
+            for item in q.source.items
+        )
+        if not quantified or total < self.COMBINATION_WARN:
+            return []
+        return [
+            ValidationIssue(
+                level=ValidationLevel.WARNING,
+                message=(
+                    f"{total} groups from a quantifier: each group is one "
+                    "combination of events within the window, not a count and "
+                    "not a run"
+                ),
+                suggestion=(
+                    "To count events use AGGREGATE count(); for repeats in a row "
+                    "use RUN(X){n,}"
+                ),
+                code="QUANTIFIER_COMBINATIONS",
+            )
+        ]
 
     def _check_ir_semantics(self, ir_query: Any) -> list[ValidationIssue]:
         """IR-walk counterparts of the classic string checks."""
@@ -614,7 +713,7 @@ class QueryValidator:
 
         # Check similar_to() thresholds (parity with the IR-walk check)
         issues.extend(self._check_similar_thresholds(query))
-        issues.extend(self._check_open_quantifiers(tree))
+        issues.extend(self._check_lowered(tree))
         issues.extend(self._check_negated_variables_text(query))
 
         # Check for undefined custom features
@@ -800,3 +899,37 @@ def validate_query(
     """
     validator = QueryValidator(user_dictionaries=user_dictionaries, **kwargs)
     return validator.validate(query)
+
+
+def _variable_names(node: Any) -> set[str]:
+    """Every ``$name`` a subquery's IR names, negated or not."""
+    import dataclasses
+
+    from .ir import nodes as ir
+
+    if isinstance(node, ir.Variable):
+        return {node.name}
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        return set().union(
+            *(_variable_names(getattr(node, f.name)) for f in dataclasses.fields(node))
+        )
+    if isinstance(node, tuple | list):
+        return set().union(*(_variable_names(x) for x in node))
+    return set()
+
+
+def _identical_links(expr: Any) -> int:
+    """The number of links in a chain of three or more identical legs joined
+    by one direction, else 0."""
+    from .ir import nodes as ir
+
+    legs: list[Any] = []
+    ops: set[str] = set()
+    while isinstance(expr, ir.SequenceLink):
+        legs.insert(0, expr.rhs)
+        ops.add(expr.op)
+        expr = expr.lhs
+    legs.insert(0, expr)
+    same = len(legs) >= 3 and all(leg == legs[0] for leg in legs)
+    one_direction = ops in ({"FOLLOWED_BY"}, {"PRECEDED_BY"})
+    return len(legs) if same and one_direction else 0
