@@ -79,9 +79,10 @@ side by side (`field(page,$p) AND from($u)`). `!$u` is "a *different* one"
 
 Two rules that keep variables honest: the equality is decided **while
 choosing the nearest candidate**, not after (otherwise a stranger in between
-would drop the group — audit A10, fixed in the plan layer); and the excluded
-side of a negation takes no variable, because that event is not in the
-group — ask the positive question and subtract.
+would drop the group — audit A10, fixed in the plan layer); and on the
+excluded side of a negation a variable binds nothing, because that event is
+not in the group — it only narrows what counts as excluded to events
+agreeing with the left side.
 
 ## 4. Quantifiers — enumeration, not counting
 
@@ -138,7 +139,8 @@ tests, not as caveats.
 What a query still cannot do: run sequence operators on a backend without
 an order axis (a tantivy index built before the axis sidecar — a loud
 `PositionalUnsupportedError`, not a wrong answer); enumerate `{n,}` without
-a ceiling; put a variable on the excluded side of a negation; carry a
+a ceiling; name a variable on the excluded side of a negation that the
+left side does not bind; carry a
 variable across subquery stages. When the engine and `tests/plan` disagree,
 the tests win — and that disagreement is a bug to pin, not a caveat to
 learn.
@@ -180,8 +182,9 @@ learn.
 2. The final link has no window. Put `INWINDOW n` / `DURING t` at the end;
    it distributes to every windowless link.
 3. A→B: at most 20 events apart (position); B→C: at most 10 minutes (time).
-4. No: the excluded side of a negation takes no variable — it is not in the
-   group. Ask `from($u) FOLLOWED_BY from($u)` and subtract from `from($u)`.
+4. Yes: `$u` on the excluded side binds nothing, it narrows the excluded
+   event to one by the same author — "a message its author did not follow
+   up within five". A `$v` the left side does not bind is an error.
 5. Rejected with `OPEN_QUANTIFIER`; write `{2,m}` or set
    `quantifier_ceiling`.
 6. Two groups, one per A; yes, both may pair with the same B — each A takes

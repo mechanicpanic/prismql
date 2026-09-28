@@ -57,10 +57,11 @@ def test_unbound_negated_variable_is_rejected(dialect):
         PrismQLEngine(MemoryBackend(DOCS)).execute(q)
 
 
-def test_negated_variable_on_a_negative_link_is_rejected_like_a_variable():
-    with pytest.raises(
-        PrismQLRuntimeError, match="not supported on the right-hand side"
-    ):
-        PrismQLEngine(MemoryBackend(DOCS)).execute(
-            "SELECT from($u) NOT_FOLLOWED_BY from(!$u) INWINDOW 3"
-        )
+@pytest.mark.parametrize("use_ir", [True, False])
+def test_negated_variable_on_a_negative_link_narrows_the_excluded_side(use_ir):
+    # "Nobody else wrote within the next three": every message but the last
+    # has a different author right after it (graph #130).
+    engine = PrismQLEngine(MemoryBackend(DOCS), use_ir=use_ir)
+    assert engine.execute("SELECT from($u) NOT_FOLLOWED_BY from(!$u) INWINDOW 3") == [
+        [5]
+    ]

@@ -384,8 +384,10 @@ Found 1 result(s):
 ```
 
 Deletions nobody undid. The group holds only the deletion: the event that
-did *not* happen is not in the answer, which is also why the excluded side
-cannot carry a variable.
+did *not* happen is not in the answer. A variable on that side binds
+nothing and narrows it instead — `field(kind, delete) AND field(page, $p)
+NOT_FOLLOWED_BY field(kind, save) AND field(page, $p) DURING 10 minutes` is
+"deletions of a page nobody saved again".
 
 ---
 

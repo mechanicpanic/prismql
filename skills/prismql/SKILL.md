@@ -286,8 +286,12 @@ implementation over the ordered corpus:
    c INWINDOW 8` does not mean the same thing.
 7. **Same entity twice → a pattern variable**, not two literals:
    `from($u) AND is_question(), from($u) INWINDOW 5`. `!$u` is "a
-   *different* one". The excluded side of a negated operator takes no
-   variable — that event is not in the group. A variable binds the value
+   *different* one". On the excluded side of a negated operator a variable
+   binds nothing (that event is not in the group) and only narrows it:
+   `field(outcome, error) AND field(tool, $t) AND field(session, $s)
+   NOT_FOLLOWED_BY field(tool, $t) AND field(session, $s) DURING 1 hour` is
+   "failed and never retried in that session"; bind it on the left first.
+   A variable binds the value
    slot of `field()` too, not only `from()`. "The same page deleted and
    then saved again":
    - ✅ `SELECT field(kind, delete) AND field(page, $p) FOLLOWED_BY field(kind, save) AND field(page, $p) DURING 10 minutes`

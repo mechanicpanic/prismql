@@ -128,8 +128,10 @@ from(bob) <~ from(alice) |> within(2)
 
 -- Negative lookahead: A NOT followed by B
 from(alice) !~> from(bob) |> within(5)
--- The excluded side takes no pattern variable ($k): it is not part of the
--- result group. Ask the positive question and subtract, or use a literal.
+-- A variable on the excluded side binds nothing (that event is not in the
+-- group): it narrows the excluded event to one agreeing with the left side.
+-- A tool failed and the same session never called it again:
+field(outcome, error) and field(tool, $t) and field(session, $s) !~> field(tool, $t) and field(session, $s) |> during(1h)
 
 -- Negative lookbehind: B NOT preceded by A
 from(bob) !<~ from(charlie) |> within(3)

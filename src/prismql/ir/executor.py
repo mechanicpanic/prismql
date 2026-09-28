@@ -434,13 +434,10 @@ class IRExecutor(PrismQLVisitor):
             return self._apply_sequential_link(
                 lhs, rhs, window, "PRECEDED_BY", lhs_leg, rhs_leg
             )
-        if rhs_leg:
-            raise PrismQLRuntimeError(
-                "Pattern variables are not supported on the right-hand side "
-                "of NOT_FOLLOWED_BY/NOT_PRECEDED_BY — the excluded message "
-                "is not part of the result group. Use a concrete condition."
-            )
-        return self._apply_negative_link(lhs, rhs, window, expr.op, lhs_leg)
+        # The excluded event binds nothing: its variables only narrow what
+        # counts as excluded (graph #130), so they leave the row's list.
+        del self.variable_constraints[n_before_rhs:]
+        return self._apply_negative_link(lhs, rhs, window, expr.op, lhs_leg, rhs_leg)
 
     def execute_bool(
         self, expr: Expr

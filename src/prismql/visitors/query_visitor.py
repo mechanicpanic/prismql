@@ -601,17 +601,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return self._apply_sequential_link(
                 lhs, rhs, window, "PRECEDED_BY", lhs_leg, rhs_leg
             )
-        if rhs_leg:
-            # The excluded message never appears in the result group, so a
-            # variable on it has nothing to bind to.
-            raise PrismQLRuntimeError(
-                "Pattern variables are not supported on the right-hand side "
-                "of NOT_FOLLOWED_BY/NOT_PRECEDED_BY — the excluded message "
-                "is not part of the result group. Use a concrete condition."
-            )
-        if ctx.NotFollowedBy():
-            return self._apply_negative_link(lhs, rhs, window, "NOT_FOLLOWED_BY")
-        return self._apply_negative_link(lhs, rhs, window, "NOT_PRECEDED_BY")
+        # The excluded event binds nothing: its variables only narrow what
+        # counts as excluded (graph #130), so they leave the row's list.
+        del self.variable_constraints[n_before_rhs:]
+        op = "NOT_FOLLOWED_BY" if ctx.NotFollowedBy() else "NOT_PRECEDED_BY"
+        return self._apply_negative_link(lhs, rhs, window, op, lhs_leg, rhs_leg)
 
     SECOND_INWINDOW = (
         "A chain or RUN carries its windows on its links; an INWINDOW after "
@@ -721,6 +715,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         window: WindowConstraint | None,
         operator: str,
         lhs_leg: list[Any] | None = None,
+        rhs_leg: list[Any] | None = None,
     ) -> set[MessageId] | list[MessageGroup]:
         """Evaluate one NOT_FOLLOWED_BY/NOT_PRECEDED_BY link."""
         forward = operator == "NOT_FOLLOWED_BY"
@@ -745,6 +740,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             lhs_constraints,
             window,
             forward,
+            list(rhs_leg or []),
         )
         # A negative link narrows a set; it stays a set so a further negative
         # link (or the row's window) can take it.

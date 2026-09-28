@@ -161,10 +161,11 @@ def run_negative_link(
     lhs_constraints: Sequence[Constraint],
     window: Any,
     forward: bool,
+    rhs_constraints: Sequence[Constraint] = (),
 ) -> list[list[MessageId]]:
     w = window_of(window)
-    lhs_leg, rhs_leg = leg(lhs, lhs_constraints), leg(rhs)
-    frame = _frame(backend, lhs | rhs, [lhs_leg], ts)
+    lhs_leg, rhs_leg = leg(lhs, lhs_constraints), leg(rhs, rhs_constraints)
+    frame = _frame(backend, lhs | rhs, [lhs_leg, rhs_leg], ts)
     return groups(
         negative_link(
             frame, lhs_leg, rhs_leg, window=w, forward=forward, timestamp_field=ts

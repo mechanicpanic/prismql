@@ -266,24 +266,54 @@ def negative_link(
     timestamp_field: str,
 ) -> Any:
     """NOT_FOLLOWED_BY (forward) / NOT_PRECEDED_BY: the lhs rows with no
-    rhs within the window. The excluded side names no variable (it is not
-    in the group); an lhs row without an axis value is not in the result
-    (graph #47)."""
+    rhs within the window. A variable on the excluded side binds nothing (that
+    event is not in the group): it narrows which rhs rows count as the
+    excluded event to those agreeing with the lhs row (graph #130). An lhs
+    row without an axis value is not in the result (graph #47)."""
     axis, w = axis_and_window(window, timestamp_field)
-    if rhs.equal or rhs.unequal:
-        raise PrismQLRuntimeError(
-            "Pattern variables are not supported on the right-hand side of "
-            "NOT_FOLLOWED_BY/NOT_PRECEDED_BY — the excluded message is not part "
-            "of the result group. Use a concrete condition."
-        )
+    key, eligible = _exclusion_constraints(lhs, rhs, _list_columns(frame))
     res = anti_link(
         leg_frame(frame, lhs.ids),
         leg_frame(frame, rhs.ids),
         axis=axis,
         window=w,
         forward=forward,
+        key=key,
+        eligible=eligible,
     )
     return _attach_bindings(res, frame, 0, lhs.equal)
+
+
+def _exclusion_constraints(
+    lhs: Leg, rhs: Leg, fields: set[str]
+) -> tuple[str | None, Any | None]:
+    """(key, eligible) for the excluded side of a negative link: its
+    variables compare with the values the lhs row holds."""
+    pl = _pl()
+    lhs_fields: dict[str, list[str]] = {}
+    for v, f in lhs.equal:
+        lhs_fields.setdefault(v, []).append(f)
+    for v, _ in rhs.equal + rhs.unequal:
+        if v not in lhs_fields:
+            raise PrismQLRuntimeError(
+                f"${v} on the excluded side of NOT_FOLLOWED_BY/NOT_PRECEDED_BY "
+                "names a variable the left side does not bind. The excluded "
+                "event binds nothing; a variable there only narrows it to "
+                f"events agreeing with the left one — bind ${v} on the left."
+            )
+    if not rhs.equal and not rhs.unequal:
+        return None, None
+    if len(rhs.equal) == 1 and not rhs.unequal:
+        v0, f0 = rhs.equal[0]
+        if lhs_fields[v0] == [f0] and f0 not in fields:
+            return f0, None
+    lists = {f"l_{f}" for f in fields} | {f"r_{f}" for f in fields}
+    conds = _self_consistency("r_", rhs, lists)
+    for v, f in rhs.equal:
+        conds.extend(_eq(f"r_{f}", f"l_{g}", lists) for g in lhs_fields[v])
+    for v, f in rhs.unequal:
+        conds.extend(_neq(f"r_{f}", f"l_{g}", lists) for g in lhs_fields[v])
+    return None, pl.all_horizontal(conds)
 
 
 def _cooccur_constraints(

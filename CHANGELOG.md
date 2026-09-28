@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (a variable on the excluded side of a negation)
+- `NOT_FOLLOWED_BY` / `NOT_PRECEDED_BY` (pipe `!~>` / `!<~`) take variables on the excluded side. They bind nothing — that event is not in the group — and narrow what counts as excluded: `$k` to an event with the left side's value, `!$k` to one with another value. "A tool failed and the same session never called it again" is `field(outcome, error) AND field(tool, $t) AND field(session, $s) NOT_FOLLOWED_BY field(tool, $t) AND field(session, $s) DURING 1 hour`. A variable the left side does not bind is an error. It used to be refused outright (graph @aleph/prismql, #130). The legacy path now passes the left side's variables to a negative link as the IR path did.
+
 ### Added (runs: repeats in a row)
 - `RUN(X){n,m}` (pipe `run(x){n,m}`) gives one group per maximal run of X: X's events split by the values of the variables X names (one run per agent with `field(agent, $a)`), each within the step of the previous one; runs never overlap, other events between members do not break them, and runs outside n..m are dropped, never cut. The first window is the step and is required (`RUN_WITHOUT_STEP` in the validator); a second `DURING` bounds the whole run. A `DURING` step reads events in time order and joins equal times; an `INWINDOW` step counts every event of the stream. For now RUN is the whole SELECT body (or a whole subquery); beside other restrictions, in AND/OR, under a quantifier or in a chain it is refused (graph @aleph/prismql, #126). `run` stays a plain word as a field name or value.
 

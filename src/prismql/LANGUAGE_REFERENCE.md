@@ -148,8 +148,11 @@ SELECT from(bob) PRECEDED_BY from(alice) INWINDOW 2
 
 -- Negative lookahead: A NOT followed by B
 SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 5
--- The excluded side takes no pattern variable ($k): it is not part of the
--- result group. Ask the positive question and subtract, or use a literal.
+-- A variable on the excluded side binds nothing (that event is not in the
+-- group): it narrows the excluded event to one agreeing with the left side.
+-- A tool failed and the same session never called it again:
+SELECT field(outcome, error) AND field(tool, $t) AND field(session, $s)
+    NOT_FOLLOWED_BY field(tool, $t) AND field(session, $s) DURING 1 hour
 
 -- Negative lookbehind: B NOT preceded by A
 SELECT from(bob) NOT_PRECEDED_BY from(charlie) INWINDOW 3
@@ -265,8 +268,10 @@ shadows the real match. Two restrictions apply:
   combined with other comma-separated restrictions or quantifiers
   (runtime error).
 - Variables on the right-hand side of `NOT_FOLLOWED_BY` / `NOT_PRECEDED_BY`
-  are rejected: the excluded message is not part of the result group, so
-  there is nothing to bind them to.
+  bind nothing — the excluded message is not in the group — and narrow what
+  counts as excluded: `$k` to a message with the left side's value, `!$k`
+  to one with another value. Each must be bound on the left side (an error
+  otherwise).
 
 ### 6. Named Groups
 
