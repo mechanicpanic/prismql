@@ -314,35 +314,48 @@ class QueryValidator:
                 issues.append(self._unbound_negated(m.group(1)))
         return issues
 
-    def _check_open_quantifiers(self, query: str) -> list[ValidationIssue]:
-        """Regex counterpart of the IR-walk open-range check (graph #46)."""
-        import re
+    def _check_open_quantifiers(self, tree: Any) -> list[ValidationIssue]:
+        """The open-range check (graph #46) on the lowered query: a run's
+        length ``RUN(x){n,}`` is not a quantifier and needs no ceiling."""
+        from .ir import nodes as ir
+        from .ir.lower import lower_query
 
         issues: list[ValidationIssue] = []
-        # Quoted strings (AS "name", contains_phrase("…")) are not syntax.
-        bare = re.sub(r"\"[^\"]*\"|'[^']*'", "", query)
-        for match in re.finditer(r"\{\s*(\d+)\s*,\s*\}", bare):
-            n = match.group(1)
-            if self.quantifier_ceiling is not None:
-                if int(n) > self.quantifier_ceiling:
-                    issues.append(self._min_above_ceiling(int(n)))
-                continue
-            issues.append(
-                ValidationIssue(
-                    level=ValidationLevel.ERROR,
-                    message=(
-                        f"{{{n},}} has no upper bound and no quantifier_ceiling "
-                        "is configured"
-                    ),
-                    suggestion=(
-                        f"Write {{{n},m}} with an explicit upper bound, or set "
-                        "quantifier_ceiling ([engine] quantifier_ceiling in "
-                        "prismql.toml) to close every open range at m"
-                    ),
-                    code="OPEN_QUANTIFIER",
-                )
-            )
+
+        def walk(q: Any) -> None:
+            if isinstance(q.source, ir.RestrictionsRow):
+                for item in q.source.items:
+                    self._check_item_quantifier(item, issues)
+            elif isinstance(q.source, ir.SubqueryChain):
+                walk(q.source.head)
+                for cont in q.source.continuations:
+                    walk(cont.query)
+
+        walk(lower_query(tree))
         return issues
+
+    def _check_item_quantifier(self, item: Any, issues: list[ValidationIssue]) -> None:
+        if item.max_count is not None:
+            return
+        if self.quantifier_ceiling is not None:
+            if item.min_count > self.quantifier_ceiling:
+                issues.append(self._min_above_ceiling(item.min_count))
+            return
+        issues.append(
+            ValidationIssue(
+                level=ValidationLevel.ERROR,
+                message=(
+                    f"{{{item.min_count},}} has no upper bound and no "
+                    "quantifier_ceiling is configured"
+                ),
+                suggestion=(
+                    f"Write {{{item.min_count},m}} with an explicit upper bound, "
+                    "or set quantifier_ceiling ([engine] quantifier_ceiling in "
+                    "prismql.toml) to close every open range at m"
+                ),
+                code="OPEN_QUANTIFIER",
+            )
+        )
 
     def _check_ir_semantics(self, ir_query: Any) -> list[ValidationIssue]:
         """IR-walk counterparts of the classic string checks."""
@@ -362,29 +375,7 @@ class QueryValidator:
         if isinstance(q.source, ir.RestrictionsRow):
             self._check_negated_variables(q.source, issues)
             for item in q.source.items:
-                if (
-                    item.max_count is None
-                    and self.quantifier_ceiling is not None
-                    and item.min_count > self.quantifier_ceiling
-                ):
-                    issues.append(self._min_above_ceiling(item.min_count))
-                if item.max_count is None and self.quantifier_ceiling is None:
-                    issues.append(
-                        ValidationIssue(
-                            level=ValidationLevel.ERROR,
-                            message=(
-                                f"{{{item.min_count},}} has no upper bound and no "
-                                "quantifier_ceiling is configured"
-                            ),
-                            suggestion=(
-                                f"Write {{{item.min_count},m}} with an explicit upper "
-                                "bound, or set quantifier_ceiling ([engine] "
-                                "quantifier_ceiling in prismql.toml) to close "
-                                "every open range at m"
-                            ),
-                            code="OPEN_QUANTIFIER",
-                        )
-                    )
+                self._check_item_quantifier(item, issues)
                 self._check_ir_expr(item.expr, True, issues)
         elif isinstance(q.source, ir.SubqueryChain):
             self._check_ir_query(q.source.head, issues)
@@ -392,7 +383,7 @@ class QueryValidator:
                 self._check_ir_window(cont.window, issues)
                 self._check_ir_query(cont.query, issues)
 
-    def _check_ir_expr(
+    def _check_ir_expr(  # noqa: C901 - one branch per IR node kind
         self, expr: Any, is_final_position: bool, issues: list[ValidationIssue]
     ) -> None:
         from .ir import nodes as ir
@@ -442,6 +433,9 @@ class QueryValidator:
             self._check_sequence_under_boolean(expr.right, op_name, issues)
             self._check_ir_expr(expr.left, False, issues)
             self._check_ir_expr(expr.right, False, issues)
+        elif isinstance(expr, ir.Run):
+            self._check_ir_window(expr.window, issues)
+            self._check_ir_expr(expr.expr, False, issues)
         elif isinstance(expr, ir.SequenceLink):
             self._check_ir_window(expr.window, issues)
             # A chain nests left, so the outermost link is the final one;
@@ -591,7 +585,7 @@ class QueryValidator:
 
         # Check similar_to() thresholds (parity with the IR-walk check)
         issues.extend(self._check_similar_thresholds(query))
-        issues.extend(self._check_open_quantifiers(query))
+        issues.extend(self._check_open_quantifiers(tree))
         issues.extend(self._check_negated_variables_text(query))
 
         # Check for undefined custom features

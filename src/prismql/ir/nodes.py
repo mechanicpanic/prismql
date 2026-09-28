@@ -227,7 +227,22 @@ class SequenceLink:
     window: WindowSpec | None = None
 
 
-Expr = ConditionNode | Not | And | Or | SequenceLink
+@dataclass(frozen=True)
+class Run:
+    """``RUN(X){n,m}``: one group per maximal run of X — events of X, split
+    by the values of the variables X names, whose neighbours are at most
+    ``window`` apart; runs of length n..m (``max_len None`` = no upper
+    bound). Events between the members do not break a run
+    (graph @aleph/prismql, #126).
+    """
+
+    expr: Expr
+    min_len: int
+    max_len: int | None
+    window: WindowSpec | None = None
+
+
+Expr = ConditionNode | Not | And | Or | SequenceLink | Run
 
 
 # ---------------------------------------------------------------------------

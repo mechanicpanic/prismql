@@ -168,8 +168,10 @@ from(alice) ~>(10) from(bob) ~>(5m) from(charlie)
   positional and temporal mix freely
 - **Whole group**: a second `during(TIME)` after the chain's window bounds the
   span of the whole group: `a ~> a ~> a |> during(1h) |> during(1d)` — each
-  step within an hour, the whole group within a day. A chain of repeats still
-  gives one group per starting event, not one per series
+  step within an hour, the whole group within a day. A second `within()`
+  there is refused, not dropped: bound the whole group with `during()`. A
+  chain of repeats still gives one group per starting event, not one per
+  series — use `run` (section 4)
 - **Positional**: `within(N)` / `~>(N)` — messages within N positions
 - **Temporal**: `during(TIME)` / `~>(TIME)` — messages within a time span
 
@@ -204,6 +206,28 @@ which reads every `{n,}` as `{n,m}`; a minimum above the ceiling is rejected too
 Prefer an explicit `{n,m}`. A range enumerates every size in it: `{2,3}`
 over three matching messages in the window returns the three pairs and the
 triple.
+
+**Runs: `run(x){n,m}`.** A quantifier counts *combinations*; a run counts
+*repeats in a row*. `run(x){n,m}` gives one group per maximal run of x:
+the events of x, split by the values of the variables x names (one run per
+agent with `field(agent, $a)`), whose neighbours are at most the step
+apart. Runs never overlap; events that are not x between the members do not
+break a run; runs shorter than n or longer than m are dropped, never cut.
+The first window stage after `run` is the step and is required; a second
+one bounds the whole run.
+
+```
+-- The same agent asked 7+ times, each within an hour of the last, all within a day
+run(field(kind, REQUEST_GOOGLE_SIGN_IN) and field(agent, $a)){7,} |> during(1h) |> during(1d)
+-- How many such runs
+run(field(kind, retry) and field(session, $s)){3,} |> within(5) |> count()
+```
+
+For a series use `run`, not `x{7}` (every 7 of 20 repeats is 77,520 groups)
+and not a chain of 7 arrows (one group per starting event, overlapping). For
+now `run` is the whole query: not beside `+`, not inside `and`/`or`, not
+next to an arrow. `run` stays a plain word as a field value:
+`field(kind, run)`.
 
 ### 5. Pattern Variables
 

@@ -1,0 +1,58 @@
+"""Maximal runs: ``RUN(X){n,m}`` (graph @aleph/prismql, #126).
+
+The events of X are split by the values of the variables X names (the
+``PARTITION BY`` of SQL's ``MATCH_RECOGNIZE``); inside each part a run
+continues while the next event is at most ``step`` away on the axis and
+breaks where the gap is larger. Every event of X belongs to exactly one run,
+so runs never overlap; events that are not X never break one.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ..exceptions import PrismQLRuntimeError
+from ..types import MessageId
+from . import _pl
+
+
+def runs(
+    frame: Any,
+    *,
+    keys: list[str],
+    axis: str,
+    step: int,
+    min_len: int,
+    max_len: int | None,
+) -> list[list[MessageId]]:
+    """Id groups of the runs of ``frame`` with length ``min_len..max_len``,
+    each in stream order, the groups ordered by their first event."""
+    pl = _pl()
+    schema = frame.collect_schema()
+    for key in keys:
+        if isinstance(schema[key], pl.List):
+            raise PrismQLRuntimeError(
+                f"RUN cannot split by {key!r}: its events hold several values "
+                "each. Split by a field with one value per event."
+            )
+    # Events without a place on the axis or without a value to split by
+    # belong to no run.
+    df = frame.drop_nulls([axis, *keys]).sort([*keys, "position"])
+    gap = pl.col(axis) - pl.col(axis).shift(1)
+    same_part = pl.all_horizontal(
+        [pl.col(k) == pl.col(k).shift(1) for k in keys] or [pl.lit(True)]
+    )
+    starts = gap.is_null() | (gap > step) | ~same_part.fill_null(False)
+    runs_frame = (
+        df.with_columns(starts.cum_sum().alias("_run"))
+        .group_by("_run")
+        .agg(
+            pl.col("id").sort_by("position"),
+            pl.col("position").min().alias("_first"),
+            pl.len(),
+        )
+        .filter(pl.col("len") >= min_len)
+    )
+    if max_len is not None:
+        runs_frame = runs_frame.filter(pl.col("len") <= max_len)
+    return [list(ids) for ids in runs_frame.sort("_first").collect()["id"].to_list()]

@@ -175,7 +175,7 @@ SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 10 FOLLOWED_BY from(charlie) D
 - **Required**: the final link of a chain must have a window (INWINDOW or DURING)
 - **Chaining**: `A FOLLOWED_BY B FOLLOWED_BY C INWINDOW 10` - a trailing window applies to every windowless link (per link, not whole-chain span)
 - **Per-link**: `A FOLLOWED_BY B INWINDOW 10 FOLLOWED_BY C DURING 5 minutes` - links may carry individual windows; INWINDOW and DURING mix freely
-- **Whole group**: a second `DURING` after the chain's window bounds the span of the whole group: `A FOLLOWED_BY A FOLLOWED_BY A DURING 1 hour DURING 1 day` - each step within an hour, the whole group within a day. A chain of repeats still gives one group per starting event, not one per series
+- **Whole group**: a second `DURING` after the chain's window bounds the span of the whole group: `A FOLLOWED_BY A FOLLOWED_BY A DURING 1 hour DURING 1 day` - each step within an hour, the whole group within a day. A second `INWINDOW` there is refused, not dropped: bound the whole group with `DURING`. A chain of repeats still gives one group per starting event, not one per series — use `RUN` (section 4)
 - **Positional**: `INWINDOW N` - messages within N positions
 - **Temporal**: `DURING <time>` - messages within time duration
 
@@ -210,6 +210,29 @@ which reads every `{n,}` as `{n,m}`; a minimum above the ceiling is rejected too
 Prefer an explicit `{n,m}`. A range enumerates every size in it: `{2,3}`
 over three matching messages in the window returns the three pairs and the
 triple.
+
+**Runs: `RUN(X){n,m}`.** A quantifier counts *combinations*; a run counts
+*repeats in a row*. `RUN(X){n,m}` gives one group per maximal run of X:
+the events of X, split by the values of the variables X names (one run per
+agent with `field(agent, $a)`), whose neighbours are at most the step
+apart. Runs never overlap; events that are not X between the members do not
+break a run; runs shorter than n or longer than m are dropped, never cut.
+The window after `RUN` is the step and is required; a second one bounds the
+whole run.
+
+```prismql
+-- The same agent asked 7+ times, each within an hour of the last, all within a day
+SELECT RUN(field(kind, REQUEST_GOOGLE_SIGN_IN) AND field(agent, $a)){7,}
+    DURING 1 hour DURING 1 day
+-- How many such runs
+SELECT RUN(field(kind, retry) AND field(session, $s)){3,} INWINDOW 5 AGGREGATE count()
+```
+
+For a series use `RUN`, not `X{7}` (every 7 of 20 repeats is 77,520 groups)
+and not a chain of 7 links (one group per starting event, overlapping). For
+now `RUN` is the whole SELECT body: not beside other restrictions, not
+inside AND/OR, not in a FOLLOWED_BY chain. `run` stays a plain word as a
+field value: `field(kind, run)`.
 
 ### 5. Pattern Variables
 

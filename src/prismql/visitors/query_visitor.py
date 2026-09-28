@@ -166,6 +166,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # If the result is from a single FOLLOWED_BY/PRECEDED_BY operator,
             # return the pairs directly without merging
             if is_sequential and len(ctx.restrictions().named_restriction()) == 1:
+                if ctx.InWindow() or ctx.InWin():
+                    raise PrismQLRuntimeError(self.SECOND_INWINDOW)
                 results = restriction_results
             elif temporal_window is not None:
                 # Unordered co-occurrence under a time span: the operator
@@ -405,6 +407,11 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 # Remove surrounding quotes (either " or ')
                 pattern_name = quoted_name[1:-1]
 
+            if named_restriction_ctx.restriction().Run() and (
+                len(ctx.named_restriction()) > 1 or named_restriction_ctx.quantifier()
+            ):
+                raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
+
             # Extract quantifier if present
             min_count, max_count = self._extract_quantifier(named_restriction_ctx)
             max_count = self._close_quantifier(min_count, max_count)
@@ -524,6 +531,20 @@ class PrismQLVisitor(BasePrismQLVisitor):
             - PartialSequence for a windowless link, to be evaluated with an
               enclosing link's window
         """
+        if ctx.Run():
+            from ..ir.lower import _quantifier
+
+            n_before = len(self.variable_constraints)
+            ids = self.visitBool_restriction(ctx.bool_restriction())
+            constraints = self.variable_constraints[n_before:]
+            del self.variable_constraints[n_before:]
+            min_len, max_len = _quantifier(ctx)
+            return self._evaluate_run(
+                ids, constraints, self._extract_window_constraint(ctx), min_len, max_len
+            )
+        if ctx.restriction() is not None and ctx.restriction().Run():
+            raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
+
         # Fallthrough: no sequential operator at this level
         if (
             not ctx.FollowedBy()
@@ -579,6 +600,58 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if ctx.NotFollowedBy():
             return self._apply_negative_link(lhs, rhs, window, "NOT_FOLLOWED_BY")
         return self._apply_negative_link(lhs, rhs, window, "NOT_PRECEDED_BY")
+
+    SECOND_INWINDOW = (
+        "A chain or RUN carries its windows on its links; an INWINDOW after "
+        "its own window would bound nothing and is refused rather than "
+        "dropped. Bound the whole group with a second DURING <time> "
+        "(graph #134)."
+    )
+
+    RUN_WHOLE_BODY = (
+        "RUN(...){n,m} must be the whole SELECT body for now: not one of "
+        "several comma restrictions, not under a quantifier, not inside "
+        "AND/OR or a FOLLOWED_BY/PRECEDED_BY chain (graph #126)."
+    )
+
+    def _evaluate_run(
+        self,
+        ids: set[MessageId] | list[MessageGroup] | PartialSequence,
+        constraints: list[Any],
+        window: WindowConstraint | None,
+        min_len: int,
+        max_len: int | None,
+    ) -> list[MessageGroup]:
+        """``RUN(X){n,m}``: one group per maximal run of X through the
+        operator layer (graph #126). Shared by both execution paths."""
+        from ..plan.bridge import run_runs
+
+        if not isinstance(ids, set):
+            raise PrismQLRuntimeError(
+                "RUN(...) repeats one condition; a sequence inside it is not "
+                "supported: RUN(field(kind, retry)){3,}, not RUN((A FOLLOWED_BY B))."
+            )
+        if window is None:
+            raise PrismQLRuntimeError(
+                "RUN(...) needs its step: the largest gap between neighbours "
+                "of a run — RUN(X){3,} INWINDOW 5 or RUN(X){3,} DURING 1 hour. "
+                "A second window after it bounds the whole run."
+            )
+        if min_len < 1 or (max_len is not None and max_len < min_len):
+            raise PrismQLRuntimeError(
+                f"RUN(...){{{min_len},{'' if max_len is None else max_len}}}: a "
+                "run is at least 1 event long and its lower bound is not above "
+                "its upper one."
+            )
+        return run_runs(
+            self.search_backend,
+            self.timestamp_field,
+            self._in_stream_order(ids),
+            constraints,
+            window,
+            min_len,
+            max_len,
+        )
 
     def _apply_sequential_link(
         self,

@@ -15,6 +15,7 @@ from datetime import timedelta
 from itertools import product
 from typing import Any
 
+from ..exceptions import PrismQLRuntimeError
 from ..types import Chain, MessageId
 from . import _pl
 from .frames import query_frame
@@ -212,6 +213,43 @@ def run_single(
 
         res = body_span(frame, res, window=w, timestamp_field=ts)
     return groups(res)
+
+
+def run_runs(
+    backend: Any,
+    ts: str,
+    ids: Sequence[MessageId],
+    constraints: Sequence[Constraint],
+    window: Any,
+    min_len: int,
+    max_len: int | None,
+) -> list[list[MessageId]]:
+    """``RUN(X){n,m}`` (graph #126): X's events split by the values of the
+    variables X names, one group per maximal run whose neighbours are at
+    most ``window`` apart."""
+    from .operators import axis_and_window, single_row
+    from .runs import runs
+
+    lg = leg(ids, constraints)
+    if lg.unequal:
+        raise PrismQLRuntimeError(
+            "RUN cannot hold an inequality (!$a): a run is split by the values "
+            "its variables take, not against a value bound elsewhere."
+        )
+    frame = _frame(backend, ids, [lg], ts)
+    if lg.equal:
+        # Two fields under one variable must agree inside an event.
+        kept = groups(single_row(frame, lg))
+        frame = frame.filter(_pl().col("id").is_in([g[0] for g in kept]))
+    # One column per variable: the event's value there names its part.
+    by_variable: dict[str, str] = {}
+    for variable, field in lg.equal:
+        by_variable.setdefault(variable, field)
+    keys = list(dict.fromkeys(by_variable.values()))
+    axis, step = axis_and_window(window_of(window), ts)
+    return runs(
+        frame, keys=keys, axis=axis, step=step, min_len=min_len, max_len=max_len
+    )
 
 
 def run_cooccur(

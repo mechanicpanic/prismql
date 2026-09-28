@@ -48,6 +48,7 @@ from .nodes import (
     Or,
     Query,
     RestrictionsRow,
+    Run,
     SequenceLink,
     SimilarTo,
     SubqueryChain,
@@ -152,6 +153,8 @@ class IRExecutor(PrismQLVisitor):
         if isinstance(q.source, RestrictionsRow):
             restriction_results, is_sequential = self.execute_restrictions(q.source)
             if is_sequential and len(q.source.items) == 1:
+                if q.positional_window is not None:
+                    raise PrismQLRuntimeError(self.SECOND_INWINDOW)
                 results = restriction_results
             elif temporal_window is not None:
                 results = self._merge_restrictions(restriction_results, temporal_window)
@@ -313,6 +316,10 @@ class IRExecutor(PrismQLVisitor):
         has_sequential_operator = False
 
         for item in row.items:
+            if isinstance(item.expr, Run) and (
+                len(row.items) > 1 or item.min_count != 1 or item.max_count != 1
+            ):
+                raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
             pattern_name = item.name
             min_count = item.min_count
             self._restriction_ranges.append(
@@ -388,8 +395,18 @@ class IRExecutor(PrismQLVisitor):
     def execute_restriction(
         self, expr: Expr
     ) -> set[MessageId] | list[MessageGroup] | PartialSequence:
+        if isinstance(expr, Run):
+            n_before = len(self.variable_constraints)
+            ids = self.execute_bool(expr.expr)
+            constraints = self.variable_constraints[n_before:]
+            del self.variable_constraints[n_before:]
+            return self._evaluate_run(
+                ids, constraints, expr.window, expr.min_len, expr.max_len
+            )
         if not isinstance(expr, SequenceLink):
             return self.execute_bool(expr)
+        if isinstance(expr.lhs, Run) or isinstance(expr.rhs, Run):
+            raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
 
         n_before_lhs = len(self.variable_constraints)
         lhs = self.execute_restriction(expr.lhs)
@@ -469,6 +486,8 @@ class IRExecutor(PrismQLVisitor):
         if isinstance(expr, SequenceLink):
             # Parenthesized sequential expression inside the boolean layer.
             return self.execute_restriction(expr)
+        if isinstance(expr, Run):
+            raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
 
         return self.execute_condition(expr)
 

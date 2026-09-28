@@ -62,6 +62,7 @@ from ..ir.nodes import (
     Query,
     RelativeTs,
     RestrictionsRow,
+    Run,
     SequenceLink,
     SimilarTo,
     SubqueryChain,
@@ -317,11 +318,7 @@ class _PipeParser:
         min_count = 1
         max_count: int | None = 1
         if self.accept("LBRACE"):
-            min_count = int(self.expect("INT", "a count inside {}").text)
-            max_count = min_count
-            if self.accept("COMMA"):
-                max_count = int(self.next().text) if self.peek().kind == "INT" else None
-            self.expect("RBRACE", "'}' closing the quantifier")
+            min_count, max_count = self.parse_count_range()
         name = None
         if self.accept("AS"):
             tok = self.peek()
@@ -398,11 +395,38 @@ class _PipeParser:
             expr = self.parse_chain()
             self.expect("RPAREN", "')'")
             return expr
+        if (
+            self.peek().kind == "NAME"
+            and self.peek().text.lower() == "run"
+            and self.peek(1).kind == "LPAREN"
+        ):
+            return self.parse_run()
         if self.peek().kind == "NAME":
             return self.parse_condition()
         raise self.error(
             f"Expected a condition, got {self.peek().text or 'end of query'!r}"
         )
+
+    def parse_run(self) -> Run:
+        """``run(x){n,m}`` (graph #126): the quantifier is the run's length
+        and is required; the step comes from the next window stage."""
+        self.next()
+        self.expect("LPAREN", "'(' after run")
+        expr = self.parse_or()
+        self.expect("RPAREN", "')' closing run(...)")
+        if not self.accept("LBRACE"):
+            raise self.error("run(...) needs its length: run(x){3,}, run(x){2,5}")
+        min_len, max_len = self.parse_count_range()
+        return Run(expr, min_len, max_len)
+
+    def parse_count_range(self) -> tuple[int, int | None]:
+        """The inside of ``{n}``, ``{n,}``, ``{n,m}``, after the ``{``."""
+        min_count = int(self.expect("INT", "a count inside {}").text)
+        max_count: int | None = min_count
+        if self.accept("COMMA"):
+            max_count = int(self.next().text) if self.peek().kind == "INT" else None
+        self.expect("RBRACE", "'}' closing the quantifier")
+        return min_count, max_count
 
     # -- conditions ----------------------------------------------------------
 
@@ -634,13 +658,17 @@ class _PipeParser:
         if (
             isinstance(source, RestrictionsRow)
             and len(source.items) == 1
-            and isinstance(source.items[0].expr, SequenceLink)
+            and isinstance(source.items[0].expr, SequenceLink | Run)
             and source.items[0].expr.window is None
         ):
             item = source.items[0]
             link = item.expr
-            assert isinstance(link, SequenceLink)
-            new_link = SequenceLink(link.op, link.lhs, link.rhs, window)
+            new_link: SequenceLink | Run
+            if isinstance(link, Run):
+                new_link = Run(link.expr, link.min_len, link.max_len, window)
+            else:
+                assert isinstance(link, SequenceLink)
+                new_link = SequenceLink(link.op, link.lhs, link.rhs, window)
             new_item = NamedRestriction(
                 expr=new_link,
                 min_count=item.min_count,

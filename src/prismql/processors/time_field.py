@@ -13,7 +13,7 @@ from typing import Any
 
 from ..backends.order import epoch_micros
 from ..exceptions import PrismQLError, PrismQLRuntimeError
-from ..ir.nodes import Query, SequenceLink
+from ..ir.nodes import Query, Run, SequenceLink
 
 # Names a time column usually has, offered in the error when they hold times.
 _USUAL = ("time", "timestamp", "ts", "created_at", "date", "datetime")
@@ -23,7 +23,7 @@ def measures_time(node: Any) -> bool:
     """True when the IR ``node`` has a temporal window or filter anywhere."""
     if isinstance(node, Query) and (node.temporal_window or node.temporal_filter):
         return True
-    if isinstance(node, SequenceLink) and isinstance(node.window, tuple):
+    if isinstance(node, SequenceLink | Run) and isinstance(node.window, tuple):
         return True
     if dataclasses.is_dataclass(node) and not isinstance(node, type):
         return any(

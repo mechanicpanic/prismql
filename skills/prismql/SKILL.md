@@ -298,6 +298,14 @@ implementation over the ordered corpus:
    `quantifier_ceiling` — there is no upper bound to enumerate to. The
    validator's code is `OPEN_QUANTIFIER`; over HTTP it is a 422 naming
    `quantifier_ceiling`. Write `{n,m}`, or ask for the ceiling to be set.
+9. **"N times in a row" is a run, not a quantifier or a chain.** `X{7}`
+   counts every combination of 7 (20 repeats → 77,520 groups); a chain of
+   7 links gives one overlapping group per starting event. `RUN(X){7,}`
+   gives one group per maximal run, split by the variables in X, the first
+   window the step, a second the whole run:
+   - ✅ `SELECT RUN(field(kind, retry) AND field(agent, $a)){7,} DURING 1 hour DURING 1 day`
+   - pipe: `run(field(kind, retry) and field(agent, $a)){7,} |> during(1h) |> during(1d)`
+   - for now RUN is the whole query (no comma, AND/OR or chain around it).
 
 ## Validate before executing (Python path)
 

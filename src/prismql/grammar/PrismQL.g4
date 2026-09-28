@@ -66,6 +66,9 @@ restriction
     | restriction PrecededBy bool_restriction (InWindow number | During time_value | Within number)?
     | restriction NotFollowedBy bool_restriction (InWindow number | During time_value | Within number)?
     | restriction NotPrecededBy bool_restriction (InWindow number | During time_value | Within number)?
+    // RUN(X){n,m}: one group per maximal run of X; the window is the step
+    // between neighbours (graph @aleph/prismql, #126).
+    | Run '(' bool_restriction ')' quantifier (InWindow number | During time_value)?
     | bool_restriction
     ;
 
@@ -183,11 +186,13 @@ time_unit
 // Rule references
 number : INTEGER;
 float_number : FLOAT | INTEGER;
-hdict : STRING | VARIABLE | WILDCARD;
-huser : STRING | QUOTED_STRING | VARIABLE | WILDCARD;
-feature_name : STRING;
-field_name : STRING;
-field_value : STRING | QUOTED_STRING | VARIABLE | WILDCARD;
+// RUN is a keyword only before '(' in a restriction; as a name or value it
+// stays the plain word it was before RUN existed.
+hdict : STRING | VARIABLE | WILDCARD | Run;
+huser : STRING | QUOTED_STRING | VARIABLE | WILDCARD | Run;
+feature_name : STRING | Run;
+field_name : STRING | Run;
+field_value : STRING | QUOTED_STRING | VARIABLE | WILDCARD | Run;
 match_mode : STRING;
 
 // Keywords (case-insensitive)
@@ -255,6 +260,7 @@ HasFeature       : 'HAS_FEATURE'      | 'has_feature'     | 'HASFEATURE'   | 'ha
 LabeledAs        : 'LABELED_AS'       | 'labeled_as'      | 'LABELEDAS'    | 'labeledas'    ;
 Field            : 'FIELD'            | 'field'           ;
 SimilarTo        : 'SIMILAR_TO'       | 'similar_to'      | 'SIMILARTO'    | 'similarto'    ;
+Run              : 'RUN'              | 'run'             ;
 
 // Legacy condition keywords (backward compatibility)
 HasWordOfDict    : 'HASWORDOFDICT'    | 'haswordofdict'   ;

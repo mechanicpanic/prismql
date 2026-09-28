@@ -44,6 +44,7 @@ from .nodes import (
     Query,
     RelativeTs,
     RestrictionsRow,
+    Run,
     SequenceLink,
     SimilarTo,
     SubqueryChain,
@@ -254,6 +255,14 @@ def _link_window(ctx: Any) -> WindowSpec | None:
 
 
 def lower_restriction(ctx: PrismQLParser.RestrictionContext) -> Expr:
+    if ctx.Run():
+        min_len, max_len = _quantifier(ctx)
+        return Run(
+            lower_bool_restriction(ctx.bool_restriction()),
+            min_len,
+            max_len,
+            _link_window(ctx),
+        )
     if (
         not ctx.FollowedBy()
         and not ctx.PrecededBy()
