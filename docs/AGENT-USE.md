@@ -28,8 +28,8 @@ and each call carries what it ran and how it ended — `cmd`, `path`, `host`,
 `action` (`destructive` for recursive deletes, hard resets, force pushes),
 `outcome`, `duration_bucket`, `output_bucket` (the agent skill lists the
 values). "A command failed and was retried" is then
-`field(outcome, error) AND field(cmd, $c) FOLLOWED_BY field(cmd, $c)`, not a
-text search.
+`field(outcome, error) AND field(cmd, $c) FOLLOWED_BY field(cmd, $c) INWINDOW 5`,
+not a text search.
 
 ## 2. `prismql.toml`
 

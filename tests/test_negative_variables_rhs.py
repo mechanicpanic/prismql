@@ -94,36 +94,71 @@ def test_a_variable_the_left_side_does_not_bind_is_refused(use_ir):
         _engine(use_ir).execute(q)
 
 
-def _oracle(docs: list[dict], window: int) -> list[list[int]]:
-    """By hand: a failed call with no call of the same tool in the same
-    session among the next ``window`` events of the stream."""
+def _oracle(
+    docs: list[dict], shape: str, forward: bool, window: int
+) -> list[list[int]]:
+    """By hand, from the definition: a failed event with no event among the
+    ``window`` next (previous) ones that agrees with it as ``shape`` says;
+    an event missing a compared value agrees with nothing."""
+
+    def agrees(d: dict, e: dict) -> bool:
+        if shape == "tool":
+            return d.get("tool") is not None and e.get("tool") == d["tool"]
+        if shape == "tool+session":
+            return all(
+                d.get(k) is not None and e.get(k) == d[k] for k in ("tool", "session")
+            )
+        # "other tool, same session"
+        return (
+            d.get("tool") is not None
+            and e.get("tool") is not None
+            and e["tool"] != d["tool"]
+            and d.get("session") is not None
+            and e.get("session") == d["session"]
+        )
+
     kept = []
     for i, d in enumerate(docs):
         if d["outcome"] != "error":
             continue
-        later = docs[i + 1 : i + 1 + window]
-        if not any(
-            e["tool"] == d["tool"] and e["session"] == d["session"] for e in later
-        ):
+        near = docs[i + 1 : i + 1 + window] if forward else docs[max(0, i - window) : i]
+        if not any(agrees(d, e) for e in near):
             kept.append([d["id"]])
     return kept
 
 
-@pytest.mark.parametrize("seed", range(20))
+SHAPES = {
+    "tool": ("field(tool, $t)", "field(tool, $t)"),
+    "tool+session": (
+        "field(tool, $t) AND field(session, $s)",
+        "field(tool, $t) AND field(session, $s)",
+    ),
+    "other": (
+        "field(tool, $t) AND field(session, $s)",
+        "field(tool, !$t) AND field(session, $s)",
+    ),
+}
+
+
+@pytest.mark.parametrize("seed", range(15))
+@pytest.mark.parametrize("shape", sorted(SHAPES))
+@pytest.mark.parametrize("forward", [True, False])
 @pytest.mark.parametrize("use_ir", [True, False])
-def test_matches_a_brute_force_oracle(seed, use_ir):
+def test_matches_a_brute_force_oracle(seed, shape, forward, use_ir):
+    """Fields go missing now and then, as ``cmd`` does on non-shell calls."""
     rnd = random.Random(seed)  # noqa: S311 - a reproducible test stream
-    docs = [
-        {
-            "id": i,
-            "session": rnd.choice(["a", "b"]),
-            "tool": rnd.choice(["Bash", "Read", "Edit"]),
-            "outcome": rnd.choice(["ok", "ok", "error"]),
-            "text": "x",
-            "timestamp": i,
-        }
-        for i in range(1, 60)
-    ]
+    docs = []
+    for i in range(1, 60):
+        d = {"id": i, "outcome": rnd.choice(["ok", "ok", "error"]), "text": "x"}
+        d["timestamp"] = i
+        if rnd.random() < 0.8:
+            d["tool"] = rnd.choice(["Bash", "Read", "Edit"])
+        if rnd.random() < 0.8:
+            d["session"] = rnd.choice(["a", "b"])
+        docs.append(d)
     window = rnd.choice([1, 3, 8])
-    q = f"SELECT {FAILED} NOT_FOLLOWED_BY {SAME} INWINDOW {window}"
-    assert sorted(_engine(use_ir, docs).execute(q)) == _oracle(docs, window)
+    left, right = SHAPES[shape]
+    op = "NOT_FOLLOWED_BY" if forward else "NOT_PRECEDED_BY"
+    q = f"SELECT field(outcome, error) AND {left} {op} {right} INWINDOW {window}"
+    got = sorted(_engine(use_ir, docs).execute(q))
+    assert got == _oracle(docs, shape, forward, window)

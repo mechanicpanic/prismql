@@ -250,11 +250,14 @@ nothing bound `$k` before it).
 
 **Variables in sequential chains**: same-value constraints are enforced across
 arrow legs (each leg binds the variable for its message in the matched group).
-Two restrictions apply:
+Two rules apply:
 - The chain must be the entire query body — chain variables cannot be combined
   with other `+`-joined restrictions or quantifiers (runtime error).
-- Variables on the right-hand side of `!~>` / `!<~` are rejected: the excluded
-  message is not part of the result group, so there is nothing to bind them to.
+- Variables on the right-hand side of `!~>` / `!<~` bind nothing — the
+  excluded message is not in the group — and narrow what counts as excluded:
+  `$k` to a message with the left side's value, `!$k` to one with another
+  value. Each must be bound on the left side (an error otherwise). A left
+  message without that value has nothing that agrees with it, so it is kept.
 
 ### 6. Named Groups
 

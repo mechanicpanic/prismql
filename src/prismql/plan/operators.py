@@ -288,7 +288,9 @@ def _exclusion_constraints(
     lhs: Leg, rhs: Leg, fields: set[str]
 ) -> tuple[str | None, Any | None]:
     """(key, eligible) for the excluded side of a negative link: its
-    variables compare with the values the lhs row holds."""
+    variables compare with the values the lhs row holds. Never an asof
+    ``key``: a key drops lhs rows without a value, and such a row has no
+    agreeing excluded event, so it must stay (cold review, 2026-09-28)."""
     pl = _pl()
     lhs_fields: dict[str, list[str]] = {}
     for v, f in lhs.equal:
@@ -303,10 +305,6 @@ def _exclusion_constraints(
             )
     if not rhs.equal and not rhs.unequal:
         return None, None
-    if len(rhs.equal) == 1 and not rhs.unequal:
-        v0, f0 = rhs.equal[0]
-        if lhs_fields[v0] == [f0] and f0 not in fields:
-            return f0, None
     lists = {f"l_{f}" for f in fields} | {f"r_{f}" for f in fields}
     conds = _self_consistency("r_", rhs, lists)
     for v, f in rhs.equal:

@@ -271,7 +271,8 @@ shadows the real match. Two restrictions apply:
   bind nothing — the excluded message is not in the group — and narrow what
   counts as excluded: `$k` to a message with the left side's value, `!$k`
   to one with another value. Each must be bound on the left side (an error
-  otherwise).
+  otherwise). A left message without that value has nothing that agrees
+  with it, so it is kept.
 
 ### 6. Named Groups
 
