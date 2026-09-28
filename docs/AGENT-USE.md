@@ -22,6 +22,15 @@ and may be strings.
 
 `.json`, `.jsonl`, `.csv` and `.parquet` all load.
 
+Agent harness logs become such a file with `prismql ingest claude-code` or
+`prismql ingest codex`: one event per prompt, thought, tool call and result,
+and each call carries what it ran and how it ended — `cmd`, `path`, `host`,
+`action` (`destructive` for recursive deletes, hard resets, force pushes),
+`outcome`, `duration_bucket`, `output_bucket` (the agent skill lists the
+values). "A command failed and was retried" is then
+`field(outcome, error) AND field(cmd, $c) FOLLOWED_BY field(cmd, $c)`, not a
+text search.
+
 ## 2. `prismql.toml`
 
 ```toml
@@ -113,6 +122,9 @@ Can:
 - define or override dictionaries for one query by putting
   `"dictionaries": {"name": ["term", …]}` in the request body;
 - get a total with `AGGREGATE count()`;
+- count repeats in a row with `RUN(X){n,m}` — one group per run (retry
+  loops, the same request again and again), where `X{n}` would give every
+  combination and a chain one overlapping group per starting event;
 - fix its own broken query: a bad query comes back as a 422 whose
   `error.message` says what to change;
 - scout first: `POST /search` (ranked full-text hits, tantivy syntax) and

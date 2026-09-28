@@ -91,6 +91,16 @@ group per set. `{2,4}` = the pairs *and* the triples *and* the quadruples.
 in the config, or write `{n,m}`. (Until P3 the engine runs ranges as their
 minimum — A8.)
 
+## 4a. Runs — repeats in a row, counted once
+
+`RUN(from($u)){3,} DURING 5 minutes` = one group per maximal run: $u's
+events, each within five minutes of the previous one, three or more. Runs
+never overlap and other events between them do not break them. Where a
+quantifier over 20 repeats gives every combination (77,520 groups for
+`{7}`) and a chain gives one overlapping group per starting event, a run
+gives one. The first window is the step, a second `DURING` bounds the whole
+run. Today a run is a whole query on its own.
+
 ## 5. Subqueries — groups of groups
 
 Brackets make a stage that keeps its own window and its own grouping; the

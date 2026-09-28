@@ -150,50 +150,92 @@ def test_run_is_not_a_boolean_operand():
 
 
 def _oracle(
-    docs: list[dict], kind: str, by_agent: bool, step_s: int, lo: int, hi: int | None
+    docs: list[dict],
+    by_agent: bool,
+    step: int,
+    positional: bool,
+    lo: int,
+    hi: int | None,
 ) -> list[list[int]]:
-    """Runs by hand: split each part's events where the gap exceeds the step."""
+    """Runs by hand, from the definition: the R events of each part, in the
+    step axis's order; a run goes on while the next one is at most ``step``
+    away (positions count every event of the stream)."""
+    pos = {d["id"]: i for i, d in enumerate(docs)}
+    at = (lambda d: pos[d["id"]]) if positional else (lambda d: d["timestamp"])
     parts: dict = {}
     for d in docs:
-        if d["kind"] == kind:
+        if d["kind"] == "R":
             parts.setdefault(d["agent"] if by_agent else None, []).append(d)
-    runs = []
+    runs: list[list[dict]] = []
     for events in parts.values():
-        run = [events[0]]
-        for prev, cur in zip(events, events[1:], strict=False):
-            if cur["timestamp"] - prev["timestamp"] <= step_s:
-                run.append(cur)
-            else:
+        events.sort(key=lambda d: (at(d), pos[d["id"]]))
+        run: list[dict] = []
+        for d in events:
+            if run and at(d) - at(run[-1]) > step:
                 runs.append(run)
-                run = [cur]
+                run = []
+            run.append(d)
         runs.append(run)
     kept = [r for r in runs if lo <= len(r) and (hi is None or len(r) <= hi)]
-    return sorted([d["id"] for d in r] for r in kept)
+    return sorted(sorted(d["id"] for d in r) for r in kept)
 
 
-@pytest.mark.parametrize("seed", range(25))
+@pytest.mark.parametrize("seed", range(20))
 @pytest.mark.parametrize("by_agent", [True, False])
-def test_runs_match_a_brute_force_oracle(seed, by_agent):
+@pytest.mark.parametrize("positional", [True, False])
+@pytest.mark.parametrize("use_ir", [True, False])
+def test_runs_match_a_brute_force_oracle(seed, by_agent, positional, use_ir):
+    """Load order and time disagree here (times jitter back), and times
+    repeat, so the oracle sees what a sorted stream would hide."""
     rnd = random.Random(seed)  # noqa: S311 - a reproducible test stream
-    t = 0
     docs = []
+    t = 0
     for i in range(1, 80):
-        t += rnd.choice([1, 2, 5, 20, 90]) * MIN
+        t += rnd.choice([0, 1, 2, 5, 20, 90]) * MIN
+        jitter = rnd.choice([0, 0, 0, -3, -40]) * MIN
         docs.append(
             {
                 "id": i,
                 "agent": rnd.choice("abc"),
                 "kind": rnd.choice("RRX"),
                 "text": "x",
-                "timestamp": t,
+                "timestamp": max(0, t + jitter),
             }
         )
     lo, hi = rnd.choice([(2, None), (3, None), (2, 4), (3, 3)])
     cond = "field(kind, R) AND field(agent, $a)" if by_agent else "field(kind, R)"
     quant = f"{{{lo},}}" if hi is None else f"{{{lo},{hi}}}"
-    q = f"SELECT RUN({cond}){quant} DURING 30 minutes"
-    got = sorted(_engine(docs=docs).execute(q))
-    assert got == _oracle(docs, "R", by_agent, 30 * MIN, lo, hi)
+    step, window = (2, "INWINDOW 2") if positional else (30 * MIN, "DURING 30 minutes")
+    q = f"SELECT RUN({cond}){quant} {window}"
+    got = sorted(sorted(g) for g in _engine(use_ir, docs).execute(q))
+    assert got == _oracle(docs, by_agent, step, positional, lo, hi)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # A parenthesized RUN hid from the legacy path's syntax checks and
+        # joined agent a's run to agent b's event (cold review, 2026-09-28).
+        "SELECT (RUN(field(kind, R) AND field(agent, $a)){2,} DURING 1 hour)"
+        " FOLLOWED_BY field(kind, X) AND field(agent, $a) INWINDOW 2",
+        "SELECT (RUN(field(kind, R)){2,} DURING 1 hour){2}",
+    ],
+)
+@pytest.mark.parametrize("use_ir", [True, False])
+def test_a_parenthesized_run_is_refused_too(use_ir, query):
+    with pytest.raises(PrismQLError, match="whole SELECT body"):
+        _engine(use_ir).execute(query)
+
+
+@pytest.mark.parametrize("use_ir", [True, False])
+def test_run_as_a_subquery(use_ir):
+    # a's run sits at positions 0, 2, 4, 5; c's request at 8 follows all of
+    # it within 10. b's run (6, 7, 9) does not wholly precede c.
+    q = (
+        f"SELECT (SELECT {RUN_A} DURING 1 hour)"
+        " FOLLOWED_BY (SELECT field(agent, c)) INWINDOW 10"
+    )
+    assert _engine(use_ir).execute(q) == [[1, 3, 5, 6, 9]]
 
 
 @pytest.mark.parametrize("use_ir", [True, False])
@@ -231,3 +273,25 @@ def test_a_second_inwindow_is_refused_not_dropped(use_ir, query):
     """It used to be ignored in silence (graph #134)."""
     with pytest.raises(PrismQLError, match="second DURING"):
         _engine(use_ir).execute(query)
+
+
+@pytest.mark.parametrize(
+    ("query", "code"),
+    [
+        ("SELECT RUN(field(kind, R)){3,}", "RUN_WITHOUT_STEP"),
+        ("run(field(kind, R)){3,}", "RUN_WITHOUT_STEP"),
+        ("SELECT field(kind, R, fuzzy)", "INVALID_QUERY"),
+    ],
+)
+def test_validator_reports_instead_of_raising(query, code):
+    from prismql import QueryValidator
+
+    result = QueryValidator().validate(query)
+    assert not result.valid
+    assert code in [i.code for i in result.issues]
+
+
+def test_validator_takes_a_run_length_for_no_quantifier():
+    from prismql import QueryValidator
+
+    assert QueryValidator().validate("SELECT RUN(field(kind, R)){3,} DURING 1 hour")

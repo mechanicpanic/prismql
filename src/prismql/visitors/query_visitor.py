@@ -36,6 +36,12 @@ from ..types import (
 # Try to import Rust backend for performance
 
 
+class RunGroups(list):  # type: ignore[type-arg]
+    """The groups ``RUN`` produced. The legacy path reads the parse tree,
+    where a parenthesized RUN hides from the syntax checks; wherever a chain
+    or a quantifier would consume groups, this type refuses it instead."""
+
+
 class PrismQLVisitor(BasePrismQLVisitor):
     """
     Visitor that traverses the PrismQL parse tree and executes the query.
@@ -423,6 +429,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
             # Process the underlying restriction
             result = self.visitRestriction(named_restriction_ctx.restriction())
+            if isinstance(result, RunGroups) and (
+                len(ctx.named_restriction()) > 1 or named_restriction_ctx.quantifier()
+            ):
+                raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
 
             # A PartialSequence escaping here means a chain's final link had
             # no window — raise a teachable error instead of crashing later.
@@ -556,6 +566,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         n_before_lhs = len(self.variable_constraints)
         lhs = self.visitRestriction(ctx.restriction())
+        if isinstance(lhs, RunGroups):
+            raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
         n_before_rhs = len(self.variable_constraints)
         if not self._seq_leg_constraints:
             # Innermost leg of the chain: the lhs visit above fell through to
@@ -643,14 +655,16 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 "run is at least 1 event long and its lower bound is not above "
                 "its upper one."
             )
-        return run_runs(
-            self.search_backend,
-            self.timestamp_field,
-            self._in_stream_order(ids),
-            constraints,
-            window,
-            min_len,
-            max_len,
+        return RunGroups(
+            run_runs(
+                self.search_backend,
+                self.timestamp_field,
+                self._in_stream_order(ids),
+                constraints,
+                window,
+                min_len,
+                max_len,
+            )
         )
 
     def _apply_sequential_link(

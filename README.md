@@ -26,7 +26,8 @@ sequences (`FOLLOWED_BY`, `PRECEDED_BY` and their negations, matched
 *nearest-first*), unordered co-occurrence (`INWINDOW`), windows on either
 axis — positions (`INWINDOW 5`) or wall clock (`DURING 30 minutes`) —
 pattern variables (`$c`: the same value across legs; `!$c`: a different
-one), quantifiers, and subqueries whose groups are themselves operands.
+one), quantifiers, runs (`RUN(X){7,}`: repeats in a row, one group per
+run), and subqueries whose groups are themselves operands.
 
 ## Install
 
@@ -293,7 +294,8 @@ between two already-grouped results is an error by design.
 | before | `B PRECEDED_BY A INWINDOW 3` | `B <~ A \|> within(3)` |
 | never followed by | `A NOT_FOLLOWED_BY B DURING 1 day` | `A !~> B \|> during(1d)` |
 | on the clock | `A FOLLOWED_BY B DURING 10 minutes` | `A ~> B \|> during(10m)` |
-| repeated | `A{3} INWINDOW 10` | `A{3} \|> within(10)` |
+| any 3 of A in a window | `A{3} INWINDOW 10` | `A{3} \|> within(10)` |
+| 3+ in a row, one group per run | `RUN(A){3,} DURING 1 hour` | `run(A){3,} \|> during(1h)` |
 | staged | `(SELECT A, B INWINDOW 3) FOLLOWED_BY (SELECT C) INWINDOW 8` | `[A + B \|> within(3)] ~>(8) [C]` |
 | how many | `… AGGREGATE count()` | `… \|> count()` |
 
@@ -302,7 +304,8 @@ definition; the **last link of a chain must carry a window**, and one
 trailing window distributes to every windowless link; `{n,}` has no upper
 bound to enumerate to, so it is rejected unless you write `{n,m}` or set a
 ceiling — `[engine] quantifier_ceiling` in `prismql.toml`, or
-`PrismQLEngine(quantifier_ceiling=…)` from Python.
+`PrismQLEngine(quantifier_ceiling=…)` from Python. `A{3}` is every
+combination of three, not three in a row: for repeats use `RUN`.
 
 **Pattern variables** hold an entity fixed across legs: `field(cell, $c)` on
 two legs means "the same cell"; `field(cell, !$c)` means "a different one".

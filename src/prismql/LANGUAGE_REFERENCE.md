@@ -217,8 +217,10 @@ the events of X, split by the values of the variables X names (one run per
 agent with `field(agent, $a)`), whose neighbours are at most the step
 apart. Runs never overlap; events that are not X between the members do not
 break a run; runs shorter than n or longer than m are dropped, never cut.
-The window after `RUN` is the step and is required; a second one bounds the
-whole run.
+The window after `RUN` is the step and is required; a second `DURING`
+bounds the whole run (a second `INWINDOW` is refused). A `DURING` step reads
+X's events in time order, and events at the same time join one run; an
+`INWINDOW` step counts every event of the stream between neighbours.
 
 ```prismql
 -- The same agent asked 7+ times, each within an hour of the last, all within a day
@@ -231,7 +233,9 @@ SELECT RUN(field(kind, retry) AND field(session, $s)){3,} INWINDOW 5 AGGREGATE c
 For a series use `RUN`, not `X{7}` (every 7 of 20 repeats is 77,520 groups)
 and not a chain of 7 links (one group per starting event, overlapping). For
 now `RUN` is the whole SELECT body: not beside other restrictions, not
-inside AND/OR, not in a FOLLOWED_BY chain. `run` stays a plain word as a
+inside AND/OR, not in a FOLLOWED_BY chain — each refused loudly. It may be
+a whole subquery: `(SELECT RUN(X){3,} DURING 1 hour) FOLLOWED_BY (SELECT Y)
+INWINDOW 10`. `run` stays a plain word as a
 field value: `field(kind, run)`.
 
 ### 5. Pattern Variables

@@ -73,6 +73,9 @@ class PrismQLLexer(RegexLexer):
                 ),
                 Operator.Word,
             ),
+            # RUN(X){n,m}: a keyword only before its parenthesis, so a field
+            # value "run" stays a plain word.
+            (r"(?i)\bRUN(?=\s*\()", Operator.Word),
             # Positional operators (lookahead/lookbehind)
             (
                 words(

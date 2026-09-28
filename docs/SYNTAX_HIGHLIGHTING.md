@@ -160,6 +160,8 @@ The lexer highlights:
 - **Exact**: `{3}` (exactly 3 occurrences)
 - **At least**: `{2,}` (2 or more occurrences)
 - **Range**: `{1,5}` (between 1 and 5 occurrences)
+- **Runs**: `RUN(x){3,}` — highlighted as an operator only before its `(`;
+  `run` as a field value stays plain
 
 ### Comments
 - Single-line: `-- comment` or `// comment`

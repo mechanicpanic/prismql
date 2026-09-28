@@ -26,7 +26,7 @@ def runs(
     max_len: int | None,
 ) -> list[list[MessageId]]:
     """Id groups of the runs of ``frame`` with length ``min_len..max_len``,
-    each in stream order, the groups ordered by their first event."""
+    each in the step axis's order, the groups ordered by where they start."""
     pl = _pl()
     schema = frame.collect_schema()
     for key in keys:
@@ -37,7 +37,9 @@ def runs(
             )
     # Events without a place on the axis or without a value to split by
     # belong to no run.
-    df = frame.drop_nulls([axis, *keys]).sort([*keys, "position"])
+    # Along the step's own axis: a time step reads events in time order even
+    # where the load order disagrees; equal times are no gap and join.
+    df = frame.drop_nulls([axis, *keys]).sort([*keys, axis, "position"])
     gap = pl.col(axis) - pl.col(axis).shift(1)
     same_part = pl.all_horizontal(
         [pl.col(k) == pl.col(k).shift(1) for k in keys] or [pl.lit(True)]
@@ -47,8 +49,8 @@ def runs(
         df.with_columns(starts.cum_sum().alias("_run"))
         .group_by("_run")
         .agg(
-            pl.col("id").sort_by("position"),
-            pl.col("position").min().alias("_first"),
+            pl.col("id"),
+            pl.col("position").first().alias("_first"),
             pl.len(),
         )
         .filter(pl.col("len") >= min_len)

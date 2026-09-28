@@ -6,7 +6,7 @@ from typing import Any
 
 from antlr4 import CommonTokenStream, InputStream
 
-from .exceptions import PrismQLSyntaxError
+from .exceptions import PrismQLError, PrismQLSyntaxError
 from .grammar.generated.PrismQLLexer import PrismQLLexer
 from .grammar.generated.PrismQLParser import PrismQLParser
 
@@ -326,13 +326,41 @@ class QueryValidator:
             if isinstance(q.source, ir.RestrictionsRow):
                 for item in q.source.items:
                     self._check_item_quantifier(item, issues)
+                    self._check_run_step(item.expr, issues)
             elif isinstance(q.source, ir.SubqueryChain):
                 walk(q.source.head)
                 for cont in q.source.continuations:
                     walk(cont.query)
 
-        walk(lower_query(tree))
+        try:
+            lowered = lower_query(tree)
+        except PrismQLError as e:
+            # A query the engine refuses at lowering is invalid: say so, as
+            # a finding, not as an exception out of validate().
+            issues.append(
+                ValidationIssue(
+                    level=ValidationLevel.ERROR, message=str(e), code="INVALID_QUERY"
+                )
+            )
+            return issues
+        walk(lowered)
         return issues
+
+    @staticmethod
+    def _check_run_step(expr: Any, issues: list[ValidationIssue]) -> None:
+        from .ir import nodes as ir
+
+        if isinstance(expr, ir.Run) and expr.window is None:
+            issues.append(
+                ValidationIssue(
+                    level=ValidationLevel.ERROR,
+                    message="RUN(...) needs its step: the largest gap between "
+                    "neighbours of a run",
+                    suggestion="RUN(x){3,} DURING 1 hour or RUN(x){3,} INWINDOW 5; "
+                    "pipe: run(x){3,} |> during(1h)",
+                    code="RUN_WITHOUT_STEP",
+                )
+            )
 
     def _check_item_quantifier(self, item: Any, issues: list[ValidationIssue]) -> None:
         if item.max_count is not None:
@@ -435,6 +463,7 @@ class QueryValidator:
             self._check_ir_expr(expr.right, False, issues)
         elif isinstance(expr, ir.Run):
             self._check_ir_window(expr.window, issues)
+            self._check_run_step(expr, issues)
             self._check_ir_expr(expr.expr, False, issues)
         elif isinstance(expr, ir.SequenceLink):
             self._check_ir_window(expr.window, issues)

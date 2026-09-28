@@ -236,6 +236,7 @@ Examples:
   SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3
   SELECT from(alice) FOLLOWED_BY from(bob) DURING 2 hours
   SELECT from($user){3} INWINDOW 10
+  SELECT RUN(from($user)){3,} DURING 5 minutes
 
 Press Ctrl+C to cancel current query.
 Press Ctrl+D or type \\quit to exit.

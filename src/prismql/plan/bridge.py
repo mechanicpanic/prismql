@@ -237,14 +237,14 @@ def run_runs(
             "its variables take, not against a value bound elsewhere."
         )
     frame = _frame(backend, ids, [lg], ts)
-    if lg.equal:
-        # Two fields under one variable must agree inside an event.
-        kept = groups(single_row(frame, lg))
-        frame = frame.filter(_pl().col("id").is_in([g[0] for g in kept]))
     # One column per variable: the event's value there names its part.
     by_variable: dict[str, str] = {}
     for variable, field in lg.equal:
         by_variable.setdefault(variable, field)
+    if len(by_variable) < len(set(lg.equal)):
+        # Two fields under one variable must agree inside an event.
+        kept = groups(single_row(frame, lg))
+        frame = frame.filter(_pl().col("id").is_in([g[0] for g in kept]))
     keys = list(dict.fromkeys(by_variable.values()))
     axis, step = axis_and_window(window_of(window), ts)
     return runs(

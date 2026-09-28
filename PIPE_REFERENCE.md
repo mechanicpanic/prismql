@@ -226,7 +226,8 @@ run(field(kind, retry) and field(session, $s)){3,} |> within(5) |> count()
 For a series use `run`, not `x{7}` (every 7 of 20 repeats is 77,520 groups)
 and not a chain of 7 arrows (one group per starting event, overlapping). For
 now `run` is the whole query: not beside `+`, not inside `and`/`or`, not
-next to an arrow. `run` stays a plain word as a field value:
+next to an arrow — each refused loudly. It may be a whole subquery:
+`[run(x){3,} |> during(1h)] ~>(10) [y]`. `run` stays a plain word as a field value:
 `field(kind, run)`.
 
 ### 5. Pattern Variables

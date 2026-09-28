@@ -302,7 +302,8 @@ implementation over the ordered corpus:
    counts every combination of 7 (20 repeats → 77,520 groups); a chain of
    7 links gives one overlapping group per starting event. `RUN(X){7,}`
    gives one group per maximal run, split by the variables in X, the first
-   window the step, a second the whole run:
+   window the step, a second `DURING` the whole run (a second `INWINDOW` is
+   refused):
    - ✅ `SELECT RUN(field(kind, retry) AND field(agent, $a)){7,} DURING 1 hour DURING 1 day`
    - pipe: `run(field(kind, retry) and field(agent, $a)){7,} |> during(1h) |> during(1d)`
    - for now RUN is the whole query (no comma, AND/OR or chain around it).

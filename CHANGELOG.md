@@ -1,5 +1,20 @@
 ## Unreleased
 
+### Added (runs: repeats in a row)
+- `RUN(X){n,m}` (pipe `run(x){n,m}`) gives one group per maximal run of X: X's events split by the values of the variables X names (one run per agent with `field(agent, $a)`), each within the step of the previous one; runs never overlap, other events between members do not break them, and runs outside n..m are dropped, never cut. The first window is the step and is required (`RUN_WITHOUT_STEP` in the validator); a second `DURING` bounds the whole run. A `DURING` step reads events in time order and joins equal times; an `INWINDOW` step counts every event of the stream. For now RUN is the whole SELECT body (or a whole subquery); beside other restrictions, in AND/OR, under a quantifier or in a chain it is refused (graph @aleph/prismql, #126). `run` stays a plain word as a field name or value.
+
+### Added (tool calls as structure)
+- `prismql ingest claude-code` / `codex` give every tool call `cmd` (the first program a shell command runs, read as shell: quoted text, heredocs, comments and substitutions are not programs), `path`, `host`, `action` (`read`, `write`, `exec`, `network`, `destructive`), and the result's `outcome` (`ok`, `error`, `none`), `duration_ms`, `output_chars` with `duration_bucket` / `output_bucket`; `call` joins a call to its result. Claude Code sub-agent events carry `agent`, the call that started one `spawned` (#129, #131). Codex marks errors only for a non-zero exec exit, so its rates do not compare with Claude Code's.
+
+### Fixed (a window dropped without a word)
+- A second `INWINDOW` after a chain or run whose link already has a window was ignored; it is refused now, pointing to a second `DURING` for the whole group (#134; what it should mean waits on #87).
+
+### Changed (validator)
+- The classic validator checks open quantifiers on the lowered query instead of a regex, and a query the engine refuses at lowering comes back as an `INVALID_QUERY` finding instead of an exception out of `validate()`.
+
+### Docs
+- Both references name the whole-group second `DURING` and that variables do not cross subqueries (#127).
+
 ### Changed (mentions: who addresses whom)
 - `mentions_user()` now means an `@mention` of an author: `@` and a name some event's author has (the server's `board.actor`, the engine's new `actor_field`, default `user`), the longest that fits, any case — an e-mail address is not one. It used to search the name as a word in the text; `mentions_user(*)` used to mean every message and now means every message with a mention. `mentions_user($y)` binds a mentioned name, so `mentions_user($y) FOLLOWED_BY field(agent, $y)` is "addressed, then answered by the one addressed"; it used to search the text "$y" and answer empty (graph @aleph/prismql, #121). The operator layer holds a list-valued field equal to a value when it contains it and settles the group on that value; comma-list members bound to one variable share one name. Mentions the engine finds live in their own field (`_mentions:<actor>`, not returned by the server); a `mentions` column counts only when ingest stamped it (`PrismQLEngine(mentions_column=…)` otherwise); a quoted `from("*")` is the author named "*" on both paths. Names with spaces or dots may be quoted in `mentions_user()` and `from()`, in both dialects. `prismql ingest … --annotate mentions --actor COL` writes a `mentions` column; without it mentions are found once at load.
 

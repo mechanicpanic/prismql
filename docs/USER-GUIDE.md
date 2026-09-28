@@ -709,6 +709,14 @@ The REPL prefixes these with `Runtime Error: Error executing query:` or
    `memory`, or let tantivy rebuild the index from the data file.
 6. **A time query that returns nothing** — check `[engine].timestamp_field`
    (section 3) before suspecting your data.
+6a. **"N times in a row" is `RUN`, not `{N}` or a chain.** `field(kind,
+   retry){7}` counts every combination of seven (twenty retries → 77,520
+   groups); seven chained links give one overlapping group per starting
+   event. `SELECT RUN(field(kind, retry) AND field(agent, $a)){7,} DURING 1
+   hour DURING 1 day` gives one group per run of one agent, each retry within
+   an hour of the last, the whole run within a day. A second window after a
+   windowed chain or run must be `DURING`: a second `INWINDOW` is refused
+   (it used to be dropped without a word).
 7. **Booleans join filters, not patterns.** `AND`, `OR`, `NOT` combine
    conditions on a single event. Once you have groups there is nothing left
    to intersect, so `SELECT field(kind, delete), field(kind, save) INWINDOW 5

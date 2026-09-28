@@ -246,8 +246,17 @@ SELECT from($user) FOLLOWED_BY from(bob) INWINDOW 5 FOLLOWED_BY from($user) INWI
 -- Alice posting exactly 3 times within 10 messages
 SELECT from(alice){3} INWINDOW 10
 
--- Same user posting 3 times close together
+-- Every set of 3 posts by one user within 5 messages (combinations:
+-- 5 posts in a row give 10 groups)
 SELECT from($user){3} INWINDOW 5
+```
+
+### Runs
+
+```prismql
+-- Same user posting 3+ times in a row, each within 5 minutes of the last:
+-- one group per run, runs never overlap
+SELECT RUN(from($user)){3,} DURING 5 minutes
 ```
 
 ### Aggregation
