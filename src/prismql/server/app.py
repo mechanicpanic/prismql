@@ -640,7 +640,9 @@ def create_app(config: ServerConfig) -> FastAPI:
         payload["query"] = req.query
         # Runs, but asks something else than meant: said beside the answer
         # and kept in the journal for the board (graph @aleph/prismql, #128).
-        warnings = _query_warnings(engine, req.query, payload.get("total"))
+        warnings = _query_warnings(
+            engine, req.query, stored.total if stored is not None and folded else None
+        )
         payload["warnings"] = warnings
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
         state.record(

@@ -111,3 +111,32 @@ def test_a_plain_query_has_an_empty_warning_list(client):
     body = client.post("/evaluate", json={"query": "SELECT from(a)"}).json()
     assert body["warnings"] == []
     assert "warnings" not in client.get("/activity").json()["entries"][-1]
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT field(kind, R){3} INWINDOW 5 AGGREGATE count()",
+        "SELECT field(kind, R){2} INWINDOW 2 GROUP BY user AGGREGATE count()",
+        "SELECT field(kind, R){2} INWINDOW 2 GROUP BY user",
+    ],
+)
+def test_a_counted_or_grouped_quantifier_always_warns(query):
+    """Counted, the combinations read as events whatever their number; the
+    advice is to drop the quantifier, not to add a count (cold review)."""
+    engine = PrismQLEngine(MemoryBackend(DOCS))
+    [issue] = QueryValidator().warnings(engine.to_ir(query), total=None)
+    assert issue.code == "QUANTIFIER_COMBINATIONS"
+    assert "drop the quantifier" in issue.suggestion
+
+
+def test_nested_subqueries_name_a_shared_variable_once():
+    q = (
+        "SELECT (SELECT (SELECT from($u)) FOLLOWED_BY (SELECT from($u)) INWINDOW 3)"
+        " FOLLOWED_BY (SELECT from($u)) INWINDOW 5"
+    )
+    assert _codes(q).count("SUBQUERY_SHARED_VARIABLE") == 1
+
+
+def test_performance_hints_are_not_shown_beside_an_answer():
+    assert _codes("SELECT from(a), from(b) INWINDOW 5000") == []

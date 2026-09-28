@@ -19,10 +19,10 @@ window.EXAMPLES = {
       "pipe": "from($u) and is_question() ~> from($u) |> within(10)"
     },
     {
-      "label": "Rapid triple burst from the same user",
-      "blurb": "Chained FOLLOWED_BY with per-link positional windows",
-      "classic": "SELECT from($u) FOLLOWED_BY from($u) INWINDOW 1 FOLLOWED_BY from($u) INWINDOW 1",
-      "pipe": "from($u) ~>(1) from($u) ~>(1) from($u)"
+      "label": "Bursts of three or more messages from one user",
+      "blurb": "RUN: one group per maximal run of repeats, not one per starting message",
+      "classic": "SELECT RUN(from($u)){3,} INWINDOW 1",
+      "pipe": "run(from($u)){3,} |> within(1)"
     },
     {
       "label": "Unanswered code-help question",

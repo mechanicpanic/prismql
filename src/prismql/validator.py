@@ -396,22 +396,26 @@ class QueryValidator:
     def warnings(
         self, ir_query: Any, total: int | None = None
     ) -> list[ValidationIssue]:
-        """What the server shows beside an answer (graph #128): the warnings
-        among the checks, and those about queries that run but ask something
-        else than meant. ``total`` is the answer's group count, when known.
-        Errors are left to the engine, which raises them itself."""
-        issues = [
-            i
-            for i in self._check_ir_semantics(ir_query)
-            if i.level == ValidationLevel.WARNING
-        ]
-        issues.extend(self._run_but_wrong(ir_query))
-        if total is not None:
-            issues.extend(self._combination_warnings(ir_query, total))
+        """What the server shows beside an answer (graph #128): queries that
+        run but ask something else than meant. ``total`` is the answer's group
+        count, when the answer has groups. Errors are left to the engine,
+        which raises them itself; performance hints are not shown."""
+        issues = self._run_but_wrong(ir_query)
+        issues.extend(self._combination_warnings(ir_query, total))
         return issues
 
     def _run_but_wrong(self, q: Any) -> list[ValidationIssue]:
-        """Shapes that run without an error and answer another question."""
+        """Shapes that run without an error and answer another question,
+        each named once however deep the subqueries nest."""
+        seen: set[tuple[str | None, str]] = set()
+        unique = []
+        for issue in self._run_but_wrong_at(q):
+            if (issue.code, issue.message) not in seen:
+                seen.add((issue.code, issue.message))
+                unique.append(issue)
+        return unique
+
+    def _run_but_wrong_at(self, q: Any) -> list[ValidationIssue]:
         from .ir import nodes as ir
 
         issues: list[ValidationIssue] = []
@@ -437,7 +441,7 @@ class QueryValidator:
                     )
                 )
             for stage in stages:
-                issues.extend(self._run_but_wrong(stage))
+                issues.extend(self._run_but_wrong_at(stage))
         elif isinstance(q.source, ir.RestrictionsRow):
             for item in q.source.items:
                 n = _identical_links(item.expr)
@@ -451,35 +455,49 @@ class QueryValidator:
                                 "per series of repeats"
                             ),
                             suggestion=(
-                                f"For repeats in a row write RUN(X){{{n},}} with the "
-                                "step as its window: one group per maximal run"
+                                f"For repeats in a row write RUN(X){{{n},}} as its "
+                                "own query, with the step as its window: one group "
+                                "per maximal run"
                             ),
                             code="REPEATED_LINKS",
                         )
                     )
         return issues
 
-    def _combination_warnings(self, q: Any, total: int) -> list[ValidationIssue]:
+    def _combination_warnings(self, q: Any, total: int | None) -> list[ValidationIssue]:
+        """A quantifier's groups are combinations. Counted or grouped, they
+        are always read as events; listed, only a large answer is worth a
+        word. ``total`` counts groups only for an answer made of groups."""
         from .ir import nodes as ir
 
         quantified = isinstance(q.source, ir.RestrictionsRow) and any(
             item.min_count > 1 or (item.max_count or item.min_count) > 1
             for item in q.source.items
         )
-        if not quantified or total < self.COMBINATION_WARN:
+        if not quantified:
+            return []
+        suggestion = (
+            "To count events drop the quantifier (SELECT X AGGREGATE count()); "
+            "for repeats in a row use RUN(X){n,}"
+        )
+        if q.aggregations or q.group_by:
+            message = (
+                "AGGREGATE or GROUP BY over a quantifier counts combinations: "
+                "every set of events within the window is one group"
+            )
+        elif total is not None and total >= self.COMBINATION_WARN:
+            message = (
+                f"{total} groups from a quantifier: each group is one "
+                "combination of events within the window, not a count and not "
+                "a run"
+            )
+        else:
             return []
         return [
             ValidationIssue(
                 level=ValidationLevel.WARNING,
-                message=(
-                    f"{total} groups from a quantifier: each group is one "
-                    "combination of events within the window, not a count and "
-                    "not a run"
-                ),
-                suggestion=(
-                    "To count events use AGGREGATE count(); for repeats in a row "
-                    "use RUN(X){n,}"
-                ),
+                message=message,
+                suggestion=suggestion,
                 code="QUANTIFIER_COMBINATIONS",
             )
         ]

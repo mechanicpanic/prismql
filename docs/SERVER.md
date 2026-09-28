@@ -257,9 +257,10 @@ A warning names a query that runs without an error but answers another
 question than it seems to ask: a chain of three or more identical links
 (one overlapping group per starting event — `RUN` counts runs), one
 variable in sibling subqueries (each subquery binds its own), a quantifier
-answer of 1,000 groups or more (combinations, not a count), a very large
-window. Each has a `code`, a `message` and a `suggestion`; the board shows
-them in the request's inspector.
+under `AGGREGATE` or `GROUP BY`, or listed with 1,000 groups or more (its
+groups are combinations — to count events drop the quantifier). Each has a
+`code`, a `message` and a `suggestion`; the board shows them in the
+request's inspector, and MCP passes them through.
 
 ## 6. Restart and reload
 

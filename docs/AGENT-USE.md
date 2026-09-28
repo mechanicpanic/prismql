@@ -122,6 +122,9 @@ Can:
 - define or override dictionaries for one query by putting
   `"dictionaries": {"name": ["term", …]}` in the request body;
 - get a total with `AGGREGATE count()`;
+- read `warnings` on every answer: a query that ran but answers another
+  question (identical links repeated, a variable shared by subqueries,
+  counted quantifier combinations) says so, with what to write instead;
 - count repeats in a row with `RUN(X){n,m}` — one group per run (retry
   loops, the same request again and again), where `X{n}` would give every
   combination and a chain one overlapping group per starting event;

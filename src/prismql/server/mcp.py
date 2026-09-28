@@ -45,6 +45,10 @@ exception that gets both: it is inline in full (`grouped_values`) AND kept
 as a "rows" result under a `result_id`/`total` — page it the same way
 (result_page(result_id, offset, limit)). For a whole result on disk pass
 output="file" (server-side [server] enable_file_output).
+The reply's `warnings` list names a query that ran but answers another
+question (a chain of identical links, a variable shared by subqueries,
+counted quantifier combinations), each with a suggestion: read it before
+reporting a number.
 Read the prismql://reference resource for the full language before
 writing complex queries. Returns JSON with matched event groups,
 hydrated with full event content.

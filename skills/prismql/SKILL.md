@@ -327,10 +327,16 @@ at most three attempts before asking the person.
 
 A query can also run and answer something else than you meant. The
 `/evaluate` answer then carries `warnings` (`code`, `message`,
-`suggestion`); `QueryValidator().validate(q).warnings` gives the same from
-Python. Read them before you report a number: `REPEATED_LINKS` (use
-`RUN`), `SUBQUERY_SHARED_VARIABLE` (one chain, not subqueries),
-`QUANTIFIER_COMBINATIONS` (count with `AGGREGATE count()`), `LARGE_WINDOW`.
+`suggestion`). Read them before you report a number:
+- `REPEATED_LINKS`: three or more identical links give one overlapping
+  group per starting event — for repeats in a row use `RUN`;
+- `SUBQUERY_SHARED_VARIABLE`: each subquery binds its own `$k` — write one
+  chain;
+- `QUANTIFIER_COMBINATIONS`: a quantifier's groups are combinations, and
+  `AGGREGATE count()` over it counts combinations too — to count events
+  drop the quantifier.
+From Python, `QueryValidator().validate(q).warnings` names the first two
+(among other hints); the third needs the answer.
 
 ## No server: inline Python
 
