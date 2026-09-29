@@ -108,8 +108,11 @@ def page_payload(
             if explainer is not None:
                 item["explain"] = [why.get(i, []) for i in span_ids]
                 if explainer.plan is not None:
-                    docs = [whole[i] for i in span_ids if i in whole]
-                    item["bindings"] = explainer.bindings(docs)
+                    # all or nothing: a missing event would shift the rest
+                    # onto the wrong legs
+                    whole_group = all(i in whole for i in span_ids)
+                    docs = [whole[i] for i in span_ids] if whole_group else []
+                    item["bindings"] = explainer.bindings(docs) if docs else []
         items.append(item)
     if result.kind == "hits":
         payload["kept"] = len(result)
