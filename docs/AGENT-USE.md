@@ -138,7 +138,8 @@ Can:
   request's own `limit` no longer narrows that file);
 - see why each event is there: `"explain": true` on `/evaluate` gives, per
   event, the conditions it satisfies with the matched terms and their
-  offsets, and the `similar_to` score;
+  offsets, and the `similar_to` score — and, for a query with `$variables`,
+  what each variable stood for in that group (`bindings`);
 - read around a finding: `GET /context?id=<id>&minutes=10&same=agent` gives
   the events before and after one event (the same agent's, or every event
   without `same`), so it can check a hit before calling it anything;

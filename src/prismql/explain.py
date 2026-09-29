@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .config import DEFAULT_CONFIG
+from .explain_bindings import Plan, bindings, plan_of
 from .explain_rules import field_holds, leaves, rule_for
 from .explain_text import fields_of, term_spans
 
@@ -27,6 +28,7 @@ class Explainer:
     language: str = "english"
     semantic_index: Any = None
     _query_vectors: dict[str, Any] = field(default_factory=dict)
+    plan: Plan | None = None  # how groups bind the pattern variables
 
     @classmethod
     def build(cls, engine: Any, ir: Any) -> Explainer:
@@ -38,6 +40,7 @@ class Explainer:
             ),
             language=getattr(backend, "text_language", "english"),
             semantic_index=getattr(backend, "semantic_index", None),
+            plan=plan_of(ir),
         )
         for leaf in leaves(ir):
             rule = rule_for(engine, leaf)
@@ -82,6 +85,10 @@ class Explainer:
                 if score is not None and score >= st.threshold:
                     out.append({"predicate": label, "score": round(score, 4)})
         return out
+
+    def bindings(self, docs: list[dict[str, Any]]) -> dict[str, Any]:
+        """What each pattern variable stood for in one group."""
+        return bindings(self.plan, docs)
 
     def _score(self, text: str, doc_id: Any) -> float | None:
         index = self.semantic_index
