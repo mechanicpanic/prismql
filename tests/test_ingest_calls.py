@@ -298,9 +298,11 @@ LIST_DOCS = [
 def _backends() -> list:
     out = [MemoryBackend(LIST_DOCS)]
     try:
-        from prismql.backends.tantivy import TantivyBackend
+        import tantivy  # noqa: F401 - the [tantivy] extra, absent in CI
     except ImportError:
         return out
+    from prismql.backends.tantivy import TantivyBackend
+
     return [*out, TantivyBackend(LIST_DOCS)]
 
 
