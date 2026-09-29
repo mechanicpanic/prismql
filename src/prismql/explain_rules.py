@@ -52,8 +52,13 @@ def field_holds(fm: FieldMatch, doc: dict[str, Any]) -> bool:
     value = doc.get(fm.field_name)
     if value is None or not isinstance(fm.value, Literal):
         return False
-    have, want = str(value).lower(), fm.value.text.lower()
-    return have == want if fm.exact else want in have
+    want = fm.value.text.lower()
+    haves = (
+        [str(v).lower() for v in value]
+        if isinstance(value, list | tuple)
+        else [str(value).lower()]
+    )
+    return any(h == want if fm.exact else want in h for h in haves)
 
 
 def leaves(node: Any) -> list[Any]:

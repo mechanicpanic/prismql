@@ -75,8 +75,9 @@ _JSON_SUFFIX = "__json"  # a column of mixed types, stored JSON-encoded
 _META_NAME = "_prismql_meta.json"  # sidecar recording field roles for reopen
 # Bumped when the index layout changes; an index from an older layout is
 # refused on open with rebuild instructions rather than failing mid-query.
-# 2: stemmed + plain twins, order sidecar; 3: _pos fast field; 4: fields sidecar
-_SCHEMA_VERSION = 4
+# 2: stemmed + plain twins, order sidecar; 3: _pos fast field; 4: fields sidecar;
+# 5: list-valued metadata indexed per element
+_SCHEMA_VERSION = 5
 _REGEX_SPECIAL = re.compile(r"([.^$*+?()\[\]{}|\\])")
 
 
@@ -308,7 +309,11 @@ class TantivyBackend(SearchBackend):
                     td.add_text(f + _PLAIN_SUFFIX, str(doc[f]))
             for f in self._meta_fields:
                 if f in doc and doc[f] is not None:
-                    td.add_text(f, str(doc[f]).lower())
+                    # Each element of a list, as a variable binds them (#133).
+                    values = doc[f] if isinstance(doc[f], list | tuple) else [doc[f]]
+                    for v in values:
+                        if v is not None:
+                            td.add_text(f, str(v).lower())
             if self._store_documents:
                 td.add_json(_DOC_FIELD, json.dumps(doc, default=str))
             writer.add_document(td)

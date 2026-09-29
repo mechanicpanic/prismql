@@ -112,13 +112,12 @@ class MemoryBackend(SearchBackend):
                 if field not in self._field_indexes:
                     self._field_indexes[field] = {}
 
-                # Convert value to string for indexing
+                # Convert value to string for indexing; a list-valued field
+                # (mentions, tool calls) is found by each of its elements, as
+                # a variable binds them (graph @aleph/prismql, #133).
                 str_value = str(value).lower()
-
-                if str_value not in self._field_indexes[field]:
-                    self._field_indexes[field][str_value] = set()
-
-                self._field_indexes[field][str_value].add(doc_id)
+                for key in _field_keys(value):
+                    self._field_indexes[field].setdefault(key, set()).add(doc_id)
 
                 # Also index individual tokens for text fields — unless a
                 # full-text index answers them (the bulk of the start-up cost)
@@ -547,3 +546,11 @@ class MemoryBackend(SearchBackend):
 
             # Store the filtered index
             self._ngram_indexes[n] = ngram_to_docs
+
+
+def _field_keys(value: Any) -> list[str]:
+    """The lowercased keys ``field()`` finds a value by: each element of a
+    list, the value itself otherwise."""
+    if isinstance(value, list | tuple):
+        return [str(v).lower() for v in value if v is not None]
+    return [str(value).lower()]

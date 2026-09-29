@@ -288,12 +288,32 @@ def test_a_result_without_its_call_keeps_no_spawned(tmp_path):
     assert read_claude_code(tmp_path).get_column("spawned").to_list() == [None]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="a literal field() on a list-valued column matches nothing, while "
-    "a variable binds its elements (graph #133)",
-)
-def test_literal_field_matches_an_element_of_a_list_column():
-    docs = [{"id": 1, "text": "x", "tags": ["cd", "git"], "timestamp": 1}]
-    engine = PrismQLEngine(MemoryBackend(docs))
+LIST_DOCS = [
+    {"id": 1, "text": "x", "tags": ["cd", "git"], "timestamp": 1},
+    {"id": 2, "text": "y", "tags": ["curl"], "timestamp": 2},
+    {"id": 3, "text": "z", "tags": None, "timestamp": 3},
+]
+
+
+def _backends() -> list:
+    out = [MemoryBackend(LIST_DOCS)]
+    try:
+        from prismql.backends.tantivy import TantivyBackend
+    except ImportError:
+        return out
+    return [*out, TantivyBackend(LIST_DOCS)]
+
+
+@pytest.mark.parametrize("backend", _backends(), ids=lambda b: type(b).__name__)
+def test_literal_field_matches_an_element_of_a_list_column(backend):
+    """It used to find nothing: the index held str(list) (graph #133)."""
+    engine = PrismQLEngine(backend)
     assert engine.execute("SELECT field(tags, git)") == [[1]]
+    assert engine.execute("SELECT field(tags, cd) AND field(tags, git)") == [[1]]
+    assert sorted(engine.execute("SELECT field(tags, git) OR field(tags, curl)")) == [
+        [1],
+        [2],
+    ]
+    # A variable and a literal agree on the same element.
+    q = "SELECT field(tags, $t) FOLLOWED_BY field(tags, $t) INWINDOW 5"
+    assert engine.execute(q) == []

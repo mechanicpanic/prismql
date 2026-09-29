@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Fixed (a list-valued field answered nothing)
+- `field(name, value)` on a field whose events hold lists (mentions, tags) now matches an event when any element equals the value, on the memory and tantivy backends, and `explain` marks it; it used to match nothing, because the index held the list's text, while a variable on the same field bound its elements (graph @aleph/prismql, #133). The tantivy index layout moves to version 5: an older index is refused on open with rebuild instructions, and a server's text index rebuilds itself at start.
+
 ### Added (several streams, one corpus)
 - `prismql ingest table A B … DST --source-col NAME` unites several tables into one stream: each row names its source (`LABEL=PATH`, else the file's stem), ids become `LABEL:id`, columns a file lacks stay empty on the other's rows. A query reads one corpus, so a lead-lag across streams (`field(source, urlquery) … FOLLOWED_BY field(source, wiki) …`) runs on the united one. Several sources without `--source-col` are refused (graph @aleph/prismql, #54).
 

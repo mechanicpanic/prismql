@@ -26,7 +26,7 @@ Restrictions are conditions that messages must satisfy. Multiple restrictions ar
 
 ```prismql
 from(username)                    -- Events from a specific source (alias for field(user, ...)); quote a name with spaces
-field(name, value)                -- Events where a field equals a value (exact, case-insensitive)
+field(name, value)                -- Events where a field equals a value (exact, case-insensitive); a list-valued field matches if any element does
 field(name, value, partial)       -- ... or contains it as a substring
 contains(dictionary_name)         -- Messages containing dictionary words
 contains_tokens(dictionary_name)  -- Token-based matching (preserves C++, emails)
