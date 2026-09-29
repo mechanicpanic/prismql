@@ -689,11 +689,12 @@ def anti_link_groups(
     axis: str,
     window: int,
     forward: bool,
+    eligible: Any | None = None,
 ) -> Any:
     """``[A] NOT_FOLLOWED_BY [B]`` / ``NOT_PRECEDED_BY``: the left groups with
-    no right group strictly after / before within ``window`` (members
-    disjoint). A left group with a null boundary axis value is dropped
-    (graph #47); ``window == 0`` keeps every placeable left group."""
+    no eligible right group strictly after / before within ``window``
+    (members disjoint). A left group with a null boundary axis value is
+    dropped (graph #47); ``window == 0`` keeps every placeable left group."""
     pl = _pl()
     if window < 0:
         raise ValueError(f"window must be >= 0, got {window}")
@@ -703,7 +704,7 @@ def anti_link_groups(
     if window > 0:
         rb = _group_bounds(right, corpus, axis, "r_")
         matched = _group_pairs(
-            pl, lb, rb, window=window, forward=forward, eligible=None
+            pl, lb, rb, window=window, forward=forward, eligible=eligible
         )
         keep = keep.join(matched.select("l_group").unique(), on="l_group", how="anti")
     order = ["l_last_ax", "l_last_pos"] if forward else ["l_first_ax", "l_first_pos"]

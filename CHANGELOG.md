@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (a run in a link)
+- A run can stand on either side of one `FOLLOWED_BY` / `PRECEDED_BY` / `NOT_*` link, with its step inside the parentheses: `X FOLLOWED_BY RUN(Y, DURING 2 minutes){3,} DURING 10 minutes` (pipe `x ~>(10m) run(y, 2m){3,}`) — "a request, then a run of retries" — and `RUN(…){3,} NOT_FOLLOWED_BY success …` — "a run of failures never recovered from". A variable named on both sides holds one value across the link; `!$k` on the condition side asks for another. The group is the run plus the linked event, one per left-hand group. Longer chains around a run are refused. On the legacy path a parenthesized run is read as the IR path reads it (graph @aleph/prismql, #126).
+
 ### Fixed (a list-valued field answered nothing)
 - `field(name, value)` on a field whose events hold lists (mentions, tags) now matches an event when any element equals the value, on the memory and tantivy backends, and `explain` marks it; it used to match nothing, because the index held the list's text, while a variable on the same field bound its elements (graph @aleph/prismql, #133). The tantivy index layout moves to version 5: an older index is refused on open with rebuild instructions, and a server's text index rebuilds itself at start.
 

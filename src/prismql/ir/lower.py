@@ -254,15 +254,36 @@ def _link_window(ctx: Any) -> WindowSpec | None:
     return None
 
 
+RUN_STEP_TWICE = (
+    "RUN has its step twice: inside RUN(X, step) and after it. Keep one; "
+    "to bound the whole run write RUN(X){n,} <step> DURING <span>."
+)
+
+
+def lower_run(ctx: Any, after: WindowSpec | None = None) -> Run:
+    """``RUN(X[, step]){n,m}``: the step inside the parentheses, or — for a
+    run standing alone — the window written after it (graph #126)."""
+    min_len, max_len = _quantifier(ctx)
+    inside = _link_window(ctx)
+    if inside is not None and after is not None:
+        raise PrismQLSyntaxError(RUN_STEP_TWICE)
+    return Run(
+        lower_bool_restriction(ctx.bool_restriction()),
+        min_len,
+        max_len,
+        inside if inside is not None else after,
+    )
+
+
+def lower_link_rhs(ctx: Any) -> Expr:
+    if ctx.run_restriction():
+        return lower_run(ctx.run_restriction())
+    return lower_bool_restriction(ctx.bool_restriction())
+
+
 def lower_restriction(ctx: PrismQLParser.RestrictionContext) -> Expr:
-    if ctx.Run():
-        min_len, max_len = _quantifier(ctx)
-        return Run(
-            lower_bool_restriction(ctx.bool_restriction()),
-            min_len,
-            max_len,
-            _link_window(ctx),
-        )
+    if ctx.run_restriction():
+        return lower_run(ctx.run_restriction(), _link_window(ctx))
     if (
         not ctx.FollowedBy()
         and not ctx.PrecededBy()
@@ -272,7 +293,7 @@ def lower_restriction(ctx: PrismQLParser.RestrictionContext) -> Expr:
         return lower_bool_restriction(ctx.bool_restriction())
 
     lhs = lower_restriction(ctx.restriction())
-    rhs = lower_bool_restriction(ctx.bool_restriction())
+    rhs = lower_link_rhs(ctx.link_rhs())
     window = _link_window(ctx)
     if ctx.FollowedBy():
         op = "FOLLOWED_BY"

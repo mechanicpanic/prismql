@@ -408,16 +408,19 @@ class _PipeParser:
         )
 
     def parse_run(self) -> Run:
-        """``run(x){n,m}`` (graph #126): the quantifier is the run's length
-        and is required; the step comes from the next window stage."""
+        """``run(x[, step]){n,m}`` (graph #126): the quantifier is the run's
+        length and is required; the step is inside, like an arrow's window
+        (``run(x, 1m)``), or — for a run standing alone — the next window
+        stage."""
         self.next()
         self.expect("LPAREN", "'(' after run")
         expr = self.parse_or()
+        step = self.parse_window_value() if self.accept("COMMA") else None
         self.expect("RPAREN", "')' closing run(...)")
         if not self.accept("LBRACE"):
             raise self.error("run(...) needs its length: run(x){3,}, run(x){2,5}")
         min_len, max_len = self.parse_count_range()
-        return Run(expr, min_len, max_len)
+        return Run(expr, min_len, max_len, step)
 
     def parse_count_range(self) -> tuple[int, int | None]:
         """The inside of ``{n}``, ``{n,}``, ``{n,m}``, after the ``{``."""

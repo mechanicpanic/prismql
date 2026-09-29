@@ -234,10 +234,29 @@ SELECT RUN(field(kind, retry) AND field(session, $s)){3,} INWINDOW 5 AGGREGATE c
 ```
 
 For a series use `RUN`, not `X{7}` (every 7 of 20 repeats is 77,520 groups)
-and not a chain of 7 links (one group per starting event, overlapping). For
-now `RUN` is the whole SELECT body: not beside other restrictions, not
-inside AND/OR, not in a FOLLOWED_BY chain — each refused loudly. It may be
-a whole subquery: `(SELECT RUN(X){3,} DURING 1 hour) FOLLOWED_BY (SELECT Y)
+and not a chain of 7 links (one group per starting event, overlapping).
+
+**A run in a link.** Inside a chain the step goes inside the parentheses,
+`RUN(X, DURING 1 minute){3,}`, and the window after the link is the link's
+own. A run takes part in one link, on either side, positive or negative;
+the group is the run and the event it links to, in time order, one per
+left-hand group as with any `FOLLOWED_BY`. A variable named on both sides
+holds one value across the link (`!$k` on the condition side: another
+value):
+
+```prismql
+-- A request, then within 10 minutes a run of 3+ retries by the same agent
+SELECT field(kind, request) AND field(agent, $a)
+  FOLLOWED_BY RUN(field(kind, retry) AND field(agent, $a), DURING 2 minutes){3,}
+  DURING 10 minutes
+-- A run of failures the same agent never followed with a success
+SELECT RUN(field(outcome, error) AND field(agent, $a), DURING 5 minutes){3,}
+  NOT_FOLLOWED_BY field(outcome, ok) AND field(agent, $a) DURING 10 minutes
+```
+
+A longer chain around a run, a run beside other restrictions, inside
+AND/OR or under a quantifier are refused loudly. A lone run may also be a
+whole subquery: `(SELECT RUN(X){3,} DURING 1 hour) FOLLOWED_BY (SELECT Y)
 INWINDOW 10`. `run` stays a plain word as a
 field value: `field(kind, run)`.
 

@@ -100,7 +100,8 @@ never overlap and other events between them do not break them. Where a
 quantifier over 20 repeats gives every combination (77,520 groups for
 `{7}`) and a chain gives one overlapping group per starting event, a run
 gives one. The first window is the step, a second `DURING` bounds the whole
-run. Today a run is a whole query on its own.
+run. In a link the step goes inside, `RUN(X, DURING 5 minutes){3,}`, and a
+run stands on either side of one arrow: "a request, then a run of retries".
 
 ## 5. Subqueries — groups of groups
 

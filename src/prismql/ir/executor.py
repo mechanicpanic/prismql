@@ -16,6 +16,7 @@ retire the visitor; this class then loses its base without changing.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from ..aggregators.types import AggregateResult, GroupedResult
 from ..exceptions import PrismQLRuntimeError
@@ -316,7 +317,7 @@ class IRExecutor(PrismQLVisitor):
         has_sequential_operator = False
 
         for item in row.items:
-            if isinstance(item.expr, Run) and (
+            if _contains_run(item.expr) and (
                 len(row.items) > 1 or item.min_count != 1 or item.max_count != 1
             ):
                 raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
@@ -405,8 +406,8 @@ class IRExecutor(PrismQLVisitor):
             )
         if not isinstance(expr, SequenceLink):
             return self.execute_bool(expr)
-        if isinstance(expr.lhs, Run) or isinstance(expr.rhs, Run):
-            raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
+        if _contains_run(expr):
+            return self._execute_run_link(expr)
 
         n_before_lhs = len(self.variable_constraints)
         lhs = self.execute_restriction(expr.lhs)
@@ -438,6 +439,23 @@ class IRExecutor(PrismQLVisitor):
         # counts as excluded (graph #130), so they leave the row's list.
         del self.variable_constraints[n_before_rhs:]
         return self._apply_negative_link(lhs, rhs, window, expr.op, lhs_leg, rhs_leg)
+
+    def _execute_run_link(self, expr: SequenceLink) -> list[MessageGroup]:
+        """A link with a run on one side or both (graph #126)."""
+        if isinstance(expr.lhs, SequenceLink) or isinstance(expr.rhs, SequenceLink):
+            raise PrismQLRuntimeError(self.RUN_ONE_LINK)
+
+        def side(e: Expr) -> tuple[Any, ...]:
+            if isinstance(e, Run):
+                return self._run_side_from(
+                    lambda: self.execute_bool(e.expr),
+                    (e.window, e.min_len, e.max_len),
+                )
+            return self._run_side_from(lambda: self.execute_bool(e), None)
+
+        return self._evaluate_run_link(
+            side(expr.lhs), side(expr.rhs), expr.window, expr.op
+        )
 
     def execute_bool(
         self, expr: Expr
@@ -596,3 +614,12 @@ class IRExecutor(PrismQLVisitor):
                 True,
             )
         return (None, None, False)
+
+
+def _contains_run(expr: Any) -> bool:
+    """Whether a restriction's sequence layer holds a RUN."""
+    if isinstance(expr, Run):
+        return True
+    if isinstance(expr, SequenceLink):
+        return _contains_run(expr.lhs) or _contains_run(expr.rhs)
+    return False

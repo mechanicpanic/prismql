@@ -413,7 +413,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 # Remove surrounding quotes (either " or ')
                 pattern_name = quoted_name[1:-1]
 
-            if named_restriction_ctx.restriction().Run() and (
+            if _ctx_has_run(named_restriction_ctx.restriction()) and (
                 len(ctx.named_restriction()) > 1 or named_restriction_ctx.quantifier()
             ):
                 raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
@@ -541,19 +541,15 @@ class PrismQLVisitor(BasePrismQLVisitor):
             - PartialSequence for a windowless link, to be evaluated with an
               enclosing link's window
         """
-        if ctx.Run():
-            from ..ir.lower import _quantifier
-
-            n_before = len(self.variable_constraints)
-            ids = self.visitBool_restriction(ctx.bool_restriction())
-            constraints = self.variable_constraints[n_before:]
-            del self.variable_constraints[n_before:]
-            min_len, max_len = _quantifier(ctx)
-            return self._evaluate_run(
-                ids, constraints, self._extract_window_constraint(ctx), min_len, max_len
+        if ctx.run_restriction():
+            side = self._visit_run_side(
+                ctx.run_restriction(), self._extract_window_constraint(ctx)
             )
-        if ctx.restriction() is not None and ctx.restriction().Run():
-            raise PrismQLRuntimeError(self.RUN_WHOLE_BODY)
+            return self._evaluate_run(*side[1:])
+        if ctx.link_rhs() is not None and (
+            _ctx_has_run(ctx.restriction()) or _run_of(ctx.link_rhs()) is not None
+        ):
+            return self._visit_run_link(ctx)
 
         # Fallthrough: no sequential operator at this level
         if (
@@ -574,7 +570,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # the boolean layer, so everything it recorded is one leg bucket.
             self._seq_leg_constraints = [list(self.variable_constraints[n_before_lhs:])]
         lhs_leg = list(self.variable_constraints[n_before_lhs:n_before_rhs])
-        rhs = self.visitBool_restriction(ctx.bool_restriction())
+        rhs = self.visitBool_restriction(ctx.link_rhs().bool_restriction())
         rhs_leg = list(self.variable_constraints[n_before_rhs:])
         window = self._extract_window_constraint(ctx)
 
@@ -620,6 +616,125 @@ class PrismQLVisitor(BasePrismQLVisitor):
         "AND/OR or a FOLLOWED_BY/PRECEDED_BY chain (graph #126)."
     )
 
+    RUN_ONE_LINK = (
+        "A run takes part in one FOLLOWED_BY/PRECEDED_BY link for now: "
+        "RUN(X, step){n,} FOLLOWED_BY Y, or X FOLLOWED_BY RUN(Y, step){n,} "
+        "— not a longer chain (graph #126)."
+    )
+
+    def _run_side_from(
+        self, visit: Any, run: tuple[Any, int, int | None] | None
+    ) -> tuple[Any, ...]:
+        """One side of a run link: its events, the variables they name (taken
+        off the row's list — the operator holds them), and for a run its step
+        and length bounds. ``visit`` evaluates the condition."""
+        n_before = len(self.variable_constraints)
+        ids = visit()
+        constraints = self.variable_constraints[n_before:]
+        del self.variable_constraints[n_before:]
+        if run is None:
+            return ("cond", ids, constraints)
+        step, min_len, max_len = run
+        return ("run", ids, constraints, step, min_len, max_len)
+
+    def _visit_run_side(self, rctx: Any, after: Any) -> tuple[Any, ...]:
+        from ..ir.lower import RUN_STEP_TWICE, _quantifier
+
+        inside = self._extract_window_constraint(rctx)
+        if inside is not None and after is not None:
+            raise PrismQLSyntaxError(RUN_STEP_TWICE)
+        min_len, max_len = _quantifier(rctx)
+        step = inside if inside is not None else after
+        return self._run_side_from(
+            lambda: self.visitBool_restriction(rctx.bool_restriction()),
+            (step, min_len, max_len),
+        )
+
+    def _visit_run_link(self, ctx: Any) -> list[MessageGroup]:
+        lhs_ctx, rhs_ctx = _unwrap(ctx.restriction()), _unwrap(ctx.link_rhs())
+        if getattr(lhs_ctx, "link_rhs", lambda: None)() is not None:
+            raise PrismQLRuntimeError(self.RUN_ONE_LINK)
+        if getattr(rhs_ctx, "link_rhs", lambda: None)() is not None:
+            raise PrismQLRuntimeError(self.RUN_ONE_LINK)
+        if _run_of(lhs_ctx):
+            lhs = self._visit_run_side(
+                _run_of(lhs_ctx), self._extract_window_constraint(lhs_ctx)
+            )
+        else:
+            lhs = self._run_side_from(
+                lambda: self.visitBool_restriction(lhs_ctx.bool_restriction()), None
+            )
+        if _run_of(rhs_ctx):
+            rhs = self._visit_run_side(
+                _run_of(rhs_ctx), self._extract_window_constraint(rhs_ctx)
+            )
+        else:
+            rhs = self._run_side_from(
+                lambda: self.visitBool_restriction(rhs_ctx.bool_restriction()), None
+            )
+        op = (
+            "FOLLOWED_BY"
+            if ctx.FollowedBy()
+            else "PRECEDED_BY"
+            if ctx.PrecededBy()
+            else "NOT_FOLLOWED_BY"
+            if ctx.NotFollowedBy()
+            else "NOT_PRECEDED_BY"
+        )
+        return self._evaluate_run_link(
+            lhs, rhs, self._extract_window_constraint(ctx), op
+        )
+
+    def _evaluate_run_link(
+        self,
+        lhs: tuple[Any, ...],
+        rhs: tuple[Any, ...],
+        window: WindowConstraint | None,
+        op: str,
+    ) -> list[MessageGroup]:
+        """A link with a run on one side or both (graph #126), shared by both
+        execution paths."""
+        from ..plan.bridge import run_run_link
+
+        if window is None:
+            raise PrismQLRuntimeError(
+                f"The {op} link next to a run needs its own window: "
+                f"RUN(X, step){{n,}} {op} Y DURING <time> (or INWINDOW <n>)."
+            )
+        for side in (lhs, rhs):
+            if not isinstance(side[1], set):
+                raise PrismQLRuntimeError(self.RUN_ONE_LINK)
+            if side[0] == "run":
+                self._check_run(side[3], side[4], side[5])
+        sides = [
+            (side[0], self._in_stream_order(side[1]), *side[2:]) for side in (lhs, rhs)
+        ]
+        return RunGroups(
+            run_run_link(
+                self.search_backend,
+                self.timestamp_field,
+                sides[0],
+                sides[1],
+                window,
+                op,
+            )
+        )
+
+    def _check_run(self, window: Any, min_len: int, max_len: int | None) -> None:
+        if window is None:
+            raise PrismQLRuntimeError(
+                "RUN(...) needs its step: the largest gap between neighbours "
+                "of a run — RUN(X){3,} INWINDOW 5, RUN(X){3,} DURING 1 hour, or "
+                "inside a chain RUN(X, DURING 1 hour){3,}. A second window after "
+                "a lone run bounds the whole run."
+            )
+        if min_len < 1 or (max_len is not None and max_len < min_len):
+            raise PrismQLRuntimeError(
+                f"RUN(...){{{min_len},{'' if max_len is None else max_len}}}: a "
+                "run is at least 1 event long and its lower bound is not above "
+                "its upper one."
+            )
+
     def _evaluate_run(
         self,
         ids: set[MessageId] | list[MessageGroup] | PartialSequence,
@@ -637,18 +752,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 "RUN(...) repeats one condition; a sequence inside it is not "
                 "supported: RUN(field(kind, retry)){3,}, not RUN((A FOLLOWED_BY B))."
             )
-        if window is None:
-            raise PrismQLRuntimeError(
-                "RUN(...) needs its step: the largest gap between neighbours "
-                "of a run — RUN(X){3,} INWINDOW 5 or RUN(X){3,} DURING 1 hour. "
-                "A second window after it bounds the whole run."
-            )
-        if min_len < 1 or (max_len is not None and max_len < min_len):
-            raise PrismQLRuntimeError(
-                f"RUN(...){{{min_len},{'' if max_len is None else max_len}}}: a "
-                "run is at least 1 event long and its lower bound is not above "
-                "its upper one."
-            )
+        self._check_run(window, min_len, max_len)
         return RunGroups(
             run_runs(
                 self.search_backend,
@@ -1893,3 +1997,39 @@ def _unquote(text: str) -> str:
     if len(text) >= 2 and text[0] == text[-1] == '"':
         return text[1:-1]
     return text
+
+
+def _unwrap(ctx: Any) -> Any:
+    """A restriction or link side without the parentheses around it — the
+    IR path never sees them, so this path must not either."""
+    while ctx is not None:
+        inner = ctx.bool_restriction() if hasattr(ctx, "bool_restriction") else None
+        if (
+            inner is None
+            or getattr(ctx, "run_restriction", lambda: None)()
+            or inner.restriction() is None
+            or inner.getChildCount() != 3
+        ):
+            return ctx
+        ctx = inner.restriction()
+    return ctx
+
+
+def _run_of(ctx: Any) -> Any:
+    """The run a restriction or link side is, parentheses aside, if any."""
+    ctx = _unwrap(ctx)
+    return ctx.run_restriction() if ctx is not None else None
+
+
+def _ctx_has_run(ctx: Any) -> bool:
+    """Whether a restriction's parse tree holds a RUN on its sequence
+    layer (a lone run, or a run on either side of a link)."""
+    ctx = _unwrap(ctx)
+    if ctx is None:
+        return False
+    if _run_of(ctx):
+        return True
+    rhs = ctx.link_rhs() if hasattr(ctx, "link_rhs") else None
+    return rhs is not None and (
+        _run_of(rhs) is not None or _ctx_has_run(ctx.restriction())
+    )

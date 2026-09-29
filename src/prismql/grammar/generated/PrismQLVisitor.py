@@ -79,6 +79,16 @@ class PrismQLVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by PrismQLParser#link_rhs.
+    def visitLink_rhs(self, ctx:PrismQLParser.Link_rhsContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by PrismQLParser#run_restriction.
+    def visitRun_restriction(self, ctx:PrismQLParser.Run_restrictionContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by PrismQLParser#bool_restriction.
     def visitBool_restriction(self, ctx:PrismQLParser.Bool_restrictionContext):
         return self.visitChildren(ctx)

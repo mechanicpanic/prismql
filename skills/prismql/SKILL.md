@@ -313,7 +313,7 @@ implementation over the ordered corpus:
    refused):
    - ✅ `SELECT RUN(field(kind, retry) AND field(agent, $a)){7,} DURING 1 hour DURING 1 day`
    - pipe: `run(field(kind, retry) and field(agent, $a)){7,} |> during(1h) |> during(1d)`
-   - for now RUN is the whole query (no comma, AND/OR or chain around it).
+   - in a link the step goes inside: `SELECT field(kind, request) AND field(agent, $a) FOLLOWED_BY RUN(field(kind, retry) AND field(agent, $a), DURING 2 minutes){3,} DURING 10 minutes` — one link, either side, NOT_ too; one group per left-hand group.
 
 ## Validate before executing (Python path)
 

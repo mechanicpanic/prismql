@@ -115,11 +115,6 @@ def test_runs_count(use_ir):
         ("SELECT RUN(field(kind, R)){3,}", "step"),
         ("SELECT RUN(field(kind, R)){3,} DURING 1 hour, field(kind, X)", "whole"),
         (
-            "SELECT RUN(field(kind, R)){3,} DURING 1 hour FOLLOWED_BY field(kind, X)"
-            " INWINDOW 3",
-            "chain",
-        ),
-        (
             "SELECT RUN(field(kind, R) AND field(agent, !$a)){3,} DURING 1 hour",
             "inequality",
         ),
@@ -211,20 +206,23 @@ def test_runs_match_a_brute_force_oracle(seed, by_agent, positional, use_ir):
     assert got == _oracle(docs, by_agent, step, positional, lo, hi)
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
-        # A parenthesized RUN hid from the legacy path's syntax checks and
-        # joined agent a's run to agent b's event (cold review, 2026-09-28).
-        "SELECT (RUN(field(kind, R) AND field(agent, $a)){2,} DURING 1 hour)"
-        " FOLLOWED_BY field(kind, X) AND field(agent, $a) INWINDOW 2",
-        "SELECT (RUN(field(kind, R)){2,} DURING 1 hour){2}",
-    ],
-)
 @pytest.mark.parametrize("use_ir", [True, False])
-def test_a_parenthesized_run_is_refused_too(use_ir, query):
+def test_a_parenthesized_run_in_a_link_keeps_its_variable(use_ir):
+    """A parenthesized RUN once joined agent a's run to agent b's event on
+    the legacy path (cold review, 2026-09-28); now it is an ordinary run
+    link on both paths and $a holds: nobody's run is followed by an X of
+    the same agent within two events."""
+    q = (
+        "SELECT (RUN(field(kind, R) AND field(agent, $a)){2,} DURING 1 hour)"
+        " FOLLOWED_BY field(kind, X) AND field(agent, $a) INWINDOW 2"
+    )
+    assert _engine(use_ir).execute(q) == []
+
+
+@pytest.mark.parametrize("use_ir", [True, False])
+def test_a_quantifier_over_a_run_is_refused(use_ir):
     with pytest.raises(PrismQLError, match="whole SELECT body"):
-        _engine(use_ir).execute(query)
+        _engine(use_ir).execute("SELECT (RUN(field(kind, R)){2,} DURING 1 hour){2}")
 
 
 @pytest.mark.parametrize("use_ir", [True, False])
@@ -248,8 +246,6 @@ def test_run_stays_a_plain_word_as_a_value(use_ir):
 @pytest.mark.parametrize(
     "query",
     [
-        "run(field(kind, R)){3,} ~>(3) field(kind, X)",
-        "field(kind, X) ~>(3) run(field(kind, R)){3,}",
         "run(field(kind, R)){3,} and field(kind, X) |> during(1h)",
         "run(field(kind, R)){3,} + field(kind, X) |> during(1h)",
     ],

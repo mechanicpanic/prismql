@@ -62,14 +62,26 @@ quantifier
 // form of the per-link window.
 restriction
     :
-    restriction FollowedBy bool_restriction (InWindow number | During time_value | Within number)?
-    | restriction PrecededBy bool_restriction (InWindow number | During time_value | Within number)?
-    | restriction NotFollowedBy bool_restriction (InWindow number | During time_value | Within number)?
-    | restriction NotPrecededBy bool_restriction (InWindow number | During time_value | Within number)?
-    // RUN(X){n,m}: one group per maximal run of X; the window is the step
-    // between neighbours (graph @aleph/prismql, #126).
-    | Run '(' bool_restriction ')' quantifier (InWindow number | During time_value)?
+    restriction FollowedBy link_rhs (InWindow number | During time_value | Within number)?
+    | restriction PrecededBy link_rhs (InWindow number | During time_value | Within number)?
+    | restriction NotFollowedBy link_rhs (InWindow number | During time_value | Within number)?
+    | restriction NotPrecededBy link_rhs (InWindow number | During time_value | Within number)?
+    // RUN(X){n,m} alone: the window after it is the step (graph
+    // @aleph/prismql, #126); RUN(X, step){n,m} carries the step inside.
+    | run_restriction (InWindow number | During time_value)?
     | bool_restriction
+    ;
+
+// The right side of a link: a condition, or a run with its step inside.
+link_rhs
+    :
+    run_restriction
+    | bool_restriction
+    ;
+
+run_restriction
+    :
+    Run '(' bool_restriction (',' (InWindow number | During time_value))? ')' quantifier
     ;
 
 // Boolean layer. ANTLR gives the FIRST alternative the highest precedence,

@@ -226,9 +226,25 @@ run(field(kind, retry) and field(session, $s)){3,} |> within(5) |> count()
 ```
 
 For a series use `run`, not `x{7}` (every 7 of 20 repeats is 77,520 groups)
-and not a chain of 7 arrows (one group per starting event, overlapping). For
-now `run` is the whole query: not beside `+`, not inside `and`/`or`, not
-next to an arrow — each refused loudly. It may be a whole subquery:
+and not a chain of 7 arrows (one group per starting event, overlapping).
+
+**A run next to an arrow.** Inside a chain the step goes inside the
+parentheses, like an arrow's window — `run(x, 1m){3,}` or `run(x, 3){3,}` —
+and the arrow keeps its own window. A run takes part in one arrow, on
+either side, `~>`, `<~`, `!~>` or `!<~`; the group is the run and the event
+it links to, in time order, one per left-hand group. A variable named on
+both sides holds one value across the arrow (`!$k` on the condition side:
+another value):
+
+```
+-- A request, then within 10 minutes a run of 3+ retries by the same agent
+field(kind, request) and field(agent, $a) ~>(10m) run(field(kind, retry) and field(agent, $a), 2m){3,}
+-- A run of failures the same agent never followed with a success
+run(field(outcome, error) and field(agent, $a), 5m){3,} !~>(10m) field(outcome, ok) and field(agent, $a)
+```
+
+A longer chain around a run, a run beside `+`, inside `and`/`or` or under a
+quantifier are refused loudly. A lone run may also be a whole subquery:
 `[run(x){3,} |> during(1h)] ~>(10) [y]`. `run` stays a plain word as a field value:
 `field(kind, run)`.
 

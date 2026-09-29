@@ -10,6 +10,7 @@ past the backend's order contract.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterable, Sequence
 from datetime import timedelta
 from itertools import product
@@ -216,28 +217,25 @@ def run_single(
     return groups(res)
 
 
-def run_runs(
-    backend: Any,
-    ts: str,
-    ids: Sequence[MessageId],
-    constraints: Sequence[Constraint],
+def _run_groups(
+    frame: Any,
+    lg: Leg,
     window: Any,
+    ts: str,
     min_len: int,
     max_len: int | None,
 ) -> list[list[MessageId]]:
-    """``RUN(X){n,m}`` (graph #126): X's events split by the values of the
-    variables X names, one group per maximal run whose neighbours are at
-    most ``window`` apart."""
+    """The runs of a leg's events in ``frame``: split by one field per
+    variable the leg names, neighbours at most ``window`` apart."""
     from .operators import axis_and_window, single_row
     from .runs import runs
 
-    lg = leg(ids, constraints)
     if lg.unequal:
         raise PrismQLRuntimeError(
             "RUN cannot hold an inequality (!$a): a run is split by the values "
             "its variables take, not against a value bound elsewhere."
         )
-    frame = _frame(backend, ids, [lg], ts)
+    frame = frame.filter(_pl().col("id").is_in(list(lg.ids)))
     # One column per variable: the event's value there names its part.
     by_variable: dict[str, str] = {}
     for variable, field in lg.equal:
@@ -251,6 +249,93 @@ def run_runs(
     return runs(
         frame, keys=keys, axis=axis, step=step, min_len=min_len, max_len=max_len
     )
+
+
+def run_runs(
+    backend: Any,
+    ts: str,
+    ids: Sequence[MessageId],
+    constraints: Sequence[Constraint],
+    window: Any,
+    min_len: int,
+    max_len: int | None,
+) -> list[list[MessageId]]:
+    """``RUN(X){n,m}`` (graph #126): X's events split by the values of the
+    variables X names, one group per maximal run whose neighbours are at
+    most ``window`` apart."""
+    lg = leg(ids, constraints)
+    frame = _frame(backend, ids, [lg], ts)
+    return _run_groups(frame, lg, window, ts, min_len, max_len)
+
+
+RunSide = tuple[
+    Any, ...
+]  # ("run", ids, constraints, step, lo, hi) | ("cond", ids, cons)
+
+
+def run_run_link(
+    backend: Any,
+    ts: str,
+    lhs: RunSide,
+    rhs: RunSide,
+    window: Any,
+    op: str,
+) -> list[list[MessageId]]:
+    """One link with a run on one side or both (graph #126): a run is one
+    group; the link finds, for each left group, the nearest right group
+    after (FOLLOWED_BY) or before (PRECEDED_BY) it within ``window``, or
+    keeps the left groups that have none (NOT_*). A variable named on both
+    sides must hold one value on both; ``!$k`` on a condition side must
+    differ from the other side's value."""
+    from .operators import _attach_bindings, axis_and_window, single_row
+    from .primitives import anti_link_groups, link_groups
+
+    pl = _pl()
+    legs = [leg(side[1], side[2]) for side in (lhs, rhs)]
+    frame = _frame(backend, set(lhs[1]) | set(rhs[1]), legs, ts)
+
+    def result(side: RunSide, lg: Leg) -> Any:
+        if side[0] == "run":
+            _, _, _, step, lo, hi = side
+            res = _result_from_groups(frame, _run_groups(frame, lg, step, ts, lo, hi))
+        else:
+            # Its !$k compares with the other side below, not within the row.
+            res = single_row(frame, dataclasses.replace(lg, unequal=()))
+        res = _attach_bindings(res, frame, 0, lg.equal)
+        # A condition side's !$k is compared, never bound: carry its value.
+        ne = [(f"{v}__ne", f) for v, f in lg.unequal]
+        return _attach_bindings(res, frame, 0, ne) if ne else res
+
+    left, right = result(lhs, legs[0]), result(rhs, legs[1])
+    lv = {v for v, _ in legs[0].equal}
+    rv = {v for v, _ in legs[1].equal}
+    conds = [
+        (pl.col(f"l__v_{v}") == pl.col(f"r__v_{v}")).fill_null(False) for v in lv & rv
+    ]
+    for side_legs, own, other in ((legs[1], "r", "l"), (legs[0], "l", "r")):
+        bound = lv if other == "l" else rv
+        for v, _ in side_legs.unequal:
+            if v not in bound:
+                raise PrismQLRuntimeError(
+                    f"!${v} refers to a variable the other side does not bind"
+                )
+            conds.append(
+                (pl.col(f"{own}__v_{v}__ne") != pl.col(f"{other}__v_{v}")).fill_null(
+                    False
+                )
+            )
+    eligible = pl.all_horizontal(conds) if conds else None
+    axis, w = axis_and_window(window_of(window), ts)
+    forward = op in ("FOLLOWED_BY", "NOT_FOLLOWED_BY")
+    if op.startswith("NOT"):
+        res = anti_link_groups(
+            frame, left, right, axis=axis, window=w, forward=forward, eligible=eligible
+        )
+    else:
+        res = link_groups(
+            frame, left, right, axis=axis, window=w, forward=forward, eligible=eligible
+        )
+    return groups(res)
 
 
 def run_cooccur(
