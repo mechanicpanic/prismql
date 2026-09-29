@@ -273,6 +273,45 @@ RunSide = tuple[
 ]  # ("run", ids, constraints, step, lo, hi) | ("cond", ids, cons)
 
 
+def _run_link_conditions(
+    legs: list[Leg], lists: set[str], op: str
+) -> tuple[list[str], list[Any], set[str]]:
+    """The variables a run link compares: those named on both sides (equal,
+    a list holding the value counts, #122) and each condition side's ``!$k``
+    against the other side; the ``_v_`` columns holding lists. On the
+    excluded side of NOT_* every variable must be bound on the left (#130)."""
+    from .bindings import _eq, _neq
+
+    lv = dict(reversed(legs[0].equal))
+    rv = dict(reversed(legs[1].equal))
+    if op.startswith("NOT"):
+        for v, _ in legs[1].equal + legs[1].unequal:
+            if v not in lv:
+                raise PrismQLRuntimeError(
+                    f"${v} on the excluded side of {op} names a variable the "
+                    "left side does not bind. The excluded event binds nothing; a "
+                    f"variable there only narrows it — bind ${v} on the left."
+                )
+    col_lists = {f"l__v_{v}" for v, f in lv.items() if f in lists}
+    col_lists |= {f"r__v_{v}" for v, f in rv.items() if f in lists}
+    col_lists |= {f"r__v_{v}__ne" for v, f in legs[1].unequal if f in lists}
+    col_lists |= {f"l__v_{v}__ne" for v, f in legs[0].unequal if f in lists}
+    shared = sorted(set(lv) & set(rv))
+    conds = [_eq(f"l__v_{v}", f"r__v_{v}", col_lists) for v in shared]
+    for side_leg, own, other, bound in (
+        (legs[1], "r", "l", lv),
+        (legs[0], "l", "r", rv),
+    ):
+        for v, _ in side_leg.unequal:
+            if v not in bound:
+                raise PrismQLRuntimeError(
+                    f"!${v} refers to a variable the other side does not bind"
+                )
+            conds.append(_neq(f"{own}__v_{v}__ne", f"{other}__v_{v}", col_lists))
+
+    return shared, conds, col_lists
+
+
 def run_run_link(
     backend: Any,
     ts: str,
@@ -285,12 +324,13 @@ def run_run_link(
     group; the link finds, for each left group, the nearest right group
     after (FOLLOWED_BY) or before (PRECEDED_BY) it within ``window``, or
     keeps the left groups that have none (NOT_*). A variable named on both
-    sides must hold one value on both; ``!$k`` on a condition side must
-    differ from the other side's value."""
+    sides must hold one value on both (a list holds it when it contains
+    it, #122); ``!$k`` on a condition side must differ from the other
+    side's value. On the excluded side of NOT_* every variable must be
+    bound on the left (#130)."""
+    from .bindings import _list_columns
     from .operators import _attach_bindings, axis_and_window, single_row
-    from .primitives import anti_link_groups, link_groups
 
-    pl = _pl()
     legs = [leg(side[1], side[2]) for side in (lhs, rhs)]
     frame = _frame(backend, set(lhs[1]) | set(rhs[1]), legs, ts)
 
@@ -302,40 +342,42 @@ def run_run_link(
             # Its !$k compares with the other side below, not within the row.
             res = single_row(frame, dataclasses.replace(lg, unequal=()))
         res = _attach_bindings(res, frame, 0, lg.equal)
-        # A condition side's !$k is compared, never bound: carry its value.
         ne = [(f"{v}__ne", f) for v, f in lg.unequal]
         return _attach_bindings(res, frame, 0, ne) if ne else res
 
+    shared, conds, col_lists = _run_link_conditions(legs, _list_columns(frame), op)
     left, right = result(lhs, legs[0]), result(rhs, legs[1])
-    lv = {v for v, _ in legs[0].equal}
-    rv = {v for v, _ in legs[1].equal}
-    conds = [
-        (pl.col(f"l__v_{v}") == pl.col(f"r__v_{v}")).fill_null(False) for v in lv & rv
-    ]
-    for side_legs, own, other in ((legs[1], "r", "l"), (legs[0], "l", "r")):
-        bound = lv if other == "l" else rv
-        for v, _ in side_legs.unequal:
-            if v not in bound:
-                raise PrismQLRuntimeError(
-                    f"!${v} refers to a variable the other side does not bind"
-                )
-            conds.append(
-                (pl.col(f"{own}__v_{v}__ne") != pl.col(f"{other}__v_{v}")).fill_null(
-                    False
-                )
-            )
-    eligible = pl.all_horizontal(conds) if conds else None
     axis, w = axis_and_window(window_of(window), ts)
     forward = op in ("FOLLOWED_BY", "NOT_FOLLOWED_BY")
+    fast = not legs[0].unequal and not legs[1].unequal and not col_lists
+    if fast:
+        from .runlink import nearest_group_link
+
+        res = nearest_group_link(
+            frame,
+            left,
+            right,
+            axis=axis,
+            window=w,
+            forward=forward,
+            keys=[f"_v_{v}" for v in shared],
+            negative=op.startswith("NOT"),
+        )
+        return groups(res)
+    from .primitives import anti_link_groups, link_groups
+
+    eligible = (
+        _pl().all_horizontal([c.fill_null(False) for c in conds]) if conds else None
+    )
+    kw: dict[str, Any] = {
+        "axis": axis,
+        "window": w,
+        "forward": forward,
+        "eligible": eligible,
+    }
     if op.startswith("NOT"):
-        res = anti_link_groups(
-            frame, left, right, axis=axis, window=w, forward=forward, eligible=eligible
-        )
-    else:
-        res = link_groups(
-            frame, left, right, axis=axis, window=w, forward=forward, eligible=eligible
-        )
-    return groups(res)
+        return groups(anti_link_groups(frame, left, right, **kw))
+    return groups(link_groups(frame, left, right, **kw))
 
 
 def run_cooccur(

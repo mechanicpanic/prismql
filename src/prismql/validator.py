@@ -352,16 +352,35 @@ class QueryValidator:
 
     @staticmethod
     def _check_run_step(expr: Any, issues: list[ValidationIssue]) -> None:
+        """A run's step, wherever it stands, and one link around a run."""
         from .ir import nodes as ir
 
+        if isinstance(expr, ir.SequenceLink):
+            if _has_run(expr) and (
+                isinstance(expr.lhs, ir.SequenceLink)
+                or isinstance(expr.rhs, ir.SequenceLink)
+            ):
+                issues.append(
+                    ValidationIssue(
+                        level=ValidationLevel.ERROR,
+                        message="A run takes part in one FOLLOWED_BY/PRECEDED_BY "
+                        "link, not a longer chain",
+                        suggestion="RUN(X, step){n,} FOLLOWED_BY Y <window>, or "
+                        "X FOLLOWED_BY RUN(Y, step){n,} <window>",
+                        code="RUN_IN_A_LONG_CHAIN",
+                    )
+                )
+            QueryValidator._check_run_step(expr.lhs, issues)
+            QueryValidator._check_run_step(expr.rhs, issues)
+            return
         if isinstance(expr, ir.Run) and expr.window is None:
             issues.append(
                 ValidationIssue(
                     level=ValidationLevel.ERROR,
                     message="RUN(...) needs its step: the largest gap between "
                     "neighbours of a run",
-                    suggestion="RUN(x){3,} DURING 1 hour or RUN(x){3,} INWINDOW 5; "
-                    "pipe: run(x){3,} |> during(1h)",
+                    suggestion="alone: RUN(x){3,} DURING 1 hour; in a link the step "
+                    "goes inside: RUN(x, DURING 1 hour){3,} (pipe: run(x, 1h){3,})",
                     code="RUN_WITHOUT_STEP",
                 )
             )
@@ -521,6 +540,7 @@ class QueryValidator:
             self._check_negated_variables(q.source, issues)
             for item in q.source.items:
                 self._check_item_quantifier(item, issues)
+                self._check_run_step(item.expr, issues)
                 self._check_ir_expr(item.expr, True, issues)
         elif isinstance(q.source, ir.SubqueryChain):
             self._check_ir_query(q.source.head, issues)
@@ -580,7 +600,6 @@ class QueryValidator:
             self._check_ir_expr(expr.right, False, issues)
         elif isinstance(expr, ir.Run):
             self._check_ir_window(expr.window, issues)
-            self._check_run_step(expr, issues)
             self._check_ir_expr(expr.expr, False, issues)
         elif isinstance(expr, ir.SequenceLink):
             self._check_ir_window(expr.window, issues)
@@ -951,3 +970,13 @@ def _identical_links(expr: Any) -> int:
     same = len(legs) >= 3 and all(leg == legs[0] for leg in legs)
     one_direction = ops in ({"FOLLOWED_BY"}, {"PRECEDED_BY"})
     return len(legs) if same and one_direction else 0
+
+
+def _has_run(expr: Any) -> bool:
+    from .ir import nodes as ir
+
+    if isinstance(expr, ir.Run):
+        return True
+    if isinstance(expr, ir.SequenceLink):
+        return _has_run(expr.lhs) or _has_run(expr.rhs)
+    return False

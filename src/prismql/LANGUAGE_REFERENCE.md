@@ -254,10 +254,17 @@ SELECT RUN(field(outcome, error) AND field(agent, $a), DURING 5 minutes){3,}
   NOT_FOLLOWED_BY field(outcome, ok) AND field(agent, $a) DURING 10 minutes
 ```
 
-A longer chain around a run, a run beside other restrictions, inside
-AND/OR or under a quantifier are refused loudly. A lone run may also be a
-whole subquery: `(SELECT RUN(X){3,} DURING 1 hour) FOLLOWED_BY (SELECT Y)
-INWINDOW 10`. `run` stays a plain word as a
+Runs are found over the whole stream first, then linked: a linked event
+that falls inside a run does not split it, and one run can be the nearest
+for several left-hand events. `RUN(X, step){n,} DURING <span>` alone bounds
+the whole run, like `RUN(X){n,} DURING <step> DURING <span>`. A longer
+chain around a run, a run beside other restrictions, inside AND/OR or under
+a quantifier are refused loudly. A lone run may also be a whole subquery:
+
+```prismql
+SELECT (SELECT RUN(field(kind, retry)){3,} DURING 2 minutes)
+  FOLLOWED_BY (SELECT field(kind, success)) INWINDOW 10
+``` `run` stays a plain word as a
 field value: `field(kind, run)`.
 
 ### 5. Pattern Variables

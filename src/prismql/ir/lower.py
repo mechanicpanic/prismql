@@ -506,6 +506,21 @@ def lower_query(ctx: PrismQLParser.QueryContext) -> Query:
     return lower_body(ctx.body())
 
 
+def _lone_run_span(ctx: Any) -> WindowSpec | None:
+    """The window after a lone ``RUN(X, step){n,}`` that is the whole query,
+    when the body has no window of its own — else None."""
+    if ctx.restrictions() is None or ctx.InWindow() or ctx.During() or ctx.InWin():
+        return None
+    items = ctx.restrictions().named_restriction()
+    if len(items) != 1 or items[0].quantifier() or items[0].As():
+        return None
+    r = items[0].restriction()
+    run = r.run_restriction()
+    if run is None or _link_window(run) is None:
+        return None
+    return _link_window(r)
+
+
 def lower_body(ctx: PrismQLParser.BodyContext) -> Query:
     positional_window: int | None = None
     temporal_window: TimeValue | None = None
@@ -515,7 +530,19 @@ def lower_body(ctx: PrismQLParser.BodyContext) -> Query:
         temporal_window = _time_value(ctx.time_value())
 
     source: RestrictionsRow | SubqueryChain | None = None
-    if ctx.restrictions():
+    span = _lone_run_span(ctx)
+    if span is not None:
+        # RUN(X, step){n,} <window>: the step is inside, so the window after
+        # the run bounds the whole run — the pipe form's second stage.
+        nr = ctx.restrictions().named_restriction()[0]
+        source = RestrictionsRow(
+            (NamedRestriction(expr=lower_run(nr.restriction().run_restriction())),)
+        )
+        if isinstance(span, int):
+            positional_window = span
+        else:
+            temporal_window = TimeValue(span[0], span[1])
+    elif ctx.restrictions():
         source = lower_restrictions(ctx.restrictions())
     elif ctx.query_seq():
         source = lower_query_seq(ctx.query_seq())

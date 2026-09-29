@@ -542,9 +542,23 @@ class PrismQLVisitor(BasePrismQLVisitor):
               enclosing link's window
         """
         if ctx.run_restriction():
-            side = self._visit_run_side(
-                ctx.run_restriction(), self._extract_window_constraint(ctx)
-            )
+            outer = self._extract_window_constraint(ctx)
+            inside = self._extract_window_constraint(ctx.run_restriction())
+            if inside is not None and outer is not None:
+                # RUN(X, step){n,} <window>: the window bounds the whole run,
+                # as lowering reads it (a second window after the run).
+                if isinstance(outer, int):
+                    raise PrismQLRuntimeError(self.SECOND_INWINDOW)
+                from ..plan.bridge import run_body_span
+
+                side = self._visit_run_side(ctx.run_restriction(), None)
+                found = self._evaluate_run(*side[1:])
+                return RunGroups(
+                    run_body_span(
+                        self.search_backend, self.timestamp_field, found, outer
+                    )
+                )
+            side = self._visit_run_side(ctx.run_restriction(), outer)
             return self._evaluate_run(*side[1:])
         if ctx.link_rhs() is not None and (
             _ctx_has_run(ctx.restriction()) or _run_of(ctx.link_rhs()) is not None

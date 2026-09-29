@@ -243,9 +243,16 @@ field(kind, request) and field(agent, $a) ~>(10m) run(field(kind, retry) and fie
 run(field(outcome, error) and field(agent, $a), 5m){3,} !~>(10m) field(outcome, ok) and field(agent, $a)
 ```
 
-A longer chain around a run, a run beside `+`, inside `and`/`or` or under a
-quantifier are refused loudly. A lone run may also be a whole subquery:
-`[run(x){3,} |> during(1h)] ~>(10) [y]`. `run` stays a plain word as a field value:
+Runs are found over the whole stream first, then linked: a linked event
+that falls inside a run does not split it, and one run can be the nearest
+for several left-hand events. `run(x, step){n,} |> during(span)` alone
+bounds the whole run. A longer chain around a run, a run beside `+`, inside
+`and`/`or` or under a quantifier are refused loudly. A lone run may also be
+a whole subquery:
+
+```
+[run(field(kind, retry), 2m){3,}] ~>(10) [field(kind, success)]
+``` `run` stays a plain word as a field value:
 `field(kind, run)`.
 
 ### 5. Pattern Variables
