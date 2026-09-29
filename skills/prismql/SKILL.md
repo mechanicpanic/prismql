@@ -189,7 +189,10 @@ order; ids are labels and may be strings.
 
 A table in the wrong order or shape, or a harness log folder, becomes that
 file through `prismql ingest`: `prismql ingest table SRC DST.parquet --id COL
---time COL [--sort COL] [--keep a,b] [--embed text --model M]`;
+--time COL [--sort COL] [--keep a,b] [--embed text --model M]`; several
+streams into one corpus: `prismql ingest table A.csv b=B.jsonl DST.parquet
+--id id --time time --sort time --source-col source` (ids become `LABEL:id`;
+ask across them with `field(source, a) … FOLLOWED_BY field(source, b) …`);
 `prismql ingest claude-code ~/.claude/projects/<project> DST.parquet` and
 `prismql ingest codex ~/.codex/sessions DST.parquet` give one event per
 prompt / thought / tool call / tool result (`kind`, `tool`, `error`,

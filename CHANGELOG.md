@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (several streams, one corpus)
+- `prismql ingest table A B … DST --source-col NAME` unites several tables into one stream: each row names its source (`LABEL=PATH`, else the file's stem), ids become `LABEL:id`, columns a file lacks stay empty on the other's rows. A query reads one corpus, so a lead-lag across streams (`field(source, urlquery) … FOLLOWED_BY field(source, wiki) …`) runs on the united one. Several sources without `--source-col` are refused (graph @aleph/prismql, #54).
+
 ### Added (warnings: runs, but asks something else)
 - Every `/evaluate` answer carries `warnings` (`code`, `message`, `suggestion`), also through MCP, and the board shows them in the request's inspector; the journal keeps them. They name queries that run without an error and answer another question: `REPEATED_LINKS` (three or more identical links — one overlapping group per starting event, use `RUN`), `SUBQUERY_SHARED_VARIABLE` (each subquery binds its own `$k`), `QUANTIFIER_COMBINATIONS` (a quantifier under `AGGREGATE` / `GROUP BY`, or listed with 1,000+ groups: combinations, not events — drop the quantifier to count events). `QueryValidator.validate()` names the first two for both dialects; `QueryValidator.warnings(ir, total=…)` gives what the server shows (graph @aleph/prismql, #128). The demo's triple-burst example is now a `RUN`.
 

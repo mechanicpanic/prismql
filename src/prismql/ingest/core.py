@@ -25,6 +25,44 @@ def read_source(path: str | Path) -> pl.DataFrame:
     raise ValueError(f"unsupported source format {suffix!r}")
 
 
+def read_sources(
+    sources: Sequence[str], source_col: str | None, id_col: str
+) -> pl.DataFrame:
+    """One table from several: each ``[LABEL=]PATH`` read, labelled in
+    ``source_col`` (the LABEL, else the file's stem) and stacked, columns a
+    file lacks left null. Ids of several sources become ``LABEL:id`` so
+    they cannot collide (the engine does not join — graph @aleph/prismql,
+    #54: provenance is a column, set here)."""
+    if len(sources) > 1 and not source_col:
+        raise ValueError(
+            "several sources need --source-col NAME, the column that says "
+            "which one each row came from"
+        )
+    frames = []
+    for spec in sources:
+        label, sep, path = spec.partition("=")
+        if not sep:
+            label, path = Path(spec).stem, spec
+        if not label or not path or "=" in path:
+            raise ValueError(f"expected [LABEL=]PATH, got {spec!r}")
+        df = read_source(path)
+        if source_col:
+            df = df.with_columns(pl.lit(label).alias(source_col))
+        frames.append((label, df))
+    if len(frames) == 1:
+        return frames[0][1]
+    for i, (label, df) in enumerate(frames):
+        if id_col not in df.columns:
+            raise ValueError(f"source {label!r} has no id column {id_col!r}")
+        frames[i] = (
+            label,
+            df.with_columns(
+                pl.format("{}:{}", pl.lit(label), pl.col(id_col)).alias(id_col)
+            ),
+        )
+    return pl.concat([df for _, df in frames], how="diagonal_relaxed")
+
+
 def normalize(
     df: pl.DataFrame,
     *,

@@ -6,6 +6,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from . import core
 
@@ -21,8 +22,19 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("source", choices=SOURCES, help="what SRC is")
-    parser.add_argument("src", help="table file or log folder")
+    parser.add_argument(
+        "src",
+        nargs="+",
+        help="table file or log folder; for table, several files (each "
+        "optionally LABEL=PATH) unite into one stream with --source-col",
+    )
     parser.add_argument("dst", help="output .parquet")
+    parser.add_argument(
+        "--source-col",
+        metavar="NAME",
+        help="table: a column naming each row's source (its LABEL, else the "
+        "file's stem); with several sources ids become LABEL:id",
+    )
     parser.add_argument("--id", help="id column (table)")
     parser.add_argument("--time", help="timestamp column (table)")
     parser.add_argument("--sort", help="column to order the stream by (table)")
@@ -72,28 +84,42 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _read_table(args: argparse.Namespace) -> Any:
+    """The canonical stream of ``table``, or a usage message."""
+    if not (args.id and args.time):
+        return "table: --id and --time are required"
+    try:
+        table = core.read_sources(args.src, args.source_col, args.id)
+    except ValueError as e:
+        return f"table: {e}"
+    return core.normalize(
+        table,
+        id_col=args.id,
+        time_col=args.time,
+        sort=args.sort,
+        time_unit=args.time_unit,
+        keep=[c for c in (args.keep or "").split(",") if c] or None,
+    )
+
+
 def run(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.source == "table":
-        if not (args.id and args.time):
-            print("table: --id and --time are required", file=sys.stderr)
+        df = _read_table(args)
+        if isinstance(df, str):
+            print(df, file=sys.stderr)
             return 2
-        df = core.normalize(
-            core.read_source(args.src),
-            id_col=args.id,
-            time_col=args.time,
-            sort=args.sort,
-            time_unit=args.time_unit,
-            keep=[c for c in (args.keep or "").split(",") if c] or None,
-        )
+    elif len(args.src) > 1:
+        print(f"{args.source}: one log folder at a time", file=sys.stderr)
+        return 2
     elif args.source == "claude-code":
         from .sources.claude_code import read_claude_code
 
-        df = read_claude_code(Path(args.src))
+        df = read_claude_code(Path(args.src[0]))
     else:
         from .sources.codex import read_codex
 
-        df = read_codex(Path(args.src))
+        df = read_codex(Path(args.src[0]))
 
     if (args.doc_prompt or args.query_prompt) and not args.embed:
         # a stamp is written only beside vectors this run computes

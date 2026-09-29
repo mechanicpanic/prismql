@@ -57,6 +57,19 @@ prismql ingest table raw_events.parquet events.parquet \
 The output has `position`, `id`, `time` and the kept columns. The time
 column is called **`time`**, which matters in the config (§3).
 
+Several streams become one corpus, since a query reads one corpus:
+
+```bash
+prismql ingest table urlquery.csv wiki=revisions.jsonl union.parquet \
+  --id id --time time --sort time --source-col source
+```
+
+Each row gets `source` (the `LABEL=` given, else the file's stem), ids
+become `LABEL:id` so they cannot collide, and a column one file lacks is
+empty on the other's rows. The time column must have one name in every
+file. Then `field(source, urlquery) … FOLLOWED_BY field(source, wiki) …`
+asks across them.
+
 - `--sort COL` orders the stream by that column. Without it the source
   order stands. `--time-unit s|ms|us|ns` states the unit of a numeric time
   column when guessing by magnitude would be wrong.
