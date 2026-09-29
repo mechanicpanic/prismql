@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from ..explain_bindings import MAX_ASSIGNMENTS
 from .results import StoredResult
 
 
@@ -112,7 +113,10 @@ def page_payload(
                     # onto the wrong legs
                     whole_group = all(i in whole for i in span_ids)
                     docs = [whole[i] for i in span_ids] if whole_group else []
-                    item["bindings"] = explainer.bindings(docs) if docs else []
+                    found = explainer.bindings(docs) if docs else []
+                    item["bindings"] = found[:MAX_ASSIGNMENTS]
+                    if len(found) > MAX_ASSIGNMENTS:
+                        item["bindings_truncated"] = True
         items.append(item)
     if result.kind == "hits":
         payload["kept"] = len(result)

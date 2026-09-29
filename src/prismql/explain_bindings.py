@@ -20,7 +20,7 @@ from typing import Any
 from .explain_plan import MENTIONS, Leg, Plan
 
 MAX_ROW_ITEMS = 6  # 720 placements; a wider row recovers nothing
-MAX_ASSIGNMENTS = 20
+MAX_ASSIGNMENTS = 20  # a page lists this many and says when there are more
 
 
 def _values(doc: dict[str, Any], source: str, plan: Plan) -> set[str]:
@@ -60,7 +60,8 @@ def _placements(plan: Plan, docs: list[dict[str, Any]]) -> list[list[tuple[Leg, 
 
 def bindings(plan: Plan, docs: list[dict[str, Any]]) -> list[dict[str, str]]:
     """Every assignment of the variables that fits the group, ``docs`` being
-    its events in slot order."""
+    its events in slot order — at most one past ``MAX_ASSIGNMENTS``, so a
+    caller can tell a full list from a cut one."""
     out: list[dict[str, str]] = []
     for placed in _placements(plan, docs):
         agreed = _settle(placed, plan)
@@ -71,6 +72,6 @@ def bindings(plan: Plan, docs: list[dict[str, Any]]) -> list[dict[str, str]]:
             assignment = dict(zip(names, values, strict=True))
             if assignment not in out:
                 out.append(assignment)
-            if len(out) >= MAX_ASSIGNMENTS:
+            if len(out) > MAX_ASSIGNMENTS:
                 return out
     return out

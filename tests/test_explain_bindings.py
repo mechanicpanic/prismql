@@ -190,3 +190,21 @@ def test_a_row_wider_than_six_recovers_nothing():
 )
 def test_uncovered_shapes_have_no_plan(query):
     assert _plan(query) is None
+
+
+def test_a_cut_assignment_list_says_so(tmp_path):
+    names = ["bo", "cy", "di", "ed", "fa"]
+    docs = [{"id": n, "time": T.format(0), "agent": n} for n in names]
+    text = " ".join(f"@{n}" for n in names)
+    docs.append({"id": "x", "time": T.format(1), "agent": "ann", "text": text})
+    query = (
+        "SELECT field(agent, ann) AND mentions_user($x) AND mentions_user($y) "
+        "INWINDOW 1"
+    )
+    body = (
+        _client(tmp_path, docs)
+        .post("/evaluate", json={"query": query, "explain": True})
+        .json()
+    )
+    group = body["results"][0]
+    assert len(group["bindings"]) == 20 and group["bindings_truncated"] is True
