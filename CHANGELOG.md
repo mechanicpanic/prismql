@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Fixed (GROUP BY counts each match once)
+- `GROUP BY DAYS(time)` (and the other units) put a multi-event match in its bucket once per event, so `AGGREGATE COUNT()` doubled for two-event chains; `GROUP BY DAYS(time), user` lost the day; plain `GROUP BY` read `id` instead of the backend's `id_field` and put everything under `__unknown__`. Each matched group now lands in one bucket, keyed by its first event, for temporal, plain and combined keys; a backend without temporal shortcuts no longer crashes on `GROUP BY DAYS` (graph @aleph/prismql, #147, #148).
+
 ### Changed (harness text is not the person)
 - `prismql ingest claude-code` gives a user record the harness wrote — skill text (`isMeta`), a task notification (`origin.kind`) — `kind = injected` instead of `prompt`; a person's own message, pasted text included, stays `prompt`. A `--judge` question may set `max_chars` to read only the start of a long text (graph @aleph/prismql, #154).
 

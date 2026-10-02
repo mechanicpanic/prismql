@@ -28,13 +28,24 @@ class Aggregator:
         """
         self.search_backend = search_backend
 
+    _TEMPORAL = re.compile(r"^__(HOURS|DAYS|WEEKS|MONTHS|YEARS)__\((.+)\)$")
+    _UNITS = {
+        "HOURS": TemporalUnit.HOUR,
+        "DAYS": TemporalUnit.DAY,
+        "WEEKS": TemporalUnit.WEEK,
+        "MONTHS": TemporalUnit.MONTH,
+        "YEARS": TemporalUnit.YEAR,
+    }
+
     def group_by(self, results: QueryResult, fields: Sequence[str]) -> GroupedResult:
         """
         Group query results by specified fields.
 
-        Supports both simple field grouping and temporal grouping.
-        Temporal grouping fields have format: __UNIT__(field_name)
-        where UNIT can be HOURS, DAYS, WEEKS, MONTHS, YEARS.
+        Each matched group lands in exactly one bucket, keyed by its first
+        event: a plain field's value there, or the time unit it falls in for
+        a temporal field (``__DAYS__(time)``, from ``GROUP BY DAYS(time)``;
+        units HOURS, DAYS, WEEKS, MONTHS, YEARS). Plain and temporal fields
+        combine into one key, joined by ``|``.
 
         Args:
             results: Query results to group
@@ -43,114 +54,77 @@ class Aggregator:
         Returns:
             Grouped results
         """
-        # Check if any fields are temporal grouping
-        temporal_pattern = re.compile(r"^__(HOURS|DAYS|WEEKS|MONTHS|YEARS)__\((.+)\)$")
-        has_temporal = any(temporal_pattern.match(f) for f in fields)
-
-        if has_temporal and len(fields) == 1:
-            # Pure temporal grouping (single field)
-            match = temporal_pattern.match(fields[0])
+        all_ids: set[MessageId] = set()
+        for group in results:
+            all_ids.update(group)
+        id_field = getattr(self.search_backend, "id_field", "id")
+        docs_by_id: dict[MessageId, dict[str, Any]] = {}
+        if any(not self._TEMPORAL.match(f) for f in fields):
+            try:
+                documents = self.search_backend.get_documents(list(all_ids))
+            except NotImplementedError:
+                return GroupedResult(
+                    groups={"__all__": results}, group_by_fields=fields
+                )
+            docs_by_id = {
+                d[id_field]: d for d in documents if d.get(id_field) is not None
+            }
+        buckets: dict[str, dict[MessageId, str]] = {}
+        for f in fields:
+            match = self._TEMPORAL.match(f)
             if match:
-                unit_str = match.group(1)
-                field_name = match.group(2)
-
-                # Map unit string to TemporalUnit
-                unit_map = {
-                    "HOURS": TemporalUnit.HOUR,
-                    "DAYS": TemporalUnit.DAY,
-                    "WEEKS": TemporalUnit.WEEK,
-                    "MONTHS": TemporalUnit.MONTH,
-                    "YEARS": TemporalUnit.YEAR,
-                }
-                unit = unit_map[unit_str]
-
-                # Get all message IDs
-                all_ids: set[MessageId] = set()
-                for group in results:
-                    all_ids.update(group)
-
-                # Use backend's cached timestamps when available (Rust path);
-                # otherwise fetch documents and parse per-query (Python path).
-                if hasattr(
-                    self.search_backend, "has_timestamp_field"
-                ) and self.search_backend.has_timestamp_field(field_name):
-                    temporal_groups = self.search_backend.group_by_temporal_unit(  # type: ignore[attr-defined]
-                        list(all_ids), field_name, unit.value
+                unit = self._UNITS[match.group(1)]
+                found = self._temporal_buckets(all_ids, match.group(2), unit)
+                if found is None:
+                    return GroupedResult(
+                        groups={"__all__": results}, group_by_fields=fields
                     )
-                else:
-                    try:
-                        documents = self.search_backend.get_documents(list(all_ids))
-                    except NotImplementedError:
-                        return GroupedResult(
-                            groups={"__all__": results}, group_by_fields=fields
-                        )
-                    temporal_groups = TemporalProcessor.group_by_temporal_unit(
-                        all_ids,
-                        documents,
-                        field_name,
-                        unit,
-                        id_field=getattr(self.search_backend, "id_field", "id"),
-                    )
+                buckets[f] = found
 
-                # Convert message ID groups to message groups
-                # (keeping original structure)
-                result_groups: dict[str, list[MessageGroup]] = defaultdict(list)
-                for group in results:
-                    # Find which temporal group each message in this group belongs to
-                    for msg_id in group:
-                        for temp_key, temp_ids in temporal_groups.items():
-                            if msg_id in temp_ids:
-                                result_groups[temp_key].append(group)
-                                break
-
-                return GroupedResult(groups=dict(result_groups), group_by_fields=fields)
-
-        # Regular field-based grouping
-        # Get all message IDs from results
-        all_message_ids: set[MessageId] = set()
-        for group in results:
-            all_message_ids.update(group)
-
-        # Retrieve documents to get field values
-        try:
-            documents = self.search_backend.get_documents(list(all_message_ids))
-        except NotImplementedError:
-            # Backend doesn't support document retrieval
-            # Fall back to treating all as one group
-            return GroupedResult(groups={"__all__": results}, group_by_fields=fields)
-
-        # Build mapping from message ID to field values
-        message_fields: dict[MessageId, dict[str, Any]] = {}
-        for doc in documents:
-            msg_id_value = doc.get("id")
-            if msg_id_value is not None:
-                message_fields[msg_id_value] = {
-                    field: doc.get(field, "__none__") for field in fields
-                }
-
-        # Group results by field values
         groups: dict[str, list[MessageGroup]] = defaultdict(list)
-
         for group in results:
-            # Determine group key for this message group
-            # Use the field values from the first message in the group
             if not group:
                 continue
-
-            first_msg = group[0]
-            if first_msg not in message_fields:
-                group_key = "__unknown__"
-            else:
-                # Create compound key from all group-by fields
-                key_parts = [
-                    str(message_fields[first_msg].get(field, "__none__"))
-                    for field in fields
-                ]
-                group_key = "|".join(key_parts)
-
-            groups[group_key].append(group)
-
+            first = group[0]
+            parts: list[str] = []
+            for f in fields:
+                if f in buckets:
+                    parts.append(buckets[f].get(first, "__none__"))
+                elif first in docs_by_id:
+                    parts.append(str(docs_by_id[first].get(f, "__none__")))
+                else:
+                    parts = ["__unknown__"]
+                    break
+            groups["|".join(parts)].append(group)
         return GroupedResult(groups=dict(groups), group_by_fields=fields)
+
+    def _temporal_buckets(
+        self, ids: set[MessageId], field_name: str, unit: TemporalUnit
+    ) -> dict[MessageId, str] | None:
+        """Each event's time-unit key, or None when the backend cannot hand
+        over its documents."""
+        backend = self.search_backend
+        if (
+            hasattr(backend, "has_timestamp_field")
+            and hasattr(backend, "group_by_temporal_unit")
+            and backend.has_timestamp_field(field_name)
+        ):
+            temporal_groups = backend.group_by_temporal_unit(
+                list(ids), field_name, unit.value
+            )
+        else:
+            try:
+                documents = backend.get_documents(list(ids))
+            except NotImplementedError:
+                return None
+            temporal_groups = TemporalProcessor.group_by_temporal_unit(
+                ids,
+                documents,
+                field_name,
+                unit,
+                id_field=getattr(backend, "id_field", "id"),
+            )
+        return {m: key for key, members in temporal_groups.items() for m in members}
 
     def aggregate(
         self,
