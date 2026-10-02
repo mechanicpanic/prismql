@@ -65,10 +65,13 @@ class Leg:
     equal: tuple[Binding, ...] = ()
     unequal: tuple[Binding, ...] = ()
     name: str | None = None
+    # ``!$k`` on the leg that binds ``$k`` itself: an inequality inside the
+    # event, held where the leg's rows are taken (graph #152).
+    own_unequal: tuple[Binding, ...] = ()
 
     @property
     def fields(self) -> tuple[str, ...]:
-        return tuple(f for _, f in self.equal + self.unequal)
+        return tuple(f for _, f in self.equal + self.unequal + self.own_unequal)
 
 
 def axis_and_window(window: Window, timestamp_field: str) -> tuple[str, int]:
@@ -124,14 +127,26 @@ def _self_consistency(
     prefix: str, leg: Leg, lists: AbstractSet[str] = frozenset()
 ) -> list[Any]:
     """A variable named twice on one leg with different fields means those
-    fields agree on that row (``field(user,$u) AND field(page,$u)``)."""
+    fields agree on that row (``field(user,$u) AND field(page,$u)``); its
+    ``!$u`` on the same leg means they differ (graph #152)."""
     first: dict[str, str] = {}
     conds: list[Any] = []
     for v, f in leg.equal:
         if v in first and first[v] != f:
             conds.append(_eq(f"{prefix}{f}", f"{prefix}{first[v]}", lists))
         first.setdefault(v, f)
+    for v, f in leg.own_unequal:
+        conds.append(_neq(f"{prefix}{f}", f"{prefix}{first[v]}", lists))
     return conds
+
+
+def leg_rows(frame: Any, leg: Leg) -> Any:
+    """The rows of one leg that keep its own same-event constraints — the
+    only rows any operator may take for it."""
+    rows = leg_frame(frame, leg.ids)
+    for cond in _self_consistency("", leg, _list_columns(frame)):
+        rows = rows.filter(cond)
+    return rows
 
 
 def _fresh_link_constraints(
@@ -220,11 +235,11 @@ def link(
     Bindings ride on the result as ``_v_<var>``.
     """
     axis, w = axis_and_window(window, timestamp_field)
-    right = leg_frame(frame, rhs.ids)
+    right = leg_rows(frame, rhs)
     key, eligible = _link_constraints(seqs, lhs, rhs, _list_columns(frame))
     if seqs is None:
         assert lhs is not None
-        left = leg_frame(frame, lhs.ids)
+        left = leg_rows(frame, lhs)
         res = nearest_link(
             left,
             right,
@@ -273,8 +288,8 @@ def negative_link(
     axis, w = axis_and_window(window, timestamp_field)
     key, eligible = _exclusion_constraints(lhs, rhs, _list_columns(frame))
     res = anti_link(
-        leg_frame(frame, lhs.ids),
-        leg_frame(frame, rhs.ids),
+        leg_rows(frame, lhs),
+        leg_rows(frame, rhs),
         axis=axis,
         window=w,
         forward=forward,
@@ -366,10 +381,7 @@ def single_row(frame: Any, leg: Leg) -> Any:
     if leg.unequal:
         v = leg.unequal[0][0]
         raise PrismQLRuntimeError(f"!${v} refers to a variable no earlier leg binds")
-    rows = leg_frame(frame, leg.ids)
-    for cond in _self_consistency("", leg, _list_columns(frame)):
-        rows = rows.filter(cond)
-    rows = rows.sort("position").with_row_index("group")
+    rows = leg_rows(frame, leg).sort("position").with_row_index("group")
     res = rows.select(
         pl.col("group").cast(pl.UInt32),
         pl.lit(0, dtype=pl.UInt32).alias("slot"),
@@ -412,7 +424,7 @@ def cooccur_row(
     # combinations: their positions must ascend.
     ascending = {i for i in range(1, len(legs)) if legs[i] == legs[i - 1]}
     return cooccur(
-        [leg_frame(frame, leg.ids) for leg in legs],
+        [leg_rows(frame, leg) for leg in legs],
         axis=axis,
         window=w,
         key=key,
@@ -450,7 +462,7 @@ def quantified_row(
             "A quantified restriction may correlate on one variable only"
         )
     res = quantify(
-        leg_frame(frame, leg.ids),
+        leg_rows(frame, leg),
         axis=axis,
         window=w,
         n_min=n_min,

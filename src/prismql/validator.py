@@ -264,28 +264,29 @@ class QueryValidator:
         )
 
     def _check_negated_variables(self, row: Any, issues: list[ValidationIssue]) -> None:
-        """``!$k`` needs an earlier leg or member that binds ``$k``."""
+        """``!$k`` needs ``$k`` bound by an earlier leg or member, or by its
+        own leg — there it differs inside the event (graph #152)."""
         from .ir import nodes as ir
+
+        def variables(expr: Any) -> list[Any]:
+            if isinstance(expr, (ir.And, ir.Or)):
+                return variables(expr.left) + variables(expr.right)
+            if isinstance(expr, ir.Not):
+                return variables(expr.operand)
+            value = getattr(expr, "value", None)
+            return [value] if isinstance(value, ir.Variable) else []
 
         def walk(expr: Any, bound: set[str]) -> None:
             if isinstance(expr, ir.SequenceLink):
                 walk(expr.lhs, bound)
                 walk(expr.rhs, bound)
                 return
-            if isinstance(expr, (ir.And, ir.Or)):
-                walk(expr.left, bound)
-                walk(expr.right, bound)
-                return
-            if isinstance(expr, ir.Not):
-                walk(expr.operand, bound)
-                return
-            value = getattr(expr, "value", None)
-            if isinstance(value, ir.Variable):
-                if value.negated:
-                    if value.name not in bound:
-                        issues.append(self._unbound_negated(value.name))
-                else:
-                    bound.add(value.name)
+            names = variables(expr)
+            own = {v.name for v in names if not v.negated}
+            for v in names:
+                if v.negated and v.name not in bound | own:
+                    issues.append(self._unbound_negated(v.name))
+            bound |= own
 
         bound: set[str] = set()
         for item in row.items:
@@ -302,19 +303,6 @@ class QueryValidator:
             code="UNBOUND_NEGATED_VARIABLE",
         )
 
-    def _check_negated_variables_text(self, query: str) -> list[ValidationIssue]:
-        """Regex counterpart for the classic dialect."""
-        import re
-
-        bare = re.sub(r"\"[^\"]*\"|'[^']*'", "", query)
-        issues: list[ValidationIssue] = []
-        for m in re.finditer(r"!\$(\w+)", bare):
-            if not re.search(
-                r"(?<!!)\$" + re.escape(m.group(1)) + r"\b", bare[: m.start()]
-            ):
-                issues.append(self._unbound_negated(m.group(1)))
-        return issues
-
     def _check_lowered(self, tree: Any) -> list[ValidationIssue]:
         """Checks on the lowered classic query: open ranges (graph #46; a
         run's length ``RUN(x){n,}`` is not a quantifier and needs no
@@ -327,6 +315,7 @@ class QueryValidator:
 
         def walk(q: Any) -> None:
             if isinstance(q.source, ir.RestrictionsRow):
+                self._check_negated_variables(q.source, issues)
                 for item in q.source.items:
                     self._check_item_quantifier(item, issues)
                     self._check_run_step(item.expr, issues)
@@ -751,7 +740,6 @@ class QueryValidator:
         # Check similar_to() thresholds (parity with the IR-walk check)
         issues.extend(self._check_similar_thresholds(query))
         issues.extend(self._check_lowered(tree))
-        issues.extend(self._check_negated_variables_text(query))
 
         # Check for undefined custom features
         feature_pattern = r"(\w+)\(\)"

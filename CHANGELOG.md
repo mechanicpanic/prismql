@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Fixed (`!$a` on its own leg)
+- `!$a` on the leg that binds `$a` now means an inequality inside the event, as `$a` twice there means an equality: `field(user, $a) AND field(kind, !$a)` finds events whose kind is not their user — alone, in a comma list or in a chain, in both dialects and on both paths. Alone and in a comma list it used to be refused; in a chain it was accepted and silently ignored, so events with kind equal to user matched too. The validator checks `!$k` on the lowered query for both dialects; the classic text scan is gone (graph @aleph/prismql, #152).
+
 ### Added (a run in a link)
 - A run can stand on either side of one `FOLLOWED_BY` / `PRECEDED_BY` / `NOT_*` link, with its step inside the parentheses: `X FOLLOWED_BY RUN(Y, DURING 2 minutes){3,} DURING 10 minutes` (pipe `x ~>(10m) run(y, 2m){3,}`) — "a request, then a run of retries" — and `RUN(…){3,} NOT_FOLLOWED_BY success …` — "a run of failures never recovered from". A variable named on both sides holds one value across the link; `!$k` on the condition side asks for another. The group is the run plus the linked event, one per left-hand group. Longer chains around a run are refused. On the legacy path a parenthesized run is read as the IR path reads it (graph @aleph/prismql, #126).
 

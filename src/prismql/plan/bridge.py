@@ -37,18 +37,25 @@ Constraint = Any  # processors.variables.VariableConstraint (variable_name, fiel
 
 
 def leg(ids: Iterable[MessageId], constraints: Sequence[Constraint] = ()) -> Leg:
+    """A ``!$k`` whose ``$k`` this same leg binds differs inside the event
+    (``own_unequal``); any other ``!$k`` differs from an earlier leg's value
+    (graph #152)."""
+    equal = tuple(
+        (c.variable_name, c.field_name)
+        for c in constraints
+        if not getattr(c, "negated", False)
+    )
+    own = {v for v, _ in equal}
+    unequal = [
+        (c.variable_name, c.field_name)
+        for c in constraints
+        if getattr(c, "negated", False)
+    ]
     return Leg(
         frozenset(ids),
-        equal=tuple(
-            (c.variable_name, c.field_name)
-            for c in constraints
-            if not getattr(c, "negated", False)
-        ),
-        unequal=tuple(
-            (c.variable_name, c.field_name)
-            for c in constraints
-            if getattr(c, "negated", False)
-        ),
+        equal=equal,
+        unequal=tuple(b for b in unequal if b[0] not in own),
+        own_unequal=tuple(b for b in unequal if b[0] in own),
     )
 
 

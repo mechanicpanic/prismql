@@ -279,7 +279,10 @@ SELECT from($u) FOLLOWED_BY from(!$u) INWINDOW 3            -- ... followed by a
 
 `!$k` is "unequal to the value an earlier leg bound to `$k`": the nearest
 candidate is chosen among those that differ (`UNBOUND_NEGATED_VARIABLE` if
-nothing bound `$k` before it).
+nothing bound `$k` before it). On the leg that binds `$k` itself it differs
+inside the event, as `$k` twice there is equal inside it:
+`SELECT field(user, $a) AND field(kind, !$a)` — events whose kind is not
+their user — alone, in a comma list or in a chain.
 
 **Variable names**: `$user`, `$speaker`, `$person`, `$author` (any identifier starting with `$`)
 
