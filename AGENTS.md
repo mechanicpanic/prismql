@@ -109,7 +109,11 @@ If references are lacking or the trace breaks, the reviewer returns `NEEDS_CONTE
 What came back — fix in the same branch; a finding you disagree with — reject with a recorded "why" (in the PR or on the node): a silently discarded review teaches the next one not to review.
 
 ### Branch discipline
-Work lands on `main` directly; the owner pushes (`gp`) — there is no PR flow today, so the "merge" event here is the owner's push of `main`. After it:
+Two paths onto `main`:
+- **Owner's agents** commit to `main` locally; the owner pushes (`gp`).
+- **Outside contributors** (Mermaid and her agents) open a PR from their fork. The prismql agent reviews it: runs `make check`, does a cold review, and posts the findings on the PR. The owner merges.
+
+The "merge" event is either the owner's push of `main` or a merged PR. After it:
 1. `git pull` on `main` to confirm the remote state.
 2. Update the graph: the change is on `main` — weave the shipped state into the contour, end what the push resolved by the rule above (`weaving`).
 3. Confirm the tidy-up before the next task.
@@ -234,7 +238,7 @@ Untracked `HANDOFF-*.md` at the repo root are legacy drafts from before the grap
 - Forge: GitHub, CLI `gh` (installed, authenticated as `mechanicpanic`); the remote is private — `gh repo view --json isPrivate` answers "is it public".
 - **Local gate — one call, not a list**: `make check` runs the whole chain; call it by name, never assemble the steps by hand. CI calls the same target.
 - **Pre-commit** runs ruff format/check + mypy on staged files (`pre-commit`); CI (push + PR, Python 3.12/3.13) enforces the gate.
-- **Definition of done**: work lands on `main` locally; **the owner pushes** (`gp`) — never `git push`, tag, create a GitHub release or upload to PyPI without an explicit go-ahead in the same conversation. "Prepare a release" means do the prep and **stop before** any public artifact; a CHANGELOG entry framed as a release is a draft, not authorization. Shipped = on `origin/main`.
+- **Definition of done**: work lands on `main` locally, or a contributor's PR is merged by the owner; **the owner pushes** (`gp`) — never `git push`, tag, create a GitHub release or upload to PyPI without an explicit go-ahead in the same conversation. "Prepare a release" means do the prep and **stop before** any public artifact; a CHANGELOG entry framed as a release is a draft, not authorization. Shipped = on `origin/main`.
 - **Never** `--no-verify`, `--force`, `--no-gpg-sign`, `git reset --hard` or history rewrites without the user's explicit instruction.
 
 *(iskronify: contract `13`, stamp `2026-09-23` — propose a re-run when the installed iskronify's description names a higher contract or when the sources this file is derived from moved after this date.)*
