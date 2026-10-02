@@ -2,9 +2,11 @@
 # with a local decision model serving (strands-decider serve, graph #153).
 # Each answer becomes a label column (`unsure` below min_confidence) and a
 # <name>_p column; the model and these exact questions are stamped into the
-# file (graph @aleph/prismql, #154).
+# file (graph @aleph/prismql, #154). max_chars: a long message is read from its
+# start only — its point is usually there, and the rest dilutes the answer.
 
 [questions.phase]
+max_chars = 400
 type = "choice"
 instructions = "What is the AI coding agent doing in this message?"
 where = { role = "assistant", kind = "text" }
@@ -18,12 +20,14 @@ asking_user = "asking the person a question or for a decision"
 claiming_done = "saying the task is finished"
 
 [questions.claims_done]
+max_chars = 400
 type = "noul"
 instructions = "Does the agent claim that the task is done, fixed, or that tests pass?"
 where = { role = "assistant", kind = "text" }
 min_confidence = 0.6
 
 [questions.user_move]
+max_chars = 400
 type = "choice"
 instructions = "What is the person doing in this message to the AI coding agent?"
 where = { role = "user", kind = "prompt" }

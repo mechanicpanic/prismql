@@ -150,8 +150,9 @@ Add `--judge questions.toml` and a local decision model answers typed
 questions about each event (`strands-decider serve CHECKPOINT --port 8000`
 first; `--judge-url` if it listens elsewhere). Each question names the
 events it applies to (`where = { role = "assistant", kind = "text" }`), its
-type (yes/no, a choice of options, a score on a rubric) and the confidence
-below which its answer is `unsure`; the file gets a label column a query
+type (yes/no, a choice of options, a score on a rubric), how much of a long
+text it reads (`max_chars`) and the confidence below which its answer is
+`unsure`; the file gets a label column a query
 matches with `field(claims_done, yes)` and a `<name>_p` column, and the
 model and the exact questions are stamped into it.
 `examples/judge/agent-logs.toml` asks agent logs what the agent is doing,

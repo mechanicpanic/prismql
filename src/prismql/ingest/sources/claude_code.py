@@ -128,6 +128,8 @@ def _read_file(
                 row = _block_row(block, rtype, tool_names, f"{file}:{lineno}")
                 if row is None:
                     continue
+                if row["kind"] == "prompt" and _injected(rec):
+                    row["kind"] = "injected"
                 if row["kind"] == "tool_result":
                     spawned = rec.get("toolUseResult") or {}
                     row["spawned"] = (
@@ -140,6 +142,15 @@ def _read_file(
                 out.append(row)
     attach_outcomes(out)
     return out
+
+
+def _injected(rec: dict[str, Any]) -> bool:
+    """A user record the harness wrote — skill text (``isMeta``), a task
+    notification (``origin.kind``) — not the person; pasted text is theirs.
+    An older log without ``origin`` reads as the person."""
+    origin = rec.get("origin")
+    kind = origin.get("kind") if isinstance(origin, dict) else None
+    return bool(rec.get("isMeta")) or kind not in (None, "human")
 
 
 def _block_row(

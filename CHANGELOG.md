@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Changed (harness text is not the person)
+- `prismql ingest claude-code` gives a user record the harness wrote — skill text (`isMeta`), a task notification (`origin.kind`) — `kind = injected` instead of `prompt`; a person's own message, pasted text included, stays `prompt`. A `--judge` question may set `max_chars` to read only the start of a long text (graph @aleph/prismql, #154).
+
 ### Added (a decision model's answers as columns)
 - `prismql ingest … --judge questions.toml [--judge-url URL]` asks a local decision model (`strands-decider serve`, the Jev request shape) typed questions about each event a question applies to, and writes a label column (`yes`/`no`, the chosen option, the score's level, or `unsure` below `min_confidence`) plus `<name>_p`; the model and the exact questions with their hash are stamped into the file. `examples/judge/agent-logs.toml` holds three questions for agent logs. Nothing leaves the machine (graph @aleph/prismql, #154).
 

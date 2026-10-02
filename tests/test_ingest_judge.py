@@ -157,3 +157,22 @@ def test_the_cli_writes_the_columns_and_the_stamp(tmp_path, monkeypatch):
     assert "phase" in table.column_names and "claims_done_p" in table.column_names
     stamp = json.loads(table.schema.metadata[JUDGE_KEY])
     assert stamp["model"] == "fake-decider"
+
+
+def test_max_chars_sends_only_the_start_of_a_long_text(tmp_path):
+    p = tmp_path / "q.toml"
+    p.write_text(
+        '[questions.done]\ntype = "noul"\ninstructions = "Done?"\nmax_chars = 5\n'
+    )
+    seen: list = []
+
+    def post(state: str, _qs: dict) -> dict:
+        seen.append(state)
+        return {"model": "m", "answers": {"done": {"type": "noul", "noul": 0.9}}}
+
+    judge(
+        pl.DataFrame({"id": ["1"], "text": ["Done. And then a long list"]}),
+        load_questions(p),
+        post=post,
+    )
+    assert seen == ["Done."]

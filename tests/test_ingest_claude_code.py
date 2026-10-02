@@ -84,3 +84,38 @@ def test_truncated_line_and_lone_surrogate_do_not_abort(tmp_path, capsys):
     (tmp_path / "empty").mkdir()
     assert read_claude_code(tmp_path / "empty").height == 0
     assert "<truncated line>×1" in capsys.readouterr().out
+
+
+def test_harness_injected_user_records_are_not_prompts(tmp_path):
+    """Skill text (isMeta) and task notifications (origin.kind) ride as user
+    records; a person's own message — pasted text included — is a prompt."""
+    import json
+
+    recs = [
+        ({"origin": {"kind": "human"}}, "fix the parser"),
+        ({"isMeta": True}, "Base directory for this skill: ..."),
+        ({"origin": {"kind": "task-notification"}}, "<task-notification>..."),
+        (
+            {"origin": {"kind": "human"}},
+            '<pasted_content id="x">a note</pasted_content>',
+        ),
+        ({}, "an older log without origin"),
+    ]
+    log = tmp_path / "s.jsonl"
+    log.write_text(
+        "\n".join(
+            json.dumps(
+                {
+                    "type": "user",
+                    "uuid": f"u{i}",
+                    "sessionId": "s",
+                    "timestamp": f"2026-01-01T00:00:0{i}Z",
+                    "message": {"content": text},
+                    **extra,
+                }
+            )
+            for i, (extra, text) in enumerate(recs)
+        )
+    )
+    kinds = read_claude_code(log).get_column("kind").to_list()
+    assert kinds == ["prompt", "injected", "injected", "prompt", "prompt"]

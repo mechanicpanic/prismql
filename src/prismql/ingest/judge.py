@@ -3,7 +3,8 @@
 
 A question file names each question, which events it applies to
 (``where``: column = value), which columns make the state it reads
-(``state``, default ``text``), and below which confidence its answer is
+(``state``, default ``text``), how much of a long text it reads
+(``max_chars``, default all), and below which confidence its answer is
 ``unsure`` (``min_confidence``). Each answer becomes two columns: the label
 a query matches with ``field()`` — ``yes``/``no`` for a yes/no question,
 the chosen option, the most likely level of a score, or ``unsure`` — and
@@ -72,6 +73,17 @@ def _wire(q: dict[str, Any]) -> dict[str, Any]:
     return {k: q[k] for k in ("type", "instructions", "criteria") if k in q}
 
 
+def _clip(state: Any, limit: int) -> Any:
+    """The start of each text, ``limit`` characters (0: whole): a long
+    message's point is usually in its first lines, and the rest dilutes
+    the model's read (observed 2026-10-02, #154)."""
+    if not limit:
+        return state
+    if isinstance(state, str):
+        return state[:limit]
+    return {k: v[:limit] if isinstance(v, str) else v for k, v in state.items()}
+
+
 def _applies(q: dict[str, Any], row: dict[str, Any]) -> bool:
     return all(row.get(col) == val for col, val in (q.get("where") or {}).items())
 
@@ -134,6 +146,7 @@ def judge(
             # One column goes as bare text: the model reads it better than
             # the same text wrapped in an object (observed 2026-10-02).
             state = values[cols[0]] if len(cols) == 1 else values
+            state = _clip(state, min((q.get("max_chars") or 0) for q in qs.values()))
             reply = post(state, {n: _wire(q) for n, q in qs.items()})
             model = model or reply.get("model")
             for name, answer in reply["answers"].items():
