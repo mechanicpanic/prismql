@@ -100,6 +100,7 @@ def test_harness_injected_user_records_are_not_prompts(tmp_path):
             '<pasted_content id="x">a note</pasted_content>',
         ),
         ({}, "an older log without origin"),
+        ({"isCompactSummary": True}, "This session is being continued ..."),
     ]
     log = tmp_path / "s.jsonl"
     log.write_text(
@@ -118,4 +119,4 @@ def test_harness_injected_user_records_are_not_prompts(tmp_path):
         )
     )
     kinds = read_claude_code(log).get_column("kind").to_list()
-    assert kinds == ["prompt", "injected", "injected", "prompt", "prompt"]
+    assert kinds == ["prompt", "injected", "injected", "prompt", "prompt", "injected"]

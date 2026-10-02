@@ -145,12 +145,15 @@ def _read_file(
 
 
 def _injected(rec: dict[str, Any]) -> bool:
-    """A user record the harness wrote — skill text (``isMeta``), a task
-    notification (``origin.kind``) — not the person; pasted text is theirs.
-    An older log without ``origin`` reads as the person."""
+    """A user record the harness wrote — skill text and command output
+    (``isMeta``), a compaction summary (``isCompactSummary``), a task
+    notification (``origin.kind``) — not the person; pasted text, a slash
+    command and an interrupt are theirs. An older log without ``origin``
+    reads as the person."""
     origin = rec.get("origin")
     kind = origin.get("kind") if isinstance(origin, dict) else None
-    return bool(rec.get("isMeta")) or kind not in (None, "human")
+    marked = rec.get("isMeta") or rec.get("isCompactSummary")
+    return bool(marked) or kind not in (None, "human")
 
 
 def _block_row(
