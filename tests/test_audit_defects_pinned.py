@@ -288,3 +288,26 @@ def test_a_prefix_search_finds_the_word_it_starts():
     backend = TantivyBackend([{"id": 1, "text": "hello world"}])
     _hits, total = backend.rank_counted("hel*", limit=10)
     assert total == 1
+
+
+SAME_EVENT = [
+    {"id": 1, "user": "a", "kind": "a", "text": "x"},
+    {"id": 2, "user": "a", "kind": "b", "text": "x"},
+    {"id": 3, "user": "b", "kind": "b", "text": "x"},
+    {"id": 4, "user": "c", "kind": "a", "text": "x"},
+]
+
+
+@BOTH
+@pytest.mark.xfail(
+    strict=True,
+    reason="!$a in the leg that binds $a is refused alone and in a comma row, "
+    "but in a chain leg it is accepted and dropped (events 1 and 3 match)",
+)
+def test_not_var_in_its_own_leg_is_honoured_or_refused_in_a_chain(use_ir):
+    q = "SELECT field(user, $a) AND field(kind, !$a) FOLLOWED_BY from(c) INWINDOW 3"
+    try:
+        got = _engine(SAME_EVENT, use_ir).execute(q)
+    except PrismQLError:
+        return  # refused, as the one-leg form is
+    assert got == [[2, 4]]  # honoured: kind differs from user in event 2 only
