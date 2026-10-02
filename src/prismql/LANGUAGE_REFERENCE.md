@@ -282,7 +282,7 @@ candidate is chosen among those that differ (`UNBOUND_NEGATED_VARIABLE` if
 nothing bound `$k` before it). On the leg that binds `$k` itself it differs
 inside the event, as `$k` twice there is equal inside it:
 `SELECT field(user, $a) AND field(kind, !$a)` — events whose kind is not
-their user — alone, in a comma list or in a chain.
+their user — alone, in a comma list or in a chain, and inside a `RUN`. Joined to `$k` by `OR` or under `NOT` it is refused (`OWN_NEGATION_NOT_UNDER_AND`).
 
 **Variable names**: `$user`, `$speaker`, `$person`, `$author` (any identifier starting with `$`)
 

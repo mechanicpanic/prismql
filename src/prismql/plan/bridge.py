@@ -234,7 +234,7 @@ def _run_groups(
 ) -> list[list[MessageId]]:
     """The runs of a leg's events in ``frame``: split by one field per
     variable the leg names, neighbours at most ``window`` apart."""
-    from .operators import axis_and_window, single_row
+    from .operators import axis_and_window, leg_rows
     from .runs import runs
 
     if lg.unequal:
@@ -242,15 +242,13 @@ def _run_groups(
             "RUN cannot hold an inequality (!$a): a run is split by the values "
             "its variables take, not against a value bound elsewhere."
         )
-    frame = frame.filter(_pl().col("id").is_in(list(lg.ids)))
+    # The leg's own same-event constraints (two fields under one variable
+    # agree, an own !$a differs, #152) choose which events can be members.
+    frame = leg_rows(frame, lg)
     # One column per variable: the event's value there names its part.
     by_variable: dict[str, str] = {}
     for variable, field in lg.equal:
         by_variable.setdefault(variable, field)
-    if len(by_variable) < len(set(lg.equal)):
-        # Two fields under one variable must agree inside an event.
-        kept = groups(single_row(frame, lg))
-        frame = frame.filter(_pl().col("id").is_in([g[0] for g in kept]))
     keys = list(dict.fromkeys(by_variable.values()))
     axis, step = axis_and_window(window_of(window), ts)
     return runs(

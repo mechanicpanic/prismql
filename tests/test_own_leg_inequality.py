@@ -74,3 +74,56 @@ def test_the_validator_accepts_it(query):
 )
 def test_a_variable_bound_nowhere_is_still_refused(query):
     assert not QueryValidator().validate(query).valid
+
+
+# Cold review, 2026-10-02: a run, OR / NOT, and the validator's view of
+# RUN and mentions_user.
+TIMED = [
+    {"id": i, "user": u, "kind": k, "text": "x", "timestamp": i * 10}
+    for i, (u, k) in enumerate(
+        [("a", "a"), ("a", "b"), ("a", "a"), ("a", "a"), ("c", "a")], 1
+    )
+]
+
+
+@pytest.mark.parametrize("use_ir", [True, False])
+def test_a_run_keeps_its_own_inequality(use_ir):
+    e = PrismQLEngine(MemoryBackend([dict(d) for d in TIMED]), use_ir=use_ir)
+    run = "RUN(field(user, $a) AND field(kind, !$a)){n} DURING 1 hours"
+    assert e.execute("SELECT " + run.replace("{n}", "{2,}")) == []
+    assert e.execute("SELECT " + run.replace("{n}", "{1,}")) == [[2], [5]]
+
+
+@pytest.mark.parametrize("use_ir", [True, False])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT field(user, $a) OR field(kind, !$a)",
+        "SELECT field(user, $a) AND NOT field(kind, !$a)",
+        "field(user, $a) or field(kind, !$a)",
+    ],
+)
+def test_an_own_inequality_across_or_or_not_is_refused(use_ir, query):
+    from prismql.exceptions import PrismQLRuntimeError
+
+    with pytest.raises(PrismQLRuntimeError, match=r"joined by AND"):
+        _engine(use_ir).execute(query)
+    assert not QueryValidator().validate(query).valid
+
+
+@pytest.mark.parametrize(
+    ("query", "valid"),
+    [
+        ("SELECT mentions_user($y) FOLLOWED_BY field(agent, !$y) INWINDOW 2", True),
+        ("mentions_user($y) ~> field(agent, !$y) |> within(2)", True),
+        (
+            "SELECT RUN(field(user, $u), DURING 1 minutes){2,}"
+            " FOLLOWED_BY field(user, !$u) INWINDOW 3",
+            True,
+        ),
+        ("SELECT mentions_user(!$y)", False),
+        ("SELECT RUN(from(!$u)){2,} DURING 1 hours", False),
+    ],
+)
+def test_the_validator_sees_inside_run_and_mentions(query, valid):
+    assert QueryValidator().validate(query).valid is valid

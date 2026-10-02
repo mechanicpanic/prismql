@@ -265,23 +265,30 @@ class QueryValidator:
 
     def _check_negated_variables(self, row: Any, issues: list[ValidationIssue]) -> None:
         """``!$k`` needs ``$k`` bound by an earlier leg or member, or by its
-        own leg — there it differs inside the event (graph #152)."""
+        own leg — there it differs inside the event (graph #152), joined
+        by AND only."""
         from .ir import nodes as ir
+        from .ir.variables import (
+            guarded_own_negations,
+            occurrences,
+            own_negation_message,
+        )
 
-        def variables(expr: Any) -> list[Any]:
-            if isinstance(expr, (ir.And, ir.Or)):
-                return variables(expr.left) + variables(expr.right)
-            if isinstance(expr, ir.Not):
-                return variables(expr.operand)
-            value = getattr(expr, "value", None)
-            return [value] if isinstance(value, ir.Variable) else []
+        for name in guarded_own_negations(ir.Query(source=row)):
+            issues.append(
+                ValidationIssue(
+                    level=ValidationLevel.ERROR,
+                    message=own_negation_message(name),
+                    code="OWN_NEGATION_NOT_UNDER_AND",
+                )
+            )
 
         def walk(expr: Any, bound: set[str]) -> None:
             if isinstance(expr, ir.SequenceLink):
                 walk(expr.lhs, bound)
                 walk(expr.rhs, bound)
                 return
-            names = variables(expr)
+            names = occurrences(expr)
             own = {v.name for v in names if not v.negated}
             for v in names:
                 if v.negated and v.name not in bound | own:

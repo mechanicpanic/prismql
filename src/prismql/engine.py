@@ -253,11 +253,13 @@ class PrismQLEngine:
             if resolved == "pipe":
                 # The pipe dialect exists only as an IR frontend.
                 ir = parse_pipe(query)
+                self._check_variables(ir)
                 self._check_time_field(ir)
                 result = self.visitor.execute(ir)
             else:
                 tree = self._parse_classic(query)
                 ir = lower_query(tree)
+                self._check_variables(ir)
                 self._check_time_field(ir)
                 # Execute: run the IR executor (default), or walk the parse
                 # tree directly with the legacy visitor path.
@@ -280,6 +282,15 @@ class PrismQLEngine:
             raise PrismQLRuntimeError(
                 f"Error executing query: {str(e)}", query=query, cause=e
             ) from e
+
+    def _check_variables(self, ir: Any) -> None:
+        """Refuse an own-leg ``!$a`` across OR or NOT before either path
+        runs it (graph @aleph/prismql, #152)."""
+        from .ir.variables import guarded_own_negations, own_negation_message
+
+        names = guarded_own_negations(ir)
+        if names:
+            raise PrismQLRuntimeError(own_negation_message(names[0]))
 
     def _check_time_field(self, ir: Any) -> None:
         """A query that measures time on a corpus with none in its time
