@@ -82,8 +82,9 @@ class SearchBackend(ABC):
         """
         Search for messages containing a specific phrase.
 
-        This uses precomputed n-gram indexes for fast O(1) phrase lookup.
-        If n-gram indexes are not available, falls back to substring matching.
+        A backend may use precomputed n-gram indexes for fast phrase lookup;
+        what it does without them is backend-specific (adjacent tokens in
+        memory and tantivy, substring in rust_memory).
 
         This is optional - backends can implement if they support n-gram
         indexing. By default, raises NotImplementedError.

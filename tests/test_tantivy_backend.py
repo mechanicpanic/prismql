@@ -39,7 +39,7 @@ class TestContract:
         assert len(backend.get_all_document_ids(limit=2)) == 2
 
     def test_ids_are_ints(self, backend):
-        # numeric ids must round-trip as int so the rust merge fast path fires
+        # numeric ids must round-trip as int, the same type the corpus holds
         assert all(isinstance(i, int) for i in backend.get_all_document_ids())
 
     def test_get_documents_fidelity(self, backend):
@@ -66,9 +66,8 @@ class TestStemmedSearch:
         assert backend.search_stems(["running"]) == {1, 2, 4}
 
     def test_not_substring(self, backend):
-        # substring would match "run" inside nothing here, but crucially
-        # "instal" must NOT match "installing"/"installs" as a substring;
-        # only the stemmed token "instal" (the stem of install) matches.
+        # whole stemmed tokens only: "cats" stems to "cat", while "par" is
+        # not a token of "park" and does not match it as a substring.
         assert backend.search_stems(["cat"]) == {1}  # stem of cats
         assert backend.search_stems(["par"]) == set()  # 'par' is not a token in 'park'
 

@@ -37,8 +37,9 @@
   // the run remembers state.seq as it stood before the POST
   // (pending.baselineSeq) and state.boot (pending.boot); the answer is the
   // lowest-seq board entry above that baseline carrying the run's own
-  // result_id, or — for an aggregate, which never gets one — the same
-  // query AND the same corpus (fix round 1, #2; fix round 2, #3). A
+  // result_id, or — for a plain aggregate, which never gets one (a GROUP
+  // BY ... AGGREGATE answer does, #90) — the same query AND the same
+  // corpus (fix round 1, #2; fix round 2, #3). A
   // server restart between the run and its answer changes state.boot and
   // restarts its seq counter from a small number again — a baseline born
   // under the old boot no longer means anything, so it's treated as 0

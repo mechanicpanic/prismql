@@ -42,8 +42,8 @@ except ImportError:  # pragma: no cover - exercised only without the extra
     _TANTIVY_AVAILABLE = False
 
 _DOC_FIELD = "_doc"  # stored JSON of the original document (for get_documents)
-_STEM_TOKENIZER = "prismql_stem"  # simple + lowercase + Snowball(text_language)
-_PLAIN_ANALYZER = "prismql_token"  # simple + lowercase, no stemming
+_STEM_TOKENIZER = "prismql_stem"  # regex + lowercase + Snowball(text_language)
+_PLAIN_ANALYZER = "prismql_token"  # regex + lowercase, no stemming
 _RAW_TOKENIZER = "raw"  # whole value as a single token (exact field match)
 _PLAIN_SUFFIX = "__tok"  # twin of every text field, indexed without stemming
 # The event's stream position as a fast field: a set query reads positions
@@ -88,7 +88,7 @@ def _regex_escape(value: str) -> str:
 
 def _quote(term: str) -> str:
     """Wrap a term/phrase for parse_query so special characters are inert and
-    the field analyzer (lowercase + stem) is applied to it."""
+    the target field's analyzer is applied to it."""
     escaped = term.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
 
@@ -138,8 +138,8 @@ def _read_fields(index_path: Path) -> dict[str, Any] | None:
 
 
 def _read_order(index_path: Path) -> tuple[OrderIndex, list[str]] | None:
-    """The axis written by ``_write_order``; None for an index built before
-    the sidecar existed (then the backend has no axis, as before)."""
+    """The axis written by ``_write_order``; None when the sidecar file is
+    missing (then the backend has no order axis)."""
     path = index_path / _ORDER_NAME
     if not path.exists():
         return None

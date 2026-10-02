@@ -1,11 +1,11 @@
 """Chicago tiers as a gate for the plan primitives (P2 task 7).
 
 Rebuilds the spike's three queries through the primitives and asserts
-tuple-for-tuple equality with the engine. Tiers have dense ids in time
-order, so the engine's id-based positions equal our load-order positions
-and HEAD is a valid oracle for Q1/Q2; Q3 (co-occurrence) is compared on
-the ordered subset (ROBBERY first), because the engine still enforces
-restriction order (D2). Runs on 100k by default; `PRISMQL_TIERS=100k,1m`
+tuple-for-tuple equality with the engine. Q3 (co-occurrence) is compared
+unordered with the engine; only its committed spike count is the ordered
+subset (ROBBERY first), from the D2-era engine. Since P3 the engine is the
+plan, so the committed counts are the independent oracle (see COMMITTED
+below). Runs on 100k by default; `PRISMQL_TIERS=100k,1m`
 adds 1m. The full tier is never run here (owner's word only).
 """
 

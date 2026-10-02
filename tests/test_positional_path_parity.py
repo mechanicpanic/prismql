@@ -1,10 +1,10 @@
 """Positional operators must agree across execution paths (Astra review of
 the ordinal-axis spec, 2026-09-18).
 
-PRECEDED_BY: the Rust kernel picks the NEAREST preceding match, the Python
+PRECEDED_BY: the Rust kernel picked the NEAREST preceding match, the Python
 builders scanned the window from its earliest position — a dual-path
-divergence on dense ids. Both paths must pick the nearest predecessor,
-mirroring FOLLOWED_BY's nearest-successor rule.
+divergence on dense ids. Since the operator layer (P3) there is one path; it
+picks the nearest predecessor, mirroring FOLLOWED_BY's nearest-successor rule.
 """
 
 import pytest

@@ -3,8 +3,9 @@
 The events of X are split by the values of the variables X names (the
 ``PARTITION BY`` of SQL's ``MATCH_RECOGNIZE``); inside each part a run
 continues while the next event is at most ``step`` away on the axis and
-breaks where the gap is larger. Every event of X belongs to exactly one run,
-so runs never overlap; events that are not X never break one.
+breaks where the gap is larger. Every event of X with an axis value and a
+value to split by belongs to exactly one run (the rest belong to none), so
+runs never overlap; events that are not X never break one.
 """
 
 from __future__ import annotations

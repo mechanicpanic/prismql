@@ -2,7 +2,8 @@
 
 Corpora here deliberately contain what the P2 review said the first draft
 masked: gapped ids, non-monotone timestamps, ties, and missing timestamps.
-The engine is the oracle ONLY where STATE.md says it is valid.
+Each test module's docstring names the shapes on which it checks parity
+with the engine.
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ def random_corpus(
 
 @pytest.fixture
 def oracle():
-    """Engine at HEAD — a valid oracle only for the shapes STATE.md lists."""
+    """Engine at HEAD, for the parity shapes each test module names."""
 
     def make(docs: list[dict]) -> PrismQLEngine:
         return PrismQLEngine(MemoryBackend(documents=docs), timestamp_field="timestamp")

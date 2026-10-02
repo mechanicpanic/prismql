@@ -6,8 +6,9 @@
 (function (root) {
   "use strict";
 
-  // What tick() compares between two 5 s beats: which seqs are visible AND
-  // what day label each carries — a range boundary or a midnight rollover
+  // What tick() compares between two 5 s beats: which in-range seqs
+  // (range+search, no facets — inRangeEntries below) there are AND what
+  // day label each carries — a range boundary or a midnight rollover
   // changes this signature with the entries themselves untouched (fix
   // round 2, #2). Exported (prefixed _) so tests/board can pin it without
   // a DOM.

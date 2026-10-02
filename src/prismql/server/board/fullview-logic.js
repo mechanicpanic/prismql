@@ -12,7 +12,7 @@
   var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   var VIEWS = { groups: ["timeline", "table", "raw"], hits: ["table", "raw"], rows: ["table", "raw"] };
   // The one page size every loader/Load-more/scroll-to-end site reads (fix
-  // round 1, #8) — fullview-data.js, fullview-body.js and fullview.js all
+  // round 1, #8) — fullview-load.js, fullview-body.js and fullview.js all
   // read this instead of each carrying its own literal 50.
   var PAGE = 50;
 
@@ -112,8 +112,8 @@
     return tiles;
   }
   // At most 4 tiles — the canvas's fixed 4-column grid (fix round 1,
-  // #12/13). `kept` (page_payload's own field for a hits page: results.py,
-  // "found; exceeds len() when scouting kept only a depth") never gets a
+  // #12/13). `kept` (page_payload's own field for a hits page, pages.py:
+  // how many hits scouting kept; `total` is how many it found) never gets a
   // 5th tile here — it lives in hitsNote's fnote text instead. A null
   // `topScoreVal` (nothing scored yet — topScore([]) === null) reads "—",
   // never "0.000" (fix round 1, #2: no invented numbers).

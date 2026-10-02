@@ -1,7 +1,6 @@
 // PrismQLFullHeader: the full view's `.fhead` (back/kind/status/when/meta/
-// k-of-n/open-in-editor/download) and the `.fcenter` summary-only body for
-// aggregate/grouped/file/error/empty results (task-7 brief; graph
-// @aleph/prismql, node #76).
+// k-of-n/open-in-editor/download); the `.fcenter` summary-only body is
+// fullview-fcenter.js's (task-7 brief; graph @aleph/prismql, node #76).
 (function (root) {
   "use strict";
   var mk = window.PrismQLBoardUtil.mk;

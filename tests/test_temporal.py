@@ -380,7 +380,7 @@ class TestTemporalGroupingWithAggregation:
         assert isinstance(result, AggregateResult)
         assert result.is_grouped()
 
-        # Each month should have 2 users (alice and bob)
+        # Jan and Feb 2024 each have 2 users (alice and bob)
         assert result.grouped_values["2024-01"] == 2
         assert result.grouped_values["2024-02"] == 2
 

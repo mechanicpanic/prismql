@@ -1,8 +1,8 @@
 """Sequence/window primitives as a Polars plan (spec 2026-09-18, P2).
 
-Optional: requires the ``[plan]`` extra (polars, pyarrow). Nothing here is
-wired into the executor yet; the engine at HEAD is the oracle these
-primitives are tested against — only where STATE.md says it is valid.
+The operator layer: polars and pyarrow are core dependencies (``[plan]`` is
+an empty alias), and both executors call it through ``bridge`` — since P3
+the engine is this plan.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from ..exceptions import PrismQLRuntimeError
 
 
 class PlanUnavailableError(PrismQLRuntimeError):
-    """polars is not installed: uv pip install 'prismql[plan]'."""
+    """polars, a core dependency, cannot be imported."""
 
 
 def _pl() -> Any:

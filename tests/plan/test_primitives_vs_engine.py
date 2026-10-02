@@ -1,11 +1,12 @@
 """nearest_link (P2 task 2) against the engine and an exhaustive oracle.
 
-Oracle matrix: the engine at HEAD is a valid oracle only where id order,
-load order and time order coincide — positional links on DENSE ids (the
-Python path still measures id distance: audit A2) and temporal links with
-MONOTONE, tie-free timestamps (HEAD sorts every group by id, audit A9).
-Gapped ids, non-monotone time, ties, nulls, eligibility (``!$k``) and the
-asof/candidate agreement are checked against the brute-force oracle here.
+Oracle matrix: engine parity is checked on the shapes the pre-P3 engine
+got right — positional links on DENSE ids (audit A2: it measured id
+distance) and temporal links with MONOTONE, tie-free timestamps (audit A9:
+it sorted every group by id); both are fixed since P3, where the engine is
+the plan. Gapped ids, non-monotone time, ties, nulls, eligibility (``!$k``)
+and the asof/candidate agreement are checked against the brute-force
+oracle here.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from tests.plan.conftest import random_corpus  # noqa: E402
 
 MINUTE = 60 * 1_000_000
 HOSTILE = {"gapped_ids": True, "monotone_time": False, "ties": True, "nulls": True}
-# Where HEAD is valid: dense ids for positional; monotone tie-free time for temporal.
+# Engine-parity shapes: dense ids for positional; monotone tie-free time.
 HEAD_POSITIONAL = {
     "gapped_ids": False,
     "monotone_time": False,

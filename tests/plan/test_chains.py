@@ -1,11 +1,10 @@
 """extend_link and body_span_filter (P2 task 3) against the engine and a
 brute-force oracle.
 
-HEAD is a valid oracle for chains only where no message could be reused
-(disjoint leg predicates) AND its position/time semantics hold (dense ids
-for positional links, monotone tie-free time for temporal ones). Message
-reuse across legs (audit A7) is checked against the brute-force oracle,
-which excludes group members by construction.
+Engine parity is checked on disjoint leg predicates, dense ids for
+positional links and monotone tie-free time for temporal ones. Message
+reuse across legs (audit A7, fixed by P3) is checked against the
+brute-force oracle, which excludes group members by construction.
 """
 
 from __future__ import annotations
@@ -237,7 +236,7 @@ def test_overlapping_legs_never_reuse_a_message(seed):
 
 
 def test_mixed_axis_chain_does_not_reuse_a_message():
-    """Audit A7: the engine returns [[0, 0, 1]] here; the plan must not."""
+    """Audit A7 (fixed by P3): no group reuses a message across axes."""
     docs = [
         {"id": 0, "user": "a", "text": "", "timestamp": 10},
         {"id": 1, "user": "b", "text": "", "timestamp": 5},

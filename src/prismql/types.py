@@ -80,7 +80,7 @@ class NamedQueryResult:
     users to access matched messages by their semantic labels.
 
     Example:
-        >>> result = engine.execute("SELECT from(alice) AS asker, from(bob) AS responder INWIN 3")
+        >>> result = engine.execute('SELECT from(alice) AS "asker", from(bob) AS "responder" INWIN 3')
         >>> print(result.pattern_names)  # ["asker", "responder"]
         >>>
         >>> # Access first match as a dict
@@ -133,7 +133,7 @@ class NamedQueryResult:
             Unnamed positions use "position_N" as the key.
 
         Example:
-            >>> result = engine.execute("SELECT from(alice) AS asker, from(bob) INWIN 3")
+            >>> result = engine.execute('SELECT from(alice) AS "asker", from(bob) INWIN 3')
             >>> result.get_named_group(0)
             {"asker": 1, "position_1": 2}
         """

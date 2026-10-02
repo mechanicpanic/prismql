@@ -79,7 +79,8 @@ class EvaluateRequest(BaseModel):
     # (single-word matching mode; multi-word terms always phrase-match).
     dictionaries: dict[str, list[str] | DictSpec] | None = None
     # "inline": results in the response, capped at max_results.
-    # "file": ALL groups written as JSONL to results_dir; the response
+    # "file": up to file_output_max_groups groups written as JSONL to
+    # results_dir (``truncated`` says when that cap bit); the response
     # carries only a summary (count, path, preview) — for batch pattern
     # work where the inline cap is meaningless.
     output: Literal["inline", "file"] = "inline"
@@ -143,8 +144,9 @@ class ServerState:
             name: build_engine(self.config.corpus(name))
             for name in self.config.corpus_names()
         }
-        # Once per load, over every event (graph @aleph/prismql, #86): the
-        # schema never changes between loads, so no request recomputes it.
+        # Once per load, over every event (a sample where the backend cannot
+        # hand them all over; graph @aleph/prismql, #86): the schema never
+        # changes between loads, so no request recomputes it.
         schemas = {
             name: compute_schema(engine, self.config.corpus(name))
             for name, engine in engines.items()
@@ -486,7 +488,7 @@ def create_app(config: ServerConfig) -> FastAPI:
         )
         start = perf_counter()
         # Read before engine_for, deliberately: a reload landing between this
-        # read and the query running only marks the result stale (Task 5
+        # read and the query running only marks the result stale (``_kept``
         # serves "gone" on a load mismatch) — never wrong (graph
         # @aleph/prismql, node #65).
         load = state.generation

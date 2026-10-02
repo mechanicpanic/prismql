@@ -422,7 +422,7 @@ def test_has_feature_with_quantifiers():
     backend = MemoryBackend(messages)
     engine = PrismQLEngine(search_backend=backend, precomputed_indexes=indexes)
 
-    # Find at least 2 action items in a window
+    # Find exactly 2 action items within the window
     result = engine.execute("SELECT has_feature(action_item){2} INWINDOW 5")
     assert len(result) >= 1
 
@@ -554,7 +554,7 @@ def test_labeled_as_equivalence_to_has_feature():
 
 
 def test_labeled_as_with_boolean_operators():
-    """Test labeled_as() combined with AND/OR operators."""
+    """Test labeled_as() combined with AND."""
     messages = [
         {"id": 1, "text": "High priority bug", "user": "alice"},
         {"id": 2, "text": "Low priority feature", "user": "bob"},

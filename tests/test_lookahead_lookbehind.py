@@ -74,7 +74,7 @@ class TestFollowedBy:
         assert len(flatten(result)) == 0
 
     def test_followed_by_with_and(self, engine):
-        """Test FOLLOWED_BY combined with AND operator."""
+        """Test FOLLOWED_BY with a window of 3."""
         # Alice at 4 is followed by bob at 5 within 3
         # Alice at 10 is not followed by bob
         query = "SELECT from(alice) FOLLOWED_BY from(bob) INWINDOW 3"
@@ -139,7 +139,7 @@ class TestNotFollowedBy:
         assert len(flatten(result)) == 0
 
     def test_not_followed_by_some_match(self, engine):
-        """Test NOT_FOLLOWED_BY where some messages match."""
+        """Test NOT_FOLLOWED_BY where every message is excluded."""
         query = "SELECT from(charlie) NOT_FOLLOWED_BY from(alice) INWINDOW 1"
         result = engine.execute(query)
         # Charlie 3->alice 4, charlie 6->alice 7, charlie 9->alice 10
@@ -165,7 +165,7 @@ class TestNotPrecededBy:
         assert len(flatten(result)) == 0
 
     def test_not_preceded_by_some_match(self, engine):
-        """Test NOT_PRECEDED_BY where some messages match."""
+        """Test NOT_PRECEDED_BY where every message is excluded."""
         query = "SELECT from(charlie) NOT_PRECEDED_BY from(bob) INWINDOW 1"
         result = engine.execute(query)
         # All charlie messages are preceded by bob at distance 1

@@ -224,7 +224,8 @@ Commands:
 Query Syntax:
   SELECT <conditions>                    Basic query
   SELECT <cond1>, <cond2> INWINDOW N     Window query (unordered, positional)
-  SELECT <cond1> FOLLOWED_BY <cond2>     Sequential query (ordered)
+  SELECT <cond1> FOLLOWED_BY <cond2> INWINDOW N
+                                         Sequential query (ordered)
   SELECT ... DURING 1 hour               Temporal window (time-based)
   SELECT ... AGGREGATE count()           Aggregation
   SELECT ... GROUP BY field              Grouping

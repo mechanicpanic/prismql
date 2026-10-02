@@ -195,10 +195,10 @@ class QueryValidator:
         """Validate a pipe-dialect query.
 
         The pipe parser produces IR directly, so semantic checks walk the IR
-        instead of regexing the query string. Only checks whose classic
-        counterparts can produce ERRORs are implemented (undefined
-        dictionaries, missing window constraints) plus the large-window
-        warning — so ``valid`` means the same thing on both surfaces.
+        instead of regexing the query string: the IR-walk error checks
+        (undefined dictionaries, missing or nested windows, sequences under
+        a boolean, similar_to thresholds, unbound ``!$k``, open quantifiers,
+        RUN steps), the large-window warning and the run-but-wrong warnings.
         Classic-only string heuristics (deprecated aliases, best-practice
         suggestions) have no pipe equivalents and are skipped.
         """
@@ -469,7 +469,7 @@ class QueryValidator:
                         ValidationIssue(
                             level=ValidationLevel.WARNING,
                             message=(
-                                f"A chain of {n} identical links gives one group per "
+                                f"A chain of {n} identical legs gives one group per "
                                 "starting event, and the groups overlap — not one "
                                 "per series of repeats"
                             ),
@@ -956,8 +956,8 @@ def _variable_names(node: Any) -> set[str]:
 
 
 def _identical_links(expr: Any) -> int:
-    """The number of links in a chain of three or more identical legs joined
-    by one direction, else 0."""
+    """The number of legs (repeats) in a chain of three or more identical
+    legs joined by one direction, else 0."""
     from .ir import nodes as ir
 
     legs: list[Any] = []

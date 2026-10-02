@@ -1,6 +1,6 @@
 """A configurable id_field must be honored on every path, not just at load.
 
-Three internal sites hard-coded doc.get("id"): the Python temporal-link
+Two internal sites hard-coded doc.get("id"): the Python temporal-link
 fallback and the operator layer's frame. With any other id_field they
 found no documents and returned EMPTY results silently — the release
 blocker class (see #18/#21/#23/#41).
@@ -40,7 +40,7 @@ class TestIdFieldPlumbing:
         result = engine.execute(
             "SELECT field(user, $u) FOLLOWED_BY field(user, $u) INWINDOW 3"
         )
-        # alice(1)->alice(3), bob(2)->bob(4): id distance 2 both
+        # alice(1)->alice(3), bob(2)->bob(4): position distance 2 both
         assert result == [[1, 3], [2, 4]]
 
     def test_temporal_link_with_custom_id_field(self, backend):

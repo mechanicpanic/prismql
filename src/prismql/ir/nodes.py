@@ -131,7 +131,8 @@ class FieldMatch:
 class MentionsUser:
     """``mentions_user(x)`` / legacy ``hasusermentioned(x)``: an @mention of
     an author. The raw argument text is kept — a name, ``*``, or ``$var`` /
-    ``!$var``, which the executor binds to the mentioned names (#121)."""
+    ``!$var``, bound to one of the event's mentioned names, the same one for
+    the whole group (#121)."""
 
     user: str
 
@@ -143,8 +144,10 @@ class IsQuestion:
 
 @dataclass(frozen=True)
 class MentionsEntity:
-    """NER-index lookup: mentions_date/time/place/org, contains_link and
-    their legacy aliases. ``label`` is the NER label (DATE/TIME/GPE/ORG/URL).
+    """Entity lookup: mentions_date/time/place/org, contains_link and their
+    legacy aliases. ``label`` is the entity label (DATE/TIME/GPE/ORG/URL):
+    DATE/TIME/GPE/ORG read the precomputed entity index; URL reads the link
+    column, else URL entities, else the link rule (#115).
     """
 
     label: str
@@ -298,7 +301,8 @@ class SubqueryChain:
 
 @dataclass(frozen=True)
 class TimeValue:
-    """A raw ``<number> <unit>`` pair; unit is the lowercased surface text."""
+    """A ``<number> <unit>`` pair; unit is canonical (``normalize_time_unit``),
+    e.g. 'hours'."""
 
     value: int
     unit: str

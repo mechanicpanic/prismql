@@ -1,6 +1,6 @@
 """Engine defects found by the Astra review of the P2 plan (2026-09-19),
-pinned as xfail(strict) until the single operator layer (P3) fixes them by
-construction. Each test states the CORRECT behaviour.
+fixed by construction in the single operator layer (P3) and kept as
+regression tests. Each test states the CORRECT behaviour.
 """
 
 import pytest
@@ -22,8 +22,8 @@ def test_chain_never_reuses_a_message_across_axes(use_ir):
         "SELECT from(a) FOLLOWED_BY from(b) INWINDOW 1 "
         "FOLLOWED_BY from(a) DURING 10 seconds"
     )
-    # Today: [[0, 0, 1]] — message 0 appears twice. Correct: no group can
-    # contain the same message twice; there is no third distinct 'a', so [].
+    # No group can contain the same message twice; there is no third
+    # distinct 'a', so [].
     assert result == []
 
 

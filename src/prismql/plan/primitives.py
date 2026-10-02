@@ -191,7 +191,7 @@ def anti_link(
     row's ``(axis, position)``.
 
     An lhs row with a null axis value cannot be shown to have no follower
-    and is dropped (the engine keeps it — recorded as a divergence).
+    and is dropped (graph #47).
     ``window == 0`` keeps every lhs row: nothing lies within distance 0.
     """
     pl = _pl()
@@ -366,8 +366,8 @@ def quantify(
     distinct matches of ``frame`` (``n_min <= n <= n_max``) whose axis span
     is within ``window`` — one group per subset, canonical
     ``(axis, position)`` order, set-deduplicated. This is enumeration, not
-    counting: ``{2,3}`` yields the pairs AND the triples (the engine runs
-    ranges as their minimum — audit A8).
+    counting: ``{2,3}`` yields the pairs AND the triples (the pre-P3 engine
+    ran ranges as their minimum — audit A8).
 
     ``{n,}`` has no natural ceiling — the caller passes ``n_max=None`` and
     ``max_size`` bounds the enumeration explicitly (subsets grow as

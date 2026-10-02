@@ -18,7 +18,8 @@ def _pa() -> Any:
         return pyarrow
     except ImportError as e:  # pragma: no cover
         raise ImportError(
-            "load_table requires pyarrow: uv pip install 'prismql[arrow]'"
+            "load_table requires pyarrow, a core dependency of prismql: "
+            "reinstall prismql"
         ) from e
 
 

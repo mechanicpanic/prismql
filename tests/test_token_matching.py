@@ -153,9 +153,9 @@ class TestMemoryBackendTokenIndex:
         token_results = backend.search_tokens(["c++"])
         assert token_results == {1}
 
-        # Word search splits "C++" into just "c"
+        # search_text matches "c++" as a whole word or substring: here the
+        # same single message
         word_results = backend.search_text(["c++"])
-        # Word search will match "c" in multiple messages
         assert len(word_results) >= len(token_results)
 
     def test_search_tokens_or_operator(self, messages_with_emails):
@@ -256,8 +256,8 @@ class TestContainsTokensQuery:
             engine_with_tech_terms.execute("SELECT contains_tokens(nonexistent)")
 
     def test_contains_vs_contains_tokens(self, engine_with_tech_terms):
-        """Compare contains (word-based) vs contains_tokens (token-based)."""
-        # contains() uses word tokenizer - "C++" becomes "c"
+        """contains_tokens() keeps "C++" and "C#" whole."""
+        # contains() runs too (it gives the same [[2], [3]] in every mode)
         engine_with_tech_terms.execute("SELECT contains(programming_languages)")
 
         # contains_tokens() preserves "C++"
@@ -265,7 +265,6 @@ class TestContainsTokensQuery:
             "SELECT contains_tokens(programming_languages)"
         )
 
-        # Token-based should give more precise results
         token_ids = {msg_id for group in result_tokens for msg_id in group}
         assert token_ids == {2, 3}  # Exact C++, C# matches
 

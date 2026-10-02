@@ -2,8 +2,9 @@
 @aleph/prismql, #106).
 
 A corpus is annotated once: at ingest (``prismql ingest … --annotate``
-writes the columns ``is_question``, ``has_link`` and ``entities``) or, for
-questions and links, once at load when the column is missing. The engine
+writes the columns ``is_question``, ``has_link``, ``mentions`` and
+``entities``) or, for questions and links, on first use per engine when no
+stamped column backs them. The engine
 reads the result as ``PrecomputedIndexes``, so every backend answers
 ``is_question()``, ``contains_link()`` and the entity predicates the same way.
 """

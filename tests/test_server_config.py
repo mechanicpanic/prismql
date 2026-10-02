@@ -223,8 +223,8 @@ def test_text_match_config(tmp_path):
     cfg = load_config(cfg_file)
     assert cfg.text_match == "token"
     engine = build_engine(cfg)
-    # token mode: "work" does not match "working"... no "working" doc here,
-    # but "spike" must not match "spiked" -- use the actual fixture text
+    # checks the config wiring only: no fixture text contains "work", so
+    # every match mode answers [] here
     assert engine.execute("SELECT contains(labour)") == []
 
 

@@ -1,8 +1,9 @@
 """Tokenization utilities for PrismQL.
 
 This module provides different tokenization strategies:
-- Word tokenizer: Simple alphanumeric splitting (current default)
+- Word tokenizer: Simple alphanumeric splitting
 - Unicode tokenizer: Preserves punctuation, emails, URLs, programming terms
+  (the default)
 """
 
 import re
@@ -11,7 +12,7 @@ from collections.abc import Sequence
 
 def tokenize_words(text: str) -> list[str]:
     """
-    Simple word tokenizer (current default).
+    Simple word tokenizer.
 
     Splits on non-alphanumeric characters.
 

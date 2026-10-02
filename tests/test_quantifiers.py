@@ -38,10 +38,10 @@ class TestExactQuantifiers:
 
     def test_exact_two(self, engine):
         """Test {2} - exactly 2 occurrences."""
-        # Pattern: alice{2} -> bob (2 alice messages, then bob)
+        # Row (unordered): 2 alice messages and a bob message, in any order
         result = engine.execute("SELECT from(alice){2}, from(bob) INWINDOW 10")
 
-        # Should find patterns with exactly 2 alice messages followed by bob
+        # Groups are in stream order: bob may come first, between or last
         assert len(result) > 0
 
         # Each result should have 3 messages (2 alice + 1 bob)
@@ -50,7 +50,7 @@ class TestExactQuantifiers:
 
     def test_exact_three(self, engine):
         """Test {3} - exactly 3 occurrences."""
-        # Pattern: alice{3} (3 consecutive alice messages)
+        # 3 alice messages within 10 (not necessarily consecutive)
         result = engine.execute("SELECT from(alice){3} INWINDOW 10")
 
         # Should find patterns with exactly 3 alice messages
@@ -62,10 +62,10 @@ class TestExactQuantifiers:
 
     def test_exact_four(self, engine):
         """Test {4} - exactly 4 occurrences."""
-        # Pattern: alice{4} (4 consecutive alice messages)
+        # 4 alice messages within 10 (not necessarily consecutive)
         result = engine.execute("SELECT from(alice){4} INWINDOW 10")
 
-        # Messages 1-4 and 12-15 are both 4-message sequences from alice
+        # alice has 1-4 in a row and 12-14; groups also mix them, e.g. [2,3,4,12]
         assert len(result) > 0
 
         # Each result should have 4 messages
@@ -100,7 +100,7 @@ class TestQuantifiersWithMultipleUsers:
         """Test pattern with multiple quantifiers: alice{2}, bob{2}."""
         result = engine.execute("SELECT from(alice){2}, from(bob){2} INWINDOW 10")
 
-        # Should find patterns with 2 alice messages followed by 2 bob messages
+        # Row (unordered): 2 alice messages and 2 bob messages
         # Each group should have 4 messages (2 alice + 2 bob)
         assert isinstance(result, list)
         # This might not match in our data - that's okay
@@ -136,7 +136,7 @@ class TestQuantifiersWithVariables:
         """Test pattern: $user{2} (same user posts twice)."""
         result = engine.execute("SELECT from($user){2} INWINDOW 10")
 
-        # Should find cases where same user posts 2 consecutive messages
+        # Two messages by the same user within 10 (not necessarily consecutive)
         assert len(result) > 0
 
         # Each group should have 2 messages
@@ -144,10 +144,10 @@ class TestQuantifiersWithVariables:
             assert len(group) == 2
 
     def test_quantifier_with_variable_and_user(self, engine):
-        """Test pattern: $user{2}, bob (any user twice, then bob)."""
+        """Test pattern: $user{2}, bob (any user twice and bob, unordered)."""
         result = engine.execute("SELECT from($user){2}, from(bob) INWINDOW 10")
 
-        # Should find patterns where any user posts twice, then bob responds
+        # Row (unordered): two messages by one user and a bob message
         assert len(result) > 0
 
         # Each group should have 3 messages (2 from $user + 1 from bob)
@@ -160,20 +160,17 @@ class TestAtLeastQuantifiers:
 
     def test_at_least_two(self, engine):
         """Test {2,} - 2 or more occurrences."""
-        # For now, this uses min_count only (same as {2})
-        # TODO: Implement proper at-least matching
+        # With quantifier_ceiling=10, {2,} means {2,10}: every size from 2 up
         result = engine.execute("SELECT from(alice){2,}, from(bob) INWINDOW 10")
 
-        # Should find patterns with at least 2 alice messages
-        # Currently treated as exactly 2 (minimum)
+        # Groups of 2 to 6 alice messages plus bob (sizes 3-7 on this data)
         assert isinstance(result, list)
 
     def test_at_least_three(self, engine):
         """Test {3,} - 3 or more occurrences."""
         result = engine.execute("SELECT from(alice){3,} INWINDOW 10")
 
-        # Should find patterns with at least 3 alice messages
-        # Currently treated as exactly 3 (minimum)
+        # Groups of 3 or more alice messages (sizes 3-6 on this data)
         assert isinstance(result, list)
 
 
@@ -182,20 +179,17 @@ class TestRangeQuantifiers:
 
     def test_range_two_to_four(self, engine):
         """Test {2,4} - between 2 and 4 occurrences."""
-        # For now, this uses min_count only (same as {2})
-        # TODO: Implement proper range matching
+        # A range is the union of its sizes
         result = engine.execute("SELECT from(alice){2,4} INWINDOW 10")
 
-        # Should find patterns with 2 to 4 alice messages
-        # Currently treated as exactly 2 (minimum)
+        # Groups of 2, 3 and 4 alice messages
         assert isinstance(result, list)
 
     def test_range_three_to_five(self, engine):
         """Test {3,5} - between 3 and 5 occurrences."""
         result = engine.execute("SELECT from(alice){3,5}, from(bob) INWINDOW 10")
 
-        # Should find patterns with 3 to 5 alice messages followed by bob
-        # Currently treated as exactly 3 (minimum)
+        # Groups of 3 to 5 alice messages plus bob (sizes 4-6), unordered
         assert isinstance(result, list)
 
 
@@ -315,7 +309,7 @@ class TestQuantifiersWithBooleanOperators:
             "SELECT (from(alice) AND contains(keywords)){2} INWINDOW 10"
         )
 
-        # Should find 2 consecutive messages from alice containing keywords
+        # 2 alice messages with keywords within 10 (not necessarily consecutive)
         assert isinstance(result, list)
 
     def test_quantifier_with_or(self, engine):
@@ -323,7 +317,7 @@ class TestQuantifiersWithBooleanOperators:
         # Pattern: (alice OR bob){3}
         result = engine.execute("SELECT (from(alice) OR from(bob)){3} INWINDOW 10")
 
-        # Should find 3 consecutive messages from either alice or bob
+        # 3 messages from alice or bob within 10 (not necessarily consecutive)
         assert len(result) > 0
 
         # Each group should have 3 messages
@@ -337,7 +331,7 @@ class TestQuantifierDocumentationExamples:
     def test_roadmap_example(self, engine):
         """Test the exact example from ROADMAP."""
         # Example: SELECT from(alice){2,4}, from(bob) INWINDOW 10
-        # "2 to 4 messages from alice, then bob, within 10 messages"
+        # "2 to 4 messages from alice and one from bob, within 10 messages"
         result = engine.execute("SELECT from(alice){2,4}, from(bob) INWINDOW 10")
 
         # Should parse and execute successfully
@@ -345,18 +339,19 @@ class TestQuantifierDocumentationExamples:
 
     def test_user_burst_pattern(self, engine):
         """Test detecting user 'bursts' of activity."""
-        # Find cases where user posts 3+ messages in a row
+        # Find 3 messages by one user within 5 (not necessarily in a row)
         result = engine.execute("SELECT from($user){3} INWINDOW 5")
 
         assert len(result) > 0
 
-        # Should find alice's burst at start and end
+        # alice's bursts at the start and end, but also interleaved triples
+        # such as [1, 2, 6] and bob's [5, 7, 8]
         for group in result:
             assert len(group) == 3
 
     def test_conversation_turn_taking(self, engine):
         """Test conversation turn-taking patterns."""
-        # alice speaks twice, then bob responds
+        # alice twice and bob once within 10, in any order
         result = engine.execute("SELECT from(alice){2}, from(bob) INWINDOW 10")
 
         assert len(result) > 0

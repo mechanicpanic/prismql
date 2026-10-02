@@ -223,7 +223,7 @@ class TestCombinedFeatures:
     """Test combinations of multiple features."""
 
     def test_group_aggregate_order_limit(self, engine):
-        """Test combining GROUP BY, AGGREGATE, ORDER BY, and LIMIT."""
+        """Test GROUP BY with AGGREGATE over three users."""
         result = engine.execute(
             "SELECT from(alice) OR from(bob) OR from(charlie) "
             "GROUP BY user AGGREGATE count()"

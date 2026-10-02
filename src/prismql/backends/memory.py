@@ -413,7 +413,8 @@ class MemoryBackend(SearchBackend):
         Search for documents containing a specific phrase.
 
         This uses precomputed n-gram indexes for fast O(1) lookup.
-        If n-gram indexes are not enabled, falls back to substring matching.
+        Without n-gram indexes, matches the phrase's tokens adjacent and in
+        order.
 
         Args:
             phrase: Phrase to search for (e.g., "thank you", "out of memory")
@@ -425,7 +426,7 @@ class MemoryBackend(SearchBackend):
         if self.text_index is not None and field in self.config.text_fields:
             return set(self.text_index.search_phrase(phrase, field=field))
         if not self.config.enable_ngrams:
-            # Fallback: substring matching (slower but works)
+            # Fallback: adjacent tokens, in order (slower but works)
             return self._search_phrase_substring(phrase, field)
 
         # Tokenize the phrase using configured tokenizer

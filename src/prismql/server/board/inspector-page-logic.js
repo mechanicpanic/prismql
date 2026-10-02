@@ -82,7 +82,7 @@
   // A rows result's value is a number, or a list for `distinct` — joined
   // with ", " for display (graph @aleph/prismql, #90); never JSON. null
   // renders as the board's own empty marker, never the literal "null"
-  // (fix round 1, #5) — the filter in fullview-data.js matches this exact
+  // (fix round 1, #5) — the filter in fullview-rows-context.js matches this exact
   // text too, so a null row is findable by it.
   function rowValueText(value) {
     if (value == null) return "—";

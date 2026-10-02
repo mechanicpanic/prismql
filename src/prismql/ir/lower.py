@@ -11,8 +11,8 @@ Fidelity notes:
   the old visit-time warning did).
 - Parentheses are unwrapped: ``'(' restriction ')'`` lowers to the inner
   expression. Precedence is already frozen in the tree shape.
-- Errors raised here are :class:`PrismQLRuntimeError` with the exact visitor
-  messages; the engine wraps them identically either way.
+- Errors raised here are PrismQL errors (:class:`PrismQLRuntimeError` or
+  :class:`PrismQLSyntaxError`); the engine passes both through unwrapped.
 """
 
 from __future__ import annotations

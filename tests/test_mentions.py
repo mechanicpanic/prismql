@@ -1,8 +1,9 @@
 """Who addresses whom: `@` and a name one of the corpus's authors has, the
 longest that fits, marks a mention; `mentions_user(name)` finds them and
-`mentions_user($y)` binds each mentioned name, so a later link can ask for
-that author's answer (graph @aleph/prismql, #121). It used to search the
-text "$y" and answer empty."""
+`mentions_user($y)` binds one mentioned name per group — the one whose
+author answers first — so a later link can ask for that author's answer
+(graph @aleph/prismql, #121, #138). It used to search the text "$y" and
+answer empty."""
 
 import pytest
 

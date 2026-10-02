@@ -2,9 +2,9 @@
 2026-09-18-ordinal-axis-design.md). Once xfail(strict) pins of the audit
 defects; since the operator layer (P3) they pass and stand as the contract.
 
-Today: positional distance is id arithmetic on the Rust path and list
-index on the Python fallback (A2), and string ids sort lexicographically
-(A3).
+Before P3, positional distance was id arithmetic on the Rust path and list
+index on the Python fallback (A2), and string ids sorted lexicographically
+(A3). Both tests named after a path now run the same single engine.
 """
 
 import pytest
@@ -71,12 +71,12 @@ SKIPPED_LEG = (
 
 @pytest.mark.parametrize("use_ir", [True, False])
 def test_pattern_variable_link_skips_a_distractor(use_ir):
-    # A save by y (id 4) lies between a's two saves. One variable on a
-    # two-leg link is bucketed per value and finds [2, 5]; two variables on
-    # a leg, or a variable that skips the middle leg, fall back to
-    # nearest-then-filter, take 4 first and return nothing — found on the
-    # collusion.wiki stream, where every page has many authors.
-    # nearest_link/extend_link put the eligibility inside the selection.
+    # A save by y (id 4) lies between a's two saves. Before P3, one variable
+    # on a two-leg link was bucketed per value and found [2, 5], while two
+    # variables on a leg, or a variable that skipped the middle leg, fell
+    # back to nearest-then-filter, took 4 first and returned nothing — found
+    # on the collusion.wiki stream, where every page has many authors.
+    # nearest_link/extend_link now put the eligibility inside the selection.
     engine = PrismQLEngine(MemoryBackend(documents=DISTRACTOR), use_ir=use_ir)
     assert engine.execute(TWO_VARS) == [[2, 5]]
     assert engine.execute(SKIPPED_LEG) == [[2, 3, 5]]

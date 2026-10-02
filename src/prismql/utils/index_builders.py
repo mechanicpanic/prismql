@@ -27,7 +27,7 @@ class IndexBuilder:
         >>> indexes = builder.from_message_annotations(
         ...     messages,
         ...     entity_field='entities',
-        ...     custom_fields={'intent': None, 'topics': None}
+        ...     custom_fields={'intent': None, 'topics': list}
         ... )
     """
 
@@ -73,7 +73,7 @@ class IndexBuilder:
             >>> # Results in:
             >>> # entities: {'ORG': {1}}
             >>> # custom_features: {'intent_question': {1}, 'intent_request': {2},
-            >>> #                  'topic_bug': {1}, 'topic_api': {1}, 'topic_feature': {2}}
+            >>> #                  'topics_bug': {1}, 'topics_api': {1}, 'topics_feature': {2}}
         """
         entities: dict[NERLabel, set[MessageId]] = {}
         questions: set[MessageId] = set()

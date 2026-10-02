@@ -124,7 +124,7 @@ class BackendConfig:
 
 # Default configurations for common use cases
 DEFAULT_CONFIG = BackendConfig()
-"""Default configuration: word tokenizer, no n-grams"""
+"""Default configuration: unicode tokenizer, no n-grams"""
 
 BALANCED_CONFIG = BackendConfig(
     tokenizer="unicode",

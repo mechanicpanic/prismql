@@ -32,7 +32,7 @@ def normalize_dictionaries(
 
     A dictionary value is either a plain term list (matched with the
     engine-wide ``text_match`` mode) or a mapping ``{"terms": [...],
-    "match": "substring"|"token"}``. Returns (terms_by_name,
+    "match": "stem"|"token"|"substring"}``. Returns (terms_by_name,
     explicit_mode_by_name). Multi-word terms are always phrase-matched
     regardless of mode, so the mode only governs single-word terms.
     """
@@ -98,7 +98,7 @@ class PrismQLEngine:
         >>>
         >>> # Execute query
         >>> results = engine.execute("SELECT from(Alice) INWIN 10")
-        >>> print(results)  # [[1, 3]]
+        >>> print(results)  # [[1], [3]]
     """
 
     def __init__(
@@ -129,10 +129,10 @@ class PrismQLEngine:
                 produce identical results; the flag exists for A/B checks
                 and as an escape hatch while the IR path is young.
             text_match: How contains() matches dictionary terms against text.
-                "substring" (default): term anywhere in the text ("hi" matches
-                "this") — historical reference behavior, doubles as poor-man's
-                stemming for morphology-rich languages. "token": whole-token
-                matching via the tokenizer index (Lucene-era semantics).
+                "stem" (default): the term's Snowball stem against the stemmed
+                tokens. "token": whole-token matching via the tokenizer index
+                (Lucene-era semantics). "substring": term anywhere in the text
+                ("hi" matches "this") — historical reference behavior.
                 contains_tokens() and contains_phrase() are unaffected.
             actor_field: The field naming each event's author; an @mention
                 is ``@`` and one of its values (``mentions_user``). The
@@ -241,7 +241,8 @@ class PrismQLEngine:
                 anything else is pipe), 'classic', or 'pipe'
 
         Returns:
-            Query results (QueryResult, AggregateResult, or GroupedResult)
+            Query results (QueryResult, NamedQueryResult, AggregateResult, or
+            GroupedResult)
 
         Raises:
             PrismQLSyntaxError: If the query has syntax errors
@@ -367,10 +368,8 @@ class PrismQLEngine:
         Example:
             >>> config = {
             ...     "search_backend": {
-            ...         "type": "opensearch",
-            ...         "client": opensearch_client,
-            ...         "index_name": "messages",
-            ...         "field_mappings": {"text": "content", "user": "author"}
+            ...         "type": "memory",
+            ...         "documents": [{"id": 1, "text": "hi", "user": "alice"}],
             ...     },
             ...     "user_dictionaries": {
             ...         "sentiment": ["happy", "sad", "angry"]

@@ -64,7 +64,8 @@ class TestQuestionIndex:
 
     def test_computed_empty_index_is_authoritative(self):
         # An explicitly computed empty index means "no questions" — it must
-        # NOT fall through to the backend heuristic (which would find id 1).
+        # NOT fall through to the ingest-layer question rule (which would
+        # find id 1).
         engine = PrismQLEngine(
             MemoryBackend(documents=DOCS),
             precomputed_indexes=PrecomputedIndexes(questions=set()),

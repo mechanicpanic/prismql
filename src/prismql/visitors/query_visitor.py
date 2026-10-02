@@ -33,8 +33,6 @@ from ..types import (
     WindowConstraint,
 )
 
-# Try to import Rust backend for performance
-
 
 class RunGroups(list):  # type: ignore[type-arg]
     """The groups ``RUN`` produced. The legacy path reads the parse tree,
@@ -85,12 +83,6 @@ class PrismQLVisitor(BasePrismQLVisitor):
         # chronological group order (FOLLOWED_BY appends, PRECEDED_BY
         # prepends). Rewritten into positions by visitRestrictions.
         self._seq_leg_constraints: list[list[VariableConstraint]] = []
-        # Correlation key (var, field) when EVERY leg of the chain carries
-        # exactly one constraint on the same variable+field (the EQL
-        # `sequence by` shape). Link merges then run greedily WITHIN each
-        # field-value partition instead of globally — greedy-global would
-        # pick the nearest candidate from any partition and lose chains the
-        # post-hoc validator can never recover.
         # (min, max) per restriction item of the current body, in order
         # (quantifier ranges are enumerated by the operator layer — A8).
         self._restriction_ranges: list[tuple[int, int]] = []
@@ -264,10 +256,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 )
                 aggregate_results.append(agg_result)
 
-            # If multiple aggregations, return list; if one, return single result
+            # Exactly one aggregation here: _one_aggregation refused more above
             if len(aggregate_results) == 1:
                 return aggregate_results[0]
-            # For multiple aggregations, combine into a single result
             return aggregate_results[0]
 
         # Step 5: If GROUP BY without AGGREGATE, return grouped results
@@ -492,9 +483,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 # list in stream order
                 sorted_result = self._in_stream_order(result)
 
-                # Apply quantifier by expanding the restriction
-                # For now, we use min_count (exact or minimum)
-                # TODO: Support range matching (min to max)
+                # Apply quantifier by expanding the restriction min_count
+                # times; run_cooccur enumerates the (min, max) range from
+                # _restriction_ranges
                 if min_count > 1:
                     # Expand the restriction min_count times
                     for i in range(min_count):
@@ -838,7 +829,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
         """Evaluate one NOT_FOLLOWED_BY/NOT_PRECEDED_BY link."""
         forward = operator == "NOT_FOLLOWED_BY"
 
-        # Negative lookarounds must carry their own window and cannot chain.
+        # Negative lookarounds must carry their own window and cannot follow
+        # a positive FOLLOWED_BY/PRECEDED_BY chain.
         if window is None:
             raise PrismQLRuntimeError(
                 f"{operator} requires a window constraint (INWINDOW or DURING)"
@@ -1646,9 +1638,10 @@ class PrismQLVisitor(BasePrismQLVisitor):
         Extract field names from GROUP BY clause.
 
         Supports both simple fields and temporal grouping.
-        For temporal grouping, returns special field names like:
-        - "HOUR(timestamp)" for hourly grouping
-        - "DAY(timestamp)" for daily grouping
+        For temporal grouping, returns special field names with the plural
+        unit, like:
+        - "__HOURS__(timestamp)" for hourly grouping
+        - "__DAYS__(timestamp)" for daily grouping
         etc.
 
         Note: Temporal grouping is handled specially in the aggregator.

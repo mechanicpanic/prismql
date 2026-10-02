@@ -1,4 +1,5 @@
-"""Tests for REPL corpus introspection: \\schema, banner, prismql.toml loading.
+"""Tests for REPL corpus introspection: \\schema and the banner, from a
+ServerConfig built in code (no prismql.toml is loaded here).
 
 The REPL and the server share ServerConfig + compute_schema, so what
 \\schema prints is exactly what GET /schema reports for the same config.

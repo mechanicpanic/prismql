@@ -267,7 +267,7 @@ def test_slots_follow_the_axis_not_the_id():
     a, b = Leg(_ids(docs, user="a")), Leg(_ids(docs, user="b"))
     frame = _frame(docs, [a, b])
     res = link(frame, None, a, b, window=(1, "day"), forward=True, timestamp_field=TS)
-    assert groups(res) == [[9, 1]]  # A9: the engine would print [1, 9]
+    assert groups(res) == [[9, 1]]  # A9 (fixed by P3): not sorted by id
 
 
 # --- the review's three counterexamples (session 01a0c515) --------------------

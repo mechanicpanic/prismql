@@ -34,7 +34,8 @@ class RustMemoryBackend(SearchBackend):
     Provides 10-100x speedup over Python MemoryBackend for large datasets
     through optimized inverted indexes and compiled search operations.
 
-    This is a drop-in replacement for MemoryBackend with identical API.
+    A search-only substitute for MemoryBackend: integer ids, token and
+    substring modes only — no stems, semantic search or ``values_at``.
 
     Performance improvements:
     - O(1) word lookups via inverted indexes (vs O(n) scans)
@@ -42,7 +43,7 @@ class RustMemoryBackend(SearchBackend):
     - Compiled Rust code (vs interpreted Python)
     - Zero-copy operations where possible
 
-    Falls back to Python MemoryBackend if Rust module is not installed.
+    Raises ImportError if prismql_rust is not installed or is too old.
     """
 
     def __init__(

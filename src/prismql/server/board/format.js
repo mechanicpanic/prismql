@@ -67,7 +67,8 @@
     var sub = DOW[d.getDay()] + " " + d.getDate() + " " + MON[d.getMonth()];
     return { key: k, label: label, sub: sub };
   }
-  // Unordered INWINDOW: Δpos/Δt are signed here, never clamped (graph @aleph/prismql, node #76).
+  // Unordered INWINDOW: Δt is signed here, never clamped; Δpos counts the
+  // events between as a magnitude (graph @aleph/prismql, node #76).
   function gapLabel(prevPos, pos, prevTime, time) { var label = "";
     if (prevPos != null && pos != null) {
       var dp = Math.abs(pos - prevPos);

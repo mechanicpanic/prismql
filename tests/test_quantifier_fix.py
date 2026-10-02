@@ -98,7 +98,8 @@ def test_quantifier_three_times(engine_with_test_data):
 
 
 @pytest.mark.skip(
-    reason="Backtracking algorithm still has limitations - see QUANTIFIER_BUG_ANALYSIS.md"
+    reason="Expectation predates the operator layer: [1, 4] is 3 apart, outside "
+    "INWINDOW 2; the engine returns the four adjacent pairs"
 )
 def test_backtracking_finds_all_combinations():
     """Test that backtracking algorithm finds all valid combinations."""

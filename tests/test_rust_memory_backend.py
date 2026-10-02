@@ -114,9 +114,8 @@ class TestRustMemoryBackend:
         python_result = python_backend.search_by_field("user", "ali", exact=False)
         rust_result = rust_backend.search_by_field("user", "ali", exact=False)
         assert rust_result == python_result
-        # "ali" is substring of "alice" only (not "charlie")
-        # Python backend also matches "charlie" due to substring in indexed value
-        # Both backends should return same results
+        # "ali" is a substring of "alice" only (not "charlie"): the Python
+        # backend returns {1, 4, 7}; both backends should return the same set
 
     def test_search_by_field_not_found(self, python_backend, rust_backend):
         """Test field search with no matches."""
@@ -261,7 +260,8 @@ class TestRustMemoryBackendTemporal:
 
         base = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
         docs = []
-        # 50 docs at 1-hour spacing — spans Jan 1 (24h) plus 2h of Jan 3
+        # 50 docs at 1-hour spacing — all of Jan 1 and Jan 2, then 00:00 and
+        # 01:00 of Jan 3
         for i in range(50):
             docs.append(
                 {
@@ -320,7 +320,7 @@ class TestRustMemoryBackendTemporal:
         groups = temporal_backend.group_by_temporal_unit(
             list(range(50)) + [100, 101], "timestamp", "day"
         )
-        # 50 docs × 15min = 12.5h; spans Jan 1 and Jan 2 (UTC)
+        # 50 hourly docs span Jan 1, Jan 2 and the first 2h of Jan 3 (UTC)
         assert "2024-01-01" in groups
         assert "2024-01-02" in groups
         assert groups["__no_timestamp__"] == {100}
@@ -384,7 +384,7 @@ class TestRustMemoryBackendTemporal:
 
 @pytest.mark.skipif(SKIP_RUST_TESTS, reason=SKIP_REASON)
 def test_rust_backend_import_error():
-    """Test that appropriate error is raised when Rust module not available."""
+    """The Rust backend imports and builds when the module is installed."""
     # This test only makes sense if the Rust backend IS available
     if not RUST_BACKEND_AVAILABLE:
         pytest.skip("Rust backend is available, skipping import error test")

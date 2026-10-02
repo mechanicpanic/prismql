@@ -261,7 +261,7 @@ class TestRankAndPaths:
     def test_numpy_and_python_paths_agree(self):
         pytest.importorskip(
             "numpy"
-        )  # the CI install has no numpy: the pure path is what runs there
+        )  # numpy comes with the dev group; without it only the pure path exists
         index = SemanticIndex(FakeEmbedder(), DOCS)
         fast = (
             index.search("oil panic", threshold=0.5),

@@ -35,17 +35,17 @@ class TestBasicVariables:
 
     def test_single_variable_same_user_pattern(self, engine):
         """Test pattern where same user appears twice."""
-        # Find: user posts, then same user posts again within 3 messages
+        # Find: two messages by the same user within 3 messages
         result = engine.execute("SELECT from($user), from($user) INWINDOW 3")
 
-        # Should find patterns where same user has consecutive messages
         # alice: 1,3,6,11,13
         # bob: 2,5,9,12
         # charlie: 4,7,8,10
 
-        # Valid same-user patterns:
-        # alice -> alice: [1,3], [3,6], [11,13]
-        # charlie -> charlie: [7,8], [8,10]
+        # Same-user pairs found:
+        # alice: [1,3], [3,6], [11,13]
+        # bob: [2,5], [9,12]
+        # charlie: [4,7], [7,8], [7,10], [8,10]
 
         assert len(result) > 0
 
@@ -55,13 +55,13 @@ class TestBasicVariables:
             # Group should contain exactly 2 message IDs
 
     def test_single_variable_with_intervening_message(self, engine):
-        """Test pattern: user, someone else, same user."""
-        # Find: user posts, someone posts, original user responds
+        """Test row: two messages by one user and one by bob."""
+        # Row (unordered): two messages by one user and one by bob within 5;
+        # groups come back in stream order, so bob may be first, middle or last
         result = engine.execute("SELECT from($user), from(bob), from($user) INWINDOW 5")
 
-        # Valid patterns:
-        # alice -> bob -> alice: [1,2,3]
-        # alice -> bob -> alice: [6,9,11] (if within window)
+        # e.g. [1,2,3] alice, bob, alice; [1,3,5] alice, alice, bob;
+        # [2,3,6] bob, alice, alice
 
         assert len(result) > 0
 
@@ -69,7 +69,7 @@ class TestBasicVariables:
         for group in result:
             assert len(group) == 3
 
-    def test_variable_no_matches(self, engine):
+    def test_variable_tight_window_single_match(self, engine):
         """Test variable pattern with tight window."""
         # Find same user within 1 message window (consecutive only)
         result = engine.execute("SELECT from($user), from($user) INWINDOW 1")
@@ -84,12 +84,10 @@ class TestMultipleVariables:
 
     def test_two_variables_conversation(self, engine):
         """Test pattern with two distinct users."""
-        # Find: user1 posts, user2 responds, user1 responds back
+        # Row (unordered): two messages by $u1 and one by $u2
         result = engine.execute("SELECT from($u1), from($u2), from($u1) INWINDOW 4")
 
-        # Valid patterns:
-        # alice -> bob -> alice: [1,2,3]
-        # alice -> bob -> alice (if any other exists within window)
+        # e.g. [1,2,3]: alice, bob, alice
 
         assert len(result) > 0
 
@@ -106,17 +104,16 @@ class TestVariableWithOtherConditions:
         # Create a dictionary for testing
         engine.add_dictionary("greetings", ["Hello", "Hi"])
 
-        # Find: user posts greeting, someone responds, original user responds
+        # Row (unordered): a greeting, a bob message and a message by $user
         result = engine.execute(
             "SELECT contains(greetings), from(bob), from($user) INWINDOW 5"
         )
 
-        # Should find patterns starting with greetings
         assert isinstance(result, list)
 
     def test_variable_with_aggregation(self, engine):
         """Test variables with aggregation."""
-        # Count same-user consecutive patterns
+        # Count same-user pairs within 3 messages
         result = engine.execute(
             "SELECT from($user), from($user) INWINDOW 3 AGGREGATE count()"
         )
@@ -139,14 +136,11 @@ class TestVariableEdgeCases:
         assert isinstance(result, list)
 
     def test_variable_with_no_results(self, engine):
-        """Test variable pattern with impossible constraint."""
-        # Same user, then specific different user, then same user again
-        # This is impossible - can't have $user be bob and not be bob
+        """Test a variable row with a fixed member in a tight window."""
+        # Two messages by one user and one by bob, within 3; this does match
         result = engine.execute("SELECT from($user), from(bob), from($user) INWINDOW 3")
 
-        # Should find patterns where someone (not bob) posts,
-        # bob responds, then original person responds
-        # alice -> bob -> alice exists: [1,2,3]
+        # e.g. [1,2,3]: alice, bob, alice
         assert len(result) > 0
 
     def test_multiple_same_variables(self, engine):
@@ -164,10 +158,10 @@ class TestVariableWithLegacySyntax:
     """Test variables work with legacy operators."""
 
     def test_byuser_variable(self, engine):
-        """Test variable with legacy from() operator."""
+        """Test a variable in from() (the legacy byuser() spelling is not
+        exercised here)."""
         result = engine.execute("SELECT from($user), from($user) INWINDOW 3")
 
-        # Should work the same as from($user)
         assert len(result) > 0
 
 
@@ -180,8 +174,8 @@ class TestVariablePositionTracking:
             "SELECT from($u1), from($u2), from($u1), from($u2) INWINDOW 5"
         )
 
-        # Find alternating conversation patterns
-        # alice -> bob -> alice -> bob: [1,2,3,5] (if within window)
+        # Row (unordered): two messages by $u1 and two by $u2
+        # e.g. [1,2,3,5]: alice, bob, alice, bob
 
         # Should find some patterns
         assert isinstance(result, list)
@@ -192,11 +186,10 @@ class TestVariableValidation:
 
     def test_inconsistent_variables_filtered(self, engine):
         """Test that results with inconsistent variables are filtered out."""
-        # This pattern should only match if same user appears at positions 0 and 2
+        # Two members must share a user; the row is unordered, so they need
+        # not be the first and last of a group
         result = engine.execute("SELECT from($user), from(bob), from($user) INWINDOW 5")
 
-        # Verify that middle message is always from bob
-        # and first/last are from same user (not bob)
         assert len(result) > 0
 
 
@@ -210,7 +203,7 @@ class TestVariableBindings:
         # Results should be queryable for their bindings
         assert len(result) > 0
 
-        # Each group should have consistent user across both positions
+        # Each group should have a consistent user across both members
         for group in result:
             assert len(group) == 2
 
@@ -220,19 +213,18 @@ class TestComplexVariablePatterns:
 
     def test_question_answer_same_user(self, engine):
         """Test question-answer pattern from same user."""
-        # User asks, someone responds, original user thanks
+        # Row (unordered): a message by $asker, one by bob, one with thanks
         engine.add_dictionary("thanks_words", ["Thanks", "Perfect", "great"])
 
         result = engine.execute(
             "SELECT from($asker), from(bob), contains(thanks_words) INWINDOW 5"
         )
 
-        # Should find patterns where someone asks, bob responds, they thank
         assert isinstance(result, list)
 
     def test_multi_turn_conversation(self, engine):
         """Test multi-turn conversation between two users."""
-        # Find back-and-forth between two specific users
+        # Row (unordered): three messages by $u1 and two by $u2
         result = engine.execute(
             "SELECT from($u1), from($u2), from($u1), from($u2), from($u1) INWINDOW 6"
         )

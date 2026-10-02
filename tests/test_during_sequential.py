@@ -112,7 +112,7 @@ def test_not_followed_by_during(engine):
 
     # alice 1 (bob 2 follows in 5s, ≤20s) → excluded
     # alice 3 (bob 4 follows in 5s, ≤20s) → excluded
-    # alice 6 (next bob is 8 at +1h54m50s, way out) → kept
+    # alice 6 (next bob is 8 at +1h55m20s, way out) → kept
     # alice 7 (next bob is 8 at +30s, >20s) → kept
     # NOT_* returns single-element groups
     assert sorted(result) == [[6], [7]]

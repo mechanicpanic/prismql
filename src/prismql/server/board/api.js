@@ -1,6 +1,7 @@
 // PrismQLApi: the board's only path to the server (graph @aleph/prismql,
 // node #63) — no other file touches fetch or EventSource. Endpoints:
-// /activity(+/stream SSE), /results/{rid}(+.jsonl), /corpora, POST /evaluate.
+// /activity(+/stream SSE), /results/{rid}(+.jsonl), /corpora, /schema,
+// POST /evaluate, /search, /similar.
 (function (root) {
   "use strict";
 

@@ -1,8 +1,8 @@
 // PrismQLFullBody: the full view's `.fbody` dispatch — timeline/table/raw/
 // summary per the active view, the shared "Load more" button and
 // scroll-to-end auto-load (task-7 brief; graph @aleph/prismql, node #76).
-// Never paginates past `ctx.loadBound` (fullview-data.js already clamps it
-// to what the store actually kept).
+// Never paginates past `ctx.loadBound` (fullview-load.js, through
+// collectPages, already clamps it to what the store actually kept).
 (function (root) {
   "use strict";
   var mk = window.PrismQLBoardUtil.mk;

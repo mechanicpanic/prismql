@@ -5,8 +5,8 @@
 // canvas markup ≈336-397 and its `renderVals` detail logic ≈734-764
 // (graph @aleph/prismql, node #63; task-5 brief, fix round 1). The
 // "Editor" tab's pane content belongs to editor.js (Task 6); this module
-// only owns the two tab buttons themselves, since both live in the one
-// `.insp` aside.
+// only owns the three tab buttons themselves (Request/Editor/Corpus), since
+// all live in the one `.insp` aside.
 (function (root) {
   "use strict";
   var mk = window.PrismQLBoardUtil.mk;
@@ -100,7 +100,8 @@
     if (!pane) return;
     // The Editor tab's content is editor.js's (Task 6): it owns #inspector-pane
     // entirely while state.tab === "editor" and must not be nuked out from
-    // under it on every render — clearing only happens on the Details path.
+    // under it on every render — clearing happens on the Details and Corpus
+    // paths, never the Editor's.
     if (state.tab === "corpus") {
       pane.innerHTML = "";
       window.PrismQLInspectorCorpus.render(pane, state);

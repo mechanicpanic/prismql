@@ -1,9 +1,7 @@
 """cooccur (P2 task 5): unordered co-occurrence against an exhaustive oracle.
 
-HEAD is NOT the oracle for co-occurrence in general (spec D2: both kernels
-enforce restriction order). Engine parity is checked only where slot
-order and position order coincide by construction (the lhs restriction
-matches the first half of the corpus, the rhs the second half) on dense
+Since P3 the engine is the plan and no longer enforces restriction order
+(spec D2), so engine parity is full unordered equality, checked on dense
 ids; everything else — commutativity, k = 3, temporal windows, ties,
 `$k` — is checked against the exhaustive oracle here.
 """
@@ -184,9 +182,8 @@ def test_ties_allowed_at_window_zero_and_self_pairs_excluded():
 @pytest.mark.parametrize("window", [2, 5])
 @pytest.mark.parametrize("seed", range(3))
 def test_positional_matches_engine_on_the_ordered_subset(oracle, seed, window):
-    """The engine enforces restriction order (D2): its `from(a), from(b)` is
-    our unordered result restricted to groups where the a-message comes
-    first. On dense ids the canonical order is the engine's id order."""
+    """Since P3 the engine's `from(a), from(b)` is our unordered result in
+    full — the D2-era restriction order (a-message first) is gone."""
     docs = random_corpus(
         seed, n=200, gapped_ids=False, monotone_time=True, ties=False, nulls=False
     )

@@ -1,7 +1,6 @@
 """quantify (P2 task 6): quantifiers as enumeration, against an exhaustive
-oracle. HEAD executes `{n,}` / `{n,m}` as `{n}` (audit A8), so it is an
-oracle only for exact `{n}` — checked on dense ids, where its id order is
-our canonical order.
+oracle. Before P3 the engine executed `{n,}` / `{n,m}` as `{n}` (audit A8);
+since P3 it enumerates ranges too. Engine parity is checked on dense ids.
 """
 
 from __future__ import annotations
@@ -124,7 +123,7 @@ def test_exact_n_matches_engine_on_dense_ids(oracle, seed, n):
 
 
 def test_range_is_enumeration_not_minimum(oracle):
-    """{2,3} yields pairs and triples; the engine returns only the pairs (A8)."""
+    """{2,3} yields pairs and triples, on the plan and (since P3, A8) the engine."""
     docs = random_corpus(
         2, n=150, gapped_ids=False, monotone_time=True, ties=False, nulls=False
     )

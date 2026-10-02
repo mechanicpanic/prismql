@@ -96,7 +96,7 @@ class ServerConfig:
     results_memory_mb: int = 256
     scout_depth: int = 1000
     # A value is either a plain term list or {"terms": [...],
-    # "match": "substring"|"token"} (single-word mode; multi-word terms
+    # "match": "stem"|"token"|"substring"} (single-word mode; multi-word terms
     # always phrase-match). TOML long form: [dictionaries.<name>] tables.
     dictionaries: dict[str, Any] = field(default_factory=dict)
     corpora: dict[str, CorpusConfig] = field(default_factory=dict)

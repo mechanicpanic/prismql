@@ -76,7 +76,7 @@ def test_temporal_during_seconds(engine_with_timestamps):
 
     # Alice (1, 0s) and Bob (2, 5s) are within 20 seconds
     # Alice (3, 10s) and Bob (4, 15s) are within 20 seconds
-    # But not Alice (6) and Bob (8) - they're 2+ hours apart
+    # But not Alice (6) and Bob (8) - they're almost 2 hours apart
     assert len(result) > 0
 
     # Verify all pairs are within 20 seconds of each other
@@ -114,8 +114,8 @@ def test_temporal_during_hours(engine_with_timestamps):
     query = "SELECT from(alice), from(bob) DURING 1 hour"
     result = engine_with_timestamps.execute(query)
 
-    # Only messages within first minute should match (1,2,3,4)
-    # Messages 7 and 8 (2 hours later) should NOT be included
+    # Messages 7 and 8 (2 hours later) pair only with each other,
+    # never with messages 1-4
     assert len(result) > 0
 
     # Verify no pairs span more than 1 hour

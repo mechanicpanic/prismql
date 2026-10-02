@@ -69,7 +69,7 @@ class PositionalUnsupportedError(PrismQLRuntimeError):
     operators cannot run on it. Boolean/set queries still work.
 
     Raised by SearchBackend's order-contract defaults; backends that carry
-    an OrderIndex (memory, rust_memory) override them.
+    an OrderIndex (memory, rust_memory, tantivy) override them.
     """
 
 

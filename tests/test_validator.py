@@ -86,15 +86,13 @@ def test_ambiguous_precedence_warning():
     )
 
     assert result.valid
-    # This warning is INFO level, not WARNING
+    # AMBIGUOUS_PRECEDENCE fires here, at WARNING level
     assert len(result.warnings) + len(result.infos) > 0
     has_precedence_warning = any(
         w.code == "AMBIGUOUS_PRECEDENCE"
         for w in result.warnings + result.infos + result.errors
     )
-    # This specific case might not trigger the warning due to how the check works
-    # The check looks for parentheses in the query, but this query doesn't need them
-    # for this specific pattern, so we'll just check it doesn't error
+    # The query stays valid: the precedence note never makes it an error
     assert result.valid
 
 
@@ -191,9 +189,8 @@ def test_disable_performance_check():
 
 def test_custom_features():
     """Test validation with custom features."""
-    # Custom features don't actually work in the grammar right now
-    # They'd need to be registered. Let's test that we can validate
-    # queries with known features
+    # A name registered both as a dictionary and as a custom feature
+    # validates cleanly
     validator = QueryValidator(
         user_dictionaries={"greetings": ["hi"]}, custom_features={"greetings"}
     )

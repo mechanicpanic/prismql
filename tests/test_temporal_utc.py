@@ -117,7 +117,7 @@ def test_capability_handshake_covers_all_kernels(monkeypatch):
 
     class StaleBackend:
         pass  # no get_timestamps
-        # merge_temporal_link / extend_temporal_link / get_timestamps absent
+        # get_timestamps is the only kernel the handshake still requires
 
     monkeypatch.setattr(rm, "_RustMemoryBackend", StaleBackend)
     with pytest.raises(ImportError, match="too old"):

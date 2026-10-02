@@ -8,7 +8,8 @@
     var out = [];
     // Built from parts (not one long literal) to stay under 100 chars per
     // line; .source reproduces each alternative exactly, so joining with
-    // "|" is byte-for-byte the original pattern — same groups, same order.
+    // "|" is the original pattern — same groups, same order (the class's
+    // `\[` is written `[`, which matches the same).
     var STR = /("(?:[^"\\]|\\.)*")(\s*:)?/;
     var NUM = /(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)/;
     var KEY = /(true|false|null)/;

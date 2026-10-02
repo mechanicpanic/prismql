@@ -29,8 +29,6 @@ class PrismQLLexer(RegexLexer):
     Example::
 
         SELECT from(alice), contains(problems) INWINDOW 10
-
-    .. versionadded:: 1.0
     """
 
     name = "PrismQL"

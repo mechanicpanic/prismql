@@ -7,7 +7,8 @@
   "use strict";
   var mk = window.PrismQLBoardUtil.mk;
 
-  // Just corpus + Run: "max groups" and "with event text" have no visible
+  // Corpus, Format and Run (editor-kindbar.js inserts the threshold field
+  // for a similar): "max groups" and "with event text" have no visible
   // effect on the board and were dropped (fix round 1, #5).
   function buildOpts(pane, ed) {
     var opts = mk("div", "opts");

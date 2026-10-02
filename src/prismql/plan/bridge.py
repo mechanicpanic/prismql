@@ -197,11 +197,11 @@ def run_single(
     constraints: Sequence[Constraint],
     window: Any,
 ) -> list[list[MessageId]]:
-    """A lone restriction: one group per match, in the order given (the
-    executor sorts a set by id, a negative link hands its own order). Same-row
-    equalities (``field(user,$u) AND field(kind,$u)``) filter it; an unbound
-    ``!$k`` is an error; a temporal window rejects rows without a timestamp
-    (and needs the axis)."""
+    """A lone restriction: one group per match, in load order (the executor
+    hands ids in stream order; a constrained or temporal one is re-sorted
+    by position). Same-row equalities (``field(user,$u) AND field(kind,$u)``)
+    filter it; an unbound ``!$k`` is an error; a temporal window rejects rows
+    without a timestamp (and needs the axis)."""
     from .operators import single_row
 
     lg = leg(ids, constraints)

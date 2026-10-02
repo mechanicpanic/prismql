@@ -1,9 +1,9 @@
 """anti_link (P2 task 4): NOT_FOLLOWED_BY / NOT_PRECEDED_BY.
 
-HEAD is the oracle on dense ids (positional) and monotone tie-free time
-WITHOUT null timestamps (temporal): the engine keeps an lhs message that
-has no timestamp as "not followed", the plan rejects it (null axis) —
-pinned below as a deliberate divergence.
+The engine is checked on dense ids (positional) and monotone tie-free time
+(temporal). An lhs message with no timestamp has no place on the axis: the
+plan drops it, and since P3 the engine (which is the plan) drops it too —
+pinned below on both.
 """
 
 from __future__ import annotations

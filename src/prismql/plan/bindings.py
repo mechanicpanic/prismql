@@ -2,9 +2,9 @@
 ``mentions``, the names a message addresses (graph @aleph/prismql, #121).
 
 A list is equal to a value when it contains it, two lists when they share
-one; once a later slot matches, the group's binding settles on that one
-value, so a group never binds a variable to two names. Scalar fields keep
-plain equality.
+one; a later slot with a single value settles the group's binding on that
+value, while two lists keep the names they share until such a slot picks
+one. Scalar fields keep plain equality.
 """
 
 from __future__ import annotations
@@ -60,7 +60,8 @@ def _narrow(
 ) -> Any:
     """A variable bound to a list (the names a message mentions) settles on
     what the slot it was just matched against holds: that event's value,
-    or the names both lists share. One group, one name (graph #121)."""
+    or the names both lists share — one name once a single-valued slot
+    matched (graph #121)."""
     pl = _pl()
     bound = _bound(result)
     carried = _list_columns(result)

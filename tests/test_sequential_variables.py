@@ -4,7 +4,7 @@ Regression tests for the 0.1.0 correctness fix: constraints recorded inside
 a sequential chain were all stamped with the same position, so the
 the old variable validator compared a message against itself and every mixed-value
 chain slipped through. Constraints are now bucketed per leg in chronological
-group order and validated against the right slot.
+group order and held inside candidate selection for the right slot.
 """
 
 import pytest
@@ -50,7 +50,8 @@ class TestSameVariableAcrossLegs:
 
     def test_temporal_link_during(self, engine):
         # Same chain but with a time window: the alice->bob pair [2, 3]
-        # fits 1 minute but must still fail the variable constraint.
+        # (5 minutes apart) fits 10 minutes but must still fail the
+        # variable constraint.
         result = engine.execute(
             "SELECT from($u) FOLLOWED_BY from($u) DURING 10 minutes"
         )
@@ -119,7 +120,7 @@ class TestCorrelationKeyPartitioning:
 
     def test_mixed_keys_fall_back_to_validation(self):
         # Legs correlate on DIFFERENT variables -> no single partition key;
-        # behavior falls back to global greedy + post-hoc validation.
+        # each variable's equality is still held inside candidate selection.
         docs = [
             {"id": 1, "user": "alice", "cell": "A", "text": "a"},
             {"id": 2, "user": "alice", "cell": "B", "text": "b"},

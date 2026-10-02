@@ -26,7 +26,6 @@ class TemporalProcessor:
     Supports:
     - Timestamp parsing (absolute and relative)
     - Time-based filtering (BEFORE, AFTER, BETWEEN)
-    - Time-based windowing (true timestamp-based WITHIN)
     - Temporal grouping (by hour/day/week/month/year)
     """
 
@@ -43,7 +42,8 @@ class TemporalProcessor:
 
         Args:
             timestamp_str: Timestamp string to parse
-            reference_time: Reference time for relative timestamps (default: now)
+            reference_time: Unused; relative times go through
+                parse_relative_time
 
         Returns:
             Parsed datetime object
