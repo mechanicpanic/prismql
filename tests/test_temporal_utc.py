@@ -122,3 +122,24 @@ def test_capability_handshake_covers_all_kernels(monkeypatch):
     monkeypatch.setattr(rm, "_RustMemoryBackend", StaleBackend)
     with pytest.raises(ImportError, match="too old"):
         rm.RustMemoryBackend(documents=DOCS)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="an ISO timestamp with an offset is read as UTC wall-clock time, "
+    "not converted (backends/order.py epoch_micros)",
+)
+def test_an_offset_timestamp_is_converted_to_utc():
+    from prismql.backends.order import epoch_micros
+
+    assert epoch_micros("2024-01-01T12:00:00+02:00") == epoch_micros(
+        "2024-01-01T10:00:00Z"
+    )
+    # b is 30 minutes after a, written in another zone.
+    docs = [
+        {"id": 1, "kind": "a", "text": "a", "timestamp": "2024-01-01T10:00:00Z"},
+        {"id": 2, "kind": "b", "text": "b", "timestamp": "2024-01-01T12:30:00+02:00"},
+    ]
+    engine = PrismQLEngine(MemoryBackend(docs))
+    q = "SELECT field(kind, a) FOLLOWED_BY field(kind, b) DURING 1 hour"
+    assert engine.execute(q) == [[1, 2]]
