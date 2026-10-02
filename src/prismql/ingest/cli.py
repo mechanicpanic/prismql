@@ -81,6 +81,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="prefix the server puts on query text (e.g. embeddinggemma "
         "'task: search result | query: '); stamped into the file",
     )
+    parser.add_argument(
+        "--judge",
+        metavar="TOML",
+        help="questions for a local decision model; each answer becomes a "
+        "label column and a <name>_p column (graph #154)",
+    )
+    parser.add_argument(
+        "--judge-url",
+        default="http://127.0.0.1:8000",
+        help="the decision model's server (strands-decider serve), default %(default)s",
+    )
     return parser
 
 
@@ -102,24 +113,40 @@ def _read_table(args: argparse.Namespace) -> Any:
     )
 
 
-def run(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def _judge(df: Any, args: argparse.Namespace) -> Any:
+    """``(df, stamp)`` with the decision model's columns, or a usage message."""
+    from . import judge as judge_module
+
+    try:
+        questions = judge_module.load_questions(args.judge)
+        return judge_module.judge(
+            df, questions, post=judge_module.http_post(args.judge_url)
+        )
+    except (ValueError, OSError) as e:
+        return f"--judge: {e}"
+
+
+def _read_source(args: argparse.Namespace) -> Any:
+    """The canonical stream of SRC, or a usage message."""
     if args.source == "table":
-        df = _read_table(args)
-        if isinstance(df, str):
-            print(df, file=sys.stderr)
-            return 2
-    elif len(args.src) > 1:
-        print(f"{args.source}: one log folder at a time", file=sys.stderr)
-        return 2
-    elif args.source == "claude-code":
+        return _read_table(args)
+    if len(args.src) > 1:
+        return f"{args.source}: one log folder at a time"
+    if args.source == "claude-code":
         from .sources.claude_code import read_claude_code
 
-        df = read_claude_code(Path(args.src[0]))
-    else:
-        from .sources.codex import read_codex
+        return read_claude_code(Path(args.src[0]))
+    from .sources.codex import read_codex
 
-        df = read_codex(Path(args.src[0]))
+    return read_codex(Path(args.src[0]))
+
+
+def run(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    df = _read_source(args)
+    if isinstance(df, str):
+        print(df, file=sys.stderr)
+        return 2
 
     if (args.doc_prompt or args.query_prompt) and not args.embed:
         # a stamp is written only beside vectors this run computes
@@ -142,6 +169,13 @@ def run(argv: Sequence[str] | None = None) -> int:
             return 2
     if args.embed:
         df = core.embed(df, text=args.embed, model=args.model, prompt=args.doc_prompt)
+    stamp = None
+    if args.judge:
+        judged = _judge(df, args)
+        if isinstance(judged, str):
+            print(judged, file=sys.stderr)
+            return 2
+        df, stamp = judged
     path = core.write(
         df,
         args.dst,
@@ -150,6 +184,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         embed_doc_prompt=args.doc_prompt,
         embed_query_prompt=args.query_prompt,
         annotations=kinds,
+        judge=stamp,
     )
     info = core.describe(df)
     print(f"{path}: {info['rows']} rows, {info['first']} … {info['last']}")

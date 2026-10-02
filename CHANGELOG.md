@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (a decision model's answers as columns)
+- `prismql ingest … --judge questions.toml [--judge-url URL]` asks a local decision model (`strands-decider serve`, the Jev request shape) typed questions about each event a question applies to, and writes a label column (`yes`/`no`, the chosen option, the score's level, or `unsure` below `min_confidence`) plus `<name>_p`; the model and the exact questions with their hash are stamped into the file. `examples/judge/agent-logs.toml` holds three questions for agent logs. Nothing leaves the machine (graph @aleph/prismql, #154).
+
 ### Fixed (`!$a` on its own leg)
 - `!$a` on the leg that binds `$a` now means an inequality inside the event, as `$a` twice there means an equality: `field(user, $a) AND field(kind, !$a)` finds events whose kind is not their user — alone, in a comma list, in a chain or inside a `RUN`, in both dialects and on both paths; across `OR` or under `NOT` it is refused. Alone and in a comma list it used to be refused; in a chain it was accepted and silently ignored, so events with kind equal to user matched too. The validator checks `!$k` on the lowered query for both dialects; the classic text scan is gone (graph @aleph/prismql, #152).
 

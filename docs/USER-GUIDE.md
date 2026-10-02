@@ -146,6 +146,19 @@ front of every query. For `google/embeddinggemma-300m` that is
 Leave them out and a query is encoded like a document — it still runs, it
 just ranks worse.
 
+Add `--judge questions.toml` and a local decision model answers typed
+questions about each event (`strands-decider serve CHECKPOINT --port 8000`
+first; `--judge-url` if it listens elsewhere). Each question names the
+events it applies to (`where = { role = "assistant", kind = "text" }`), its
+type (yes/no, a choice of options, a score on a rubric) and the confidence
+below which its answer is `unsure`; the file gets a label column a query
+matches with `field(claims_done, yes)` and a `<name>_p` column, and the
+model and the exact questions are stamped into it.
+`examples/judge/agent-logs.toml` asks agent logs what the agent is doing,
+whether it claims to be done, and what the person's message does. Check
+the labels on a sample before trusting them: on a Russian discussion-heavy
+session most answers came back `unsure`.
+
 Add `--annotate questions` and the file carries an `is_question` column; the
 server reads it as the answer to `is_question()` on any backend. Without it
 the same rule runs once over the events at load (a '?' that ends a clause, or

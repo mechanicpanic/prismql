@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -276,6 +277,7 @@ def write(
     embed_doc_prompt: str | None = None,
     embed_query_prompt: str | None = None,
     annotations: Sequence[str] = (),
+    judge: dict[str, Any] | None = None,
 ) -> Path:
     """Write the stream as Parquet; ``emb`` lands as FixedSizeList<float32, d>.
 
@@ -299,6 +301,9 @@ def write(
     if annotations:
         # which columns are annotations, not fields that share their names
         meta[b"prismql.annotations"] = ",".join(annotations).encode()
+    if judge:
+        # which model answered which exact questions (graph #154)
+        meta[b"prismql.judge"] = json.dumps(judge, ensure_ascii=False).encode()
     table = table.replace_schema_metadata(meta or None)
     pq.write_table(table, p)
     return p

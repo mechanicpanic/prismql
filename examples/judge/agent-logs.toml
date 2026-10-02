@@ -1,0 +1,36 @@
+# Questions for `prismql ingest claude-code LOGS OUT.parquet --judge THIS`
+# with a local decision model serving (strands-decider serve, graph #153).
+# Each answer becomes a label column (`unsure` below min_confidence) and a
+# <name>_p column; the model and these exact questions are stamped into the
+# file (graph @aleph/prismql, #154).
+
+[questions.phase]
+type = "choice"
+instructions = "What is the AI coding agent doing in this message?"
+where = { role = "assistant", kind = "text" }
+min_confidence = 0.6
+[questions.phase.criteria]
+progressing = "moving the task forward: explaining, planning or reporting a step"
+retrying = "trying again after something failed"
+stuck = "repeating itself or unable to find a way forward"
+giving_up = "abandoning the task or part of it"
+asking_user = "asking the person a question or for a decision"
+claiming_done = "saying the task is finished"
+
+[questions.claims_done]
+type = "noul"
+instructions = "Does the agent claim that the task is done, fixed, or that tests pass?"
+where = { role = "assistant", kind = "text" }
+min_confidence = 0.6
+
+[questions.user_move]
+type = "choice"
+instructions = "What is the person doing in this message to the AI coding agent?"
+where = { role = "user", kind = "prompt" }
+min_confidence = 0.6
+[questions.user_move.criteria]
+new_task = "asking for something new"
+clarification = "adding detail or answering the agent's question"
+correction = "saying the agent did something wrong or should do it differently"
+approval = "agreeing, approving, or saying go ahead"
+stop = "telling the agent to stop or wait"
