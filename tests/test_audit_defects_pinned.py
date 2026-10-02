@@ -274,3 +274,17 @@ def test_whitespace_text_is_not_indexed_on_either_path():
     docs = [{"id": 1, "text": "oil"}, {"id": 2, "text": "   "}]
     index = SemanticIndex(_Constant(), docs)
     assert index.search("oil", threshold=0.5) == {1}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="a tantivy prefix query 'hel*' matches nothing (the * is dropped), "
+    "though /search documents prefix* (server/app.py SearchRequest)",
+)
+def test_a_prefix_search_finds_the_word_it_starts():
+    pytest.importorskip("tantivy")
+    from prismql.backends.tantivy import TantivyBackend
+
+    backend = TantivyBackend([{"id": 1, "text": "hello world"}])
+    _hits, total = backend.rank_counted("hel*", limit=10)
+    assert total == 1
