@@ -36,6 +36,17 @@ pattern variables (`$c`: the same value across legs; `!$c`: a different
 one), quantifiers, runs (`RUN(X){7,}`: repeats in a row, one group per
 run), and subqueries whose groups are themselves operands.
 
+PrismQL grew out of Matcher, the retrieval language of the Chat Corpora
+Annotator, built to find situations in multiparticipant chats:
+
+- A. Smirnova, E. Slobodkin, G. Chernishev. *Situation-Based
+  Multiparticipant Chat Summarization: a Concept, an Exploration-Annotation
+  Tool and an Example Collection.* ACL-IJCNLP 2021 Student Research
+  Workshop, pp. 127–137. [aclanthology.org/2021.acl-srw.14](https://aclanthology.org/2021.acl-srw.14/)
+- Y. Kuzin, A. Smirnova, E. Slobodkin, G. Chernishev. *Query Processing and
+  Optimization for a Custom Retrieval Language.* PANDL workshop at COLING
+  2022, pp. 61–70. [aclanthology.org/2022.pandl-1.8](https://aclanthology.org/2022.pandl-1.8/)
+
 ## What is in the repository
 
 A language, and a few tools that carry a corpus to it:
@@ -84,7 +95,7 @@ the ones you use:
 | `nlp` | named entities at ingest (spaCy) |
 
 Pin a commit for results that must not move — `…/prismql@<sha>`.
-Python ≥ 3.12, no compiler and no Rust toolchain needed.
+Python ≥ 3.12, no compiler needed.
 
 Or from a clone, if you want the examples and the references at hand:
 
