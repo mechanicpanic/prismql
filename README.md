@@ -36,6 +36,30 @@ pattern variables (`$c`: the same value across legs; `!$c`: a different
 one), quantifiers, runs (`RUN(X){7,}`: repeats in a row, one group per
 run), and subqueries whose groups are themselves operands.
 
+## What is in the repository
+
+A language, and a few tools that carry a corpus to it:
+
+```
+your events ──prismql ingest──▶ one ordered stream ──▶ engine: REPL · Python · server ──▶ groups of events
+```
+
+| Part | What it does |
+|---|---|
+| **The language** | Predicates name sets of events: `field`, `from`, `contains`, `is_question()`, `similar_to("…", 0.7)`. Operators turn sets into groups: `FOLLOWED_BY`, `INWINDOW`, `DURING`, `RUN`. Two dialects, classic and pipe, parse to one intermediate representation and run through one operator layer over a Polars plan. |
+| **Ingest** | `prismql ingest` turns a table, or a folder of Claude Code or Codex logs, into one stream: sorted, time in UTC. In the same pass it can add columns that predicates read: annotations (questions, links, mentions, named entities), an embedding per event, labels from a local decision model. |
+| **Backends** | Answer "which events satisfy this predicate": `memory` by default, `tantivy` for a full-text index kept on disk. |
+| **Server** | HTTP over one or more corpora. `/evaluate` runs the language. `/search` (full-text, BM25) and `/similar` (nearest by meaning) are scouting endpoints outside the language: they rank, to show what is where before you write a query. The board at `/board/` shows a person every request and the events that answered it. `prismql-mcp` puts it behind MCP. |
+| **REPL** | `prismql`: the language at a prompt, over one file. |
+| **Agent skill** | `skills/prismql/`: what an agent needs to query the server and investigate a question. |
+
+At query time, search by meaning is the one part with a model behind it:
+`similar_to()` in the language and `/similar` on the server compare the
+query text with an embedding of each event, computed once — at ingest
+(`--embed`) or when the server starts. The other models (named entities,
+decision-model labels) run only at ingest, and what reaches the engine is
+plain columns.
+
 ## Install
 
 PrismQL is **not on PyPI**; `pip install prismql` does not work yet.
@@ -46,10 +70,21 @@ Straight from git, no clone and no virtualenv — this puts `prismql`,
 uv tool install "prismql[repl,server,mcp] @ git+https://github.com/mechanicpanic/prismql"
 ```
 
-Add `tantivy` for a persisted full-text index, and `semantic` when a corpus
-carries embeddings (`similar_to`, `/similar`): without it a server whose
-corpus has an `emb` column stops at start with an `ImportError`. Pin a
-commit for results that must not move — `…/prismql@<sha>`.
+The engine has no optional parts; extras add the tools around it. Take
+the ones you use:
+
+| Extra | For |
+|---|---|
+| `repl`, `highlighting` | the prompt, and colour in it |
+| `server` | `prismql-server` and the board |
+| `mcp` | `prismql-mcp`, the server behind MCP |
+| `tantivy` | a full-text index kept on disk, behind text predicates and `/search` — the same answers, faster on a large corpus |
+| `semantic` | `similar_to()` and `/similar`; a corpus that carries embeddings needs it to load |
+| `ingest` | `prismql ingest --embed` |
+| `nlp` | named entities at ingest (spaCy) |
+
+Pin a commit for results that must not move — `…/prismql@<sha>`.
+Python ≥ 3.12, no compiler and no Rust toolchain needed.
 
 Or from a clone, if you want the examples and the references at hand:
 
@@ -58,13 +93,6 @@ git clone https://github.com/mechanicpanic/prismql.git && cd prismql
 uv sync                    # engine only — polars and pyarrow are core, not extras
 uv sync --extra repl --extra highlighting --extra server   # REPL and HTTP server
 ```
-
-Optional extras: `repl`, `highlighting`, `server` (the FastAPI HTTP
-server), `mcp` (the stdio MCP shim — a separate extra; without it
-`prismql-mcp` stops at `ModuleNotFoundError: No module named 'mcp'`),
-`tantivy` (real full-text search, persisted), `nlp` (spaCy), `semantic`
-(sentence-transformers), `ingest` (embeddings at ingest). Python ≥ 3.12, no compiler and
-no Rust toolchain needed.
 
 ## Try it on your own events
 
