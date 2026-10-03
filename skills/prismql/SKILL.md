@@ -103,7 +103,16 @@ event, the conditions it satisfies — `{"predicate": "contains(evalaware)", "ma
 into that field, `{"predicate": "similar_to(…)", "score": 0.61}`, or just
 the name for `field(…)`. Conditions under `NOT` never appear. Use it to
 tell a dictionary that is too broad from a hit whose word sits past what
-you read — before you narrow the dictionary.
+you read — before you narrow the dictionary. A query with pattern
+variables also gets `bindings` per group: the assignments of its variables
+that fit the group, e.g. `[{"a": "GPT-5", "y": "o3"}]` — usually one;
+several when the group alone cannot settle it (a comma row whose items look
+alike, or a `mentions_user($y)` that nothing narrows to one name); `[]` when
+it could not be recovered for that group (a row wider than six items). A
+page lists at most 20 and adds `"bindings_truncated": true` when there were
+more. Covered: a single condition, a chain, `RUN`, a
+comma row whose items match once; subqueries and quantified rows get no
+`bindings`. `!$k` binds nothing and is not listed.
 
 **Read around an event before you name what it is.** `GET /context?id=<id>& minutes=10&same=agent` returns the events around one event in stream order
 — within ten minutes before and after, only those with the same `agent` —
