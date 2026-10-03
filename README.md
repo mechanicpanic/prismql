@@ -31,20 +31,23 @@ run), and subqueries whose groups are themselves operands.
 
 ## Install
 
-PrismQL is **not on PyPI**; `pip install prismql` does not work yet. The
-repository is private, so both routes below need access to it. Straight from
-git, no clone and no virtualenv — this puts `prismql` and `prismql-server`
-on your PATH (add `mcp` to the extras if you also want a working
-`prismql-mcp`):
+PrismQL is **not on PyPI**; `pip install prismql` does not work yet.
+Straight from git, no clone and no virtualenv — this puts `prismql`,
+`prismql-server` and `prismql-mcp` on your PATH:
 
 ```bash
-uv tool install "prismql[repl,server] @ git+ssh://git@github.com/mechanicpanic/prismql"
+uv tool install "prismql[repl,server,mcp] @ git+https://github.com/mechanicpanic/prismql"
 ```
+
+Add `tantivy` for a persisted full-text index, and `semantic` when a corpus
+carries embeddings (`similar_to`, `/similar`): without it a server whose
+corpus has an `emb` column stops at start with an `ImportError`. Pin a
+commit for results that must not move — `…/prismql@<sha>`.
 
 Or from a clone, if you want the examples and the references at hand:
 
 ```bash
-git clone git@github.com:mechanicpanic/prismql.git && cd prismql
+git clone https://github.com/mechanicpanic/prismql.git && cd prismql
 uv sync                    # engine only — polars and pyarrow are core, not extras
 uv sync --extra repl --extra highlighting --extra server   # REPL and HTTP server
 ```
