@@ -129,6 +129,13 @@ of encoding at start. Details in `docs/USER-GUIDE.md`, section 2.
   folder with symlinks resolved — `cp -RL skills/prismql <dest>` — because
   its `LANGUAGE_REFERENCE.md` is a symlink into the package and a plain
   `cp -R` leaves the copy dangling.
+- **Investigate agent behaviour** — the skill's *Investigating* section
+  (`skills/prismql/SKILL.md`): from a question to a finding with a null twin,
+  question shapes on agent and web logs (spread to other agents, never
+  cancelled, streaks per agent, answered by another address, bursts, per-day
+  counts, lead-lag across streams), semantic fields labelled at ingest by a
+  local decision model (`prismql ingest … --judge`), and the shapes that
+  answer wrong today.
 - **Work on the repository** — [`docs/START-HERE.md`](docs/START-HERE.md):
   the reading path, the gates, what the tests prove, how state is recorded.
 

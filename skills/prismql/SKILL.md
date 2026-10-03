@@ -1,6 +1,6 @@
 ---
 name: prismql
-description: Run PrismQL pattern-matching queries over sequential data (conversations, logs, events, transactions) — via a local prismql-server if one is running, else directly via Python. Use when the user wants to find sequential/co-occurrence/temporal patterns in ordered records ("X followed by Y", "A and B within N messages", repeated behavior by the same entity), or asks to "seed"/set up PrismQL for a specific dataset.
+description: Run PrismQL pattern-matching queries over sequential data (conversations, logs, agent traces, events, transactions) — via a local prismql-server if one is running, else directly via Python. Use when the user wants to find sequential/co-occurrence/temporal patterns in ordered records ("X followed by Y", "A and B within N messages", repeated behavior by the same entity), investigates agent behaviour in logs (contagion, streaks, never-followed, lead-lag, with a null twin), or asks to "seed"/set up PrismQL for a specific dataset.
 ---
 
 # PrismQL — executable pattern queries over sequential data
@@ -316,6 +316,86 @@ implementation over the ordered corpus:
    - in a link the step goes inside: `SELECT field(kind, request) AND field(agent, $a) FOLLOWED_BY RUN(field(kind, retry) AND field(agent, $a), DURING 2 minutes){3,} DURING 10 minutes` — one link, either side, NOT_ too; one group per left-hand group;
    - refused: a longer chain around a run, a run beside a comma, inside AND/OR or under a quantifier;
    - runs are found over the whole stream before the link: a request that falls inside another request's run of retries does not start its own run.
+
+## Investigating: from a question to a finding
+
+A count is not a finding. The loop that makes one:
+
+1. **Shape the question** as events in order: *then* (`FOLLOWED_BY`),
+   *near* (comma + `INWINDOW`/`DURING`), *same / another entity*
+   (`$a` / `!$a`), *never followed* (`NOT_FOLLOWED_BY`), *in a row*
+   (`RUN`). Name the corpus.
+2. **Run it** on the server; read `warnings` in the answer — a warning names
+   a query that runs but asks something else.
+3. **Run its null twin** — the same query with exactly the tested part
+   broken — and compare the two counts.
+4. **Read groups** before believing either number: `"explain": true` on
+   `/evaluate` says why each event matched; `/context` shows what surrounds
+   a group.
+5. **Record** question → query → corpus → count → twin's count → a few ids
+   read → verdict (confirmed / not / unclear), and the limits.
+
+### Question shapes
+
+Each of these runs on the hackathon corpora (`village`, `wiki_msgs`,
+`urlquery`; fields from `/schema`):
+
+| Question | Query |
+|---|---|
+| Does a help request spread to *other* agents within an hour? | `SELECT field(kind, REQUEST_HUMAN_HELPER) AND field(agent, $a) FOLLOWED_BY field(kind, REQUEST_HUMAN_HELPER) AND field(agent, !$a) DURING 1 hour` |
+| Which help requests are never cancelled by the same agent? | `SELECT field(kind, REQUEST_HUMAN_HELPER) AND field(agent, $a) NOT_FOLLOWED_BY field(kind, CANCEL_REQUEST_FOR_HUMAN_HELPER) AND field(agent, $a) DURING 1 hour` |
+| Who waits again and again? (one group per streak, per agent) | `SELECT RUN(field(kind, WAIT) AND field(agent, $a)){5,} DURING 10 minutes` |
+| A message on a wiki page, then one from *another* address on the same page | `SELECT field(kind, add) AND field(page, $p) AND field(ip16, $i) FOLLOWED_BY field(kind, add) AND field(page, $p) AND field(ip16, !$i) DURING 1 day` |
+| Bursts of significant reports from one data source | `SELECT RUN(field(confidence, significant) AND field(data_source, $d)){5,} DURING 10 minutes` |
+| How many per day? | `SELECT field(kind, REQUEST_HUMAN_HELPER) GROUP BY DAYS(time) AGGREGATE COUNT()` — each matched group counts once, on its first event's day |
+| Two streams, who comes first? | unite them at ingest (`prismql ingest table A B OUT --source-col source`), then `field(source, a) … FOLLOWED_BY field(source, b) …` on the one corpus |
+
+`!$a` on the leg that binds `$a` means "differs inside the event"
+(`field(user, $a) AND field(kind, !$a)` — kind is not the user); joined to
+`$a` by `OR` or under `NOT` it is refused. A list field (mentions, tags)
+matches `field(name, v)` when any element is `v`.
+
+### The null twin, in the language itself
+
+The twin keeps everything but the one thing the claim is about:
+
+- *"another agent"* → the same query with `$a` instead of `!$a`. The
+  contagion query above gives 71 groups on `village`, its same-agent twin
+  67: "spreads to others" is no stronger than "the agent asks again";
+- *"within an hour"* → widen or shift the window and see whether the count
+  scales with the window (background) or stays (an effect);
+- *"after X"* → replace X by a control event of similar frequency;
+- *"never followed"* → compare with the positive `FOLLOWED_BY` count.
+
+A twin that returns 0, or exactly the same count, is usually the wrong twin.
+
+### Semantic fields: label at ingest, query as fields
+
+Regexes and dictionaries miss "the agent gave up", "the person corrected
+it". Ask a local decision model at ingest and query the answer as a field:
+`prismql ingest … --judge questions.toml` (a `strands-decider serve` or
+Kev server on localhost; `examples/judge/agent-logs.toml`). Each question
+becomes a label column (`yes`/`no`, an option, a level, or `unsure`) plus
+`<name>_p`; the model and the exact questions are stamped into the file.
+Check labels on a sample first — confidence is calibrated on the model's
+data, not yours, and English reads better than Russian.
+
+### Shapes that answer wrong today
+
+Pinned `xfail(strict)` in `tests/test_audit_defects_pinned.py` until fixed —
+avoid them or check by hand:
+
+- `mentions_user($y) FOLLOWED_BY field(agent, $y)` gives one group per
+  ping, the first responder only, not one per mentioned name;
+- a quantifier over a whole chain, `(A FOLLOWED_BY B …){2}`, takes the first
+  two chain matches;
+- semicolon subqueries with `DURING`, `(SELECT a) ; (SELECT b) DURING 1
+  hour`, can drop matches — use a comma row;
+- `AS "name"` labels can land on the wrong member of a comma row;
+- `NOT from($u)` with `$u` bound nowhere answers `[]` instead of refusing;
+- pipe `|> within(n) |> during(t)` silently keeps one window;
+- an ISO time with an offset (`+02:00`) is read as UTC wall-clock — the
+  hackathon corpora are all UTC.
 
 ## Validate before executing (Python path)
 
