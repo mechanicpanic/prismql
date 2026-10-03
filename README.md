@@ -150,11 +150,17 @@ Both `timestamp_*` keys are needed: without `[engine].timestamp_field` a
 `DURING` query returns nothing rather than an error.
 
 Have a table that is not quite in that shape, or a folder of Claude Code
-transcripts? `prismql ingest table export.csv events.parquet --id rev_id --time
-created --sort created` (or `prismql ingest claude-code ~/.claude/projects/<project>
-sessions.parquet`, or `prismql ingest codex ~/.codex/sessions …`) writes the stream for you: sorted, timestamps parsed to UTC,
-optionally with an embedding column (`--embed text`) the server reads instead
-of encoding at start. Details in `docs/USER-GUIDE.md`, section 2.
+or Codex transcripts? `prismql ingest` writes the stream for you: sorted,
+timestamps parsed to UTC, optionally with an embedding column
+(`--embed text`) the server reads instead of encoding at start.
+
+```bash
+prismql ingest table export.csv events.parquet --id rev_id --time created --sort created
+prismql ingest claude-code ~/.claude/projects/<project> sessions.parquet
+prismql ingest codex ~/.codex/sessions sessions.parquet
+```
+
+Details in `docs/USER-GUIDE.md`, section 2.
 
 ## Where to go next
 

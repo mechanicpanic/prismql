@@ -52,10 +52,8 @@ predicate  ──►  set of events  ──►  groups of events  ──►  ans
    pairwise within n, all distinct). A chain can have any number of legs
    (`A FOLLOWED_BY B FOLLOWED_BY C …`): each link is greedy-nearest from the
    previous slot, the group is the whole chain.
-3. **The tail shapes the answer.** `AS "name"` labels a slot; `AGGREGATE
-   count()` / `|> count()` counts groups (the only way to a total the server
-   will not cap); `GROUP BY user` / `|> group(user)`; `BEFORE / AFTER /
-   BETWEEN`; `ORDER BY`, `LIMIT`. Booleans do **not** apply to groups — an
+3. **The tail shapes the answer.** `AS "name"` labels a slot; `AGGREGATE count()` / `|> count()` counts groups (the only way to a total the server
+   will not cap); `GROUP BY user` / `|> group(user)`; `BEFORE / AFTER / BETWEEN`; `ORDER BY`, `LIMIT`. Booleans do **not** apply to groups — an
    `AND` between two chains is an error, by design.
 
 Once you see the three levels, the syntax rules follow: booleans bind

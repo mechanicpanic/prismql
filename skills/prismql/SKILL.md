@@ -58,8 +58,7 @@ The response carries hydrated event groups (`results[].events`). A bad
 query comes back as a structured 422 whose `error.message` says what to
 change — read it and retry rather than guessing again. One case the
 message does not name: **every query begins with `SELECT`**; leave it out
-and the 422 reports the operator it tripped on (`Unexpected 'FOLLOWED_BY'
-after query`), not the missing keyword.
+and the 422 reports the operator it tripped on (`Unexpected 'FOLLOWED_BY' after query`), not the missing keyword.
 
 Other endpoints: `GET /reference` (the full language doc), `GET /corpora`
 (named corpora; pass `"corpus": "<name>"` in the request to pick one),
@@ -94,22 +93,19 @@ same way.
 
 **Who addresses whom.** `mentions_user("Claude Opus 4.5")` finds messages
 that `@mention` that author; `mentions_user($y)` binds each mentioned name,
-so `SELECT mentions_user($y) FOLLOWED_BY field(agent, $y) DURING 10
-minutes` is "addressed, then answered by the one addressed" and
+so `SELECT mentions_user($y) FOLLOWED_BY field(agent, $y) DURING 10 minutes` is "addressed, then answered by the one addressed" and
 `field(agent, !$y)` "answered by someone else". A mention is `@` plus an
 author name that exists in the corpus — e-mail addresses do not count.
 
 **Ask why an event is there.** `"explain": true` on `/evaluate` (or
 `?explain=true` on `GET /results/<id>`) adds `explain` to each group: per
-event, the conditions it satisfies — `{"predicate": "contains(evalaware)",
-"matches": [{"term", "field", "start", "end"}]}` with character offsets
+event, the conditions it satisfies — `{"predicate": "contains(evalaware)", "matches": [{"term", "field", "start", "end"}]}` with character offsets
 into that field, `{"predicate": "similar_to(…)", "score": 0.61}`, or just
 the name for `field(…)`. Conditions under `NOT` never appear. Use it to
 tell a dictionary that is too broad from a hit whose word sits past what
 you read — before you narrow the dictionary.
 
-**Read around an event before you name what it is.** `GET /context?id=<id>&
-minutes=10&same=agent` returns the events around one event in stream order
+**Read around an event before you name what it is.** `GET /context?id=<id>& minutes=10&same=agent` returns the events around one event in stream order
 — within ten minutes before and after, only those with the same `agent` —
 each with its `offset` from the event (`0`), time and fields. Without
 `minutes` it takes `before`/`after` events (10 each, at most 200); `same` is
@@ -140,14 +136,12 @@ any field. One call instead of two queries and a join.
    `error.type == "gone"` — run the query again, do not retry the page.
    For a real total regardless of paging, `AGGREGATE count()` still counts
    every group, uncapped.
-2. **Enumerating past the cap in one shot needs permission.** `"output":
-   "file"` writes every kept group (or up to `scout_depth` hits for
+2. **Enumerating past the cap in one shot needs permission.** `"output": "file"` writes every kept group (or up to `scout_depth` hits for
    scouting) as JSONL server-side and returns `{count, path, preview}`; on a
    server without `[server] enable_file_output = true` it answers 403. For
    a match result, paging by `result_id` works either way and needs no
    permission — use it instead of asking to enable file output.
-3. **Dictionaries are per-request.** Add `"dictionaries": {"name":
-   ["term", …]}` to the body to define or override term lists for that
+3. **Dictionaries are per-request.** Add `"dictionaries": {"name": ["term", …]}` to the body to define or override term lists for that
    query only. Iterate there; ask for stable ones to be persisted into the
    server's `prismql.toml`.
 4. **Kept results do not survive a reload or a restart.** They live only in
@@ -188,10 +182,8 @@ without times is an error, not an empty answer. Stream order is the file
 order; ids are labels and may be strings.
 
 A table in the wrong order or shape, or a harness log folder, becomes that
-file through `prismql ingest`: `prismql ingest table SRC DST.parquet --id COL
---time COL [--sort COL] [--keep a,b] [--embed text --model M]`; several
-streams into one corpus: `prismql ingest table A.csv b=B.jsonl DST.parquet
---id id --time time --sort time --source-col source` (ids become `LABEL:id`;
+file through `prismql ingest`: `prismql ingest table SRC DST.parquet --id COL --time COL [--sort COL] [--keep a,b] [--embed text --model M]`; several
+streams into one corpus: `prismql ingest table A.csv b=B.jsonl DST.parquet --id id --time time --sort time --source-col source` (ids become `LABEL:id`;
 ask across them with `field(source, a) … FOLLOWED_BY field(source, b) …`);
 `prismql ingest claude-code ~/.claude/projects/<project> DST.parquet` and
 `prismql ingest codex ~/.codex/sessions DST.parquet` give one event per
@@ -201,8 +193,7 @@ prompt / thought / tool call / tool result (`kind`, `tool`, `error`,
 `cd`, `sudo`, assignments, loop headers; quoted text and heredocs are not
 programs), `path` (the file read or written), `host` (from a URL a network
 program or fetch is given), `action` (`read`, `write`, `exec`, `network`,
-`destructive` — recursive rm, `git reset --hard`, force push, `git clean
--f`, `find -delete`, `dd of=`, DROP/TRUNCATE through a SQL client),
+`destructive` — recursive rm, `git reset --hard`, force push, `git clean -f`, `find -delete`, `dd of=`, DROP/TRUNCATE through a SQL client),
 `outcome` (`ok`, `error`, `none` — no result), `duration_ms` (call to
 result, so a wait for the user's approval counts), `output_chars`, and the
 words `duration_bucket` (`instant` < 1s, `short` < 10s, `medium` < 1m,
@@ -269,8 +260,7 @@ implementation over the ordered corpus:
    means `(alice ∧ question) FOLLOWED_BY bob`. Use parens only to override.
 3. **Use the subquery form only to sequence multi-event stages.** For
    simple sequences plain `a FOLLOWED_BY b INWINDOW n` is equivalent and
-   simpler. `SELECT (SELECT a, b INWINDOW 3) FOLLOWED_BY (SELECT c)
-   INWINDOW 8` matches whole groups (all of stage 1 before stage 2, gap
+   simpler. `SELECT (SELECT a, b INWINDOW 3) FOLLOWED_BY (SELECT c) INWINDOW 8` matches whole groups (all of stage 1 before stage 2, gap
    measured from the stage's last event to the next stage's first) and
    concatenates them. Three rules, all of them enforced:
    - **the outer `SELECT` is not optional** — a query that starts with
@@ -284,15 +274,12 @@ implementation over the ordered corpus:
    literal use `contains_phrase("exact phrase")`, or define a dictionary.
 5. **`INWINDOW` is unordered; `FOLLOWED_BY` is ordered.** "A then B" →
    `FOLLOWED_BY`; "A and B near each other" → comma + `INWINDOW`.
-6. **Don't flatten multi-stage patterns.** `SELECT (SELECT a, b INWINDOW
-   3) FOLLOWED_BY (SELECT c) INWINDOW 8` keeps a+b grouped; `SELECT a, b,
-   c INWINDOW 8` does not mean the same thing.
+6. **Don't flatten multi-stage patterns.** `SELECT (SELECT a, b INWINDOW 3) FOLLOWED_BY (SELECT c) INWINDOW 8` keeps a+b grouped; `SELECT a, b, c INWINDOW 8` does not mean the same thing.
 7. **Same entity twice → a pattern variable**, not two literals:
    `from($u) AND is_question(), from($u) INWINDOW 5`. `!$u` is "a
    *different* one". On the excluded side of a negated operator a variable
    binds nothing (that event is not in the group) and only narrows it:
-   `field(outcome, error) AND field(tool, $t) AND field(session, $s)
-   NOT_FOLLOWED_BY field(tool, $t) AND field(session, $s) DURING 1 hour` is
+   `field(outcome, error) AND field(tool, $t) AND field(session, $s) NOT_FOLLOWED_BY field(tool, $t) AND field(session, $s) DURING 1 hour` is
    "failed and never retried in that session"; bind it on the left first.
    A variable binds the value
    slot of `field()` too, not only `from()`. "The same page deleted and
@@ -391,8 +378,7 @@ avoid them or check by hand:
   ping, the first responder only, not one per mentioned name;
 - a quantifier over a whole chain, `(A FOLLOWED_BY B …){2}`, takes the first
   two chain matches;
-- semicolon subqueries with `DURING`, `(SELECT a) ; (SELECT b) DURING 1
-  hour`, can drop matches — use a comma row;
+- semicolon subqueries with `DURING`, `(SELECT a) ; (SELECT b) DURING 1 hour`, can drop matches — use a comma row;
 - `AS "name"` labels can land on the wrong member of a comma row;
 - `NOT from($u)` with `$u` bound nowhere answers `[]` instead of refusing;
 - pipe `|> within(n) |> during(t)` silently keeps one window;
@@ -427,8 +413,7 @@ From Python, `QueryValidator().validate(q).warnings` names the first two
 
 ## No server: inline Python
 
-From a clone `uv sync`, or in another project `uv add --editable
-/path/to/prismql`. If `import prismql` already works, skip both.
+From a clone `uv sync`, or in another project `uv add --editable /path/to/prismql`. If `import prismql` already works, skip both.
 
 ```bash
 uv run python - <<'EOF'

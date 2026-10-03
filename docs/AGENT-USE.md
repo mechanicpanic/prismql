@@ -12,8 +12,7 @@ here; the sample outputs are real.
 ## 1. Your events
 
 One JSON object per line. The engine needs two things named: an id field
-and a timestamp field. Everything else is queryable with `field(name,
-value)`. **Stream order is file order** — ids are labels, not coordinates,
+and a timestamp field. Everything else is queryable with `field(name, value)`. **Stream order is file order** — ids are labels, not coordinates,
 and may be strings.
 
 ```jsonl
@@ -77,8 +76,7 @@ uv run --extra server prismql-server --config /path/to/prismql.toml
 ```
 
 Keep `--extra server` on `uv run` as well. `uv run` re-syncs the
-environment to the project's defaults first, so a bare `uv run
-prismql-server` in a fresh clone uninstalls FastAPI and then fails with
+environment to the project's defaults first, so a bare `uv run prismql-server` in a fresh clone uninstalls FastAPI and then fails with
 `ModuleNotFoundError: No module named 'fastapi'`.
 
 Check it is up:
@@ -201,15 +199,13 @@ stream will send, so the agent can check it received the whole thing
 without buffering it first.
 
 `/search` and `/similar` are paged the same way, but their `total` can run
-ahead of what the server kept: it holds only the best `[server]
-scout_depth` hits (default 1000) and reports that count as `kept` — more
+ahead of what the server kept: it holds only the best `[server] scout_depth` hits (default 1000) and reports that count as `kept` — more
 matched than were kept when `kept < total`, and `truncated` turns false
 once the agent has paged through `kept`.
 
 A kept result lives in memory only: it does not survive `/reload` or a
 restart, and the oldest are dropped first once `[server] results_memory_mb`
-fills up. Either way a stale id comes back `{"ok":false,"error":{"type":
-"gone",...}}` — tell the agent to run the query again, not to treat it as
+fills up. Either way a stale id comes back `{"ok":false,"error":{"type": "gone",...}}` — tell the agent to run the query again, not to treat it as
 a bug.
 
 **`AGGREGATE count()` is still the only honest total** for the number
@@ -301,8 +297,7 @@ one that did not:
 
 **Question 3 — "How many such repairs are there in total?"**
 
-`3`, from an `AGGREGATE count()` response (`{"kind":"aggregate", …,
-"value":3}`). An agent that reports the number of groups it happened to
+`3`, from an `AGGREGATE count()` response (`{"kind":"aggregate", …, "value":3}`). An agent that reports the number of groups it happened to
 receive inline has not understood the cap — on your real data that number
 will be 50 and wrong.
 

@@ -399,8 +399,7 @@ Found 1 result(s):
 
 Deletions nobody undid. The group holds only the deletion: the event that
 did *not* happen is not in the answer. A variable on that side binds
-nothing and narrows it instead — `field(kind, delete) AND field(page, $p)
-NOT_FOLLOWED_BY field(kind, save) AND field(page, $p) DURING 10 minutes` is
+nothing and narrows it instead — `field(kind, delete) AND field(page, $p) NOT_FOLLOWED_BY field(kind, save) AND field(page, $p) DURING 10 minutes` is
 "deletions of a page nobody saved again".
 
 ---
@@ -414,12 +413,10 @@ That is the whole point: you can open every match and look at it.
 Two things worth knowing:
 
 - **`AGGREGATE count()`** turns the answer into a single number over every
-  group, uncapped: `SELECT ... INWINDOW 3 AGGREGATE count()` → `Aggregated
-  result: 2`. It is the honest way to a total, because listings are capped
+  group, uncapped: `SELECT ... INWINDOW 3 AGGREGATE count()` → `Aggregated result: 2`. It is the honest way to a total, because listings are capped
   (the HTTP server sends at most `[server] max_results` groups, 50 by
   default, and says `"truncated": true` when it cut).
-- **`GROUP BY`** splits that count: `SELECT field(kind, delete) GROUP BY user
-  AGGREGATE count()` → `alice: 1`, `carol: 1`, `dave: 1`. Fields and time
+- **`GROUP BY`** splits that count: `SELECT field(kind, delete) GROUP BY user AGGREGATE count()` → `alice: 1`, `carol: 1`, `dave: 1`. Fields and time
   buckets (`day(time)`, `hour(time)`) both work.
 
 **`AS "name"` is narrower than it looks.** It attaches to members of the
@@ -435,14 +432,12 @@ Found 4 result(s):
   ...
 ```
 
-On a chain it does not parse at all — `field(kind, delete) AS "del"
-FOLLOWED_BY ...` gives *"mismatched input 'FOLLOWED_BY' expecting `<EOF>`"*,
+On a chain it does not parse at all — `field(kind, delete) AS "del" FOLLOWED_BY ...` gives *"mismatched input 'FOLLOWED_BY' expecting `<EOF>`"*,
 and `AS del` without quotes gives *"mismatched input 'del' expecting
 QUOTED_STRING"*. And the names are handed out **by position**: the group
 prints in stream order and takes your names in the order you wrote them, so
 on an unordered comma set the name can land on the other event —
-`field(kind, save) AS "the save", field(kind, login) AS "the login"
-INWINDOW 3` prints `the save:` in front of the login. Read the ids; treat
+`field(kind, save) AS "the save", field(kind, login) AS "the login" INWINDOW 3` prints `the save:` in front of the login. Read the ids; treat
 the names as slot numbers with words on them.
 
 ---
@@ -556,8 +551,7 @@ actor = "agent"
 ```
 
 Leave it unset for a corpus and the board still shows the request and its
-output — just the event text, with no kind/actor line on each one. `GET
-/corpora` echoes the mapping back per corpus, so you can check what the
+output — just the event text, with no kind/actor line on each one. `GET /corpora` echoes the mapping back per corpus, so you can check what the
 board will show without opening it — it also reports each corpus's
 `id_field` (`[corpora.<name>] id_field`, default `"id"`), which is how the
 board pairs a group's events back to its own ids/positions when a corpus
@@ -584,8 +578,7 @@ address, labelled *unnamed client*: an agent's `curl` without the header
 looks exactly like a person's. The board's own editor sets it to `board`.
 
 The editor runs all three kinds of request: *Query* (the language,
-highlighted, with *Format*), *Search* (tantivy syntax — words, `"a
-phrase"`, `field:term`, `prefix*`, `AND`/`OR`/`NOT`) and *Similar* (a
+highlighted, with *Format*), *Search* (tantivy syntax — words, `"a phrase"`, `field:term`, `prefix*`, `AND`/`OR`/`NOT`) and *Similar* (a
 sentence, ranked by meaning, with an optional *threshold*). Either answer
 opens in the Request tab like a query's and pages through everything the
 server kept (`[server] scout_depth`, 1000 by default).
@@ -625,8 +618,7 @@ Two more endpoints are for looking around, not for asking: `POST /search`
 with `{"query": "restored OR \"put back\""}` returns the best-matching
 events ranked (full-text, tantivy syntax), and `POST /similar` with
 `{"text": "someone undid a deletion"}` returns the nearest events by
-embedding when the corpus carries one. Both keep their best `[server]
-scout_depth` hits (default 1000) and page the same way as `/evaluate` —
+embedding when the corpus carries one. Both keep their best `[server] scout_depth` hits (default 1000) and page the same way as `/evaluate` —
 their `total` can run ahead of what got kept, which the response reports
 as `kept`; `truncated` turns false once you have paged through `kept`, not
 `total`. Read a few hits, learn the words, put them in a dictionary, then
@@ -696,8 +688,7 @@ The REPL prefixes these with `Runtime Error: Error executing query:` or
 
 1. **The last link of a chain must carry a window.** One trailing window
    covers every windowless link before it.
-   `SELECT field(kind, delete) FOLLOWED_BY field(kind, save) INWINDOW 2
-   FOLLOWED_BY field(kind, login)` →
+   `SELECT field(kind, delete) FOLLOWED_BY field(kind, save) INWINDOW 2 FOLLOWED_BY field(kind, login)` →
    *"Sequential chain is missing a window constraint on its final link. Add
    `INWINDOW <n>` or `DURING <time>` at the end of the chain — a trailing
    window applies to every windowless link."*
@@ -725,18 +716,15 @@ The REPL prefixes these with `Runtime Error: Error executing query:` or
    `memory`, or let tantivy rebuild the index from the data file.
 6. **A time query that returns nothing** — check `[engine].timestamp_field`
    (section 3) before suspecting your data.
-6a. **"N times in a row" is `RUN`, not `{N}` or a chain.** `field(kind,
-   retry){7}` counts every combination of seven (twenty retries → 77,520
+6a. **"N times in a row" is `RUN`, not `{N}` or a chain.** `field(kind, retry){7}` counts every combination of seven (twenty retries → 77,520
    groups); seven chained links give one overlapping group per starting
-   event. `SELECT RUN(field(kind, retry) AND field(agent, $a)){7,} DURING 1
-   hour DURING 1 day` gives one group per run of one agent, each retry within
+   event. `SELECT RUN(field(kind, retry) AND field(agent, $a)){7,} DURING 1 hour DURING 1 day` gives one group per run of one agent, each retry within
    an hour of the last, the whole run within a day. A second window after a
    windowed chain or run must be `DURING`: a second `INWINDOW` is refused
    (it used to be dropped without a word).
 7. **Booleans join filters, not patterns.** `AND`, `OR`, `NOT` combine
    conditions on a single event. Once you have groups there is nothing left
-   to intersect, so `SELECT field(kind, delete), field(kind, save) INWINDOW 5
-   AND field(page, P1)` →
+   to intersect, so `SELECT field(kind, delete), field(kind, save) INWINDOW 5 AND field(page, P1)` →
    *"Syntax error: mismatched input 'AND' expecting `<EOF>`"*. Put the
    condition on one of the legs instead.
 

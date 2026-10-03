@@ -394,8 +394,7 @@ SELECT
    message of the B-group and the positional gap from A's last message to
    B's first is within `n` (greedy closest match, like the restriction
    level). Matched groups are concatenated chronologically, so multi-message
-   stages stay intact: `(SELECT a, b INWINDOW 3) FOLLOWED_BY (SELECT c)
-   INWINDOW 8` yields groups `[a, b, c]`. `NOT_FOLLOWED_BY` /
+   stages stay intact: `(SELECT a, b INWINDOW 3) FOLLOWED_BY (SELECT c) INWINDOW 8` yields groups `[a, b, c]`. `NOT_FOLLOWED_BY` /
    `NOT_PRECEDED_BY` keep the left groups that have no such counterpart.
 
    - Each positional link carries its own `INWINDOW n` — a chain cannot
@@ -585,8 +584,7 @@ Sequential links (`FOLLOWED_BY`, `PRECEDED_BY`, chains):
   gets the single nearest eligible message on the right side, after it for
   `FOLLOWED_BY`, before it for `PRECEDED_BY`, along the window's axis
   (positions for `INWINDOW`, time for `DURING`) — never every message in the
-  window. Stream `a1 a2 b1 b2`: `SELECT from(a) FOLLOWED_BY from(b)
-  INWINDOW 5` → `[[a1, b1], [a2, b1]]`.
+  window. Stream `a1 a2 b1 b2`: `SELECT from(a) FOLLOWED_BY from(b) INWINDOW 5` → `[[a1, b1], [a2, b1]]`.
 - **Partners are shared.** Two left messages may pick the same partner (`b1`
   above).
 - **Strictly later in time.** On a `DURING` link the partner's timestamp must
@@ -620,8 +618,7 @@ temporal one, ties by stream position. With positional windows all of this is
 stream order; it differs only when timestamps run backwards in load order, and
 the engine warns when they do.
 
-A result of one condition (`SELECT from(alice)`, `SELECT contains(x) OR
-field(k, v)`) lists one message per group in stream order — ids are labels,
+A result of one condition (`SELECT from(alice)`, `SELECT contains(x) OR field(k, v)`) lists one message per group in stream order — ids are labels,
 never the order, so any mix of id types works.
 
 ## Syntax Decision Tree

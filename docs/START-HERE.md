@@ -106,8 +106,7 @@ sentence-transformer smoke test). `make format` fixes what ruff can.
 
 Only the classic reference is packaged inside `prismql`
 (`src/prismql/LANGUAGE_REFERENCE.md`; the root `LANGUAGE_REFERENCE.md` is a
-symlink to it). `PIPE_REFERENCE.md` is a repository file only, so `GET
-/reference` and the MCP `prismql://reference` resource serve the classic one
+symlink to it). `PIPE_REFERENCE.md` is a repository file only, so `GET /reference` and the MCP `prismql://reference` resource serve the classic one
 alone.
 
 **P1a, P2, P3, P4** are the phases of one piece of work — making stream

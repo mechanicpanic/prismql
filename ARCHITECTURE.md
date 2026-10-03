@@ -153,8 +153,7 @@ reproduces, not as code.
 | `opensearch` / `elasticsearch` | remote FTS | remote | Python | analyzer-dependent | client-side search only |
 | `postgres`, `duckdb` | FTS in the DB | in the DB | Python | FTS | **not** used as a store with joins; only as an id-set oracle |
 
-Order contract (P1a, every backend): `positions / sorted_positions / ids_at /
-timestamps_at / has_order_axis`; a backend without an axis raises
+Order contract (P1a, every backend): `positions / sorted_positions / ids_at / timestamps_at / has_order_axis`; a backend without an axis raises
 `PositionalUnsupportedError` instead of silently falling back.
 
 ## 6. The order axis — and the three "positions"
@@ -175,8 +174,7 @@ ways:
 | Python fallback for FB/PB and chain extension | index in the sorted list of **all** documents |
 | `window.py` for string ids | index among the **matched** documents |
 
-Consequences: on corpus `{1, 10}` the query `from(a) FOLLOWED_BY from(b)
-INWINDOW 3` returns `[]` on Rust and `[[1, 10]]` on Python; string ids sort
+Consequences: on corpus `{1, 10}` the query `from(a) FOLLOWED_BY from(b) INWINDOW 3` returns `[]` on Rust and `[[1, 10]]` on Python; string ids sort
 lexicographically (`m10` "follows" `m1` before `m2`) — any UUID corpus gets
 silently wrong sequences; the Python path capped the universe at 1 000 000
 documents (88 % of pairs lost on the full Chicago tier — fixed); tie-breaks
@@ -390,12 +388,10 @@ turns, memory, goals). What the language is strong at, and where it is not:
 **Trees.** A trace is a tree, but serialised in pre-order (by start time, as
 OTel spans are) it becomes a sequence in which **a node's whole subtree lies
 in the contiguous segment between its start and end**. So ingest emits two
-events per span — `start` and `end` (a Dyck / bracket encoding) — plus `run,
-span, parent, depth, agent`. Then:
+events per span — `start` and `end` (a Dyck / bracket encoding) — plus `run, span, parent, depth, agent`. Then:
 
 - "an error happened inside sub-agent X" is a sandwich:
-  `field(kind, start) AND field(span, $x) FOLLOWED_BY field(status, error)
-  FOLLOWED_BY field(kind, end) AND field(span, $x) DURING 1 hour` — correct
+  `field(kind, start) AND field(span, $x) FOLLOWED_BY field(status, error) FOLLOWED_BY field(kind, end) AND field(span, $x) DURING 1 hour` — correct
   *because* matching is greedy: if the error came after X's end, no `end(X)`
   exists after it, so no match. Brackets + greediness = a nesting check.
 - "error at depth ≥ 3" — `field(depth, …)`; "a sub-agent that never returned"
