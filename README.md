@@ -139,6 +139,43 @@ of encoding at start. Details in `docs/USER-GUIDE.md`, section 2.
 - **Work on the repository** — [`docs/START-HERE.md`](docs/START-HERE.md):
   the reading path, the gates, what the tests prove, how state is recorded.
 
+## Human oversight: what the agents asked, and what came back
+
+When agents query your data for you, the claim they bring back is a
+summary. The board at `/board/` on the server is the other side: every
+request any client sends, the query exactly as it ran, and the events that
+answered it, so a person can check the evidence instead of the summary.
+
+<p align="center">
+  <img src="docs/assets/board-warning.png" alt="PrismQL board: a journal of queries from three named agents, and the inspector of one request showing a warning that its chain of identical links counts overlapping groups, with the advice to use RUN" width="900">
+</p>
+
+- **Journal.** Every request, live, newest first: the client that sent it
+  (agents name themselves with an `X-PrismQL-Client` header), the corpus,
+  how many groups, how long it took. Filter by time, kind, client, corpus
+  and status — ok, capped, empty, error.
+- **Inspector.** The query highlighted, its outcome, and **warnings** for a
+  query that runs without an error but asks another question than it
+  seems to — above, an agent counted "the same user three times" with a
+  chain of identical links, which yields 1,355 overlapping groups; the
+  warning says so and points to `RUN`. Then the first groups, event by
+  event; *context* on an event shows what surrounded it within ten minutes,
+  from the same actor or from everyone.
+- **Full view.** Every group as a timeline — the matched events, the time
+  between them and how many events were skipped — or as a table, or raw
+  JSON, with a filter over the output.
+- **Act on it.** *Open in editor* to change the query, *Run again*, or
+  download the whole result as `.jsonl`; the editor sends its requests as
+  the client `board`, so a person's checks sit in the same journal as the
+  agents' queries. With file output on, the journal survives a restart.
+
+<p align="center">
+  <img src="docs/assets/board-fullview.png" alt="PrismQL board full view: 286 groups of one agent query on a chat corpus, the first group shown as a timeline of two messages 48 seconds apart with two events between them" width="900">
+</p>
+
+The screenshots run on the demo corpora (freeCodeCamp chat, Chicago crime
+records) with queries sent by three named agent clients.
+
 ## Server and agent integration
 
 ```bash
