@@ -252,7 +252,13 @@ def _run_groups(
     keys = list(dict.fromkeys(by_variable.values()))
     axis, step = axis_and_window(window_of(window), ts)
     return runs(
-        frame, keys=keys, axis=axis, step=step, min_len=min_len, max_len=max_len
+        frame,
+        keys=keys,
+        axis=axis,
+        step=step,
+        min_len=min_len,
+        max_len=max_len,
+        binds=by_variable,
     )
 
 

@@ -16,10 +16,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .config import DEFAULT_CONFIG
-from .explain_bindings import bindings
-from .explain_plan import Plan, plan_of
 from .explain_rules import field_holds, leaves, rule_for
 from .explain_text import fields_of, term_spans
+from .ir.variables import legs, occurrences
 
 
 @dataclass
@@ -29,10 +28,11 @@ class Explainer:
     language: str = "english"
     semantic_index: Any = None
     _query_vectors: dict[str, Any] = field(default_factory=dict)
-    plan: Plan | None = None  # how groups bind the pattern variables
+    has_variables: bool = False  # the query binds a $variable somewhere
+    found: Any = None  # plan.recorded.Bindings: what the engine bound (#137)
 
     @classmethod
-    def build(cls, engine: Any, ir: Any) -> Explainer:
+    def build(cls, engine: Any, ir: Any, bindings: Any = None) -> Explainer:
         backend = engine.search_backend
         config = getattr(backend, "config", None)
         ex = cls(
@@ -41,7 +41,10 @@ class Explainer:
             ),
             language=getattr(backend, "text_language", "english"),
             semantic_index=getattr(backend, "semantic_index", None),
-            plan=plan_of(ir, _mentions_field(engine)),
+            has_variables=any(
+                not o.negated for leg in legs(ir) for o in occurrences(leg)
+            ),
+            found=bindings,
         )
         for leaf in leaves(ir):
             rule = rule_for(engine, leaf)
@@ -52,7 +55,7 @@ class Explainer:
     @property
     def nbytes(self) -> int:
         """A rough size for the result store's budget: the terms dominate."""
-        size = 512
+        size = 512 + (self.found.nbytes if self.found is not None else 0)
         for kind, rule in self.rules:
             if kind == "text":
                 size += 64 * len(rule.terms) + sum(len(t) for t in rule.terms)
@@ -87,9 +90,10 @@ class Explainer:
                     out.append({"predicate": label, "score": round(score, 4)})
         return out
 
-    def bindings(self, docs: list[dict[str, Any]]) -> list[dict[str, str]]:
-        """Every assignment of the pattern variables that fits one group."""
-        return [] if self.plan is None else bindings(self.plan, docs)
+    def bindings(self, ids: list[Any]) -> list[dict[str, Any]] | None:
+        """What the engine bound the query's variables to in one group;
+        None when it bound nothing there (a step that does not carry them)."""
+        return None if self.found is None else self.found.of(ids)
 
     def _score(self, text: str, doc_id: Any) -> float | None:
         index = self.semantic_index
@@ -100,10 +104,3 @@ class Explainer:
             vector = self._query_vectors[text] = index.query_vector(text)
         score: float | None = index.cosine(vector, doc_id)
         return score
-
-
-def _mentions_field(engine: Any) -> str:
-    """Where the engine reads an event's mentions: the ingest-stamped column,
-    else the field it writes them to at load (``mentions.mentions_of``)."""
-    column = getattr(engine, "mentions_column", None)
-    return column or f"_mentions:{getattr(engine, 'actor_field', 'user')}"

@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from ..aggregators.types import AggregateResult, GroupedResult
 from ..exceptions import PrismQLError, PrismQLRuntimeError, PrismQLSyntaxError
 from ..explain import Explainer
+from ..plan.recorded import recording_bindings
 from ..reference import load_reference
 from ..types import NamedQueryResult
 from .config import (
@@ -534,7 +535,8 @@ def create_app(config: ServerConfig) -> FastAPI:
                     mentions_column=engine.mentions_column,
                 )
             try:
-                result = engine.execute(req.query)
+                with recording_bindings() as bound:
+                    result = engine.execute(req.query)
             except PrismQLSyntaxError as e:
                 syntax_pos = {
                     "line": getattr(e, "line", None),
@@ -608,7 +610,9 @@ def create_app(config: ServerConfig) -> FastAPI:
                 )
                 # kept with the result: a later page can still be explained,
                 # request dictionaries included (graph @aleph/prismql, #119)
-                stored.explainer = Explainer.build(engine, engine.to_ir(req.query))
+                stored.explainer = Explainer.build(
+                    engine, engine.to_ir(req.query), bindings=bound.keep(groups)
+                )
                 rid = state.results.put(stored)
                 page = partial(
                     page_payload,

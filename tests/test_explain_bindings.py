@@ -1,22 +1,16 @@
-"""Explained pages say what each pattern variable stood for in a group:
-read back from the group's events and the query's legs, since the engine
-projects bindings away when groups become id lists."""
+"""Explained pages say what each pattern variable stood for in a group —
+what the operator layer bound, recorded before groups become id lists
+(graph @aleph/prismql, #137)."""
 
 import json
 import warnings
 
 import pytest
-from antlr4 import CommonTokenStream, InputStream
 
 pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from prismql.explain_bindings import bindings  # noqa: E402
-from prismql.explain_plan import Plan, plan_of  # noqa: E402
-from prismql.grammar.generated.PrismQLLexer import PrismQLLexer  # noqa: E402
-from prismql.grammar.generated.PrismQLParser import PrismQLParser  # noqa: E402
-from prismql.ir.lower import lower_query  # noqa: E402
 from prismql.server.app import create_app  # noqa: E402
 from prismql.server.config import ServerConfig  # noqa: E402
 
@@ -139,59 +133,6 @@ def test_a_query_without_variables_has_no_bindings_key(client):
     assert _groups(client, query) == [(["1", "3"], None)]
 
 
-def _plan(query: str, mentions: str = "mentions") -> Plan | None:
-    parser = PrismQLParser(CommonTokenStream(PrismQLLexer(InputStream(query))))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        return plan_of(lower_query(parser.parse().query()), mentions)
-
-
-def test_an_unordered_row_lists_whole_assignments():
-    plan = _plan("SELECT field(agent, $a), mentions_user($y) INWINDOW 3")
-    docs = [
-        {"agent": "ann", "mentions": ["bob"]},
-        {"agent": "bob", "mentions": ["ann"]},
-    ]
-    assert bindings(plan, docs) == [
-        {"a": "ann", "y": "ann"},
-        {"a": "bob", "y": "bob"},
-    ]
-
-
-def test_values_compare_exactly():
-    plan = _plan("SELECT field(agent, $a), field(agent, $b) INWINDOW 1")
-    assert bindings(plan, [{"agent": "Ann"}, {"agent": "ann"}]) == [
-        {"a": "Ann", "b": "ann"},
-        {"a": "ann", "b": "Ann"},
-    ]
-    chain = _plan("SELECT field(agent, $a) FOLLOWED_BY field(agent, $a) INWINDOW 1")
-    assert bindings(chain, [{"agent": "Ann"}, {"agent": "ann"}]) == []
-
-
-def test_a_negated_variable_binds_nothing():
-    plan = _plan("SELECT field(agent, $a) FOLLOWED_BY field(agent, !$a) INWINDOW 3")
-    assert bindings(plan, [{"agent": "ann"}, {"agent": "bob"}]) == [{"a": "ann"}]
-
-
-def test_a_row_wider_than_six_recovers_nothing():
-    items = ", ".join(f"field(agent, $v{i})" for i in range(7))
-    plan = _plan(f"SELECT {items} INWINDOW 9")
-    assert bindings(plan, [{"agent": str(i)} for i in range(7)]) == []
-
-
-@pytest.mark.parametrize(
-    "query",
-    [
-        "SELECT field(agent, $a){2} INWINDOW 3",
-        "SELECT (SELECT field(agent, $a) INWINDOW 2) ; "
-        "(SELECT field(agent, $a) INWINDOW 2) INWINDOW 5",
-        "SELECT field(agent, ann) FOLLOWED_BY field(agent, bob) INWINDOW 2",
-    ],
-)
-def test_uncovered_shapes_have_no_plan(query):
-    assert _plan(query) is None
-
-
 def test_a_cut_assignment_list_says_so(tmp_path):
     names = ["bo", "cy", "di", "ed", "fa"]
     docs = [{"id": n, "time": T.format(0), "agent": n} for n in names]
@@ -208,3 +149,74 @@ def test_a_cut_assignment_list_says_so(tmp_path):
     )
     group = body["results"][0]
     assert len(group["bindings"]) == 20 and group["bindings_truncated"] is True
+
+
+# -- the engine's own bindings (graph @aleph/prismql, #137) -------------------
+
+
+def test_a_comma_row_lists_only_what_the_engine_bound(tmp_path):
+    docs = [
+        {"id": "1", "time": T.format(0), "agent": "ann", "kind": "ask"},
+        {"id": "2", "time": T.format(1), "agent": "bob", "kind": "answer"},
+    ]
+    client = _client(tmp_path, docs)
+    assert _groups(client, "SELECT field(agent, $a), field(agent, bob) INWINDOW 3") == [
+        (["1", "2"], [{"a": "ann"}])
+    ]
+    query = (
+        "SELECT field(kind, ask) AND field(agent, $a), "
+        "field(kind, answer) AND field(agent, $b) INWINDOW 3"
+    )
+    assert _groups(client, query) == [(["1", "2"], [{"a": "ann", "b": "bob"}])]
+
+
+def test_numbers_bind_as_the_engine_compares_them(tmp_path):
+    docs = [
+        {"id": "1", "time": T.format(0), "n": 1},
+        {"id": "2", "time": T.format(1), "f": 1.0},
+    ]
+    query = "SELECT field(n, $k) FOLLOWED_BY field(f, $k) INWINDOW 3"
+    assert _groups(_client(tmp_path, docs), query) == [(["1", "2"], [{"k": 1}])]
+
+
+def test_a_run_in_a_link_carries_its_binding(tmp_path):
+    docs = [
+        {"id": "1", "time": T.format(0), "agent": "ann", "kind": "try"},
+        {"id": "2", "time": T.format(1), "agent": "ann", "kind": "try"},
+        {"id": "3", "time": T.format(2), "agent": "ann", "kind": "done"},
+    ]
+    query = (
+        "SELECT RUN(field(kind, try) AND field(agent, $a), INWINDOW 1){2,} "
+        "FOLLOWED_BY field(agent, $a) AND field(kind, done) INWINDOW 3"
+    )
+    assert _groups(_client(tmp_path, docs), query) == [
+        (["1", "2", "3"], [{"a": "ann"}])
+    ]
+
+
+@pytest.mark.parametrize("use_ir", [True, False])
+def test_both_paths_record_the_same_bindings(use_ir):
+    from prismql import PrismQLEngine
+    from prismql.backends.memory import MemoryBackend
+    from prismql.plan.recorded import recording_bindings
+
+    docs = [{**d, "timestamp": i} for i, d in enumerate(DOCS)]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        engine = PrismQLEngine(MemoryBackend(docs), use_ir=use_ir, actor_field="agent")
+        with recording_bindings() as found:
+            groups = engine.execute(PING_BACK)
+    assert [found.of(g) for g in groups] == [
+        [{"a": "ann", "y": "bob"}],
+        [{"a": "bob", "y": "ann"}],
+    ]
+
+
+def test_a_step_that_carries_no_bindings_says_null(client):
+    query = (
+        "SELECT (SELECT field(agent, $a) FOLLOWED_BY field(agent, $b) INWINDOW 2) "
+        "FOLLOWED_BY (SELECT field(agent, $a)) INWINDOW 3"
+    )
+    body = client.post("/evaluate", json={"query": query, "explain": True}).json()
+    assert body["results"]
+    assert all(g["bindings"] is None for g in body["results"])

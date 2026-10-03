@@ -15,6 +15,7 @@ from typing import Any
 from ..exceptions import PrismQLRuntimeError
 from ..types import MessageId
 from . import _pl
+from .recorded import record
 
 
 def runs(
@@ -25,9 +26,12 @@ def runs(
     step: int,
     min_len: int,
     max_len: int | None,
+    binds: dict[str, str] | None = None,
 ) -> list[list[MessageId]]:
     """Id groups of the runs of ``frame`` with length ``min_len..max_len``,
-    each in the step axis's order, the groups ordered by where they start."""
+    each in the step axis's order, the groups ordered by where they start.
+    ``binds`` (variable -> the key field naming its part) is recorded as
+    each run's binding (``recorded``)."""
     pl = _pl()
     schema = frame.collect_schema()
     for key in keys:
@@ -53,9 +57,14 @@ def runs(
             pl.col("id"),
             pl.col("position").first().alias("_first"),
             pl.len(),
+            *[pl.col(f).first().alias(f"_v_{v}") for v, f in (binds or {}).items()],
         )
         .filter(pl.col("len") >= min_len)
     )
     if max_len is not None:
         runs_frame = runs_frame.filter(pl.col("len") <= max_len)
-    return [list(ids) for ids in runs_frame.sort("_first").collect()["id"].to_list()]
+    df = runs_frame.sort("_first").collect()
+    groups = [list(ids) for ids in df["id"].to_list()]
+    if binds:
+        record(groups, df.select(f"_v_{v}" for v in binds).to_dicts())
+    return groups

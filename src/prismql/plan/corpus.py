@@ -15,6 +15,7 @@ from typing import Any
 from ..backends.order import epoch_micros
 from ..types import MessageId
 from . import _pl
+from .recorded import record, recording
 
 RESULT_COLUMNS = ("group", "slot", "position", "id")
 
@@ -76,10 +77,18 @@ def to_groups(result: Any) -> list[list[MessageId]]:
     Lazy or eager; one aggregation, no per-group Python loop (graph #14)."""
     pl = _pl()
     lf = result.lazy() if hasattr(result, "lazy") else result
+    carry = (
+        [c for c in lf.collect_schema().names() if c.startswith("_v_")]
+        if recording()
+        else []
+    )
     df = (
         lf.sort(["group", "slot"])
         .group_by("group", maintain_order=True)
-        .agg(pl.col("id"))
+        .agg(pl.col("id"), *[pl.col(c).first() for c in carry])
         .collect()
     )
-    return [list(ids) for ids in df["id"].to_list()]
+    groups = [list(ids) for ids in df["id"].to_list()]
+    if carry:  # constant within a group (operators.py)
+        record(groups, df.select(carry).to_dicts())
+    return groups
