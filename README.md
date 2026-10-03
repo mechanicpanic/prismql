@@ -9,20 +9,39 @@ shape as the events themselves, grouped, never a summary.
   <img src="docs/assets/repl.svg" alt="PrismQL REPL on the freeCodeCamp chat corpus: a question, a reply from someone else, then the asker's thanks within five messages — three groups shown" width="780">
 </p>
 
+It does the job SQL's `MATCH_RECOGNIZE` was made for — finding a pattern
+across rows — with the pattern written as a pattern. Zhu, Huang &
+Chaudhuri open their VLDB 2023 paper on row-pattern recognition
+([*High-Performance Row Pattern Recognition Using Joins*](https://www.vldb.org/pvldb/vol16/p1181-zhu.pdf),
+PVLDB 16(5), [doi:10.14778/3579075.3579090](https://doi.org/10.14778/3579075.3579090))
+with a query over the City of Chicago crime records
+([`ijzp-q8t2`](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2)):
+a robbery, then a battery, then a motor vehicle theft, in the same place,
+within 30 minutes. As `MATCH_RECOGNIZE` that is about fifteen lines and
+five clauses — `PATTERN`, `DEFINE`, `MEASURES`, `AFTER MATCH SKIP`,
+`ORDER BY` — and the crimes in between are an undefined pattern variable
+that matches any row. In PrismQL:
+
 ```prismql
 SELECT field(type, ROBBERY) AND field(cell, $c)
-       FOLLOWED_BY field(type, BATTERY) AND field(cell, $c) DURING 30 minutes
+  FOLLOWED_BY field(type, BATTERY) AND field(cell, $c) DURING 30 minutes
+  FOLLOWED_BY field(type, "MOTOR VEHICLE THEFT") AND field(cell, $c) DURING 30 minutes
+  DURING 30 minutes
 ```
 ```
-field(type, ROBBERY) and field(cell, $c) ~>(30m) field(type, BATTERY) and field(cell, $c)
+field(type, ROBBERY) and field(cell, $c)
+  ~>(30m) field(type, BATTERY) and field(cell, $c)
+  ~>(30m) field(type, "MOTOR VEHICLE THEFT") and field(cell, $c)
+  |> during(30m)
 ```
 
-The robbery-then-battery shape is the opening query of Zhu, Huang &
-Chaudhuri, [*High-Performance Row Pattern Recognition Using
-Joins*](https://www.vldb.org/pvldb/vol16/p1181-zhu.pdf), PVLDB 16(5),
-2023 ([doi:10.14778/3579075.3579090](https://doi.org/10.14778/3579075.3579090)),
-Figure 1, over the City of Chicago crime records
-([data.cityofchicago.org, `ijzp-q8t2`](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2)).
+`FOLLOWED_BY` lets other events sit in between; `$c` keeps the place the
+same across the three (a grid cell, assigned at ingest); the last `DURING`
+bounds the whole chain. Over all 8.47M reports it returns **372 matches**,
+the same 372 as the paper's optimized SQL rewrite on DuckDB. The plain
+SQL join an analyst would write does not finish in 90 minutes, and the
+paper's own `MATCH_RECOGNIZE`, run on Flink as written, returns nothing.
+Numbers for six engines: [How fast is it](#how-fast-is-it).
 
 Two surface dialects — classic `SELECT` and a pipe dialect — lower to one
 intermediate representation and run through one operator layer, so the same
@@ -348,20 +367,38 @@ Results are lists of groups of message ids, in axis order within a group.
 
 ## How fast is it
 
-The flagship query of Zhu, Huang & Chaudhuri's VLDB 2023 paper on
-row-pattern recognition (PVLDB 16(5), Figure 1: robbery → battery → motor
-vehicle theft, co-located, within 30 minutes) over the full City of
-Chicago crime corpus — 8.47M events, 25 years — returns **372 matches**, in
-exact agreement with the optimized SQL formulation, while the naive SQL join
-does not finish in 90 minutes. The comparison against DuckDB, SQLite, Flink
-`MATCH_RECOGNIZE`, ClickHouse and Elastic EQL is in
-[docs/CHICAGO_BENCHMARK.md](docs/CHICAGO_BENCHMARK.md) — note that its
-timing column was measured before the operator layer landed and still names
-a Rust execution path that no longer exists.
+The Chicago query above, over the full corpus — 8,473,715 crime reports,
+2001–2026:
 
-Measured on the current engine, on a laptop: the same three-leg correlated
-chain over the 1M-row tier of that corpus answers in **under half a second**
-— 0.58 s on the first call, 0.42 s warm — for 28 matches, after a 5 s load.
+| engine | time | matches |
+|---|---|---|
+| PrismQL, before the operator layer (Rust kernels) | 3.8 s | 372 |
+| DuckDB, the paper's bucketized rewrite | 10.1 s | 372 |
+| Flink `MATCH_RECOGNIZE`, after three fixes to the paper's query | 6.8 s | 570¹ |
+| Elastic EQL | 20.2 s | 556¹ |
+| SQLite | 15.2 min | 372 |
+| DuckDB, the plain join | over 90 min, stopped | — |
+| ClickHouse `windowFunnel` | 0.24 s | counts only² |
+
+¹ Chicago timestamps are whole minutes, so "battery after robbery" is
+ambiguous when two reports share a minute. Engines that compare
+timestamps strictly agree at 372; Flink and EQL follow stream order and
+disagree with each other on ties.
+² It counts funnels and cannot say which events matched.
+
+PrismQL needs no rewrite to get there: conditions resolve to sets of
+events first, and the sequence step only looks near each candidate in
+time — the plan shape the paper's rewrite builds by hand.
+
+The engine today runs every operator as a Polars plan. On the 1M-row tier
+of the same corpus the query answers in **0.42 s** warm (0.58 s on the
+first call, after a 5 s load) on a laptop, for 28 matches. In the spike
+that led to that layer, the Polars plan for this query took 0.04 s on the
+full corpus, where the engine of the time took 3.4 s on its Rust kernels,
+with the same 372 tuples. The current engine's end-to-end time on the
+full corpus has not been re-measured.
+Methodology, runners and the portability findings:
+[docs/CHICAGO_BENCHMARK.md](docs/CHICAGO_BENCHMARK.md).
 
 ## Query language, in brief
 
