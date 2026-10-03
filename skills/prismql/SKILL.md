@@ -359,9 +359,11 @@ matches `field(name, v)` when any element is `v`.
 
 The twin keeps everything but the one thing the claim is about:
 
-- *"another agent"* → the same query with `$a` instead of `!$a`. The
-  contagion query above gives 71 groups on `village`, its same-agent twin
-  67: "spreads to others" is no stronger than "the agent asks again";
+- *"another agent"* → keep "another agent" and break the link in time or
+  in identity: shift one side's events by a fixed lag, or shuffle which
+  agent made each request, and rerun on that copy. `$a` instead of `!$a`
+  is **not** a twin — it asks another question ("does the agent ask
+  again?"), not the background the spread is measured against;
 - *"within an hour"* → widen or shift the window and see whether the count
   scales with the window (background) or stays (an effect);
 - *"after X"* → replace X by a control event of similar frequency;
