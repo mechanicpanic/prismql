@@ -20,6 +20,7 @@ from ..plan.bridge import (
     run_negative_link,
     run_single,
 )
+from ..plan.recorded import not_recording
 from ..processors.ordering import order_groups
 from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..processors.variables import VariableConstraint
@@ -177,7 +178,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 results = self._merge_restrictions(restriction_results, window_size)
         elif ctx.query_seq():
             # Multiple subqueries in sequence
-            subquery_results, is_positional = self.visitQuery_seq(ctx.query_seq())
+            # stages do not carry their variables across (#52): none recorded
+            with not_recording():
+                subquery_results, is_positional = self.visitQuery_seq(ctx.query_seq())
             # Each subquery validated its own variables inside its visitBody;
             # whatever the last one left behind must not be re-applied to the
             # merged groups (positions would point at the wrong messages).

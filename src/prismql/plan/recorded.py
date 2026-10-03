@@ -34,15 +34,14 @@ def _members(ids: Sequence[MessageId]) -> tuple[str, ...]:
 def _assignments(row: dict[str, Any]) -> list[Assignment]:
     """One group's ``_v_`` row -> its assignments: a list value is each of
     the names it still holds."""
-    names = sorted(c[3:] for c in row)
-    choices = []
-    for name in names:
+    names, choices = [], []
+    for name in sorted(c[3:] for c in row):
         value = row[f"_v_{name}"]
         held = value if isinstance(value, list) else [value]
         values = [v for v in held if v is not None]
-        if not values:
-            return []
-        choices.append(values)
+        if values:  # a variable with no value there binds nothing
+            names.append(name)
+            choices.append(values)
     return [dict(zip(names, combo, strict=True)) for combo in product(*choices)]
 
 
@@ -59,6 +58,8 @@ class Bindings:
         for ids, row in zip(groups, rows, strict=True):
             kept = found.setdefault(_members(ids), [])
             kept.extend(a for a in _assignments(row) if a not in kept)
+        for kept in found.values():  # the same order on every run and path
+            kept.sort(key=lambda a: [(k, str(v)) for k, v in sorted(a.items())])
         self._by_members.update(found)
 
     def of(self, ids: Sequence[MessageId]) -> list[Assignment] | None:
@@ -77,9 +78,11 @@ class Bindings:
 
     @property
     def nbytes(self) -> int:
-        """A rough size for the result store's budget."""
+        """A generous size for the result store's budget: measured near 400
+        bytes for a three-event group with one two-variable assignment."""
         return sum(
-            64 * len(key) + 96 * len(found) for key, found in self._by_members.items()
+            200 + 64 * len(key) + sum(150 + 80 * len(a) for a in found)
+            for key, found in self._by_members.items()
         )
 
 
@@ -93,6 +96,17 @@ def recording_bindings() -> Iterator[Bindings]:
     token = _CURRENT.set(found)
     try:
         yield found
+    finally:
+        _CURRENT.reset(token)
+
+
+@contextmanager
+def not_recording() -> Iterator[None]:
+    """Record nothing while the block runs — a step whose bindings do not
+    reach the answer (subquery stages, #52)."""
+    token = _CURRENT.set(None)
+    try:
+        yield
     finally:
         _CURRENT.reset(token)
 

@@ -78,7 +78,12 @@ def to_groups(result: Any) -> list[list[MessageId]]:
     pl = _pl()
     lf = result.lazy() if hasattr(result, "lazy") else result
     carry = (
-        [c for c in lf.collect_schema().names() if c.startswith("_v_")]
+        # ``_v_<var>`` only: ``_v_<var>__ne`` holds a !$var's comparison side
+        [
+            c
+            for c in lf.collect_schema().names()
+            if c.startswith("_v_") and "__" not in c[3:]
+        ]
         if recording()
         else []
     )

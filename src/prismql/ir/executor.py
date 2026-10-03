@@ -21,6 +21,7 @@ from typing import Any
 from ..aggregators.types import AggregateResult, GroupedResult
 from ..exceptions import PrismQLRuntimeError
 from ..plan.bridge import run_body_span
+from ..plan.recorded import not_recording
 from ..processors.ordering import order_groups
 from ..processors.temporal import TemporalProcessor, TemporalUnit
 from ..types import (
@@ -163,7 +164,9 @@ class IRExecutor(PrismQLVisitor):
             else:
                 results = self._merge_restrictions(restriction_results, window_size)
         elif isinstance(q.source, SubqueryChain):
-            subquery_results, is_positional = self.execute_query_seq(q.source)
+            # stages do not carry their variables across (#52): none recorded
+            with not_recording():
+                subquery_results, is_positional = self.execute_query_seq(q.source)
             # Each subquery validated its own variables inside its body;
             # whatever the last one left behind must not be re-applied.
             self.variable_constraints = []

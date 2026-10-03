@@ -220,3 +220,86 @@ def test_a_step_that_carries_no_bindings_says_null(client):
     body = client.post("/evaluate", json={"query": query, "explain": True}).json()
     assert body["results"]
     assert all(g["bindings"] is None for g in body["results"])
+
+
+def _bound(docs: list[dict], query: str, use_ir: bool) -> list:
+    from prismql import PrismQLEngine
+    from prismql.backends.memory import MemoryBackend
+    from prismql.plan.recorded import recording_bindings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        engine = PrismQLEngine(
+            MemoryBackend([dict(d) for d in docs], timestamp_fields=["time"]),
+            use_ir=use_ir,
+            actor_field="agent",
+            timestamp_field="time",
+        )
+        with recording_bindings() as found:
+            groups = engine.execute(query)
+    return [(list(g), found.of(g)) for g in groups]
+
+
+BOTH = pytest.mark.parametrize("use_ir", [True, False])
+ASK = [
+    {"id": "1", "time": T.format(0), "agent": "ann", "kind": "try"},
+    {"id": "2", "time": T.format(1), "agent": "ann", "kind": "try"},
+    {"id": "3", "time": T.format(2), "agent": "bob", "kind": "done"},
+]
+
+
+@BOTH
+def test_review_cases_hold_on_both_paths(use_ir):
+    pair = ASK[:1] + ASK[2:]
+    assert _bound(
+        pair, "SELECT field(agent, $a), field(agent, bob) INWINDOW 3", use_ir
+    ) == [(["1", "3"], [{"a": "ann"}])]
+    nums = [
+        {"id": "1", "time": T.format(0), "n": 1},
+        {"id": "2", "time": T.format(1), "f": 1.0},
+    ]
+    assert _bound(
+        nums, "SELECT field(n, $k) FOLLOWED_BY field(f, $k) INWINDOW 3", use_ir
+    ) == [(["1", "2"], [{"k": 1}])]
+
+
+@BOTH
+def test_an_inequality_in_a_run_link_is_not_a_variable(use_ir):
+    query = (
+        "SELECT RUN(field(kind, try) AND field(agent, $a), INWINDOW 1){2,} "
+        "FOLLOWED_BY field(agent, !$a) AND field(kind, done) INWINDOW 3"
+    )
+    assert _bound(ASK, query, use_ir) == [(["1", "2", "3"], [{"a": "ann"}])]
+
+
+@BOTH
+def test_the_excluded_side_of_subqueries_binds_nothing_shown(use_ir):
+    docs = [
+        {"id": str(i), "time": T.format(i), "agent": a}
+        for i, a in enumerate(["ann", "ann", "bob", "cy"], start=1)
+    ]
+    query = (
+        "SELECT (SELECT field(agent, $a) FOLLOWED_BY field(agent, $b) INWINDOW 1) "
+        "NOT_FOLLOWED_BY (SELECT field(agent, $c) FOLLOWED_BY field(agent, $d) "
+        "INWINDOW 1) INWINDOW 1"
+    )
+    got = _bound(docs, query, use_ir)
+    assert got and all(found is None for _, found in got)
+
+
+def test_assignments_come_in_one_order_on_both_paths():
+    docs = [
+        {"id": str(i), "time": T.format(i), "agent": a}
+        for i, a in enumerate("pqrs", start=1)
+    ]
+    query = (
+        "SELECT field(agent, $a), field(agent, $b), field(agent, $c), "
+        "field(agent, $d) INWINDOW 4"
+    )
+    ir, legacy = _bound(docs, query, True), _bound(docs, query, False)
+    assert ir == legacy
+    found = ir[0][1]
+    assert len(found) == 24
+    assert found == sorted(
+        found, key=lambda a: [(k, str(v)) for k, v in sorted(a.items())]
+    )
