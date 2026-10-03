@@ -22,16 +22,19 @@ HERE = Path(__file__).parent
 GREEN_BOLD = "\x1b[1;32m"
 RESET = "\x1b[0m"
 
-QUERY = (
-    "SELECT field(source, news) AND contains(sanctions) "
-    "FOLLOWED_BY field(source, pulse) AND contains(panic) DURING 4 hours"
-)
+# A question, someone else's reply, and the asker's thanks — within 5 messages
+LINES = [
+    "SELECT from($u) AND is_question()",
+    "FOLLOWED_BY from(!$u)",
+    "FOLLOWED_BY from($u) AND contains(thanks) INWINDOW 5 LIMIT 3 OFFSET 3",
+]
+QUERY = " ".join(LINES)
 
 
 def main() -> None:
-    config: ServerConfig = load_config(HERE / "prismql.toml")
+    config: ServerConfig = load_config(HERE / "repl.toml")
     engine = build_engine(config)
-    config.data = "corpus.jsonl"  # display the relative path in the banner
+    config.data = "demo/data/fcc.json"  # display the relative path in the banner
     repl = PrismQLRepl(engine=engine, server_config=config)
 
     print("PrismQL Interactive REPL")
@@ -45,11 +48,11 @@ def main() -> None:
             text, PrismQLLexer(), Terminal256Formatter(style="monokai")
         ).rstrip("\n")
 
-    # Render the query as the wrapped two-line input it is at this width
-    first, rest = QUERY.split(" FOLLOWED_BY ", 1)
+    # Render the query as the wrapped input it is at this width
     prompt = f"{GREEN_BOLD}prismql[0]>{RESET} "
-    print(f"{prompt}{colorize(first)}")
-    print(" " * 12 + colorize("FOLLOWED_BY " + rest))
+    print(f"{prompt}{colorize(LINES[0])}")
+    for line in LINES[1:]:
+        print(" " * 12 + colorize(line))
 
     start = time.time()
     result = repl.engine.execute(QUERY)

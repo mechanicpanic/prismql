@@ -1,67 +1,99 @@
-<svg height="351.2" width="688" xmlns="http://www.w3.org/2000/svg">
+<svg height="495.2" width="731.2" xmlns="http://www.w3.org/2000/svg">
 <g transform="translate(32,16)">
-<filter filterUnits="userSpaceOnUse" height="359.2" id="shadow" width="696" x="-32" y="-24">
+<filter filterUnits="userSpaceOnUse" height="503.2" id="shadow" width="739.2" x="-32" y="-24">
 <feGaussianBlur stdDeviation="12"/>
 </filter>
-<rect fill="#000000c0" filter="url(#shadow)" height="287.2" rx="10" ry="10" width="624" x="4" y="12"/>
-<rect fill="#282c34" height="287.2" rx="10" ry="10" width="624"/>
+<rect fill="#000000c0" filter="url(#shadow)" height="431.2" rx="10" ry="10" width="667.2" x="4" y="12"/>
+<rect fill="#282c34" height="431.2" rx="10" ry="10" width="667.2"/>
 <clipPath id="header">
-<rect height="28" width="624"/>
+<rect height="28" width="667.2"/>
 </clipPath>
-<rect clip-path="url(#header)" fill="#383837" height="56" rx="10" ry="10" width="624"/>
-<line stroke="#000000c0" stroke-width="0.5" x1="0" x2="624" y1="28" y2="28"/><text dominant-baseline="central" fill="#b3b3b3" font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" x="312" y="14">prismql</text>
+<rect clip-path="url(#header)" fill="#383837" height="56" rx="10" ry="10" width="667.2"/>
+<line stroke="#000000c0" stroke-width="0.5" x1="0" x2="667.2" y1="28" y2="28"/><text dominant-baseline="central" fill="#b3b3b3" font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" x="333.6" y="14">prismql</text>
 <g>
 <circle cx="14" cy="14" fill="#ff5f56" r="6" stroke="#ff5f56" stroke-width="0.5"/>
 <circle cx="34" cy="14" fill="#ffbd2e" r="6" stroke="#ffbd2e" stroke-width="0.5"/>
 <circle cx="54" cy="14" fill="#28c941" r="6" stroke="#28c941" stroke-width="0.5"/>
 </g>
-<svg class="terminal" font-family="JetBrains Mono, Fira Code, Source Code Pro, Cascadia Code, Consolas, Menlo, Monaco, DejaVu Sans Mono, monospace, Symbols Nerd Font Mono, Cascadia Mono" font-size="12" height="259.2" width="624" y="28">
+<svg class="terminal" font-family="JetBrains Mono, Fira Code, Source Code Pro, Cascadia Code, Consolas, Menlo, Monaco, DejaVu Sans Mono, monospace, Symbols Nerd Font Mono, Cascadia Mono" font-size="12" height="403.2" width="667.2" y="28">
 <svg fill="#dcdfe4" x="9.6" y="7.2">
 <g>
-<svg height="244.8" viewBox="0 0 50.4 20.4" width="604.8">
-<g stroke-width="0.025"/>
+<svg height="388.8" viewBox="0 0 54 32.4" width="648">
+<g stroke-width="0.025">
+<path d="M17.4,7.2 H18 V8.4 H17.4 Z" fill="#121212" stroke="#121212"/>
+</g>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="0">
+<svg height="14.4" overflow="hidden" width="648" y="0">
 <text xml:space="preserve" y="0.96em"><tspan fill="#dcdfe4">PrismQL </tspan><tspan fill="#dcdfe4">Interactive </tspan><tspan fill="#dcdfe4">REPL </tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="14.4">
+<svg height="14.4" overflow="hidden" width="648" y="14.4">
 <text xml:space="preserve" y="0.96em"><tspan fill="#dcdfe4">Type </tspan><tspan fill="#dcdfe4">\help </tspan><tspan fill="#dcdfe4">for </tspan><tspan fill="#dcdfe4">help, </tspan><tspan fill="#dcdfe4">\schema </tspan><tspan fill="#dcdfe4">to </tspan><tspan fill="#dcdfe4">inspect </tspan><tspan fill="#dcdfe4">the </tspan><tspan fill="#dcdfe4">corpus, </tspan><tspan fill="#dcdfe4">\quit </tspan><tspan fill="#dcdfe4">to </tspan><tspan fill="#dcdfe4">exit </tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="28.8">
-<text xml:space="preserve" y="0.96em"><tspan fill="#dcdfe4">Loaded: </tspan><tspan fill="#dcdfe4">6 </tspan><tspan fill="#dcdfe4">documents </tspan><tspan fill="#dcdfe4">via </tspan><tspan fill="#dcdfe4">MemoryBackend </tspan><tspan fill="#dcdfe4">from </tspan><tspan fill="#dcdfe4">corpus.jsonl </tspan><tspan fill="#dcdfe4">· </tspan><tspan fill="#dcdfe4">2 </tspan><tspan fill="#dcdfe4">dictionaries </tspan></text>
+<svg height="14.4" overflow="hidden" width="648" y="28.8">
+<text xml:space="preserve" y="0.96em"><tspan fill="#dcdfe4">Loaded: </tspan><tspan fill="#dcdfe4">4145 </tspan><tspan fill="#dcdfe4">documents </tspan><tspan fill="#dcdfe4">via </tspan><tspan fill="#dcdfe4">MemoryBackend </tspan><tspan fill="#dcdfe4">from </tspan><tspan fill="#dcdfe4">demo/data/fcc.json </tspan><tspan fill="#dcdfe4">· </tspan><tspan fill="#dcdfe4">1 </tspan><tspan fill="#dcdfe4">dictionary </tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="43.2">
+<svg height="14.4" overflow="hidden" width="648" y="43.2">
 <text xml:space="preserve" y="0.96em"><tspan fill="#dcdfe4">Features: </tspan><tspan fill="#dcdfe4">history, </tspan><tspan fill="#dcdfe4">syntax </tspan><tspan fill="#dcdfe4">highlighting </tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="72">
-<text xml:space="preserve" y="0.96em"><tspan fill="#98c379" font-weight="bold">prismql[0]&gt;</tspan><tspan> </tspan><tspan fill="#5fd7ff">SELECT</tspan><tspan> </tspan><tspan fill="#f7f9fc">field(source, </tspan><tspan fill="#f7f9fc">news) </tspan><tspan fill="#ff5f87">AND</tspan><tspan> </tspan><tspan fill="#f7f9fc">contains(sanctions)</tspan></text>
+<svg height="14.4" overflow="hidden" width="648" y="72">
+<text xml:space="preserve" y="0.96em"><tspan fill="#98c379" font-weight="bold">prismql[0]&gt;</tspan><tspan> </tspan><tspan fill="#5fd7ff">SELECT</tspan><tspan> </tspan><tspan fill="#afd700">from</tspan><tspan fill="#eeeeee">($u) </tspan><tspan fill="#ff5f87">AND</tspan><tspan> </tspan><tspan fill="#afd700">is_question</tspan><tspan fill="#eeeeee">()</tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="86.4">
-<text xml:space="preserve" y="0.96em"><tspan>            </tspan><tspan fill="#ff5f87">FOLLOWED_BY</tspan><tspan> </tspan><tspan fill="#f7f9fc">field(source, </tspan><tspan fill="#f7f9fc">pulse) </tspan><tspan fill="#ff5f87">AND</tspan><tspan> </tspan><tspan fill="#f7f9fc">contains(panic) </tspan><tspan fill="#5fd7ff">DURING</tspan><tspan> </tspan><tspan fill="#af87ff">4</tspan><tspan> </tspan><tspan fill="#5fd7ff">hours</tspan></text>
+<svg height="14.4" overflow="hidden" width="648" y="86.4">
+<text xml:space="preserve" y="0.96em"><tspan>            </tspan><tspan fill="#ff5f87">FOLLOWED_BY</tspan><tspan> </tspan><tspan fill="#afd700">from</tspan><tspan fill="#eeeeee">(</tspan><tspan fill="#ff0087">!</tspan><tspan fill="#eeeeee">$u)</tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="115.2">
-<text xml:space="preserve" y="0.96em"><tspan fill="#dcdfe4">Found </tspan><tspan fill="#dcdfe4">1 </tspan><tspan fill="#dcdfe4">result(s): </tspan></text>
+<svg height="14.4" overflow="hidden" width="648" y="100.8">
+<text xml:space="preserve" y="0.96em"><tspan>            </tspan><tspan fill="#ff5f87">FOLLOWED_BY</tspan><tspan> </tspan><tspan fill="#afd700">from</tspan><tspan fill="#eeeeee">($u) </tspan><tspan fill="#ff5f87">AND</tspan><tspan> </tspan><tspan fill="#afd700">contains</tspan><tspan fill="#eeeeee">(thanks) </tspan><tspan fill="#5fd7ff">INWINDOW</tspan><tspan> </tspan><tspan fill="#af87ff">5</tspan><tspan> </tspan><tspan fill="#5fd7ff">LIMIT</tspan><tspan> </tspan><tspan fill="#af87ff">3</tspan><tspan> </tspan><tspan fill="#5fd7ff">OFFSET</tspan><tspan> </tspan><tspan fill="#af87ff">3</tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="144">
+<svg height="14.4" overflow="hidden" width="648" y="129.6">
+<text xml:space="preserve" y="0.96em"><tspan fill="#dcdfe4">Found </tspan><tspan fill="#dcdfe4">3 </tspan><tspan fill="#dcdfe4">result(s): </tspan></text>
+</svg>
+<svg height="14.4" overflow="hidden" width="648" y="158.4">
 <text xml:space="preserve" y="0.96em"><tspan>  </tspan><tspan fill="#dcdfe4">Group </tspan><tspan fill="#dcdfe4">1: </tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="158.4">
-<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[1] </tspan><tspan fill="#dcdfe4">rbc: </tspan><tspan fill="#dcdfe4">New </tspan><tspan fill="#dcdfe4">sanctions </tspan><tspan fill="#dcdfe4">package </tspan><tspan fill="#dcdfe4">targets </tspan><tspan fill="#dcdfe4">energy </tspan><tspan fill="#dcdfe4">exports </tspan></text>
+<svg height="14.4" overflow="hidden" width="648" y="172.8">
+<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[1049] </tspan><tspan fill="#dcdfe4">Sonju: </tspan><tspan fill="#dcdfe4">OMG.. </tspan><tspan fill="#dcdfe4">thanks! </tspan><tspan fill="#dcdfe4">what </tspan><tspan fill="#dcdfe4">does </tspan><tspan fill="#dcdfe4">the </tspan><tspan fill="#dcdfe4">&lt;small&gt;&lt;/small&gt; </tspan><tspan fill="#dcdfe4">element </tspan><tspan fill="#dcdfe4">funct... </tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="172.8">
-<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[2] </tspan><tspan fill="#dcdfe4">trader99: </tspan><tspan fill="#dcdfe4">panic </tspan><tspan fill="#dcdfe4">selling </tspan><tspan fill="#dcdfe4">everything </tspan><tspan fill="#dcdfe4">before </tspan><tspan fill="#dcdfe4">the </tspan><tspan fill="#dcdfe4">close </tspan></text>
+<svg height="14.4" overflow="hidden" width="648" y="187.2">
+<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[1050] </tspan><tspan fill="#dcdfe4">iyeager2004: </tspan><tspan fill="#dcdfe4">&lt;small&gt; </tspan><tspan fill="#dcdfe4">is </tspan><tspan fill="#dcdfe4">a </tspan><tspan fill="#dcdfe4">css </tspan><tspan fill="#dcdfe4">tag. </tspan><tspan fill="#dcdfe4">Later </tspan><tspan fill="#dcdfe4">you'll </tspan><tspan fill="#dcdfe4">learn </tspan><tspan fill="#dcdfe4">that </tspan><tspan fill="#dcdfe4">you </tspan><tspan fill="#dcdfe4">can </tspan><tspan fill="#dcdfe4">mak... </tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="201.6">
-<text xml:space="preserve" y="0.96em"><tspan fill="#dcdfe4">(Query </tspan><tspan fill="#dcdfe4">executed </tspan><tspan fill="#dcdfe4">in </tspan><tspan fill="#dcdfe4">0.004s) </tspan></text>
+<svg height="14.4" overflow="hidden" width="648" y="201.6">
+<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[1051] </tspan><tspan fill="#dcdfe4">Sonju: </tspan><tspan fill="#dcdfe4">Cool </tspan><tspan fill="#dcdfe4">@iyeager2004 </tspan><tspan fill="#dcdfe4">. </tspan><tspan fill="#dcdfe4">Thanks </tspan><tspan fill="#dcdfe4">a </tspan><tspan fill="#dcdfe4">lot </tspan><tspan fill="#dcdfe4">for </tspan><tspan fill="#dcdfe4">taking </tspan><tspan fill="#dcdfe4">time </tspan><tspan fill="#dcdfe4">to </tspan><tspan fill="#dcdfe4">expla... </tspan></text>
 </svg>
-<svg height="14.4" overflow="hidden" width="604.8" y="230.4">
+<svg height="14.4" overflow="hidden" width="648" y="216">
+<text xml:space="preserve" y="0.96em"><tspan>  </tspan><tspan fill="#dcdfe4">Group </tspan><tspan fill="#dcdfe4">2: </tspan></text>
+</svg>
+<svg height="14.4" overflow="hidden" width="648" y="230.4">
+<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[1913] </tspan><tspan fill="#dcdfe4">AnthonyIsaacs: </tspan><tspan fill="#dcdfe4">The </tspan><tspan fill="#dcdfe4">first </tspan><tspan fill="#dcdfe4">task </tspan><tspan fill="#dcdfe4">for </tspan><tspan fill="#dcdfe4">every </tspan><tspan fill="#dcdfe4">lesson </tspan><tspan fill="#dcdfe4">in </tspan><tspan fill="#dcdfe4">the </tspan><tspan fill="#dcdfe4">Chrome </tspan><tspan fill="#dcdfe4">Dev </tspan><tspan fill="#dcdfe4">Tools </tspan><tspan fill="#dcdfe4">c... </tspan></text>
+</svg>
+<svg height="14.4" overflow="hidden" width="648" y="244.8">
+<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[1914] </tspan><tspan fill="#dcdfe4">Maximization: </tspan><tspan fill="#dcdfe4">@AnthonyIsaacs </tspan><tspan fill="#dcdfe4">yup, </tspan><tspan fill="#dcdfe4">it's </tspan><tspan fill="#dcdfe4">a </tspan><tspan fill="#dcdfe4">bug </tspan><tspan fill="#dcdfe4">relaoding </tspan><tspan fill="#dcdfe4">the </tspan><tspan fill="#dcdfe4">page </tspan><tspan fill="#dcdfe4">fixes </tspan><tspan fill="#dcdfe4">t... </tspan></text>
+</svg>
+<svg height="14.4" overflow="hidden" width="648" y="259.2">
+<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[1915] </tspan><tspan fill="#dcdfe4">AnthonyIsaacs: </tspan><tspan fill="#dcdfe4">Thanks </tspan></text>
+</svg>
+<svg height="14.4" overflow="hidden" width="648" y="273.6">
+<text xml:space="preserve" y="0.96em"><tspan>  </tspan><tspan fill="#dcdfe4">Group </tspan><tspan fill="#dcdfe4">3: </tspan></text>
+</svg>
+<svg height="14.4" overflow="hidden" width="648" y="288">
+<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[1930] </tspan><tspan fill="#dcdfe4">GrahamFischer: </tspan><tspan fill="#dcdfe4">Hello </tspan><tspan fill="#dcdfe4">all, </tspan><tspan fill="#dcdfe4">I </tspan><tspan fill="#dcdfe4">have </tspan><tspan fill="#dcdfe4">a </tspan><tspan fill="#dcdfe4">question </tspan><tspan fill="#dcdfe4">regarding </tspan><tspan fill="#dcdfe4">the </tspan><tspan fill="#dcdfe4">responsive </tspan><tspan fill="#dcdfe4">blo... </tspan></text>
+</svg>
+<svg height="14.4" overflow="hidden" width="648" y="302.4">
+<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[1932] </tspan><tspan fill="#dcdfe4">RussEby: </tspan><tspan fill="#dcdfe4">@GrahamFischer </tspan><tspan fill="#dcdfe4">I'm </tspan><tspan fill="#dcdfe4">pretty </tspan><tspan fill="#dcdfe4">sure </tspan><tspan fill="#dcdfe4">whatever </tspan><tspan fill="#dcdfe4">question </tspan><tspan fill="#dcdfe4">you </tspan><tspan fill="#dcdfe4">have... </tspan></text>
+</svg>
+<svg height="14.4" overflow="hidden" width="648" y="316.8">
+<text xml:space="preserve" y="0.96em"><tspan>    </tspan><tspan fill="#dcdfe4">[1940] </tspan><tspan fill="#dcdfe4">GrahamFischer: </tspan><tspan fill="#dcdfe4">PS. </tspan><tspan fill="#dcdfe4">Thanks </tspan><tspan fill="#dcdfe4">for </tspan><tspan fill="#dcdfe4">the </tspan><tspan fill="#dcdfe4">help! </tspan></text>
+</svg>
+<svg height="14.4" overflow="hidden" width="648" y="345.6">
+<text xml:space="preserve" y="0.96em"><tspan fill="#dcdfe4">(Query </tspan><tspan fill="#dcdfe4">executed </tspan><tspan fill="#dcdfe4">in </tspan><tspan fill="#dcdfe4">0.024s) </tspan></text>
+</svg>
+<svg height="14.4" overflow="hidden" width="648" y="374.4">
 <text xml:space="preserve" y="0.96em"><tspan fill="#98c379" font-weight="bold">prismql[1]&gt;</tspan></text>
 </svg>
 </g>
 </svg>
 </svg>
-<rect fill="none" height="287.2" rx="10" ry="10" stroke="#000000" stroke-width="0.5" width="624"/>
-<rect fill="none" height="285.2" rx="9" ry="9" stroke="#f0f0f080" stroke-width="0.5" width="622" x="1" y="1"/>
+<rect fill="none" height="431.2" rx="10" ry="10" stroke="#000000" stroke-width="0.5" width="667.2"/>
+<rect fill="none" height="429.2" rx="9" ry="9" stroke="#f0f0f080" stroke-width="0.5" width="665.2" x="1" y="1"/>
 </g>
 <style>
 @font-face {

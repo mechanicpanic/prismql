@@ -1,0 +1,7 @@
+# The REPL screenshot runs on the demo's freeCodeCamp chat corpus.
+[backend]
+type = "memory"
+data = "../../demo/data/fcc.json"
+
+[dictionaries]
+thanks = ["thanks", "thank you", "thx", "ty"]

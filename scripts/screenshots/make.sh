@@ -11,7 +11,7 @@ termframe \
   --title "prismql" \
   --mode dark \
   --embed-fonts true \
-  -W 84 -H auto \
+  -W 90 -H auto \
   -o "$OUT/repl.svg" \
   -- uv run --project ../.. python repl_shot.py
 

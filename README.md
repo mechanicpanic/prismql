@@ -6,7 +6,7 @@ records. You name a shape in the stream; it returns every instance of that
 shape as the events themselves, grouped, never a summary.
 
 <p align="center">
-  <img src="docs/assets/repl.svg" alt="PrismQL REPL running a cross-corpus lead-lag query: news mentioning sanctions FOLLOWED_BY panic on a retail feed DURING 4 hours" width="780">
+  <img src="docs/assets/repl.svg" alt="PrismQL REPL on the freeCodeCamp chat corpus: a question, a reply from someone else, then the asker's thanks within five messages — three groups shown" width="780">
 </p>
 
 ```prismql
@@ -16,6 +16,13 @@ SELECT field(type, ROBBERY) AND field(cell, $c)
 ```
 field(type, ROBBERY) and field(cell, $c) ~>(30m) field(type, BATTERY) and field(cell, $c)
 ```
+
+The robbery-then-battery shape is the opening query of Zhu, Huang &
+Chaudhuri, [*High-Performance Row Pattern Recognition Using
+Joins*](https://www.vldb.org/pvldb/vol16/p1181-zhu.pdf), PVLDB 16(5),
+2023 ([doi:10.14778/3579075.3579090](https://doi.org/10.14778/3579075.3579090)),
+Figure 1, over the City of Chicago crime records
+([data.cityofchicago.org, `ijzp-q8t2`](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2)).
 
 Two surface dialects — classic `SELECT` and a pipe dialect — lower to one
 intermediate representation and run through one operator layer, so the same
@@ -296,8 +303,9 @@ Results are lists of groups of message ids, in axis order within a group.
 
 ## How fast is it
 
-The VLDB 2023 row-pattern-recognition flagship query (robbery → battery →
-motor vehicle theft, co-located, within 30 minutes) over the full City of
+The flagship query of Zhu, Huang & Chaudhuri's VLDB 2023 paper on
+row-pattern recognition (PVLDB 16(5), Figure 1: robbery → battery → motor
+vehicle theft, co-located, within 30 minutes) over the full City of
 Chicago crime corpus — 8.47M events, 25 years — returns **372 matches**, in
 exact agreement with the optimized SQL formulation, while the naive SQL join
 does not finish in 90 minutes. The comparison against DuckDB, SQLite, Flink
