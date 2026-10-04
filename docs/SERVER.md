@@ -260,7 +260,9 @@ request in Markdown — corpus, query, how many groups, a `curl` that
 reruns it against `$PRISMQL_SERVER_URL`, and the request's own board
 address, `/board/#q<seq>` — on the clipboard. A request's own
 `dictionaries` are kept in the journal with their terms, so *Run again*
-and a copied finding replay them.
+and a copied finding replay them. The board works by keyboard too: `j`/`k`
+walk the journal, `f` opens the full view, `e` the editor, `c` copies the
+finding, `/` searches, and `?` lists the rest.
 
 A client names itself with the header `X-PrismQL-Client: <name>`. The
 board's own editor sends `board`. A request without the header shows as its

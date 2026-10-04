@@ -143,7 +143,7 @@
     }
   }
 
-  var api = { render: render, tick: tick };
+  var api = { render: render, tick: tick, visible: function () { return lastVisible; } }; // board-keys.js
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLJournalList = api;
 })(typeof window !== "undefined" ? window : globalThis);

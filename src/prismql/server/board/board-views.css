@@ -115,3 +115,7 @@ mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
 .slotno{display:inline-block;margin-right:4px;color:var(--accent,#2f6fdb);font-weight:600}
 .bindings{font:11px "JetBrains Mono",monospace;color:var(--muted,#667);margin:-4px 0 8px;overflow-wrap:anywhere}
 .gdh .bindings{display:block;margin:4px 0 0}
+#keys-help{position:fixed;right:24px;bottom:24px;z-index:50;padding:14px 18px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);box-shadow:0 8px 24px rgba(0,0,0,.25);font-size:12px;color:var(--text)}
+#keys-help dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}
+#keys-help dt{font-family:"JetBrains Mono",monospace;color:var(--accent);white-space:nowrap}
+#keys-help dd{margin:0;color:var(--text-2)}

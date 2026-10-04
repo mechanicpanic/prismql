@@ -82,3 +82,19 @@ test("a request's own dictionaries replay from the journal; an old entry without
   const md = Finding.findingMarkdown({ corpus: "c", query: "SELECT contains(frame)", total: 2, dictionary_terms: terms }, "http://h");
   assert.match(md, /"dictionaries":\{"frame":\["frame"\]\}/);
 });
+
+test("keyAction: journal keys, full-view paging, and nothing while typing or with a modifier", () => {
+  const Keys = require(B + "board-keys.js");
+  const base = { typing: false, modified: false, handled: false, full: false, help: false };
+  assert.equal(Keys.keyAction("j", base), "next");
+  assert.equal(Keys.keyAction("ArrowUp", base), "prev");
+  assert.equal(Keys.keyAction("f", base), "full");
+  assert.equal(Keys.keyAction("c", base), "copy");
+  assert.equal(Keys.keyAction("j", { ...base, typing: true }), null);
+  assert.equal(Keys.keyAction("c", { ...base, modified: true }), null);
+  assert.equal(Keys.keyAction("ArrowDown", { ...base, handled: true }), null, "the journal list moved already");
+  assert.equal(Keys.keyAction("]", { ...base, full: true }), "pageNext");
+  assert.equal(Keys.keyAction("j", { ...base, full: true }), null, "the full view keeps its own keys");
+  assert.equal(Keys.keyAction("Escape", { ...base, help: true }), "help");
+  assert.equal(Keys.keyAction("j", { ...base, help: true }), null);
+});
