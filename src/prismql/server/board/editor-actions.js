@@ -29,6 +29,8 @@
     // request-scoped dictionaries, but the same note the inspector shows
     // follows the query text in here too — the board never held the terms.
     ed.dictNote = L.hasRequestDictionaries(entry) ? L.DICT_NOTE : null;
+    ed.dictionaries = entry.dictionary_terms || null; // runs with it again (#175)
+    if (ed.dictionaries) ed.dictNote = "runs with its own dictionaries: " + Object.keys(ed.dictionaries).join(", ");
     ed.rev++;
   }
 
@@ -76,6 +78,7 @@
     ed.kind = kind;
     ed.error = null;
     ed.dictNote = null;
+    ed.dictionaries = null;
     ed.rev++;
     ed.focus = true;
     render();

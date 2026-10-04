@@ -20,6 +20,7 @@
     var head = "**" + title + "** — corpus `" + entry.corpus + "`" + (found ? ", " + found : "")
       + (entry.ts ? " (" + String(entry.ts).slice(0, 16).replace("T", " ") + " UTC)" : "");
     var body = { query: entry.query, corpus: entry.corpus };
+    if (entry.dictionary_terms) body.dictionaries = entry.dictionary_terms; // #175
     // A reader reruns against their own server, never this one: the
     // address is a variable, the corpus is named, ours is a comment.
     var curl = "curl -s \"$PRISMQL_SERVER_URL/evaluate\" -H 'content-type: application/json' "

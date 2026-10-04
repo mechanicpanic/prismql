@@ -11,6 +11,7 @@
   function buildEvaluateBody(ed) {
     var body = { query: ed.query };
     if (ed.corpus) body.corpus = ed.corpus;
+    if (ed.dictionaries) body.dictionaries = ed.dictionaries; // replayed from the journal (#175)
     return body;
   }
 
@@ -107,12 +108,13 @@
 
   // Finding 3: "Run again" replays a request by its own kind — evaluate
   // through the editor (no body here, null), search/similar directly
-  // against their own endpoints. A request that used request-scoped
-  // dictionaries can't be replayed: the board never held their terms.
-  var DICT_NOTE = "used request dictionaries — the board can't replay them";
+  // against their own endpoints. A request's own dictionaries replay with
+  // it: the journal keeps their terms (graph @aleph/prismql, #175). Only an
+  // entry logged before that names dictionaries it cannot give back.
+  var DICT_NOTE = "used request dictionaries logged without their terms — the board can't replay them";
 
   function hasRequestDictionaries(entry) {
-    return !!(entry.dictionaries && entry.dictionaries.length);
+    return !!(entry.dictionaries && entry.dictionaries.length) && !entry.dictionary_terms;
   }
 
   // Finding 3 round 2, #3: replay exactly what the journal has — the

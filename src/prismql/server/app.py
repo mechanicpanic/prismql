@@ -518,14 +518,7 @@ def create_app(config: ServerConfig) -> FastAPI:
                 # visitor are new. The base engine is untouched.
                 from ..engine import PrismQLEngine
 
-                overlay = {
-                    name: (
-                        value.model_dump(exclude_none=True)
-                        if isinstance(value, DictSpec)
-                        else value
-                    )
-                    for name, value in req.dictionaries.items()
-                }
+                overlay = _dictionary_terms(req.dictionaries)
                 engine = PrismQLEngine(
                     engine.search_backend,
                     user_dictionaries={**corpus_cfg.dictionaries, **overlay},
@@ -665,6 +658,12 @@ def create_app(config: ServerConfig) -> FastAPI:
                 "query": req.query,
                 "label": req.label,
                 "dictionaries": sorted(req.dictionaries) if req.dictionaries else [],
+                # their terms too, so the entry reruns on its own (#175)
+                **(
+                    {"dictionary_terms": _dictionary_terms(req.dictionaries)}
+                    if req.dictionaries
+                    else {}
+                ),
                 "ok": True,
                 "result": payload.get("kind"),
                 "count": _journal_count(payload),
@@ -679,6 +678,14 @@ def create_app(config: ServerConfig) -> FastAPI:
             }
         )
         return payload
+
+    def _dictionary_terms(dictionaries: dict[str, Any]) -> dict[str, Any]:
+        return {
+            name: value.model_dump(exclude_none=True)
+            if isinstance(value, DictSpec)
+            else value
+            for name, value in dictionaries.items()
+        }
 
     def _query_warnings(
         engine: Any, query: str, total: int | None

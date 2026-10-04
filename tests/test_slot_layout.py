@@ -92,3 +92,30 @@ def test_the_journal_carries_the_layout_for_groups_only(tmp_path):
     client.post("/evaluate", json={"query": chain + " AGGREGATE count()"})
     entries = client.get("/activity").json()["entries"]
     assert [e.get("slots") for e in entries] == [[2, 1], None]
+
+
+def test_the_journal_keeps_a_request_dictionarys_terms(tmp_path):
+    pytest.importorskip("fastapi")
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from prismql.server.app import create_app
+    from prismql.server.config import ServerConfig
+
+    data = tmp_path / "e.jsonl"
+    docs = [{"id": "1", "text": "a frame here", "timestamp": 1}]
+    data.write_text("\n".join(json.dumps(d) for d in docs))
+    client = TestClient(create_app(ServerConfig(backend_type="memory", data=str(data))))
+    dicts = {"frame": ["frame"], "loose": {"terms": ["fram"], "match": "substring"}}
+    client.post(
+        "/evaluate", json={"query": "SELECT contains(frame)", "dictionaries": dicts}
+    )
+    entry = client.get("/activity").json()["entries"][-1]
+    assert entry["dictionaries"] == ["frame", "loose"]
+    assert entry["dictionary_terms"] == dicts
+    rerun = client.post(
+        "/evaluate",
+        json={"query": entry["query"], "dictionaries": entry["dictionary_terms"]},
+    ).json()
+    assert rerun["total"] == 1

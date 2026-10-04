@@ -12,6 +12,7 @@ const Lexer = globalThis.PrismQLLexer;
 const QF = require(B + "query-format.js");
 const EF = require(B + "explain-format.js");
 const Finding = require(B + "finding.js");
+const EL = require(B + "editor-logic.js");
 
 test("numberedLegs puts each link's event number in front of it", () => {
   const q = "SELECT field(kind, b) PRECEDED_BY field(kind, a) INWINDOW 3";
@@ -71,4 +72,13 @@ test("numberedLegs shows nothing when a single-quoted string could hide a link",
 test("numberedLegs puts a pipe link's number after its window, before the link", () => {
   const pieces = QF.numberedLegs("from(a) ~>(5) from(b) |> within(5)", [1, 2], Lexer);
   assert.equal(pieces[2].text.trimStart().startsWith("from(b)"), true);
+});
+
+test("a request's own dictionaries replay from the journal; an old entry without terms stays blocked", () => {
+  const terms = { frame: ["frame"] };
+  assert.equal(EL.hasRequestDictionaries({ dictionaries: ["frame"], dictionary_terms: terms }), false);
+  assert.equal(EL.hasRequestDictionaries({ dictionaries: ["frame"] }), true);
+  assert.deepEqual(EL.buildEvaluateBody({ query: "q", corpus: "c", dictionaries: terms }), { query: "q", corpus: "c", dictionaries: terms });
+  const md = Finding.findingMarkdown({ corpus: "c", query: "SELECT contains(frame)", total: 2, dictionary_terms: terms }, "http://h");
+  assert.match(md, /"dictionaries":\{"frame":\["frame"\]\}/);
 });
