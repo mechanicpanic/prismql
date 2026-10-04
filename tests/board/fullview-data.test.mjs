@@ -89,7 +89,7 @@ test("fix round 1, #1: the actors tile counts the chip list — distinct FIRST-s
   const ctx = Data.buildContext(entry, board, "groups", vs(), actions);
 
   assert.equal(ctx.agents.length, 1, "both groups lead with actor A — one chip");
-  const actorsTile = ctx.tiles.find((t) => t.l === "actors");
+  const actorsTile = ctx.tiles.find((t) => t.l === "actors on this page");
   assert.equal(actorsTile.v, String(ctx.agents.length), "the tile must equal the chip list's own length");
   assert.equal(actorsTile.v, "1", "not 3 — never counted via every event's actor (B and C are never leads)");
 });
@@ -108,7 +108,7 @@ test("paged view: a selected agent with no group on this page keeps its chip but
   const ctx = Data.buildContext(entry, board, "groups", view(), actions);
 
   assert.deepEqual(ctx.agents.map((a) => a.label), ["A", "ghost"], "the selection stays undoable");
-  assert.equal(ctx.tiles.find((t) => t.l === "actors").v, "1", "the tile counts this page's actors only");
+  assert.equal(ctx.tiles.find((t) => t.l === "actors on this page").v, "1", "the tile counts this page's actors only");
 });
 
 test("paged view: the sources tile of a hits page ignores a selected agent the page does not have", async () => {
@@ -324,7 +324,7 @@ test("fix round 2, #4: a blocked (gone) result hides the filter box and chips", 
 
 // --- rows (GROUP BY ... AGGREGATE answer, graph @aleph/prismql, #90) ---
 
-test("rowsContext: loads the flat key/value list and reports it as groups loaded/total", async () => {
+test("rowsContext: loads the flat key/value list and reports it as rows on this page/total", async () => {
   const Data = freshModules(async () => ({
     kind: "rows", function: "count", field: null, total: 2, offset: 0,
     count: 2, truncated: false,
@@ -337,7 +337,7 @@ test("rowsContext: loads the flat key/value list and reports it as groups loaded
   assert.equal(ctx.kind, "rows");
   assert.deepEqual(ctx.loaded, [{ key: "tick_a", value: 3 }, { key: "tick_b", value: 1 }]);
   assert.deepEqual(ctx.filtered, ctx.loaded);
-  assert.deepEqual(ctx.tiles, [{ v: "2 / 2", l: "groups loaded" }]);
+  assert.deepEqual(ctx.tiles, [{ v: "2 / 2", l: "rows on this page" }]);
   assert.equal(ctx.note, "1–2 of 2");
   assert.equal(ctx.canFilter, true);
 });

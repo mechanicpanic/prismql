@@ -183,3 +183,14 @@ test("table: a toggle row names its group and wires the same actions; opened row
   assert.deepEqual(calls, [[7, 40, "open"]]);
   assert.equal(wrap.byClass("tr").length - 1, 3 + 1, "header excluded: 3 event rows + the toggle row");
 });
+
+test("raw lines carry each group's stored number, not its place on the page", () => {
+  load();
+  window.PrismQLLexJson = require(B + "lexjson.js");
+  delete require.cache[require.resolve(B + "fullview-table.js")];
+  const Table = require(B + "fullview-table.js");
+  const out = el("div");
+  Table.renderRaw(out, [{ ids: ["a"] }, { ids: ["b"] }], 0, [78, 21]);
+  const nos = out.byClass("no").map((n) => n.textContent);
+  assert.deepEqual(nos, ["78", "21"]);
+});

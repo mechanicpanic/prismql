@@ -303,3 +303,16 @@ def test_assignments_come_in_one_order_on_both_paths():
     assert found == sorted(
         found, key=lambda a: [(k, str(v)) for k, v in sorted(a.items())]
     )
+
+
+def test_a_size_ordered_page_keeps_each_groups_bindings(client):
+    rid = client.post("/evaluate", json={"query": PING_BACK}).json()["result_id"]
+    plain = client.get(f"/results/{rid}", params={"explain": "true"}).json()
+    ordered = client.get(
+        f"/results/{rid}",
+        params={"explain": "true", "order": "size", "reverse": "true"},
+    ).json()
+    by_ids = {tuple(g["ids"]): g["bindings"] for g in plain["results"]}
+    assert ordered["results"]
+    for g in ordered["results"]:
+        assert g["bindings"] == by_ids[tuple(g["ids"])]

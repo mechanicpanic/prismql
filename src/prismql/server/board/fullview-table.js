@@ -127,15 +127,19 @@
     return div;
   }
   // `first` is the number of the first line: the page's own offset, so a
-  // later page does not start over at 1.
-  function renderRaw(el, items, first) {
+  // later page does not start over at 1. `numbers`, when given, are the
+  // items' own numbers in the stored result (a group keeps its number under
+  // a size order or a page filter, so a line matches the .jsonl export).
+  function renderRaw(el, items, first, numbers) {
     if (!items.length) {
       var empty = mk("div", "empty");
       empty.appendChild(mk("strong", null, "Nothing loaded yet"));
       el.appendChild(empty);
       return;
     }
-    items.forEach(function (obj, i) { el.appendChild(rawLine((first || 0) + i + 1, obj)); });
+    items.forEach(function (obj, i) {
+      el.appendChild(rawLine(numbers ? numbers[i] : (first || 0) + i + 1, obj));
+    });
   }
 
   var api = { renderTable: renderTable, renderRaw: renderRaw };

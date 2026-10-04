@@ -382,7 +382,7 @@ def main() -> None:
     server = subprocess.Popen(  # noqa: S603 - fixed argv, scratch config
         ["uv", "run", "prismql-server", "--config", str(work / "prismql.toml")],  # noqa: S607
         cwd=REPO,
-        stdout=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,  # an unread pipe would fill and stall the server
         stderr=subprocess.STDOUT,
     )
     base = f"http://127.0.0.1:{port}"

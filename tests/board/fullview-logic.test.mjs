@@ -145,15 +145,15 @@ test("topScore: null when nothing is loaded", () => {
 
 test("groupsTiles: with an actor field configured", () => {
   assert.deepEqual(FL.groupsTiles(2, 6, 4, 3, true, "Jun 3–8"), [
-    { v: "2 / 6", l: "groups loaded" },
-    { v: "4", l: "events" },
-    { v: "3", l: "actors" },
-    { v: "Jun 3–8", l: "time range" },
+    { v: "2 / 6", l: "groups on this page" },
+    { v: "4", l: "events on this page" },
+    { v: "3", l: "actors on this page" },
+    { v: "Jun 3–8", l: "time range of this page" },
   ]);
 });
 test("groupsTiles: the actors tile is omitted when the corpus has no actor field", () => {
   const tiles = FL.groupsTiles(2, 6, 4, 0, false, "Jun 3–8");
-  assert.equal(tiles.some((t) => t.l === "actors"), false);
+  assert.equal(tiles.some((t) => t.l === "actors on this page"), false);
   assert.equal(tiles.length, 3);
 });
 
@@ -163,10 +163,10 @@ test("groupsTiles: the actors tile is omitted when the corpus has no actor field
 test("hitsTiles: similar shows a top score, not BM25 for search", () => {
   const tiles = FL.hitsTiles(3, 35, true, 0.812, 3, true, "Jun 3–8");
   assert.deepEqual(tiles, [
-    { v: "3 / 35", l: "hits loaded" },
+    { v: "3 / 35", l: "hits on this page" },
     { v: "0.812", l: "top score" },
     { v: "3", l: "sources" },
-    { v: "Jun 3–8", l: "time range" },
+    { v: "Jun 3–8", l: "time range of this page" },
   ]);
 });
 test("hitsTiles: search shows 'exact', never a score", () => {

@@ -99,11 +99,11 @@
 
   function groupsTiles(loadedCount, total, eventCount, actorCount, hasActor, timeRange) {
     var tiles = [
-      { v: loadedCount + " / " + total, l: "groups loaded" },
-      { v: String(eventCount), l: "events" },
+      { v: loadedCount + " / " + total, l: "groups on this page" },
+      { v: String(eventCount), l: "events on this page" },
     ];
-    if (hasActor) tiles.push({ v: String(actorCount), l: "actors" });
-    tiles.push({ v: timeRange, l: "time range" });
+    if (hasActor) tiles.push({ v: String(actorCount), l: "actors on this page" });
+    tiles.push({ v: timeRange, l: "time range of this page" });
     return tiles;
   }
   // At most 4 tiles — the canvas's fixed 4-column grid (fix round 1,
@@ -113,12 +113,12 @@
   // `topScoreVal` (nothing scored yet — topScore([]) === null) reads "—",
   // never "0.000" (fix round 1, #2: no invented numbers).
   function hitsTiles(loadedCount, total, scored, topScoreVal, sourceCount, hasActor, timeRange) {
-    var tiles = [{ v: loadedCount + " / " + total, l: "hits loaded" }];
+    var tiles = [{ v: loadedCount + " / " + total, l: "hits on this page" }];
     tiles.push(scored
       ? { v: topScoreVal != null ? Number(topScoreVal).toFixed(3) : "—", l: "top score" }
       : { v: "exact", l: "match type" });
     if (hasActor) tiles.push({ v: String(sourceCount), l: "sources" });
-    tiles.push({ v: timeRange, l: "time range" });
+    tiles.push({ v: timeRange, l: "time range of this page" });
     return tiles;
   }
 

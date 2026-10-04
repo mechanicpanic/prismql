@@ -47,7 +47,8 @@
   function buildRaw(body, entry, ctx, vs) {
     var raw = mk("div", "raw");
     raw.setAttribute("aria-label", "Raw output, one JSON object per line");
-    Table.renderRaw(raw, Data.rawItemsFor(ctx, entry), ctx.nav ? ctx.nav.offset : 0);
+    var numbers = ctx.kind === "groups" ? ctx.filtered.map(function (g) { return g.n; }) : null;
+    Table.renderRaw(raw, Data.rawItemsFor(ctx, entry), ctx.nav ? ctx.nav.offset : 0, numbers);
     body.appendChild(raw);
   }
 

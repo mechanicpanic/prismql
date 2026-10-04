@@ -23,7 +23,7 @@
       return String(r.key).toLowerCase().indexOf(q) >= 0
         || PL.rowValueText(r.value).toLowerCase().indexOf(q) >= 0;
     });
-    var tiles = rows.length === 0 ? [] : [{ v: rows.length + " / " + entry.total, l: "groups loaded" }];
+    var tiles = rows.length === 0 ? [] : [{ v: rows.length + " / " + entry.total, l: "rows on this page" }];
     return {
       kind: "rows", loaded: rows, filtered: filtered,
       pending: res.pending, blocker: res.blocker, nav: res.nav, total: entry.total,
