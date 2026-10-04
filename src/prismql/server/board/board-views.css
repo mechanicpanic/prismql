@@ -33,7 +33,7 @@
 .ev .l .k{font:600 11px "JetBrains Mono",monospace;color:var(--text)}
 .ev .l .a{color:var(--k-similar)}
 .ev .l .t{font-family:"JetBrains Mono",monospace;margin-left:auto}
-.ev .x{font-size:13px;line-height:1.5;color:var(--text-2);margin-top:3px}
+.ev .x{font-size:13px;line-height:1.5;color:var(--text-2);margin-top:3px;overflow-wrap:anywhere}
 /* one rail through a group: the badge sits on it, and a stem runs from each
    badge down through its text to the gap line and the next badge */
 .ev .spine{display:flex;flex-direction:column;align-items:center}

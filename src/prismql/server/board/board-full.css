@@ -23,7 +23,7 @@
 .vseg button:hover{color:var(--text)}
 .vseg button.on{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 0 0 1px var(--line-2)}
 .fsearch{width:240px;flex:none;height:32px}
-.achips{display:flex;gap:6px;min-width:0;overflow:hidden}
+.achips{display:flex;gap:6px;min-width:0;max-width:100%;overflow-x:auto;scrollbar-width:thin;padding-bottom:2px}
 .achip{height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
 .achip:hover{color:var(--text)}
 .achip.on{border-color:var(--k-similar);color:var(--text);background:color-mix(in srgb,var(--k-similar) 14%,var(--surface))}
@@ -56,12 +56,12 @@
 .tev .rl i{flex:none;width:10px;height:10px;border-radius:50%;border:2px solid var(--k-evaluate);background:var(--bg)}
 .tev ~ .tev .rl::before,.tev:not(:last-child) .rl::after{width:2px;background:repeating-linear-gradient(to bottom,var(--line-2) 0 4px,transparent 4px 8px)}
 .tev:not(:last-child) .rl::after{content:"";flex:1}
-.tev .card{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:12px 16px}
+.tev .card{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:12px 16px;min-width:0}
 .tev .card .l{display:flex;gap:10px;align-items:baseline;font-size:12px;color:var(--muted)}
 .tev .card .l .k{font:600 12px "JetBrains Mono",monospace;color:var(--text)}
 .tev .card .l .a{color:var(--k-similar)}
 .tev .card .l .e{margin-left:auto;font:11px "JetBrains Mono",monospace;color:var(--faint)}
-.tev .card .x{font-size:15px;line-height:1.6;color:var(--text-2);margin-top:6px}
+.tev .card .x{font-size:15px;line-height:1.6;color:var(--text-2);margin-top:6px;overflow-wrap:anywhere}
 .tgap{display:grid;grid-template-columns:132px 24px minmax(0,1fr);column-gap:14px;height:72px}
 .tgap .rl{display:flex;justify-content:center}
 .tgap .rl em{width:2px;height:100%;background:repeating-linear-gradient(to bottom,var(--line-2) 0 4px,transparent 4px 8px)}
@@ -78,7 +78,7 @@
 .tr .k{font:600 12px/1.6 "JetBrains Mono",monospace;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tr .a{color:var(--k-similar);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tr .g{font:600 12px/1.6 "JetBrains Mono",monospace;color:var(--k-evaluate)}
-.tr .x{color:var(--text-2);line-height:1.55}
+.tr .x{color:var(--text-2);line-height:1.55;overflow-wrap:anywhere}
 .tr .v{font:12px/1.6 "JetBrains Mono",monospace;color:var(--text-2)}
 .tr .sbar{height:3px;border-radius:2px;background:var(--line-2);margin-top:6px;overflow:hidden;width:72px}
 .tr .sbar i{display:block;height:3px;background:var(--k-similar)}
