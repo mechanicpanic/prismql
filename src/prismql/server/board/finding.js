@@ -20,9 +20,15 @@
     var head = "**" + title + "** — corpus `" + entry.corpus + "`" + (found ? ", " + found : "")
       + (entry.ts ? " (" + String(entry.ts).slice(0, 16).replace("T", " ") + " UTC)" : "");
     var body = { query: entry.query, corpus: entry.corpus };
-    var curl = "curl -s " + origin + "/evaluate -H 'content-type: application/json' "
+    // A reader reruns against their own server, never this one: the
+    // address is a variable, the corpus is named, ours is a comment.
+    var curl = "curl -s \"$PRISMQL_SERVER_URL/evaluate\" -H 'content-type: application/json' "
       + "-H 'X-PrismQL-Client: <your name>' -d " + shellQuote(JSON.stringify(body));
-    return [head, "", "```prismql", entry.query, "```", "", "Rerun:", "", "```bash", curl, "```", ""].join("\n");
+    var lines = [head, "", "```prismql", entry.query, "```", "",
+      "Rerun on a PrismQL server with the `" + entry.corpus + "` corpus loaded:", "", "```bash",
+      "# PRISMQL_SERVER_URL: that server's address (ours was " + origin + ")", curl, "```"];
+    if (entry.seq != null) lines.push("", "On our board: " + origin + "/board/#q" + entry.seq);
+    return lines.concat([""]).join("\n");
   }
 
   var api = { findingMarkdown: findingMarkdown, shellQuote: shellQuote };

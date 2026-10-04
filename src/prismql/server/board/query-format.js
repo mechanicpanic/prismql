@@ -65,21 +65,32 @@
   // with the number of the event its link gave (``slots``, from the server:
   // graph @aleph/prismql, #85; null for a NOT_ link). Null when the text's
   // links and the layout disagree — then the board shows no numbers.
-  var SEQ = { followed_by: 1, preceded_by: 1, not_followed_by: 1, not_preceded_by: 1 };
+  var SEQ = {
+    followed_by: 1, preceded_by: 1, not_followed_by: 1, not_preceded_by: 1,
+    followedby: 1, precededby: 1, notfollowedby: 1, notprecededby: 1,
+  };
   var SEQ_ARROWS = { "~>": 1, "<~": 1, "!~>": 1, "!<~": 1 };
   function numberedLegs(src, slots, lexer) {
     lexer = lexer || root.PrismQLLexer;
-    if (!src || !lexer || !slots || !slots.length) return null;
-    var toks = lexer.tokenize(src), starts = [], at = 0, depth = 0, open = true;
+    // the board's lexer has no single-quoted strings: a link word or a
+    // parenthesis inside one would move a number — show none instead
+    if (!src || !lexer || !slots || !slots.length || src.indexOf("'") !== -1) return null;
+    var toks = lexer.tokenize(src), starts = [], at = 0, depth = 0, open = true, win = false;
     for (var i = 0; i < toks.length; i++) {
       var t = toks[i], w = t.v.toLowerCase(), blank = /^\s+$/.test(t.v);
-      if (depth === 0 && open && !blank && !(t.c === "keyword" && w === "select")) {
+      // a pipe link's own window, `~>(5)`, is not where its link starts
+      var skip = win && t.c === "punct" && t.v === "(";
+      if (!blank) win = false;
+      if (depth === 0 && open && !blank && !skip && !(t.c === "keyword" && w === "select")) {
         starts.push(at);
         open = false;
       }
       if (t.c === "punct" && t.v === "(") depth++;
       if (t.c === "punct" && t.v === ")") depth = Math.max(0, depth - 1);
-      if (depth === 0 && ((t.c === "keyword" && SEQ[w]) || (t.c === "arrow" && SEQ_ARROWS[t.v]))) open = true;
+      if (depth === 0 && ((t.c === "keyword" && SEQ[w]) || (t.c === "arrow" && SEQ_ARROWS[t.v]))) {
+        open = true;
+        win = t.c === "arrow";
+      }
       at += t.v.length;
     }
     if (starts.length !== slots.length) return null;

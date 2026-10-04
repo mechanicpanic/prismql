@@ -36,7 +36,11 @@
     var rerunBtn = actBtn("Run again", ICON_RERUN, function () { actions.rerun(entry); });
     if (dictBlocked) { rerunBtn.disabled = true; rerunBtn.title = L.DICT_NOTE; }
     acts.appendChild(rerunBtn);
-    if (entry.kind === "evaluate" && entry.ok) acts.appendChild(findingBtn(entry));
+    if (entry.kind === "evaluate" && entry.ok) {
+      var fb = findingBtn(entry);
+      if (dictBlocked) { fb.disabled = true; fb.title = L.DICT_NOTE; } // its count would not rerun
+      acts.appendChild(fb);
+    }
     if (entry.result_id != null) {
       var a = document.createElement("a");
       a.className = "ghost";

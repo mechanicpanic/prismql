@@ -77,6 +77,7 @@
       state.entries = window.PrismQLBoardUtil.cap(got.slice().reverse());
       state.pending = [];
       state.down = false;
+      if (window.PrismQLBoardLink) window.PrismQLBoardLink.attach(state, render); // /board/#q<seq>
       render();
       if (streamHandle) { streamHandle.close(); streamHandle = null; }
       streamHandle = window.PrismQLApi.stream(state.seq,

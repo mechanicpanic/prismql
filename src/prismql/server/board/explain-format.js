@@ -57,16 +57,19 @@
 
   // What the engine bound the query's $variables to in one group (graph
   // @aleph/prismql, #167, #173): "$a = ann, $y = bob"; several assignments
-  // "·"-joined, at most three shown; null (bound nothing) and no field at all
-  // both read "".
+  // "·"-joined, at most three shown. null is the engine binding nothing for
+  // this group (a subquery's stages), said so; no field (a query without
+  // variables) and [] read "".
   function bindingsText(bindings, truncated) {
+    if (bindings === null) return "variables not bound in this group";
     if (!bindings || !bindings.length) return "";
     var one = function (a) {
       return Object.keys(a).sort().map(function (k) { return "$" + k + " = " + a[k]; }).join(", ");
     };
     var shown = bindings.slice(0, 3).map(one).join("  ·  ");
     var more = bindings.length - 3;
-    if (more > 0 || truncated) shown += "  ·  +" + (more > 0 ? more : "") + " more";
+    if (truncated) shown += "  ·  +" + Math.max(more, 0) + " or more";
+    else if (more > 0) shown += "  ·  +" + more + " more";
     return shown;
   }
 

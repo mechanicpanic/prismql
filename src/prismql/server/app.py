@@ -652,7 +652,9 @@ def create_app(config: ServerConfig) -> FastAPI:
         )
         payload["warnings"] = warnings
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
-        slots = slot_layout(engine.to_ir(req.query))  # the board's ①② (#85)
+        # the board's ①② (#85): only over groups, never over a single number
+        grouped = payload.get("kind") in ("groups", "named")
+        slots = slot_layout(engine.to_ir(req.query)) if grouped else None
         state.record(
             {
                 **({"warnings": warnings} if warnings else {}),

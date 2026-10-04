@@ -73,3 +73,22 @@ def test_the_layout_matches_the_engines_groups(query, kinds, layout, use_ir):
 )
 def test_shapes_without_a_fixed_layout_get_none(query):
     assert slot_layout(_engine(True).to_ir(query)) is None
+
+
+def test_the_journal_carries_the_layout_for_groups_only(tmp_path):
+    pytest.importorskip("fastapi")
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from prismql.server.app import create_app
+    from prismql.server.config import ServerConfig
+
+    data = tmp_path / "e.jsonl"
+    data.write_text("\n".join(json.dumps(d) for d in DOCS))
+    client = TestClient(create_app(ServerConfig(backend_type="memory", data=str(data))))
+    chain = "SELECT field(kind, b) PRECEDED_BY field(kind, a) INWINDOW 5"
+    client.post("/evaluate", json={"query": chain})
+    client.post("/evaluate", json={"query": chain + " AGGREGATE count()"})
+    entries = client.get("/activity").json()["entries"]
+    assert [e.get("slots") for e in entries] == [[2, 1], None]
