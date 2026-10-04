@@ -15,6 +15,7 @@ Needs Google Chrome (``channel="chrome"``) and ``uv`` on PATH.
 from __future__ import annotations
 
 import json
+import re
 import socket
 import subprocess
 import sys
@@ -109,6 +110,7 @@ def run(page: Page, base: str, shots: Path) -> None:
             route.continue_() if route.request.url.startswith(base) else route.abort()
         ),
     )
+    http(f"{base}/evaluate", {"query": QUERY})  # an older entry for ←/→ to reach
     res = http(f"{base}/evaluate", {"query": QUERY})
     rid = res["result_id"]
     page.goto(f"{base}/board/")
@@ -148,6 +150,37 @@ def run(page: Page, base: str, shots: Path) -> None:
     )
     page.screenshot(path=str(shots / "01-default.png"))
 
+    # --- keyboard: the controls keep their own arrows
+    counter = full.locator(".fhead").get_by_text(re.compile(r"^\d+ of \d+$"))
+    check(counter.inner_text() == "1 of 2", "two journal entries, the newest open")
+    sort = full.locator("select[data-fkey=sort]")
+    sort.focus()
+    page.keyboard.press("ArrowDown")  # timeline view: used to move the group nav
+    check(
+        full.locator(".gnav .gitem.on b").inner_text() == "group 1",
+        "ArrowDown on the Sort select does not move the group selection",
+    )
+    page.keyboard.press("ArrowRight")
+    check(counter.inner_text() == "1 of 2", "ArrowRight on the Sort select stays put")
+    sort.press("L")  # typeahead: "Largest groups first"
+    expect(full.locator(".fpage")).to_have_text("Page 1 of 3")
+    check(sort.input_value() == "size", "the Sort select is operable from the keyboard")
+    check(focus_key(page) == "sort", "focus stays on the Sort select after it changes")
+    sort.press("O")  # back to "Original order"
+    check(sort.input_value() == "position", "and back by keyboard")
+    expect(full.locator(".gnav .gitem").first).to_contain_text("group 1")
+    nxt = full.locator("button[data-fkey=next]")
+    nxt.focus()
+    page.keyboard.press("ArrowRight")
+    check(
+        counter.inner_text() == "1 of 2", "ArrowRight on Next does not leave the result"
+    )
+    check(
+        full.locator(".fpage").inner_text() == "Page 1 of 3", "and does not page either"
+    )
+    nxt.press("ArrowLeft")
+    check(counter.inner_text() == "1 of 2", "ArrowLeft on a pager button stays put")
+
     # --- a verbose group is collapsed by default, opens step by step, folds back
     full.locator(".gnav .gitem", has_text="group 8").first.click()
     check(
@@ -178,7 +211,6 @@ def run(page: Page, base: str, shots: Path) -> None:
     full.locator(".gnav .gitem", has_text="group 78").count()  # not on this page: no-op
 
     # --- next page replaces, never accumulates
-    nxt = full.locator("button[data-fkey=next]")
     nxt.focus()
     page.keyboard.press("Enter")
     expect(full.locator(".fpage")).to_have_text("Page 2 of 3")
@@ -251,7 +283,6 @@ def run(page: Page, base: str, shots: Path) -> None:
         "aria-pressed", "true"
     )
     expect(full.locator(".gnav .gitem").first).to_contain_text("3 events")
-    check(True, "reverse is pressed")
     api = http(f"{base}/results/{rid}?order=size&reverse=true&limit=50&hydrate=false")
     shown = [
         int(t.split()[-1]) for t in full.locator(".gnav .gitem b").all_inner_texts()

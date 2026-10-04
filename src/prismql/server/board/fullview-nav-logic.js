@@ -74,6 +74,18 @@
     return out;
   }
 
+  // Arrow keys a focused control keeps for itself instead of the full view's
+  // shortcuts (←/→ between journal entries, ↑/↓ between groups): a Sort
+  // select uses all four to change its value, and ←/→ on a pager or order
+  // button must not leave the result being paged.
+  var ARROWS = { ArrowLeft: 1, ArrowRight: 1, ArrowUp: 1, ArrowDown: 1 };
+  function keepsArrow(el, key) {
+    if (!el || !ARROWS[key]) return false;
+    if (el.tagName === "SELECT") return true;
+    if (key !== "ArrowLeft" && key !== "ArrowRight") return false;
+    return !!(el.closest && el.closest(".fpager, .forder"));
+  }
+
   function isVerbose(total) { return total > COLLAPSE_AT; }
   function visibleCount(total, shown) {
     if (!isVerbose(total)) return total;
@@ -118,7 +130,7 @@
     COLLAPSE_AT: COLLAPSE_AT, PREVIEW: PREVIEW, STEP: STEP, ORDERS: ORDERS,
     initial: initial, pageCount: pageCount, clampPage: clampPage, goPage: goPage,
     setOrder: setOrder, toggleReverse: toggleReverse, viewOf: viewOf,
-    effectiveSize: effectiveSize, itemCount: itemCount, storedIndexes: storedIndexes,
+    effectiveSize: effectiveSize, keepsArrow: keepsArrow, itemCount: itemCount, storedIndexes: storedIndexes,
     isVerbose: isVerbose, visibleCount: visibleCount, nextShown: nextShown,
     applyShown: applyShown, setAll: setAll, toggleText: toggleText, pageNote: pageNote,
   };

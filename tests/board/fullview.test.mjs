@@ -98,3 +98,51 @@ test("render(): a real view/group change still rebuilds", () => {
   Full.open(state, function () { Full.render(state, actions); }, 2); // a new entry: real rebuild
   assert.deepEqual(calls, ["build", "patch", "build"]);
 });
+
+// The keyboard: a focused Sort select and the pager buttons keep their own
+// arrow keys; elsewhere ←/→ still walk the journal and ↑/↓ the groups.
+function keyHarness() {
+  const calls = [];
+  const Full = freshFull(calls);
+  const full = globalThis.document.getElementById("full");
+  const handlers = [];
+  full.addEventListener = (type, fn) => { if (type === "keydown") handlers.push(fn); };
+  globalThis.window.PrismQLFullBody.build = () => [{ n: 1 }, { n: 2 }];
+  globalThis.window.PrismQLFullLogic.viewsFor = () => ["timeline", "table", "raw"];
+  const state = { full: 1, entries: [{ seq: 1, corpus: "v" }, { seq: 2, corpus: "v" }] };
+  const opened = [];
+  const closed = [];
+  const actions = { openFull: (s) => opened.push(s), closeFull: () => closed.push(1) };
+  Full.open(state, () => Full.render(state, actions), 1);
+  function press(key, target) {
+    let prevented = 0;
+    handlers[0]({ key, target, preventDefault() { prevented++; } });
+    return prevented;
+  }
+  return { press, opened, closed };
+}
+const SELECT = { tagName: "SELECT" };
+const PAGER_BTN = { tagName: "BUTTON", closest: (sel) => (sel.includes(".fpager") ? {} : null) };
+const PLAIN_BTN = { tagName: "BUTTON", closest: () => null };
+
+test("keys: ArrowDown on the focused Sort select is left to the select (no group move, no preventDefault)", () => {
+  const k = keyHarness();
+  assert.equal(k.press("ArrowDown", SELECT), 0);
+  assert.equal(k.press("ArrowUp", SELECT), 0);
+  assert.equal(k.press("ArrowRight", SELECT), 0);
+  assert.deepEqual(k.opened, []);
+});
+test("keys: ArrowRight/Left on a pager button does not jump to another journal entry", () => {
+  const k = keyHarness();
+  assert.equal(k.press("ArrowRight", PAGER_BTN), 0);
+  assert.equal(k.press("ArrowLeft", PAGER_BTN), 0);
+  assert.deepEqual(k.opened, []);
+});
+test("keys: elsewhere the shortcuts still work (←/→ entries, ↑/↓ groups, Esc closes)", () => {
+  const k = keyHarness();
+  assert.equal(k.press("ArrowRight", PLAIN_BTN), 1);
+  assert.deepEqual(k.opened, [2]);
+  assert.equal(k.press("ArrowDown", PLAIN_BTN), 1, "the group walk takes ↓ off a non-select control");
+  assert.equal(k.press("Escape", SELECT), 1);
+  assert.equal(k.closed.length, 1, "Esc on the select still closes the view");
+});

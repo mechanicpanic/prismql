@@ -28,6 +28,10 @@
     return n.count == null ? "" : Nav.pageNote(n.offset, n.got, n.count, matched, n.total);
   }
 
+  // The chips can carry a selected agent this page has none of (so the
+  // filter stays undoable); the tile counts only the page's own.
+  function onPage(actorValues) { return FL.agentChipList(actorValues, null).length; }
+
   function groupsContext(entry, board, vs, actions, idField) {
     var fields = PL.fieldsFor(board);
     var res = loadPage(entry, fields, vs, actions, "results");
@@ -51,7 +55,7 @@
     // Fix round 1, #2: nothing loaded yet (still pending) has no real
     // numbers to show — an empty tiles array, not invented zeros.
     var tiles = groups.length === 0 ? [] : FL.groupsTiles(
-      groups.length, entry.total, FL.countEvents(groups), agents.length, hasActor,
+      groups.length, entry.total, FL.countEvents(groups), onPage(leadActors), hasActor,
       FL.timeRangeLabel(FL.allTimes(groups)),
     );
     return {
@@ -75,7 +79,7 @@
     var actorVals = hits.map(function (h) { return FL.actorOf(h.event, board); });
     var agents = FL.agentChipList(actorVals, vs.agents);
     var tiles = hits.length === 0 ? [] : FL.hitsTiles(
-      hits.length, entry.total, scored, FL.topScore(hits), agents.length, hasActor,
+      hits.length, entry.total, scored, FL.topScore(hits), onPage(actorVals), hasActor,
       FL.timeRangeLabel(hits.map(function (h) { return h.time; })),
     );
     return {

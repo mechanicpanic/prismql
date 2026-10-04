@@ -126,3 +126,17 @@ test("pageNote: the page's place in the result; a filter says it reaches this pa
   assert.equal(Nav.pageNote(0, 2, 2, null, 3), "1–2 of 2 · 3 found", "hits kept fewer than found");
   assert.equal(Nav.pageNote(0, 0, 0, null, 0), "0 of 0");
 });
+
+// --- keys a control keeps ---
+
+test("keepsArrow: a Sort select keeps all four arrows, pager/order buttons keep ←/→ only", () => {
+  const select = { tagName: "SELECT" };
+  for (const k of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) assert.equal(Nav.keepsArrow(select, k), true, k);
+  const inPager = { tagName: "BUTTON", closest: (sel) => (sel.includes(".fpager") ? {} : null) };
+  assert.equal(Nav.keepsArrow(inPager, "ArrowRight"), true);
+  assert.equal(Nav.keepsArrow(inPager, "ArrowLeft"), true);
+  assert.equal(Nav.keepsArrow(inPager, "ArrowDown"), false, "↑/↓ still walk the groups");
+  assert.equal(Nav.keepsArrow({ tagName: "BUTTON", closest: () => null }, "ArrowRight"), false, "other buttons keep the entry shortcuts");
+  assert.equal(Nav.keepsArrow(select, "Escape"), false, "Esc is never kept: it closes the view");
+  assert.equal(Nav.keepsArrow(null, "ArrowDown"), false);
+});

@@ -47,6 +47,7 @@
       if (e.key === "Escape") t.blur();
       return;
     }
+    if (Nav.keepsArrow(t, e.key)) return; // the control's own arrows (Sort select, pager buttons)
     if (e.key === "Escape") { e.preventDefault(); actions.closeFull(); return; }
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
       var visible = window.PrismQLJournal._visibleEntries(state, Date.now());

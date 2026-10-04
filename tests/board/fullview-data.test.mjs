@@ -94,6 +94,37 @@ test("fix round 1, #1: the actors tile counts the chip list — distinct FIRST-s
   assert.equal(actorsTile.v, "1", "not 3 — never counted via every event's actor (B and C are never leads)");
 });
 
+test("paged view: a selected agent with no group on this page keeps its chip but is not counted as an actor of the page", async () => {
+  const Data = freshModules(async () => ({
+    kind: "groups", total: 1,
+    results: [
+      { ids: ["a"], positions: [1], times: [null], events: [{ id: "a", agent: "A", kind: "K1" }] },
+    ],
+  }));
+  const entry = { result_id: "r1b", total: 1, kind: "evaluate", result: "groups" };
+  const view = () => Object.assign(vs(), { agents: { ghost: true } });
+  Data.buildContext(entry, board, "groups", view(), actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "groups", view(), actions);
+
+  assert.deepEqual(ctx.agents.map((a) => a.label), ["A", "ghost"], "the selection stays undoable");
+  assert.equal(ctx.tiles.find((t) => t.l === "actors").v, "1", "the tile counts this page's actors only");
+});
+
+test("paged view: the sources tile of a hits page ignores a selected agent the page does not have", async () => {
+  const Data = freshModules(async () => ({
+    kind: "hits", total: 1, kept: 1,
+    hits: [{ id: "a", position: 1, score: 0.9, time: null, event: { agent: "A", text: "hi" } }],
+  }));
+  const entry = { result_id: "r4b", total: 1, kind: "search", result: "hits" };
+  const view = () => Object.assign(vs(), { agents: { ghost: true } });
+  Data.buildContext(entry, board, "hits", view(), actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "hits", view(), actions);
+  assert.equal(ctx.agents.length, 2);
+  assert.equal(ctx.tiles.find((t) => t.l === "sources").v, "1");
+});
+
 test("fix round 1, #2: nothing loaded yet (still pending) renders no tiles", async () => {
   const Data = freshModules(() => new Promise(() => {})); // never resolves
   const entry = { result_id: "r2", total: 5, kind: "evaluate", result: "groups" };
