@@ -22,10 +22,10 @@ and may be strings.
 `.json`, `.jsonl`, `.csv` and `.parquet` all load.
 
 Text search (`contains()`, `contains_phrase()`) reads only the columns named
-`text`, `content` or `message`. Words that live in another column (`body`,
-`title`) are found by `field()` but never by the text predicates, and the
-query does not fail — it just returns less. Put the text an agent should
-search into a `text` column.
+`text`, `content` or `message` by default. Words that live in another column
+(`body`, `title`) are found by `field()` but, with that default, not by the
+text predicates; unless your version reports it, the query does not fail — it
+just returns less. Put the text an agent should search into a `text` column.
 
 Agent harness logs become such a file with `prismql ingest claude-code` or
 `prismql ingest codex`: one event per prompt, thought, tool call and result,

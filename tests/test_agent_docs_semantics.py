@@ -224,3 +224,21 @@ def test_the_agent_use_doc_states_both_traps():
     text = flat(AGENT_USE)
     assert "text, content or message" in text
     assert "count(DISTINCT page)" in text and "match groups" in text
+
+
+@pytest.mark.parametrize(
+    "doc", [CLASSIC, PIPE, SKILL, AGENT_USE], ids=["classic", "pipe", "skill", "use"]
+)
+def test_the_text_field_wording_is_conditional_on_the_default(doc):
+    """A diagnostic for unsearched columns may land; the docs promise only
+    what the current default does, not that it can never be reported."""
+    text = flat(doc)
+    assert (
+        "with that default" in text.lower()
+        or "with the current defaults" in text.lower()
+    )
+    assert (
+        "never by `contains" not in doc and "never by the text predicates" not in text
+    )
+    assert "no setting for" not in text
+    assert "returns nothing, silently" not in text

@@ -108,14 +108,18 @@ its shape:
 C++, emails, contractions); `contains_phrase()` matches one exact phrase.
 
 **Which fields the text predicates read.** Only the corpus's text fields:
-by default `text`, `content` and `message`, and no other column. A body kept
-in `body`, `title` or `comment` is reachable with `field()` but never by
-`contains()`, `contains_tokens()` or `contains_phrase()` — no error, those
-events simply never match (check `SELECT field(body, "…")` against what
-`contains_phrase("…")` finds when a count looks too small). Put the text to
-search in a column named `text` before loading, or, from Python, pass
-`BackendConfig(text_fields=["text", "body"])` to the backend; a server
-corpus reads the three default names.
+by default `text`, `content` and `message`, and no other column. With that
+default, a body kept in `body`, `title` or `comment` is reachable with
+`field()` but not by `contains()`, `contains_tokens()` or
+`contains_phrase()`, and unless your version reports it (a warning or an
+error naming the column) those events just do not match, so a count that
+looks too small is worth checking (`SELECT field(body, "…")` against what
+`contains_phrase("…")` finds). Put the text to search in a column named
+`text` before loading, or, from Python, pass
+`BackendConfig(text_fields=["text", "body"])` to the backend. A server
+corpus used the default names when this was written; read `/schema` and
+the server's own documentation for your version rather than assuming a
+setting exists or not.
 
 **`contains(x)` is a dictionary name, `contains_phrase("x")` is a literal.**
 `contains(timeout)` with no dictionary called `timeout` is an error

@@ -235,12 +235,14 @@ of ids out**:
 | `similar_to("…", 0.7)` | embedding cosine ≥ threshold | semantic index, if configured |
 
 The text predicates read only the corpus's text fields — by default `text`,
-`content` and `message`, **not** every column: a `body` or `title` column is
-queryable with `field()` but `contains()` never looks in it, and a query that
-should hit it returns fewer groups (or none) without an error. When a count
-looks too small, compare `contains_phrase("word")` with `field(body, "…")`;
-the fix is a corpus whose text sits in a column called `text` (a server
-corpus has no setting for the field names). A dictionary is the semantic
+`content` and `message`, **not** every column: with that default a `body` or
+`title` column is queryable with `field()` but `contains()` does not look in
+it, and a query that should hit it can return fewer groups (or none) —
+without an error unless your version reports it. When a count looks too
+small, compare `contains_phrase("word")` with `field(body, "…")`; the
+reliable fix is a corpus whose text sits in a column called `text` (a server
+corpus used the default names when this was written — check `/schema` and
+the version's docs for a setting). A dictionary is the semantic
 layer: invest there, and pass it in-band while iterating.
 
 What you can rely on, because every sequence and window operator is one
@@ -287,7 +289,8 @@ implementation over the ordered corpus:
    literal use `contains_phrase("exact phrase")`, or define a dictionary.
    An unknown name is an error (`Dictionary 'timeout' not found`) — but a
    word that sits in a column the text predicates do not read (see above)
-   is not: that returns nothing, silently.
+   may not be: with the current defaults that returns nothing, and only a
+   version with a diagnostic says why.
 5. **`INWINDOW` is unordered; `FOLLOWED_BY` is ordered.** "A then B" →
    `FOLLOWED_BY`; "A and B near each other" → comma + `INWINDOW`.
 6. **Don't flatten multi-stage patterns.** `SELECT (SELECT a, b INWINDOW 3) FOLLOWED_BY (SELECT c) INWINDOW 8` keeps a+b grouped; `SELECT a, b, c INWINDOW 8` does not mean the same thing.
