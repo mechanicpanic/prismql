@@ -965,6 +965,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
             if dict_name not in self.user_dictionaries:
                 raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
+            self._require_text(f"contains_tokens({dict_name})")
             tokens = self.user_dictionaries[dict_name]
             return self.search_backend.search_tokens(
                 tokens, field="text", operator="OR"
@@ -975,6 +976,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             phrase_text = ctx.QUOTED_STRING().getText()
             # Remove surrounding quotes
             phrase = phrase_text[1:-1]  # Strip first and last character
+            self._require_text("contains_phrase()")
             return self.search_backend.search_phrase(phrase, field="text")
 
         # from(username) - same as byuser
@@ -1199,6 +1201,22 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         raise PrismQLRuntimeError("Unknown condition type")
 
+    def _require_text(self, predicate: str) -> None:
+        """Refuse a text predicate on a corpus with none of the text fields:
+        its empty answer would read as a real negative (graph #168)."""
+        backend = self.search_backend
+        present = getattr(backend, "text_fields_present", None)
+        if present is None or present:
+            return
+        config = getattr(backend, "config", None)
+        names = getattr(config, "text_fields", None) or ["text", "content", "message"]
+        raise PrismQLRuntimeError(
+            f"{predicate} reads the text fields {', '.join(names)}, and this "
+            "corpus has none of them, so it would match nothing. Put the text "
+            "in a column named `text`, or match the column it is in with "
+            'field(<column>, "word", partial) — e.g. field(body, "word", partial).'
+        )
+
     def _search_dictionary(self, dict_name: str) -> set[MessageId]:
         """Resolve a dictionary condition with per-term routing.
 
@@ -1208,6 +1226,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         order. Single-word terms use the dictionary's `match` mode when
         declared, else the engine-wide text_match.
         """
+        self._require_text(f"contains({dict_name})")
         words = self.user_dictionaries[dict_name]
         phrases = [t for t in words if " " in t.strip()]
         singles = [t for t in words if " " not in t.strip()]
@@ -1302,6 +1321,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         from ..ingest.annotate import TEXT_FIELDS, link_ids, question_ids
 
         predicate = "is_question()" if kind == "questions" else "contains_link()"
+        self._require_text(predicate)
         backend = self.search_backend
         docs = getattr(backend, "documents", None)
         if not isinstance(docs, list):

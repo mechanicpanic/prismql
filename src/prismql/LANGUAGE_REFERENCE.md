@@ -107,6 +107,8 @@ its shape:
 `contains_tokens()` always matches whole tokens (Unicode-aware: preserves
 C++, emails, contractions); `contains_phrase()` matches one exact phrase.
 
+Text predicates — `contains()`, `contains_tokens()`, `contains_phrase()`, `is_question()`, `contains_link()` — read the text fields `text`, `content` and `message`. On a corpus with none of them they refuse with an error instead of answering zero; text in another column is matched with `field(body, "word", partial)`.
+
 ### 2. Boolean Operators
 
 ```prismql

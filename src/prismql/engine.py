@@ -66,11 +66,29 @@ class PrismQLErrorListener(ErrorListener):
         msg: str,
         e: Any,
     ) -> None:
-        hint = ""
+        hint = _contains_word_hint(recognizer, offendingSymbol)
         prefix = "token recognition error at: '"
-        if msg.startswith(prefix) and len(msg) > len(prefix):
+        if not hint and msg.startswith(prefix) and len(msg) > len(prefix):
             hint = unquoted_value_hint(msg[len(prefix)])
         raise PrismQLSyntaxError(f"Syntax error: {msg}{hint}", line=line, column=column)
+
+
+def _contains_word_hint(recognizer: Any, token: Any) -> str:
+    """A quoted word in contains(…): the grammar's STRING is a bare name, so
+    the parser's own message names it and still refuses the quotes."""
+    text = getattr(token, "text", None) or ""
+    stream = getattr(recognizer, "getTokenStream", lambda: None)()
+    index = getattr(token, "tokenIndex", -1)
+    if text[:1] not in "\"'" or stream is None or index < 2:
+        return ""
+    name, paren = stream.get(index - 2).text, stream.get(index - 1).text
+    if paren != "(" or name.lower() not in ("contains", "contains_tokens"):
+        return ""
+    return (
+        f" — {name}() takes the name of a dictionary, not a word; for a word "
+        f"or phrase use contains_phrase({text}), for one field "
+        f"field(<column>, {text}, partial)"
+    )
 
 
 class PrismQLEngine:

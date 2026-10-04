@@ -368,6 +368,11 @@ class TantivyBackend(SearchBackend):
         """The fields indexed as text (stemmed + plain twins)."""
         return frozenset(self._text_fields)
 
+    @property
+    def text_fields_present(self) -> frozenset[str]:
+        """The text fields the corpus holds (graph @aleph/prismql, #168)."""
+        return frozenset(self._text_fields)
+
     # ------------------------------------------------------------- internals
     def _coerce_id(self, raw: Any) -> MessageId:
         return int(raw) if self._id_is_int else str(raw)

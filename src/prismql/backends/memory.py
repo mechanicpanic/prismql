@@ -96,6 +96,7 @@ class MemoryBackend(SearchBackend):
             str, set[MessageId]
         ] = {}  # Token index using configured tokenizer
         self._ngram_indexes: dict[int, dict[str, set[MessageId]]] = {}  # N-gram indexes
+        self._text_seen: set[str] = set()  # text fields some event holds
 
         # Collect tokens for n-gram building
         doc_tokens: dict[MessageId, list[str]] = {}
@@ -122,6 +123,7 @@ class MemoryBackend(SearchBackend):
                 # Also index individual tokens for text fields — unless a
                 # full-text index answers them (the bulk of the start-up cost)
                 if field in self.config.text_fields and value is not None:
+                    self._text_seen.add(field)
                     if text_index is None or self.config.enable_ngrams:
                         tokens = self._tokenize(str_value)
                     if text_index is None:
@@ -317,6 +319,12 @@ class MemoryBackend(SearchBackend):
             if value_lower in indexed_value:
                 matching_ids.update(doc_ids)
         return matching_ids
+
+    @property
+    def text_fields_present(self) -> frozenset[str]:
+        """The text fields at least one event holds: none means every text
+        predicate would answer nothing (graph @aleph/prismql, #168)."""
+        return frozenset(self._text_seen)
 
     def get_total_documents(self) -> int:
         """Get total number of documents."""
