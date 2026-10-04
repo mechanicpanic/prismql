@@ -36,6 +36,7 @@
     var rerunBtn = actBtn("Run again", ICON_RERUN, function () { actions.rerun(entry); });
     if (dictBlocked) { rerunBtn.disabled = true; rerunBtn.title = L.DICT_NOTE; }
     acts.appendChild(rerunBtn);
+    if (entry.kind === "evaluate" && entry.ok) acts.appendChild(findingBtn(entry));
     if (entry.result_id != null) {
       var a = document.createElement("a");
       a.className = "ghost";
@@ -52,6 +53,18 @@
     // actually answers, and clears itself once that stops matching.
     var err = state && state.rerunError;
     if (err && err.seq === entry.seq) wrap.appendChild(mk("div", "inline-err", err.message));
+  }
+
+  // The request as a finding anyone can rerun, in Markdown (#174)
+  function findingBtn(entry) {
+    var btn = actBtn("Copy finding", ICON_FILE, function () {
+      var md = window.PrismQLFinding.findingMarkdown(entry, window.location.origin);
+      var done = function (t) { btn.title = t; setTimeout(function () { btn.title = "Copy the query, corpus and a curl to rerun it"; }, 1500); };
+      try {
+        navigator.clipboard.writeText(md).then(function () { done("Copied"); }, function () { done("Copy failed"); });
+      } catch (e) { done("Copy failed"); }
+    }, "Copy the query, corpus and a curl to rerun it");
+    return btn;
   }
 
   function addKv(dl, label, fill, cls) {

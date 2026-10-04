@@ -55,7 +55,22 @@
     return out;
   }
 
-  var api = { textParts: textParts, scores: scores, elsewhere: elsewhere };
+  // What the engine bound the query's $variables to in one group (graph
+  // @aleph/prismql, #167, #173): "$a = ann, $y = bob"; several assignments
+  // "·"-joined, at most three shown; null (bound nothing) and no field at all
+  // both read "".
+  function bindingsText(bindings, truncated) {
+    if (!bindings || !bindings.length) return "";
+    var one = function (a) {
+      return Object.keys(a).sort().map(function (k) { return "$" + k + " = " + a[k]; }).join(", ");
+    };
+    var shown = bindings.slice(0, 3).map(one).join("  ·  ");
+    var more = bindings.length - 3;
+    if (more > 0 || truncated) shown += "  ·  +" + (more > 0 ? more : "") + " more";
+    return shown;
+  }
+
+  var api = { textParts: textParts, scores: scores, elsewhere: elsewhere, bindingsText: bindingsText };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLExplainFormat = api;
 })(typeof window !== "undefined" ? window : globalThis);

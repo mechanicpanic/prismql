@@ -72,6 +72,9 @@
     title.appendChild(mk("span", null, "·"));
     title.appendChild(mk("span", null, "span " + F.span(g.times)));
     div.appendChild(title);
+    // what the engine bound each $variable to here (#173)
+    var bound = window.PrismQLExplainFormat.bindingsText(g.bindings, g.bindings_truncated);
+    if (bound) div.appendChild(mk("div", "bindings", bound));
     var ids = g.ids || [], positions = g.positions || [], times = g.times || [];
     // Paired by the corpus's own id field (finding 4) — the server can
     // drop an id it couldn't hydrate, shifting `events`' own index (fix

@@ -42,6 +42,7 @@
       return {
         n: res.indices[i] + 1, idx: res.indices[i], ids: g.ids, positions: g.positions, times: g.times,
         slots: PL.pairEventsToSlots(g.ids, g.events, idField), explain: g.explain, raw: g,
+        bindings: g.bindings, bindingsCut: g.bindings_truncated,
       };
     });
     var q = vs.q.trim().toLowerCase();

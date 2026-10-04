@@ -18,7 +18,7 @@
 .when > span{font-weight:400;color:var(--muted);font-size:14px}
 .code{position:relative;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:12px 44px 12px 14px;font:13px/1.6 "JetBrains Mono",monospace;color:var(--text-2);white-space:pre-wrap;word-break:break-word}
 .code .copy{position:absolute;top:8px;right:8px}
-.acts{display:flex;gap:8px}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
 .kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 12px;font-size:13px;margin:0}
 .kv dt{color:var(--faint)}
 .kv dd{margin:0;color:var(--text-2);min-width:0}
@@ -112,3 +112,6 @@ mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
 /* why an event is in the result (#119) */
 .ev .l .why{font:11px "JetBrains Mono",monospace;color:var(--accent);border:1px solid var(--line);border-radius:5px;padding:0 5px}
 .warn-line{color:var(--warn)}.warn-line+.warn-line{margin-top:6px}.warn-hint{margin-top:2px;color:var(--muted);font-size:12px}
+.slotno{display:inline-block;margin-right:4px;color:var(--accent,#2f6fdb);font-weight:600}
+.bindings{font:11px "JetBrains Mono",monospace;color:var(--muted,#667);margin:-4px 0 8px;overflow-wrap:anywhere}
+.gdh .bindings{display:block;margin:4px 0 0}

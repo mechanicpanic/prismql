@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from ..aggregators.types import AggregateResult, GroupedResult
 from ..exceptions import PrismQLError, PrismQLRuntimeError, PrismQLSyntaxError
 from ..explain import Explainer
+from ..ir.slots import slot_layout
 from ..plan.recorded import recording_bindings
 from ..reference import load_reference
 from ..types import NamedQueryResult
@@ -651,9 +652,11 @@ def create_app(config: ServerConfig) -> FastAPI:
         )
         payload["warnings"] = warnings
         payload["elapsed_ms"] = round((perf_counter() - start) * 1000, 2)
+        slots = slot_layout(engine.to_ir(req.query))  # the board's ①② (#85)
         state.record(
             {
                 **({"warnings": warnings} if warnings else {}),
+                **({"slots": slots} if slots else {}),
                 "kind": "evaluate",
                 "corpus": req.corpus or config.default_corpus,
                 "who": _who(request),

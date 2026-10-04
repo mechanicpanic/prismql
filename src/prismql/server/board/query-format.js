@@ -61,7 +61,48 @@
     return breakLines(flat, lexer);
   }
 
-  var api = { breakLines: breakLines, formatQuery: formatQuery };
+  // The query cut where each link of a top-level chain starts, each piece
+  // with the number of the event its link gave (``slots``, from the server:
+  // graph @aleph/prismql, #85; null for a NOT_ link). Null when the text's
+  // links and the layout disagree — then the board shows no numbers.
+  var SEQ = { followed_by: 1, preceded_by: 1, not_followed_by: 1, not_preceded_by: 1 };
+  var SEQ_ARROWS = { "~>": 1, "<~": 1, "!~>": 1, "!<~": 1 };
+  function numberedLegs(src, slots, lexer) {
+    lexer = lexer || root.PrismQLLexer;
+    if (!src || !lexer || !slots || !slots.length) return null;
+    var toks = lexer.tokenize(src), starts = [], at = 0, depth = 0, open = true;
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i], w = t.v.toLowerCase(), blank = /^\s+$/.test(t.v);
+      if (depth === 0 && open && !blank && !(t.c === "keyword" && w === "select")) {
+        starts.push(at);
+        open = false;
+      }
+      if (t.c === "punct" && t.v === "(") depth++;
+      if (t.c === "punct" && t.v === ")") depth = Math.max(0, depth - 1);
+      if (depth === 0 && ((t.c === "keyword" && SEQ[w]) || (t.c === "arrow" && SEQ_ARROWS[t.v]))) open = true;
+      at += t.v.length;
+    }
+    if (starts.length !== slots.length) return null;
+    var pieces = [{ text: src.slice(0, starts[0]), n: null }];
+    for (var k = 0; k < starts.length; k++) {
+      pieces.push({ text: src.slice(starts[k], k + 1 < starts.length ? starts[k + 1] : src.length), n: slots[k] });
+    }
+    return pieces;
+  }
+
+  // The query highlighted, a link's event number ①② in front of it.
+  function numberedHtml(src, slots, lexer) {
+    lexer = lexer || root.PrismQLLexer;
+    var pieces = numberedLegs(src, slots, lexer);
+    if (!pieces) return lexer.highlight(src);
+    return pieces.map(function (p) {
+      var no = p.n == null ? "" : '<span class="slotno" title="event ' + p.n + ' of each group">'
+        + (p.n <= 20 ? String.fromCharCode(0x245f + p.n) : "(" + p.n + ")") + "</span>";
+      return no + lexer.highlight(p.text);
+    }).join("");
+  }
+
+  var api = { breakLines: breakLines, formatQuery: formatQuery, numberedLegs: numberedLegs, numberedHtml: numberedHtml };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLQueryFormat = api;
 })(typeof window !== "undefined" ? window : globalThis);

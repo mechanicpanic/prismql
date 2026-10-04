@@ -253,7 +253,11 @@ Encoding the query dominates `/similar` (under 1 s on a laptop CPU).
 Open `http://127.0.0.1:8901/board/`. Every request anyone sends appears
 there. The editor runs a query, a search or a similar. *context* on an
 event lists its neighbours within ten minutes, the same actor's (the
-corpus's `board.actor` field) or every event.
+corpus's `board.actor` field) or every event. In a chain, ①② in front of
+each link of the query say which event of every group it gave; each group
+shows what the engine bound its `$variables` to; *Copy finding* puts the
+request in Markdown — corpus, query, how many groups, and a `curl` that
+reruns it — on the clipboard.
 
 A client names itself with the header `X-PrismQL-Client: <name>`. The
 board's own editor sends `board`. A request without the header shows as its

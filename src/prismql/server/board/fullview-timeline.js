@@ -103,6 +103,9 @@
     bits.push("span " + info.span);
     if (info.range) bits.push(info.range);
     gdh.appendChild(mk("span", null, bits.join(" · ")));
+    // what the engine bound each $variable to here (#173)
+    var bound = window.PrismQLExplainFormat.bindingsText(group.bindings, group.bindingsCut);
+    if (bound) gdh.appendChild(mk("span", "bindings", bound));
     el.appendChild(gdh);
     var shown = (shownMap || {})[group.idx];
     var verbose = Nav.isVerbose(info.count);

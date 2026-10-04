@@ -63,7 +63,7 @@
     var code = mk("div", "code");
     // shown with a line per link and clause (#84); Copy takes the query as sent
     var shown = window.PrismQLQueryFormat.breakLines(entry.query || "");
-    if (entry.kind === "evaluate") code.innerHTML = window.PrismQLLexer.highlight(shown);
+    if (entry.kind === "evaluate") code.innerHTML = window.PrismQLQueryFormat.numberedHtml(shown, entry.slots); // ①② (#85)
     else code.appendChild(document.createTextNode(entry.query || ""));
     var btn = mk("button", "iconbtn sm copy");
     btn.type = "button";

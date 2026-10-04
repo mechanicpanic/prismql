@@ -36,7 +36,7 @@
   function buildSum(el, entry, tiles) {
     var sum = mk("div", "fsum");
     var code = mk("div", "code");
-    if (entry.kind === "evaluate") code.innerHTML = Lex.highlight(entry.query || "");
+    if (entry.kind === "evaluate") code.innerHTML = window.PrismQLQueryFormat.numberedHtml(entry.query || "", entry.slots, Lex); // ①② (#85)
     else code.appendChild(document.createTextNode(entry.query || ""));
     code.appendChild(copyBtn(entry.query || ""));
     sum.appendChild(code);
