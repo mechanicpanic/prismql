@@ -29,3 +29,78 @@ def test_an_unquoted_hyphen_says_to_quote_the_value(query):
 def test_the_quoted_value_works():
     engine = PrismQLEngine(MemoryBackend(DOCS))
     assert engine.execute('SELECT field(page_family, "relay-coordination")') == [[1]]
+
+
+# `!` negates only a variable; before a literal it used to be a bare lexer
+# message. The hint points at NOT, which does mean "every event but these".
+NEGATED_LITERAL = [
+    'SELECT field(page_family, !"a")',
+    "SELECT field(page_family, !a)",
+    "field(page_family, !a)",
+    'field(page_family, !"a")',
+]
+
+
+@pytest.mark.parametrize("query", NEGATED_LITERAL)
+def test_a_negated_literal_says_to_use_not(query):
+    engine = PrismQLEngine(MemoryBackend(DOCS))
+    with pytest.raises(PrismQLSyntaxError) as err:
+        engine.execute(query)
+    assert "negates only a variable" in str(err.value)
+    assert "NOT field(" in str(err.value)
+
+
+def test_a_negated_literal_error_points_at_the_bang():
+    query = "field(page_family, !a)"
+    engine = PrismQLEngine(MemoryBackend(DOCS))
+    with pytest.raises(PrismQLSyntaxError) as err:
+        engine.execute(query)
+    assert err.value.column == query.index("!")
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        'SELECT NOT field(page_family, "relay-coordination")',
+        'not field(page_family, "relay-coordination")',
+    ],
+)
+def test_the_suggested_not_form_excludes_the_value(query):
+    docs = [*DOCS, {"id": 2, "page_family": "other", "text": "y"}]
+    engine = PrismQLEngine(MemoryBackend(docs))
+    assert engine.execute(query) == [[2]]
+
+
+# `!` elsewhere is not a negated literal: the hint must not claim it is.
+OTHER_BANGS = [
+    "SELECT field(page_family, a) AND !field(page_family, b)",
+    "SELECT field(page_family != a)",
+    "SELECT field(page_family, a) != field(page_family, b)",
+    "SELECT from(a), !from(b)",
+    "SELECT from(a) ! from(b)",
+    "field(page_family, a) and !field(page_family, b)",
+    "field(page_family != a)",
+    "from(a), !from(b)",
+    "from(a) ! from(b)",
+    "field(page_family, a) != field(page_family, b)",
+]
+
+
+@pytest.mark.parametrize("query", OTHER_BANGS)
+def test_a_bang_that_negates_no_literal_gets_no_negation_hint(query):
+    engine = PrismQLEngine(MemoryBackend(DOCS))
+    with pytest.raises(PrismQLSyntaxError) as err:
+        engine.execute(query)
+    assert "negates only a variable" not in str(err.value)
+    assert "NOT field(" not in str(err.value)
+
+
+@pytest.mark.parametrize(
+    "query",
+    ['SELECT field(a, "x,y", !b)', 'field(a, "x(", !b)'],
+)
+def test_quoted_parentheses_and_commas_do_not_confuse_the_context(query):
+    engine = PrismQLEngine(MemoryBackend(DOCS))
+    with pytest.raises(PrismQLSyntaxError) as err:
+        engine.execute(query)
+    assert "negates only a variable" in str(err.value)

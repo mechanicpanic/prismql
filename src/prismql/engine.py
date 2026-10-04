@@ -13,6 +13,7 @@ from .dialects.pipe import parse_pipe
 from .exceptions import (
     PrismQLRuntimeError,
     PrismQLSyntaxError,
+    negated_literal_hint,
     unquoted_value_hint,
 )
 from .grammar.generated.PrismQLLexer import PrismQLLexer
@@ -69,7 +70,11 @@ class PrismQLErrorListener(ErrorListener):
         hint = _contains_word_hint(recognizer, offendingSymbol)
         prefix = "token recognition error at: '"
         if not hint and msg.startswith(prefix) and len(msg) > len(prefix):
-            hint = unquoted_value_hint(msg[len(prefix)])
+            char = msg[len(prefix)]
+            hint = unquoted_value_hint(char)
+            if char == "!":
+                start = recognizer._tokenStartCharIndex
+                hint = negated_literal_hint(recognizer.inputStream.strdata, start)
         raise PrismQLSyntaxError(f"Syntax error: {msg}{hint}", line=line, column=column)
 
 

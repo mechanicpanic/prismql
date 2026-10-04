@@ -565,7 +565,11 @@ class QueryValidator:
                     ValidationIssue(
                         level=ValidationLevel.ERROR,
                         message=f"Dictionary '{expr.dict_name.text}' is not defined",
-                        suggestion=f"Define the dictionary or use one of: {available}",
+                        suggestion=(
+                            f"Define the dictionary or use one of: {available}. "
+                            "To search for literal text, use "
+                            f'contains_phrase("{expr.dict_name.text}")'
+                        ),
                         code="UNDEFINED_DICTIONARY",
                     )
                 )
@@ -739,7 +743,15 @@ class QueryValidator:
                     ValidationIssue(
                         level=ValidationLevel.ERROR,
                         message=f"Dictionary '{dict_name}' is not defined",
-                        suggestion=f"Define the dictionary or use one of: {', '.join(self.user_dictionaries.keys()) if self.user_dictionaries else 'none available'}",
+                        suggestion=(
+                            "Define the dictionary or use one of: "
+                            + (
+                                ", ".join(self.user_dictionaries)
+                                if self.user_dictionaries
+                                else "none available"
+                            )
+                            + f'. To search for literal text, use contains_phrase("{dict_name}")'
+                        ),
                         code="UNDEFINED_DICTIONARY",
                     )
                 )
