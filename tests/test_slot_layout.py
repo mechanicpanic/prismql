@@ -119,3 +119,20 @@ def test_the_journal_keeps_a_request_dictionarys_terms(tmp_path):
         json={"query": entry["query"], "dictionaries": entry["dictionary_terms"]},
     ).json()
     assert rerun["total"] == 1
+
+
+def test_the_board_is_revalidated_on_every_load(tmp_path):
+    pytest.importorskip("fastapi")
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from prismql.server.app import create_app
+    from prismql.server.config import ServerConfig
+
+    data = tmp_path / "e.jsonl"
+    data.write_text(json.dumps({"id": "1", "text": "x", "timestamp": 1}))
+    client = TestClient(create_app(ServerConfig(backend_type="memory", data=str(data))))
+    response = client.get("/board/board.js")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"

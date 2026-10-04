@@ -1248,9 +1248,18 @@ def create_app(config: ServerConfig) -> FastAPI:
 
     # The board ships with the package and is served whatever static_dir
     # says; mounted before the demo root so "/board" is not shadowed.
+    class _BoardFiles(StaticFiles):
+        """Revalidated on every load (ETag makes that cheap): without it a
+        browser keeps an old board after an update and shows stale buttons."""
+
+        async def get_response(self, path: str, scope: Any) -> Any:
+            response = await super().get_response(path, scope)
+            response.headers["Cache-Control"] = "no-cache"
+            return response
+
     app.mount(
         "/board",
-        StaticFiles(directory=str(Path(__file__).parent / "board"), html=True),
+        _BoardFiles(directory=str(Path(__file__).parent / "board"), html=True),
         name="board",
     )
     if config.static_dir:
