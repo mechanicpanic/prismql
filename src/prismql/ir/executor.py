@@ -530,7 +530,7 @@ class IRExecutor(PrismQLVisitor):
                 )
             dict_name = cond.dict_name.text
             if dict_name not in self.user_dictionaries:
-                raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
+                raise self._missing_dictionary("contains", dict_name)
             return self._search_dictionary(dict_name)
 
         if isinstance(cond, ContainsTokens):
@@ -543,7 +543,7 @@ class IRExecutor(PrismQLVisitor):
                 )
             dict_name = cond.dict_name.text
             if dict_name not in self.user_dictionaries:
-                raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
+                raise self._missing_dictionary("contains_tokens", dict_name)
             tokens = self.user_dictionaries[dict_name]
             return self.search_backend.search_tokens(
                 tokens, field="text", operator="OR"

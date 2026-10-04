@@ -79,7 +79,13 @@ _VALUE_BREAKERS = "-/:@.#&'"
 
 def unquoted_value_hint(char: str) -> str:
     """A hint for a lexer stop at ``char`` when it most likely sits inside an
-    unquoted value (graph @aleph/prismql, #97); empty for other characters."""
+    unquoted value (graph @aleph/prismql, #97) or is a ``!`` before a literal
+    — ``!`` negates only a variable; empty for other characters."""
+    if char == "!":
+        return (
+            " — '!' negates only a variable (!$x), not a literal; to exclude "
+            'a value write NOT field(name, "a")'
+        )
     if char in _VALUE_BREAKERS:
         return f' — a value with {char!r} must be in quotes, e.g. field(name, "a-b")'
     return ""

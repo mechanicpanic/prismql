@@ -943,7 +943,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 )
 
             if dict_name not in self.user_dictionaries:
-                raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
+                raise self._missing_dictionary("contains", dict_name)
             return self._search_dictionary(dict_name)
 
         # contains_tokens(dict_name) - Unicode-aware token matching
@@ -964,7 +964,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 )
 
             if dict_name not in self.user_dictionaries:
-                raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
+                raise self._missing_dictionary("contains_tokens", dict_name)
             tokens = self.user_dictionaries[dict_name]
             return self.search_backend.search_tokens(
                 tokens, field="text", operator="OR"
@@ -1198,6 +1198,22 @@ class PrismQLVisitor(BasePrismQLVisitor):
             return self._get_ner_messages("URL")
 
         raise PrismQLRuntimeError("Unknown condition type")
+
+    def _missing_dictionary(self, func: str, dict_name: str) -> PrismQLRuntimeError:
+        """The error for ``func(word)`` naming no configured dictionary — the
+        usual cause is a literal word, which ``contains()`` does not search."""
+        known = sorted(self.user_dictionaries)
+        have = (
+            "configured dictionaries: " + ", ".join(known[:10])
+            if known
+            else "no dictionaries are configured"
+        )
+        return PrismQLRuntimeError(
+            f"Dictionary '{dict_name}' not found — {func}() looks up a "
+            f"configured dictionary, not literal text ({have}). To search for "
+            f'the text, use contains_phrase("{dict_name}"); to match a field '
+            f"other than text, use field(name, {dict_name}, partial)"
+        )
 
     def _search_dictionary(self, dict_name: str) -> set[MessageId]:
         """Resolve a dictionary condition with per-term routing.
