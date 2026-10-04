@@ -32,7 +32,7 @@ from .config import (
     load_config,
 )
 from .context import MAX_SIDE, ContextError, context_payload
-from .pages import page_payload, rows_page_payload
+from .pages import ORDERS, page_payload, rows_page_payload
 from .results import ResultStore, StoredResult
 from .schema import compute_schema
 
@@ -1159,6 +1159,8 @@ def create_app(config: ServerConfig) -> FastAPI:
         hydrate: bool | None = None,
         fields: str | None = None,
         explain: bool = False,
+        order: str = "position",
+        reverse: bool = False,
     ) -> Any:
         if _rate_limited(_client_ip(request)):
             return _rate_limit_response()
@@ -1166,12 +1168,26 @@ def create_app(config: ServerConfig) -> FastAPI:
         if isinstance(kept, JSONResponse):
             return kept
         stored, engine, corpus_cfg = kept
+        # A view of the stored result — never a different result: the stored
+        # order and the query's answer are untouched, and the default (no
+        # order, no reverse) is the page it always was.
+        if order not in ORDERS:
+            return _error(
+                400, "bad_request", f"order must be one of {', '.join(ORDERS)}"
+            )
+        if order == "size" and stored.kind not in ("groups", "named"):
+            return _error(
+                400,
+                "bad_request",
+                f"a {stored.kind} result has no group size to sort by",
+            )
         if stored.kind == "rows":
             # hydrate/fields do not apply: rows carry no ids to fetch.
             payload = rows_page_payload(
                 stored,
                 offset=max(0, offset),
                 limit=max(1, min(limit, config.max_results)),
+                reverse=reverse,
             )
             return {"ok": True, "result_id": rid, **payload}
         payload = page_payload(
@@ -1182,6 +1198,8 @@ def create_app(config: ServerConfig) -> FastAPI:
             offset=max(0, offset),
             limit=max(1, min(limit, config.max_results)),
             explainer=stored.explainer if explain else None,
+            order=order,
+            reverse=reverse,
             **_page_args(hydrate, fields),
         )
         return {"ok": True, "result_id": rid, **payload}

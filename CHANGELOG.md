@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added (board: ordering, pages and collapsible groups in the full view)
+- `GET /results/{id}` takes two view-only parameters: `order=size` lists groups largest first (equal sizes keep their stored order) over the WHOLE result, and `reverse=true` flips whichever order is shown (`order=position`, the default, is the stored order; `size` on a hits or rows result is a 400, an unknown order a 400). A page that is not the default view names its `order`, `reverse` and `indices` (each item's 0-based position in the stored result, so a group keeps its number). Without them a page is exactly what it was; the stored result, query results and `/results/{id}.jsonl` are untouched. The board's full view now shows one bounded page at a time (Prev/Next, "Page n of m", jump to a page) in place of Load more / scroll-to-end, with a Sort select (groups) and a Reverse button; its filter reaches the shown page only and says so; groups with more than 10 events start as a 3-event preview in the timeline and the table and open 100 events at a time, with Collapse all / Expand all per page.
+
 ### Fixed (GROUP BY counts each match once)
 - `GROUP BY DAYS(time)` (and the other units) put a multi-event match in its bucket once per event, so `AGGREGATE COUNT()` doubled for two-event chains; `GROUP BY DAYS(time), user` lost the day; plain `GROUP BY` read `id` instead of the backend's `id_field` and put everything under `__unknown__`. Each matched group now lands in one bucket, keyed by its first event, for temporal, plain and combined keys; a backend without temporal shortcuts no longer crashes on `GROUP BY DAYS` (graph @aleph/prismql, #147, #148).
 

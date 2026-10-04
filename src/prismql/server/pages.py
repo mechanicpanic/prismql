@@ -12,6 +12,19 @@ from typing import Any
 from .results import StoredResult
 
 MAX_BINDINGS = 20  # a page lists this many assignments and says when cut
+ORDERS = ("position", "size")  # how a page's items are ordered (a view only)
+
+
+def _view(
+    payload: dict[str, Any], order: str, reverse: bool, indices: list[int]
+) -> None:
+    """Name a non-default view on the page: how it was ordered and which
+    stored item each entry is (0-based), so a client can keep the original
+    numbers. The stored order stays the default and adds nothing."""
+    if order != "position" or reverse:
+        payload["order"] = order
+        payload["reverse"] = reverse
+        payload["indices"] = indices
 
 
 def iso_micros(us: int | None) -> str | None:
@@ -67,8 +80,11 @@ def page_payload(
     hydrate: bool,
     fields: list[str] | None,
     explainer: Any = None,
+    order: str = "position",
+    reverse: bool = False,
 ) -> dict[str, Any]:
-    window = result.window(offset, limit)
+    indices = result.display_indices(offset, limit, order, reverse)
+    window = result.window(offset, limit, order, reverse)
     flat = [p for positions, _ in window for p in positions]
     ids = backend.ids_at(flat)
     times = _times(backend, flat, time_field)
@@ -80,6 +96,7 @@ def page_payload(
         "count": len(window),
         "truncated": offset + len(window) < len(result),
     }
+    _view(payload, order, reverse, indices)
     items: list[dict[str, Any]] = []
     cursor = 0
     for positions, score in window:
@@ -118,12 +135,14 @@ def page_payload(
     return payload
 
 
-def rows_page_payload(result: StoredResult, offset: int, limit: int) -> dict[str, Any]:
+def rows_page_payload(
+    result: StoredResult, offset: int, limit: int, reverse: bool = False
+) -> dict[str, Any]:
     """A window of a "rows" result (GROUP BY ... AGGREGATE answer, graph
     @aleph/prismql, #90): no backend, no ids/times — just key/value pairs in
     the engine's order. ``hydrate``/``fields`` do not apply to this kind."""
-    window = result.rows_window(offset, limit)
-    return {
+    window = result.rows_window(offset, limit, reverse)
+    payload = {
         "kind": "rows",
         "function": result.function,
         "field": result.field_name,
@@ -133,3 +152,10 @@ def rows_page_payload(result: StoredResult, offset: int, limit: int) -> dict[str
         "truncated": offset + len(window) < len(result),
         "rows": [{"key": k, "value": v} for k, v in window],
     }
+    _view(
+        payload,
+        "position",
+        reverse,
+        result.display_indices(offset, limit, reverse=reverse),
+    )
+    return payload

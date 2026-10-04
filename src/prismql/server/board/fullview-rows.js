@@ -50,11 +50,15 @@
   // rest of the board uses (inspector-format.js's localDateTime).
   function shortTime(t) { return t != null ? IF.localDateTime(t) : null; }
 
-  function groupTableRows(groups, board) {
+  // `shown` ({idx: events open}) is the groups' open/closed state: a verbose
+  // group lists the events it shows, then one toggle row naming the rest —
+  // the table never carries rows nobody asked to see.
+  function groupTableRows(groups, board, shown) {
     var rows = [];
     (groups || []).forEach(function (g) {
       var ids = g.ids || [], slots = g.slots || [];
-      ids.forEach(function (id, j) {
+      var seen = Nav.visibleCount(ids.length, (shown || {})[g.idx]);
+      ids.slice(0, seen).forEach(function (id, j) {
         var ev = slots[j];
         rows.push({
           cls: j === 0 ? "first" : "", group: j === 0 ? g.n : "", n: j + 1,
@@ -64,6 +68,9 @@
           parts: ev && ev.text != null ? EXF.textParts(ev.text, (g.explain || [])[j]) : null,
         });
       });
+      if (Nav.isVerbose(ids.length)) {
+        rows.push({ toggle: true, idx: g.idx, total: ids.length, shown: (shown || {})[g.idx], n: g.n });
+      }
     });
     return rows;
   }
@@ -94,6 +101,8 @@
     });
   }
 
+  var Nav = typeof module === "object" && module.exports
+    ? require("./fullview-nav-logic.js") : root.PrismQLFullNav;
   var EXF = typeof module === "object" && module.exports
     ? require("./explain-format.js") : root.PrismQLExplainFormat;
   // The timeline's shaping lives in fullview-timeline-logic.js; exported

@@ -11,21 +11,36 @@
   var PL = window.PrismQLInspectorPageLogic;
   var FL = window.PrismQLFullLogic;
   var F = window.PrismQLFormat;
+  var Nav = typeof module === "object" && module.exports
+    ? require("./fullview-nav-logic.js") : window.PrismQLFullNav;
   var PFLoad = typeof module === "object" && module.exports
     ? require("./fullview-load.js") : window.PrismQLFullLoad;
   var RowsContext = typeof module === "object" && module.exports
     ? require("./fullview-rows-context.js") : window.PrismQLFullRowsContext;
 
-  var loadPaged = PFLoad.loadPaged;
+  var loadPage = PFLoad.loadPage;
   var blockedContext = PFLoad.blockedContext;
+
+  // The fnote: where this page sits in the result, and that a filter
+  // reaches this page only.
+  function pageNote(res, matched) {
+    var n = res.nav;
+    return n.count == null ? "" : Nav.pageNote(n.offset, n.got, n.count, matched, n.total);
+  }
+
+  // The chips can carry a selected agent this page has none of (so the
+  // filter stays undoable); the tile counts only the page's own.
+  function onPage(actorValues) { return FL.agentChipList(actorValues, null).length; }
 
   function groupsContext(entry, board, vs, actions, idField) {
     var fields = PL.fieldsFor(board);
-    var res = loadPaged(entry, fields, vs.loadTo, actions, "results");
+    var res = loadPage(entry, fields, vs, actions, "results");
     if (res.blocker) return blockedContext("groups", res);
+    // n is the group's number in the STORED result, whatever the order or
+    // page shows it in; idx (0-based) keys its open/closed state.
     var groups = res.items.map(function (g, i) {
       return {
-        n: i + 1, ids: g.ids, positions: g.positions, times: g.times,
+        n: res.indices[i] + 1, idx: res.indices[i], ids: g.ids, positions: g.positions, times: g.times,
         slots: PL.pairEventsToSlots(g.ids, g.events, idField), explain: g.explain, raw: g,
       };
     });
@@ -40,39 +55,38 @@
     // Fix round 1, #2: nothing loaded yet (still pending) has no real
     // numbers to show — an empty tiles array, not invented zeros.
     var tiles = groups.length === 0 ? [] : FL.groupsTiles(
-      groups.length, entry.total, FL.countEvents(groups), agents.length, hasActor,
+      groups.length, entry.total, FL.countEvents(groups), onPage(leadActors), hasActor,
       FL.timeRangeLabel(FL.allTimes(groups)),
     );
     return {
       kind: "groups", loaded: groups, filtered: filtered,
-      pending: res.pending, blocker: res.blocker, loadBound: res.loadBound, total: entry.total,
+      pending: res.pending, blocker: res.blocker, nav: res.nav, total: entry.total,
       canFilter: true, agents: agents, tiles: tiles, labels: res.labels,
-      note: FL.loadNote(groups.length, entry.total, filtered.length < groups.length ? filtered.length : null),
+      note: pageNote(res, filtered.length),
     };
   }
 
   function hitsContext(entry, board, vs, actions) {
     var fields = PL.fieldsFor(board);
-    var res = loadPaged(entry, fields, vs.loadTo, actions, "hits");
+    var res = loadPage(entry, fields, vs, actions, "hits");
     if (res.blocker) return blockedContext("hits", res);
     var hits = res.items;
     var q = vs.q.trim().toLowerCase();
     var filtered = hits.filter(function (h) { return FL.hitPassesFilter(h, board, q, vs.agents); });
     var scored = PL.isScored(entry.kind);
     var hasActor = !!board.actor;
-    var kept = res.loadBound < entry.total ? res.loadBound : null;
     var terms = entry.kind === "search" ? F.searchTerms(entry.query || "") : [];
     var actorVals = hits.map(function (h) { return FL.actorOf(h.event, board); });
     var agents = FL.agentChipList(actorVals, vs.agents);
     var tiles = hits.length === 0 ? [] : FL.hitsTiles(
-      hits.length, entry.total, scored, FL.topScore(hits), agents.length, hasActor,
+      hits.length, entry.total, scored, FL.topScore(hits), onPage(actorVals), hasActor,
       FL.timeRangeLabel(hits.map(function (h) { return h.time; })),
     );
     return {
       kind: "hits", loaded: hits, filtered: filtered,
-      pending: res.pending, blocker: res.blocker, loadBound: res.loadBound, total: entry.total,
+      pending: res.pending, blocker: res.blocker, nav: res.nav, total: entry.total,
       canFilter: true, agents: agents, scored: scored, terms: terms, tiles: tiles,
-      note: FL.hitsNote(hits.length, entry.total, filtered.length < hits.length ? filtered.length : null, kept),
+      note: pageNote(res, filtered.length),
     };
   }
 

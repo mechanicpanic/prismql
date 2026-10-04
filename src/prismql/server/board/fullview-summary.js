@@ -5,6 +5,7 @@
   "use strict";
   var mk = window.PrismQLBoardUtil.mk;
   var Lex = window.PrismQLLexer;
+  var Pager = window.PrismQLFullPager;
 
   var VIEW_LABELS = { timeline: "Timeline", table: "Table", raw: "Raw JSON", summary: "Summary" };
   var ICON_COPY = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path></svg>';
@@ -75,8 +76,9 @@
     label.innerHTML = ICON_SEARCH;
     var input = document.createElement("input");
     input.type = "search";
-    input.placeholder = "Filter the output";
-    input.setAttribute("aria-label", "Filter the output");
+    // a page at a time: the filter reaches the page shown, not the whole result
+    input.placeholder = "Filter this page";
+    input.setAttribute("aria-label", "Filter this page");
     input.value = vs.q;
     input.addEventListener("input", function (e) { vs.q = e.target.value; vs.group = 0; onChange(); });
     label.appendChild(input);
@@ -103,6 +105,7 @@
     var bar = mk("div", "fbar");
     buildViewSeg(bar, allowed, currentView, vs, onChange);
     if (ctx.canFilter) buildFilter(bar, ctx, vs, onChange);
+    if (ctx.nav && ctx.canFilter) Pager.buildOrder(bar, ctx, vs, onChange);
     bar.appendChild(mk("span", "fnote", ctx.note || ""));
     el.appendChild(bar);
   }

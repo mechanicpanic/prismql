@@ -32,14 +32,6 @@
     return da + "–" + MON[b.getMonth()] + " " + b.getDate() + (sameYear ? "" : " " + b.getFullYear());
   }
 
-  function loadNote(loadedCount, total, matchedCount) {
-    var base = loadedCount + " of " + total + " loaded";
-    if (matchedCount != null && matchedCount < loadedCount) {
-      return matchedCount + " of " + loadedCount + " match · " + base;
-    }
-    return base;
-  }
-
   function viewsFor(kind) { return VIEWS[kind] || ["summary", "raw"]; }
 
   function fieldText(event, board) {
@@ -76,9 +68,12 @@
     return fieldText(event, board).indexOf(q) >= 0;
   }
 
+  // A selected agent stays a chip when the page shown has none of its
+  // groups (the full view pages: another page may lead with other agents),
+  // so the filter on it can always be undone.
   function agentChipList(values, selected) {
     var seen = {}, out = [];
-    (values || []).forEach(function (v) {
+    (values || []).concat(Object.keys(selected || {})).forEach(function (v) {
       if (v == null || seen[v]) return;
       seen[v] = true;
       out.push({ label: v, on: !!(selected && selected[v]) });
@@ -114,7 +109,7 @@
   // At most 4 tiles — the canvas's fixed 4-column grid (fix round 1,
   // #12/13). `kept` (page_payload's own field for a hits page, pages.py:
   // how many hits scouting kept; `total` is how many it found) never gets a
-  // 5th tile here — it lives in hitsNote's fnote text instead. A null
+  // 5th tile here — it lives in the fnote (fullview-nav-logic.js's pageNote) instead. A null
   // `topScoreVal` (nothing scored yet — topScore([]) === null) reads "—",
   // never "0.000" (fix round 1, #2: no invented numbers).
   function hitsTiles(loadedCount, total, scored, topScoreVal, sourceCount, hasActor, timeRange) {
@@ -127,18 +122,9 @@
     return tiles;
   }
 
-  // The hits fnote: the load/match note plus "kept K" when the store could
-  // not retrieve every found hit (fix round 1, #5 — dropped from the
-  // Load-more row so it is said exactly once).
-  function hitsNote(loadedCount, total, matchedCount, kept) {
-    var note = loadNote(loadedCount, total, matchedCount);
-    if (kept != null && kept < total) note += " · kept " + kept;
-    return note;
-  }
-
   var api = {
     PAGE: PAGE,
-    timeRangeLabel: timeRangeLabel, loadNote: loadNote, hitsNote: hitsNote, viewsFor: viewsFor,
+    timeRangeLabel: timeRangeLabel, viewsFor: viewsFor,
     fieldText: fieldText, actorOf: actorOf,
     groupPassesFilter: groupPassesFilter, hitPassesFilter: hitPassesFilter,
     agentChipList: agentChipList, countEvents: countEvents,

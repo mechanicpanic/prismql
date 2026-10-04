@@ -219,3 +219,36 @@ test("groupHeaderInfo: an unordered group's range still runs earliest to latest,
   const info = FR.groupHeaderInfo(group, 1, board);
   assert.equal(info.range, IF.localDateTime(earliest) + " → " + F.hms(latest));
 });
+
+// --- verbose groups: a table and a timeline that never carry rows nobody asked for ---
+
+function bigGroup(idx, n) {
+  const ids = Array.from({ length: n }, (_, i) => "e" + idx + "_" + i);
+  return {
+    n: idx + 1, idx, ids, positions: ids.map((_, i) => i), times: ids.map(() => null),
+    slots: ids.map((id) => ({ id, agent: "A", kind: "K", text: "t " + id })),
+  };
+}
+
+test("groupTableRows: a verbose group lists its preview and one toggle row, a small group has none", () => {
+  const rows = FR.groupTableRows([bigGroup(0, 40), bigGroup(1, 4)], board, {});
+  assert.equal(rows.filter((r) => !r.toggle).length, 3 + 4);
+  const toggles = rows.filter((r) => r.toggle);
+  assert.deepEqual(toggles.map((t) => [t.idx, t.total, t.n]), [[0, 40, 1]]);
+  assert.equal(rows[3].toggle, true, "the toggle closes its own group");
+});
+test("groupTableRows: an opened group shows as many events as its state says", () => {
+  const rows = FR.groupTableRows([bigGroup(5, 40)], board, { 5: 20 });
+  assert.equal(rows.filter((r) => !r.toggle).length, 20);
+  assert.equal(rows[0].group, 6, "the group keeps its stored number");
+});
+test("timelineItems: a limit builds only the events shown, with the gaps between them", () => {
+  const items = FR.timelineItems(bigGroup(0, 40), board, null, 3);
+  assert.equal(items.filter((i) => !i.isGap).length, 3);
+  assert.equal(items.filter((i) => i.isGap).length, 2);
+  assert.equal(FR.timelineItems(bigGroup(0, 5), board, null).filter((i) => !i.isGap).length, 5);
+});
+test("navItemFor and groupHeaderInfo carry the group's event count", () => {
+  assert.equal(FR.navItemFor(bigGroup(0, 40), board).count, 40);
+  assert.equal(FR.groupHeaderInfo(bigGroup(0, 40), 99, board).count, 40);
+});

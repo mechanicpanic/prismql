@@ -95,6 +95,10 @@
     if (opts.hydrate != null) params.set("hydrate", opts.hydrate);
     if (opts.fields != null) params.set("fields", opts.fields);
     if (opts.explain) params.set("explain", "true"); // why each event is there (#119)
+    // a view of the stored result, never a different result: the whole
+    // result in this order, then flipped
+    if (opts.order && opts.order !== "position") params.set("order", opts.order);
+    if (opts.reverse) params.set("reverse", "true");
     const url = "/results/" + encodeURIComponent(rid) + "?" + params.toString();
     const r = await fetch(url);
     if (r.status === 404) return { gone: true };

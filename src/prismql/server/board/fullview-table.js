@@ -74,17 +74,42 @@
     return tr;
   }
 
-  function renderTable(el, kind, cols, heads, rows, board) {
+  // The row closing a verbose group: how many of its events show, and the
+  // buttons that open more or fold it back (keyboard-focusable, keyed so a
+  // rebuild keeps focus on them).
+  function toggleRow(r, onToggle) {
+    var tx = window.PrismQLFullNav.toggleText(r.total, r.shown);
+    var tr = mk("div", "tr tmore");
+    tr.setAttribute("role", "row");
+    var cell = mk("span", "tcell");
+    cell.setAttribute("role", "cell");
+    cell.appendChild(mk("span", "gcount", "group " + r.n + ": " + tx.seen + " of " + r.total + " events shown"));
+    [["more", "open", tx.more], ["close", "close", tx.close]].forEach(function (b) {
+      if (!b[2]) return;
+      var btn = mk("button", "ghost sm", b[2]);
+      btn.type = "button";
+      btn.dataset.fkey = "grp-" + b[0] + ":" + r.idx;
+      btn.dataset.falt = "grp-" + (b[0] === "more" ? "close" : "more") + ":" + r.idx; // its twin, if this one is gone
+      btn.setAttribute("aria-expanded", String(b[0] === "close"));
+      btn.addEventListener("click", function () { onToggle(r.idx, r.total, b[1]); });
+      cell.appendChild(btn);
+    });
+    tr.appendChild(cell);
+    return tr;
+  }
+
+  function renderTable(el, kind, cols, heads, rows, board, onToggle) {
     board = board || {};
     el.appendChild(headerRow(cols, heads));
     if (!rows.length) {
       var empty = mk("div", "empty");
-      empty.appendChild(mk("strong", null, "Nothing matches the filter"));
+      empty.appendChild(mk("strong", null, "Nothing on this page matches the filter"));
       el.appendChild(empty);
       return;
     }
     rows.forEach(function (r) {
-      var row = kind === "groups" ? groupRow(cols, r, board)
+      var row = r.toggle ? toggleRow(r, onToggle)
+        : kind === "groups" ? groupRow(cols, r, board)
         : kind === "rows" ? rowRow(cols, r)
         : hitRow(cols, r, board);
       el.appendChild(row);
@@ -101,14 +126,16 @@
     div.appendChild(cd);
     return div;
   }
-  function renderRaw(el, items) {
+  // `first` is the number of the first line: the page's own offset, so a
+  // later page does not start over at 1.
+  function renderRaw(el, items, first) {
     if (!items.length) {
       var empty = mk("div", "empty");
       empty.appendChild(mk("strong", null, "Nothing loaded yet"));
       el.appendChild(empty);
       return;
     }
-    items.forEach(function (obj, i) { el.appendChild(rawLine(i + 1, obj)); });
+    items.forEach(function (obj, i) { el.appendChild(rawLine((first || 0) + i + 1, obj)); });
   }
 
   var api = { renderTable: renderTable, renderRaw: renderRaw };
