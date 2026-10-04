@@ -322,9 +322,13 @@ class MemoryBackend(SearchBackend):
 
     @property
     def text_fields_present(self) -> frozenset[str]:
-        """The text fields at least one event holds: none means every text
-        predicate would answer nothing (graph @aleph/prismql, #168)."""
+        """The text fields at least one event holds (graph #168)."""
         return frozenset(self._text_seen)
+
+    def text_fields_read(self, kind: str) -> tuple[str, ...]:
+        """The fields a ``field="text"`` search reads: words span every text
+        field, a phrase reads ``text`` alone (graph #168)."""
+        return ("text",) if kind == "phrase" else tuple(self.config.text_fields)
 
     def get_total_documents(self) -> int:
         """Get total number of documents."""

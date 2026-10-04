@@ -131,6 +131,17 @@ class SearchBackend(ABC):
     # Backends without an axis MUST fail loudly here; order is never
     # reconstructed from id values.
     # ------------------------------------------------------------------
+    @property
+    def text_fields_present(self) -> frozenset[str] | None:
+        """The text fields some event holds; None when the backend cannot
+        say, and then no text predicate refuses (graph @aleph/prismql, #168)."""
+        return None
+
+    def text_fields_read(self, kind: str) -> tuple[str, ...]:  # noqa: ARG002
+        """The fields a ``field="text"`` search of ``kind`` (words, phrase)
+        reads."""
+        return ("text",)
+
     def has_order_axis(self) -> bool:
         return False
 

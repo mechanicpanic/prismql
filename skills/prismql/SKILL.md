@@ -280,8 +280,9 @@ implementation over the ordered corpus:
      naming this rule) — use `DURING <time>` for an overall time bound.
 4. **`contains(x)` takes a dictionary NAME**, never a literal word. For a
    literal use `contains_phrase("exact phrase")`, or define a dictionary.
-   Text predicates read only `text`, `content` and `message`: on a corpus
-   whose text is in `body` they refuse — use `field(body, "word", partial)`.
+   Text predicates read only `text`, `content` and `message` (phrases and
+   tantivy: `text` alone): on a corpus whose text is in `body` they refuse —
+   use `field(body, "word", partial)`.
 5. **`INWINDOW` is unordered; `FOLLOWED_BY` is ordered.** "A then B" →
    `FOLLOWED_BY`; "A and B near each other" → comma + `INWINDOW`.
 6. **Don't flatten multi-stage patterns.** `SELECT (SELECT a, b INWINDOW 3) FOLLOWED_BY (SELECT c) INWINDOW 8` keeps a+b grouped; `SELECT a, b, c INWINDOW 8` does not mean the same thing.

@@ -551,7 +551,7 @@ class IRExecutor(PrismQLVisitor):
             )
 
         if isinstance(cond, ContainsPhrase):
-            self._require_text("contains_phrase()")
+            self._require_text("contains_phrase()", "phrase")
             return self.search_backend.search_phrase(cond.phrase, field="text")
 
         if isinstance(cond, FieldMatch):

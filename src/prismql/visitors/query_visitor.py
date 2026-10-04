@@ -976,7 +976,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             phrase_text = ctx.QUOTED_STRING().getText()
             # Remove surrounding quotes
             phrase = phrase_text[1:-1]  # Strip first and last character
-            self._require_text("contains_phrase()")
+            self._require_text("contains_phrase()", "phrase")
             return self.search_backend.search_phrase(phrase, field="text")
 
         # from(username) - same as byuser
@@ -1201,20 +1201,29 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
         raise PrismQLRuntimeError("Unknown condition type")
 
-    def _require_text(self, predicate: str) -> None:
-        """Refuse a text predicate on a corpus with none of the text fields:
-        its empty answer would read as a real negative (graph #168)."""
+    def _require_text(self, predicate: str, kind: str = "words") -> None:
+        """Refuse a text predicate when the corpus holds none of the fields it
+        reads: its empty answer would read as a real negative (graph #168).
+        ``kind``: words, phrase, or annotate (a rule over the documents)."""
+        from ..ingest.annotate import TEXT_FIELDS
+
         backend = self.search_backend
         present = getattr(backend, "text_fields_present", None)
-        if present is None or present:
+        if present is None:
             return
-        config = getattr(backend, "config", None)
-        names = getattr(config, "text_fields", None) or ["text", "content", "message"]
+        if kind == "annotate":
+            read: tuple[str, ...] = TEXT_FIELDS
+        else:
+            read = backend.text_fields_read(kind)
+        if set(present) & set(read):
+            return
+        fields = ", ".join(read)
+        noun = "field" if len(read) == 1 else "fields"
         raise PrismQLRuntimeError(
-            f"{predicate} reads the text fields {', '.join(names)}, and this "
-            "corpus has none of them, so it would match nothing. Put the text "
-            "in a column named `text`, or match the column it is in with "
-            'field(<column>, "word", partial) — e.g. field(body, "word", partial).'
+            f"{predicate} reads the text {noun} {fields}, and this corpus has "
+            "none of them, so it would match nothing. Put the text in a column "
+            'named `text`, or match the column it is in with field(<column>, "word", '
+            'partial) — e.g. field(body, "word", partial).'
         )
 
     def _search_dictionary(self, dict_name: str) -> set[MessageId]:
@@ -1226,10 +1235,13 @@ class PrismQLVisitor(BasePrismQLVisitor):
         order. Single-word terms use the dictionary's `match` mode when
         declared, else the engine-wide text_match.
         """
-        self._require_text(f"contains({dict_name})")
         words = self.user_dictionaries[dict_name]
         phrases = [t for t in words if " " in t.strip()]
         singles = [t for t in words if " " not in t.strip()]
+        if phrases:
+            self._require_text(f"contains({dict_name})", "phrase")
+        if singles:
+            self._require_text(f"contains({dict_name})")
         mode = self.dictionary_modes.get(dict_name, self.text_match)
 
         results: set[MessageId] = set()
@@ -1282,6 +1294,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
             if username == "*":
                 return set().union(*given.values())
             return set(given.get(username, set()))
+        if not self.mentions_column:  # found in the text at load
+            self._require_text(f"mentions_user({username})", "annotate")
         mentions = mentions_of(
             self.search_backend, self.actor_field, TEXT_FIELDS, self.mentions_column
         )
@@ -1321,7 +1335,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
         from ..ingest.annotate import TEXT_FIELDS, link_ids, question_ids
 
         predicate = "is_question()" if kind == "questions" else "contains_link()"
-        self._require_text(predicate)
+        self._require_text(predicate, "annotate")
         backend = self.search_backend
         docs = getattr(backend, "documents", None)
         if not isinstance(docs, list):

@@ -265,6 +265,9 @@ class TantivyBackend(SearchBackend):
         self._id_is_int = id_is_int
         self._text_fields = text_set
         self._meta_fields = set(meta)
+        self._text_present: set[str] | None = observed & (
+            set(self.config.text_fields) | text_set
+        )
 
         sb = tantivy.SchemaBuilder()
         if id_is_int:
@@ -326,6 +329,7 @@ class TantivyBackend(SearchBackend):
                         "id_field": self.id_field,
                         "id_is_int": self._id_is_int,
                         "text_fields": sorted(self._text_fields),
+                        "text_present": sorted(self._text_present or ()),
                         "meta_fields": sorted(self._meta_fields),
                         "text_language": self.text_language,
                         "schema_version": _SCHEMA_VERSION,
@@ -358,6 +362,9 @@ class TantivyBackend(SearchBackend):
         self._id_is_int = meta["id_is_int"]
         self._text_fields = set(meta["text_fields"])
         self._meta_fields = set(meta["meta_fields"])
+        # an index written before #168 does not say: no refusal then
+        present = meta.get("text_present")
+        self._text_present = None if present is None else set(present)
 
     @property
     def stores_documents(self) -> bool:
@@ -369,9 +376,15 @@ class TantivyBackend(SearchBackend):
         return frozenset(self._text_fields)
 
     @property
-    def text_fields_present(self) -> frozenset[str]:
-        """The text fields the corpus holds (graph @aleph/prismql, #168)."""
-        return frozenset(self._text_fields)
+    def text_fields_present(self) -> frozenset[str] | None:
+        """The text fields some event holds; None for an index that predates
+        recording them (graph @aleph/prismql, #168)."""
+        return None if self._text_present is None else frozenset(self._text_present)
+
+    def text_fields_read(self, kind: str) -> tuple[str, ...]:  # noqa: ARG002
+        """A ``field="text"`` search reads the field named ``text`` only,
+        for words and phrases alike."""
+        return ("text",)
 
     # ------------------------------------------------------------- internals
     def _coerce_id(self, raw: Any) -> MessageId:

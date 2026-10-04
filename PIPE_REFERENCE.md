@@ -83,7 +83,7 @@ A backend that cannot honour a mode refuses rather than substituting
 (tantivy has no substring mode). `contains_tokens()` always matches whole
 tokens; `contains_phrase()` matches one exact phrase.
 
-Text predicates — `contains()`, `contains_tokens()`, `contains_phrase()`, `is_question()`, `contains_link()` — read the text fields `text`, `content` and `message`. On a corpus with none of them they refuse with an error instead of answering zero; text in another column is matched with `field(body, "word", partial)`.
+Text predicates read fixed text fields. Words — `contains()` and `contains_tokens()` — read `text`, `content` and `message` (tantivy: `text` only); a phrase — `contains_phrase()` or a multi-word dictionary term — reads `text` only; `is_question()`, `contains_link()` and `mentions_user()` (when mentions were not stamped at ingest) read `text`, `content` and `message`. When the corpus holds none of the fields a predicate reads, it refuses with an error instead of answering zero; text in another column is matched with `field(body, "word", partial)`.
 
 ### 2. Boolean Operators
 
