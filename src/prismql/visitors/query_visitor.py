@@ -1099,7 +1099,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 return self.search_backend.get_all_document_ids(limit=total_docs)
 
             if dict_name not in self.user_dictionaries:
-                raise PrismQLRuntimeError(f"Dictionary '{dict_name}' not found")
+                raise self._missing_dictionary("contains", dict_name)
             return self._search_dictionary(dict_name)
 
         if ctx.ByUser():
@@ -1201,7 +1201,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
 
     def _missing_dictionary(self, func: str, dict_name: str) -> PrismQLRuntimeError:
         """The error for ``func(word)`` naming no configured dictionary — the
-        usual cause is a literal word, which ``contains()`` does not search."""
+        usual cause is a literal word, which ``contains()`` does not search.
+        The deprecated ``haswordofdict`` is ``contains()`` (it lowers to the
+        same node), so both paths name ``contains``."""
         known = sorted(self.user_dictionaries)
         have = (
             "configured dictionaries: " + ", ".join(known[:10])

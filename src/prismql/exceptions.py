@@ -1,5 +1,6 @@
 """PrismQL exceptions."""
 
+import re
 from typing import Any
 
 
@@ -79,13 +80,29 @@ _VALUE_BREAKERS = "-/:@.#&'"
 
 def unquoted_value_hint(char: str) -> str:
     """A hint for a lexer stop at ``char`` when it most likely sits inside an
-    unquoted value (graph @aleph/prismql, #97) or is a ``!`` before a literal
-    — ``!`` negates only a variable; empty for other characters."""
-    if char == "!":
-        return (
-            " — '!' negates only a variable (!$x), not a literal; to exclude "
-            'a value write NOT field(name, "a")'
-        )
+    unquoted value (graph @aleph/prismql, #97); empty for other characters."""
     if char in _VALUE_BREAKERS:
         return f' — a value with {char!r} must be in quotes, e.g. field(name, "a-b")'
     return ""
+
+
+_QUOTED = re.compile(r""""[^"]*"|'[^']*'""")
+
+
+def negated_literal_hint(query: str, index: int) -> str:
+    """A hint for a lexer stop at the ``!`` at ``query[index]`` when it negates
+    a literal: it stands as an argument (after a ``,`` inside parentheses) and
+    a value follows — ``field(x, !a)``. ``!=``, ``AND !field(...)`` and a bare
+    ``!`` between conditions get none: ``!`` negates only a variable (!$x)."""
+    if query[index : index + 1] != "!":
+        return ""
+    after = query[index + 1 : index + 2]
+    if not (after.isalnum() or after in ("_", '"', "'")):
+        return ""
+    before = _QUOTED.sub('""', query[:index])
+    if before.count("(") <= before.count(")") or not before.rstrip().endswith(","):
+        return ""
+    return (
+        " — '!' negates only a variable (!$x), not a literal; to exclude "
+        'a value write NOT field(name, "a")'
+    )

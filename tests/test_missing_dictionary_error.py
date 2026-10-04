@@ -7,6 +7,7 @@ import pytest
 from prismql import PrismQLEngine
 from prismql.backends.memory import MemoryBackend
 from prismql.exceptions import PrismQLRuntimeError
+from prismql.validator import QueryValidator
 
 DOCS = [
     {"id": 1, "user": "a", "text": "hello world"},
@@ -59,3 +60,23 @@ def test_the_suggested_phrase_form_finds_the_text(use_ir):
 def test_a_configured_dictionary_still_answers(use_ir):
     engine = make_engine(use_ir, {"greet": ["hello"]})
     assert engine.execute("SELECT contains(greet)") == [[1]]
+
+
+@pytest.mark.parametrize("use_ir", [True, False])
+def test_the_deprecated_haswordofdict_gets_the_same_message_on_both_paths(use_ir):
+    # It lowers to the same node as contains(), so both paths say so.
+    with pytest.warns(DeprecationWarning), pytest.raises(PrismQLRuntimeError) as err:
+        make_engine(use_ir).execute("SELECT haswordofdict(hello)")
+    assert "contains() looks up a configured dictionary" in str(err.value)
+    assert 'contains_phrase("hello")' in str(err.value)
+
+
+@pytest.mark.parametrize(
+    "query", ["SELECT contains(hello)", "contains(hello)"], ids=["classic", "pipe"]
+)
+def test_the_validator_suggestion_points_at_contains_phrase(query):
+    result = QueryValidator(user_dictionaries={"greet": ["hi"]}).validate(query)
+    [issue] = result.errors
+    assert issue.code == "UNDEFINED_DICTIONARY"
+    assert "one of: greet" in issue.suggestion
+    assert 'contains_phrase("hello")' in issue.suggestion
