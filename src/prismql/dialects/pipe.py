@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from ..aggregators.types import AggregationFunction
 from ..exceptions import (
     PrismQLSyntaxError,
+    dictionary_not_word_advice,
     negated_literal_hint,
     unquoted_value_hint,
 )
@@ -449,11 +450,7 @@ class _PipeParser:
         if name in ("contains", "contains_tokens"):
             if self.peek().kind == "STRING":
                 word = self.peek().text
-                raise self.error(
-                    f"{name}() takes the name of a dictionary, not a word; for a "
-                    f"word or phrase use contains_phrase({word}), for one field "
-                    f"field(<column>, {word}, partial)"
-                )
+                raise self.error(dictionary_not_word_advice(name, word))
             term = self.parse_term()
             self.expect("RPAREN", "')'")
             return Contains(term) if name == "contains" else ContainsTokens(term)

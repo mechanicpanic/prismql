@@ -8,7 +8,11 @@ from typing import Any
 from ..aggregators.aggregator import Aggregator
 from ..aggregators.types import AggregateResult, AggregationFunction, GroupedResult
 from ..backends.base import PrecomputedIndexes, SearchBackend
-from ..exceptions import PrismQLRuntimeError, PrismQLSyntaxError
+from ..exceptions import (
+    PrismQLRuntimeError,
+    PrismQLSyntaxError,
+    dictionary_not_word_advice,
+)
 from ..grammar.generated.PrismQLParser import PrismQLParser
 from ..grammar.generated.PrismQLVisitor import PrismQLVisitor as BasePrismQLVisitor
 from ..plan.bridge import (
@@ -1238,10 +1242,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
             else "no dictionaries are configured"
         )
         return PrismQLRuntimeError(
-            f"Dictionary '{dict_name}' not found — {func}() looks up a "
-            f"configured dictionary, not literal text ({have}). To search for "
-            f'the text, use contains_phrase("{dict_name}"); to match a field '
-            f"other than text, use field(name, {dict_name}, partial)"
+            f"Dictionary '{dict_name}' not found ({have}) — "
+            + dictionary_not_word_advice(func, dict_name)
         )
 
     def _search_dictionary(self, dict_name: str) -> set[MessageId]:

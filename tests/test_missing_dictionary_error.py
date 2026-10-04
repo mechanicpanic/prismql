@@ -35,9 +35,9 @@ def test_a_literal_word_is_pointed_at_contains_phrase(use_ir, query):
         make_engine(use_ir).execute(query)
     message = str(err.value)
     assert "Dictionary 'hello' not found" in message  # the old wording stays
-    assert "configured dictionary, not literal text" in message
+    assert "takes the name of a dictionary, not a word" in message
     assert 'contains_phrase("hello")' in message
-    assert "field(name, hello, partial)" in message
+    assert 'field(<column>, "hello", partial)' in message
     assert "no dictionaries are configured" in message
 
 
@@ -67,7 +67,7 @@ def test_the_deprecated_haswordofdict_gets_the_same_message_on_both_paths(use_ir
     # It lowers to the same node as contains(), so both paths say so.
     with pytest.warns(DeprecationWarning), pytest.raises(PrismQLRuntimeError) as err:
         make_engine(use_ir).execute("SELECT haswordofdict(hello)")
-    assert "contains() looks up a configured dictionary" in str(err.value)
+    assert "contains() takes the name of a dictionary" in str(err.value)
     assert 'contains_phrase("hello")' in str(err.value)
 
 
@@ -80,3 +80,11 @@ def test_the_validator_suggestion_points_at_contains_phrase(query):
     assert issue.code == "UNDEFINED_DICTIONARY"
     assert "one of: greet" in issue.suggestion
     assert 'contains_phrase("hello")' in issue.suggestion
+
+
+def test_the_advice_puts_a_dictionary_first_and_says_what_a_phrase_reads():
+    from prismql.exceptions import dictionary_not_word_advice
+
+    advice = dictionary_not_word_advice("contains", "fail")
+    assert advice.index("define one") < advice.index("contains_phrase")
+    assert "exact, unstemmed and reads text only" in advice

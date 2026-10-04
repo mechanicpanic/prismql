@@ -104,5 +104,20 @@ def negated_literal_hint(query: str, index: int) -> str:
         return ""
     return (
         " — '!' negates only a variable (!$x), not a literal; to exclude "
-        'a value write NOT field(name, "a")'
+        'a value write NOT field(name, "a"), which also keeps events that '
+        "have no such field at all"
+    )
+
+
+def dictionary_not_word_advice(func: str, word: str) -> str:
+    """What to write instead of a word where ``func`` wants a dictionary name:
+    a dictionary first — it matches stemmed whole words in every text field —
+    then the narrower forms, each with what it reads (graph #168)."""
+    bare = word.strip("\"'")
+    return (
+        f"{func}() takes the name of a dictionary, not a word: define one "
+        f'(e.g. {bare}s = ["{bare}"]) to match it as a whole word in text, '
+        f'content and message; contains_phrase("{bare}") is exact, unstemmed '
+        f'and reads text only; for another column use field(<column>, "{bare}", '
+        "partial)"
     )

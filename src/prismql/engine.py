@@ -13,6 +13,7 @@ from .dialects.pipe import parse_pipe
 from .exceptions import (
     PrismQLRuntimeError,
     PrismQLSyntaxError,
+    dictionary_not_word_advice,
     negated_literal_hint,
     unquoted_value_hint,
 )
@@ -89,11 +90,7 @@ def _contains_word_hint(recognizer: Any, token: Any) -> str:
     name, paren = stream.get(index - 2).text, stream.get(index - 1).text
     if paren != "(" or name.lower() not in ("contains", "contains_tokens"):
         return ""
-    return (
-        f" — {name}() takes the name of a dictionary, not a word; for a word "
-        f"or phrase use contains_phrase({text}), for one field "
-        f"field(<column>, {text}, partial)"
-    )
+    return " — " + dictionary_not_word_advice(name, text)
 
 
 class PrismQLEngine:
