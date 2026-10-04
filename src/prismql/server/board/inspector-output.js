@@ -63,7 +63,7 @@
     var btn = mk("button", "iconbtn sm");
     btn.type = "button";
     btn.setAttribute("aria-label", "Open output full screen");
-    btn.title = "Full view";
+    btn.title = "View results";
     btn.innerHTML = UI.ICON_FULL;
     btn.addEventListener("click", function () { actions.openFull(entry.seq); });
     el.appendChild(btn);

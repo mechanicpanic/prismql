@@ -44,6 +44,12 @@
     id.style.marginLeft = "auto";
     id.style.font = "11px 'JetBrains Mono', monospace";
     id.style.color = "var(--faint)";
+    if (entry.ok && entry.result_id != null) {
+      var top = window.PrismQLInspectorDetail.viewResultsBtn(entry, window.PrismQLBoard.actions, true);
+      top.style.marginLeft = "auto";
+      dhead.appendChild(top);
+      id.style.marginLeft = "10px";
+    }
     dhead.appendChild(id);
     wrap.appendChild(dhead);
 

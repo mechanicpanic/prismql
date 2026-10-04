@@ -8,7 +8,7 @@
 
   var KEYS = [
     ["j / ↓", "next request"], ["k / ↑", "previous request"],
-    ["Enter / f", "full view"], ["Esc", "close"], ["[ / ]", "previous / next page (full view)"],
+    ["Enter / f", "view results"], ["Esc", "close"], ["[ / ]", "previous / next page (full view)"],
     ["e", "open in editor"], ["r", "run again"], ["n", "new query"],
     ["c", "copy finding"], ["/", "search"], ["?", "this list"],
   ];

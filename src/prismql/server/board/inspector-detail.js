@@ -30,7 +30,7 @@
   // the query text is still reachable.
   function buildActs(wrap, entry, actions, state) {
     var acts = mk("div", "acts");
-    acts.appendChild(actBtn("Full view", UI.ICON_FULL, function () { actions.openFull(entry.seq); }, "Open the output full screen (Enter)"));
+    acts.appendChild(viewResultsBtn(entry, actions));
     var dictBlocked = L.hasRequestDictionaries(entry);
     acts.appendChild(actBtn("Open in editor", ICON_EDIT, function () { actions.openInEditor(entry); }));
     var rerunBtn = actBtn("Run again", ICON_RERUN, function () { actions.rerun(entry); });
@@ -57,6 +57,14 @@
     // actually answers, and clears itself once that stops matching.
     var err = state && state.rerunError;
     if (err && err.seq === entry.seq) wrap.appendChild(mk("div", "inline-err", err.message));
+  }
+
+  // The way into the output, said plainly and in the accent colour: it was a
+  // grey "Full view" nobody read as "the results are here".
+  function viewResultsBtn(entry, actions, small) {
+    var btn = actBtn("View results", UI.ICON_FULL, function () { actions.openFull(entry.seq); }, "Open every result of this request, page by page (f)");
+    btn.className = "primary view-results" + (small ? " sm" : "");
+    return btn;
   }
 
   // The request as a finding anyone can rerun, in Markdown (#174)
@@ -107,7 +115,7 @@
     wrap.appendChild(dl);
   }
 
-  var api = { buildActs: buildActs, buildKv: buildKv };
+  var api = { buildActs: buildActs, buildKv: buildKv, viewResultsBtn: viewResultsBtn };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PrismQLInspectorDetail = api;
 })(typeof window !== "undefined" ? window : globalThis);
