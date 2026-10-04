@@ -11,10 +11,13 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const FETCH_PATH = require.resolve("../../src/prismql/server/board/inspector-fetch.js");
+const LOAD_PATH = require.resolve("../../src/prismql/server/board/fullview-load.js");
+const ROWSCTX_PATH = require.resolve("../../src/prismql/server/board/fullview-rows-context.js");
 const DATA_PATH = require.resolve("../../src/prismql/server/board/fullview-data.js");
 const BoardUtil = require("../../src/prismql/server/board/board-util.js");
 const PageLogic = require("../../src/prismql/server/board/inspector-page-logic.js");
 const FullLogic = require("../../src/prismql/server/board/fullview-logic.js");
+const FullNav = require("../../src/prismql/server/board/fullview-nav-logic.js");
 const Format = require("../../src/prismql/server/board/format.js");
 const EditorLogic = require("../../src/prismql/server/board/editor-logic.js");
 
@@ -44,6 +47,7 @@ function freshModules(pageImpl) {
     PrismQLInspectorUI: { emptyBlock: fakeEmptyBlock, ICON_FULL: "" },
     PrismQLInspectorPageLogic: PageLogic,
     PrismQLFullLogic: FullLogic,
+    PrismQLFullNav: FullNav,
     PrismQLFormat: Format,
     PrismQLEditorLogic: EditorLogic,
     PrismQLApi: { page: pageImpl },
@@ -51,6 +55,8 @@ function freshModules(pageImpl) {
   };
   delete require.cache[FETCH_PATH];
   delete require.cache[DATA_PATH];
+  delete require.cache[LOAD_PATH];
+  delete require.cache[ROWSCTX_PATH];
   const PF = require(FETCH_PATH);
   globalThis.window.PrismQLInspectorFetch = PF;
   const Data = require(DATA_PATH);
@@ -63,7 +69,7 @@ function flush() {
 
 const board = { kind: "kind", actor: "agent" };
 const actions = {};
-const vs = () => ({ loadTo: 50, q: "", agents: {} });
+const vs = () => Object.assign({ q: "", agents: {}, group: 0 }, FullNav.initial(50));
 
 test("fix round 1, #1: the actors tile counts the chip list — distinct FIRST-slot actors, not every event's actor", async () => {
   const Data = freshModules(async () => ({
@@ -129,7 +135,7 @@ test("fix round 1, #12: hits with kept < total show it in the note, never as a 5
   const ctx = Data.buildContext(entry, board, "hits", vs(), actions);
   assert.equal(ctx.tiles.some((t) => t.l === "kept"), false);
   assert.equal(ctx.tiles.length, 4);
-  assert.match(ctx.note, /kept 2/);
+  assert.equal(ctx.note, "1–2 of 2 · 3 found", "kept 2 of the 3 found");
 });
 
 // --- fix round 2 ---
@@ -149,26 +155,107 @@ test("fix round 2, #1: 'Run again' on a gone result closes the full view before 
   assert.deepEqual(calls, ["close", "rerun:r6"], "closeFull must run, then rerun — never the other order or neither");
 });
 
-test("finding 1: full view paging advances by the page's own count, not a fixed PAGE, when the server caps below it", async () => {
+test("finding 1: a server cap below the page size steps offsets by what came back — no page skips items", async () => {
   const N = 80, CAP = 25;
   const all = [];
   for (let i = 0; i < N; i++) {
     all.push({ ids: ["g" + i], positions: [i], times: [null], events: [{ id: "g" + i, agent: "A", kind: "K" }] });
   }
+  const asked = [];
   const Data = freshModules(async (rid, opts) => {
+    asked.push([opts.offset, opts.limit]);
     const off = opts.offset;
-    return { kind: "groups", total: N, results: all.slice(off, off + CAP) };
+    return { kind: "groups", total: N, count: Math.min(CAP, N - off), truncated: off + CAP < N, offset: off, results: all.slice(off, off + CAP) };
   });
   const entry = { result_id: "rN", total: N, kind: "evaluate", result: "groups" };
-  let ctx;
-  for (let i = 0; i < 10; i++) {
-    ctx = Data.buildContext(entry, board, "groups", { loadTo: N, q: "", agents: {} }, actions);
-    if (!ctx.pending) break;
-    await flush();
+  const view = vs();
+  const seen = [];
+  for (let page = 0; page < 4; page++) {
+    view.page = page;
+    let ctx;
+    for (let i = 0; i < 5; i++) {
+      ctx = Data.buildContext(entry, board, "groups", view, actions);
+      if (!ctx.pending) break;
+      await flush();
+    }
+    assert.equal(ctx.pending, false);
+    seen.push(...ctx.loaded.map((g) => g.n));
+    assert.equal(ctx.nav.pageCount, 4, "80 items at 25 a page");
   }
-  assert.equal(ctx.pending, false, "loading must finish within a handful of page fetches");
-  assert.equal(ctx.loaded.length, N, "all 80 groups must load despite the 25-item server cap");
-  assert.deepEqual(ctx.loaded.map((g) => g.n), Array.from({ length: N }, (_, i) => i + 1));
+  assert.deepEqual(seen, Array.from({ length: N }, (_, i) => i + 1), "every group exactly once, none skipped");
+  assert.deepEqual(asked.map((a) => a[0]), [0, 25, 50, 75]);
+  assert.ok(asked.every((a) => a[1] === 50), "every request asks for one PAGE, never a growing limit");
+});
+
+test("paging fetches one page and never accumulates the earlier ones", async () => {
+  const N = 120;
+  const all = [];
+  for (let i = 0; i < N; i++) all.push({ ids: ["g" + i], positions: [i], times: [null], events: [{ id: "g" + i, agent: "A", kind: "K" }] });
+  const Data = freshModules(async (rid, opts) => ({
+    kind: "groups", total: N, offset: opts.offset, count: Math.min(50, N - opts.offset),
+    truncated: opts.offset + 50 < N, results: all.slice(opts.offset, opts.offset + 50),
+  }));
+  const entry = { result_id: "rP", total: N, kind: "evaluate", result: "groups" };
+  const view = vs();
+  async function load() {
+    let ctx = Data.buildContext(entry, board, "groups", view, actions);
+    if (ctx.pending) { await flush(); ctx = Data.buildContext(entry, board, "groups", view, actions); }
+    return ctx;
+  }
+  await load();
+  view.page = 2;
+  const ctx = await load();
+  assert.equal(ctx.loaded.length, 20, "page 3 of 120 holds its own last 20, not 120");
+  assert.equal(ctx.loaded[0].n, 101);
+  assert.match(ctx.note, /101–120 of 120/);
+});
+
+test("a sorted page numbers each group by its place in the STORED result", async () => {
+  const Data = freshModules(async (rid, opts) => ({
+    kind: "groups", total: 6, offset: 0, count: 2, truncated: true, order: opts.order, reverse: !!opts.reverse,
+    indices: [5, 1],
+    results: [
+      { ids: ["a", "b", "c", "d"], positions: [4, 5, 6, 7], times: [null, null, null, null], events: [] },
+      { ids: ["x", "y", "z"], positions: [1, 2, 3], times: [null, null, null], events: [] },
+    ],
+  }));
+  const entry = { result_id: "rS", total: 6, kind: "evaluate", result: "groups" };
+  const view = vs();
+  view.order = "size";
+  Data.buildContext(entry, board, "groups", view, actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "groups", view, actions);
+  assert.deepEqual(ctx.loaded.map((g) => g.n), [6, 2]);
+  assert.deepEqual(ctx.loaded.map((g) => g.idx), [5, 1]);
+});
+
+test("the view reaches the request: default sends no order, a view sends order and reverse", async () => {
+  const calls = [];
+  const Data = freshModules(async (rid, opts) => {
+    calls.push({ order: opts.order, reverse: opts.reverse });
+    return { kind: "groups", total: 1, offset: 0, count: 1, truncated: false, results: [{ ids: ["a"], positions: [0], times: [null], events: [] }] };
+  });
+  const entry = { result_id: "rV", total: 1, kind: "evaluate", result: "groups" };
+  const view = vs();
+  Data.buildContext(entry, board, "groups", view, actions);
+  view.order = "size"; view.reverse = true;
+  Data.buildContext(entry, board, "groups", view, actions);
+  assert.deepEqual(calls, [{ order: undefined, reverse: undefined }, { order: "size", reverse: true }]);
+});
+
+test("a selected agent chip survives a page that has none of its groups", async () => {
+  const Data = freshModules(async () => ({
+    kind: "groups", total: 1, offset: 0, count: 1, truncated: false,
+    results: [{ ids: ["a"], positions: [0], times: [null], events: [{ id: "a", agent: "B", kind: "K" }] }],
+  }));
+  const entry = { result_id: "rC", total: 1, kind: "evaluate", result: "groups" };
+  const view = vs();
+  view.agents = { A: true };
+  Data.buildContext(entry, board, "groups", view, actions);
+  await flush();
+  const ctx = Data.buildContext(entry, board, "groups", view, actions);
+  assert.deepEqual(ctx.agents, [{ label: "B", on: false }, { label: "A", on: true }]);
+  assert.equal(ctx.filtered.length, 0, "the filter still applies, and its chip is there to undo it");
 });
 
 test("finding 4: buildContext threads idField through to pairEventsToSlots for groups", async () => {
@@ -220,7 +307,7 @@ test("rowsContext: loads the flat key/value list and reports it as groups loaded
   assert.deepEqual(ctx.loaded, [{ key: "tick_a", value: 3 }, { key: "tick_b", value: 1 }]);
   assert.deepEqual(ctx.filtered, ctx.loaded);
   assert.deepEqual(ctx.tiles, [{ v: "2 / 2", l: "groups loaded" }]);
-  assert.equal(ctx.note, "2 of 2 loaded");
+  assert.equal(ctx.note, "1–2 of 2");
   assert.equal(ctx.canFilter, true);
 });
 
@@ -274,4 +361,20 @@ test("rowsContext: a gone result renders no tiles and the canvas's own note", as
   const ctx = Data.buildContext(entry, board, "rows", vs(), actions);
   assert.deepEqual(ctx.tiles, []);
   assert.equal(ctx.note, "result no longer kept");
+});
+
+test("a failed page keeps its nav (the way back); a gone result has none", async () => {
+  const bad = freshModules(async () => ({ error: { message: "boom" } }));
+  const entry = { result_id: "rE", total: 130, kind: "evaluate", result: "groups" };
+  const view = vs();
+  view.page = 2;
+  bad.buildContext(entry, board, "groups", view, actions);
+  await flush();
+  const failed = bad.buildContext(entry, board, "groups", view, actions);
+  assert.ok(failed.blocker && !failed.gone);
+  assert.deepEqual([failed.nav.page, failed.nav.pageCount], [2, 3]);
+  const gone = freshModules(async () => ({ gone: true }));
+  gone.buildContext({ ...entry, result_id: "rG" }, board, "groups", view, actions);
+  await flush();
+  assert.equal(gone.buildContext({ ...entry, result_id: "rG" }, board, "groups", view, actions).nav, null);
 });

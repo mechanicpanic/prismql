@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+const FullNav = require("../../src/prismql/server/board/fullview-nav-logic.js");
 const MODPATH = require.resolve("../../src/prismql/server/board/fullview.js");
 
 function fakeEl() {
@@ -41,6 +42,7 @@ function freshFull(calls) {
       boardFieldsFor: () => ({ board: {}, idField: "id", blocked: false }),
       loadingBlock: () => fakeEl(),
     },
+    PrismQLFullNav: FullNav,
     PrismQLFullLogic: { PAGE: 50, viewsFor: () => ["timeline", "table", "raw"] },
     PrismQLFullData: {
       buildContext: () => ({

@@ -2,7 +2,7 @@
 
 *The one place project state lives. Updated in the same commit as the change
 it describes. Agent memory points here; it does not duplicate this.*
-*Last update: 2026-10-03 (explained pages carry what the engine bound each pattern variable to).*
+*Last update: 2026-10-04 (board result navigation: ordering, pages and collapsible groups in the full view; on a branch, not yet on `main`).*
 
 ## Shipped (newest first)
 
@@ -85,6 +85,8 @@ it describes. Agent memory points here; it does not duplicate this.*
 1. **P4 gates** — Chicago full-tuple equality on the tiers is in `tests/plan/test_chicago_tiers.py` (100k/1m via `PRISMQL_TIERS`; full tier on the owner's word); still to add: a positional benchmark query on the full tier, relabeled corpora (gapped numeric, non-lexical strings) on the tiers.
 2. **Frame cost, now measured (graph #14)** — Village (381k rows, `emb` column) on memory: start 54 s, two-leg chain 0.1 s, `contains` chain 1.1 s; the same corpus on tantivy with `index_path` (714 MB): first start 85 s, reopen 19 s, `/search` 10 ms with no lazy build — but the same two-leg chain 2.9 s and the `contains` chain 3.9 s, because `query_frame` fetches the participating documents one by one from the index (`get_documents`) and reads fields from dicts. The fix is the plan's deferred task: the backend keeps the corpus as an Arrow/Polars table and `query_frame` slices it by position (ingest plan task 6). Until then large corpora stay on memory (start-up dominated by the text index: 21 s of the 54 s) and tantivy is the scouting/persisted-index backend, not the fast one.
 5. Agent surface track; workbench M0–M3; mismatch diary Q04–Q18; `similar_to` v2.
+
+**Board result navigation** (asked by Mermaid, view only; on branch `feat/board-result-navigation`, waiting for review, not on `main`): the full view shows one page at a time (Prev/Next, page indicator, jump) instead of loading more; groups can be ordered by size over the whole result and any order reversed (`GET /results/{id}?order=size&reverse=true` — a view of the stored result, default and `.jsonl` unchanged, `indices` names each item's stored position); groups with more than 10 events start as a 3-event preview. Filters reach the shown page only and say so. Browser check: `uv run --no-project --with playwright python scripts/e2e_board_navigation.py`. Known gaps: a raw-view line is still one whole group (a huge group is a long line); page size is fixed at 50 (no selector).
 
 **Board follow-ups** (owner, 2026-09-23): query line breaks (graph #84), event numbers in the query (#85, owner's yes pending), corpus schema on the board (#86). Phrase search residue: #88.
 

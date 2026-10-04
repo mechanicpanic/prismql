@@ -6,12 +6,13 @@
 (function (root) {
   "use strict";
   var PL = window.PrismQLInspectorPageLogic;
-  var FL = window.PrismQLFullLogic;
+  var Nav = typeof module === "object" && module.exports
+    ? require("./fullview-nav-logic.js") : window.PrismQLFullNav;
   var PFLoad = typeof module === "object" && module.exports
     ? require("./fullview-load.js") : window.PrismQLFullLoad;
 
   function rowsContext(entry, vs, actions) {
-    var res = PFLoad.loadPaged(entry, [], vs.loadTo, actions, "rows");
+    var res = PFLoad.loadPage(entry, [], vs, actions, "rows");
     if (res.blocker) return PFLoad.blockedContext("rows", res);
     var rows = res.items;
     var q = vs.q.trim().toLowerCase();
@@ -25,9 +26,9 @@
     var tiles = rows.length === 0 ? [] : [{ v: rows.length + " / " + entry.total, l: "groups loaded" }];
     return {
       kind: "rows", loaded: rows, filtered: filtered,
-      pending: res.pending, blocker: res.blocker, loadBound: res.loadBound, total: entry.total,
+      pending: res.pending, blocker: res.blocker, nav: res.nav, total: entry.total,
       canFilter: true, agents: [], tiles: tiles,
-      note: FL.loadNote(rows.length, entry.total, filtered.length < rows.length ? filtered.length : null),
+      note: res.nav.count == null ? "" : Nav.pageNote(res.nav.offset, res.nav.got, res.nav.count, filtered.length, res.nav.total),
     };
   }
 

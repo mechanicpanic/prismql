@@ -19,11 +19,14 @@
   // group) shows its own slot label on each event item instead of the
   // generic "event n"; an unnamed slot (labels[j] absent/null) still
   // falls back to "event n" at render time (fullview-timeline.js).
-  function timelineItems(group, board, labels) {
+  // `limit` (optional) stops after that many events: a verbose group builds
+  // only the events it will show, never hundreds of cards it hides.
+  function timelineItems(group, board, labels, limit) {
     var ids = group.ids || [], positions = group.positions || [];
     var times = group.times || [], slots = group.slots || [];
     var items = [];
-    for (var j = 0; j < ids.length; j++) {
+    var upto = limit == null ? ids.length : Math.min(limit, ids.length);
+    for (var j = 0; j < upto; j++) {
       if (j > 0) {
         var gap = F.gapLabel(positions[j - 1], positions[j], times[j - 1], times[j]);
         items.push({ isGap: true, plus: gap.plus, label: gap.label });
@@ -47,7 +50,7 @@
     var snip = withText ? withText.text : (fieldOf(lead, board.kind) || "");
     var t0 = (group.times || [])[0];
     return {
-      n: group.n, actor: fieldOf(lead, board.actor) || "",
+      n: group.n, actor: fieldOf(lead, board.actor) || "", count: (group.ids || []).length,
       span: F.span(group.times || []), snip: snip || "",
       date: t0 != null ? IF.localDateTime(t0) : "",
     };
@@ -64,7 +67,7 @@
     var lead = (group.slots || [])[0] || null;
     return {
       n: group.n, total: total, actor: fieldOf(lead, board.actor) || "",
-      span: F.span(group.times || []),
+      count: (group.ids || []).length, span: F.span(group.times || []),
       range: times.length ? IF.localDateTime(earliest) + " → " + F.hms(latest) : "",
     };
   }

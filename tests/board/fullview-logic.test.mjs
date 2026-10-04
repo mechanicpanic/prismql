@@ -35,21 +35,6 @@ test("timeRangeLabel: null entries are dropped, not treated as a boundary", () =
   assert.equal(FL.timeRangeLabel([null, "2026-06-03T18:02:11Z", null]), "Jun 3");
 });
 
-// --- loadNote ---
-
-test("loadNote: no filter", () => {
-  assert.equal(FL.loadNote(50, 371, null), "50 of 371 loaded");
-});
-test("loadNote: filter narrows the loaded set", () => {
-  assert.equal(FL.loadNote(50, 371, 12), "12 of 50 match · 50 of 371 loaded");
-});
-test("loadNote: a filter matching everything loaded reads as no filter", () => {
-  assert.equal(FL.loadNote(50, 371, 50), "50 of 371 loaded");
-});
-test("loadNote: everything loaded", () => {
-  assert.equal(FL.loadNote(6, 6, null), "6 of 6 loaded");
-});
-
 // --- viewsFor ---
 
 test("viewsFor: groups get timeline/table/raw", () => {
@@ -133,6 +118,10 @@ test("agentChipList: dedupes, keeps first-seen order, carries selection", () => 
     { label: "opus", on: false },
   ]);
 });
+test("agentChipList: a selected agent with no group on this page keeps its chip (paged view)", () => {
+  const chips = FL.agentChipList(["gemini"], { codex: true });
+  assert.deepEqual(chips, [{ label: "gemini", on: false }, { label: "codex", on: true }]);
+});
 test("agentChipList: null/undefined values are skipped", () => {
   assert.deepEqual(FL.agentChipList([null, "a", undefined], {}), [{ label: "a", on: false }]);
 });
@@ -199,22 +188,6 @@ test("hitsTiles: the sources tile is omitted without an actor field — never mo
 test("hitsTiles: a null top score (nothing scored yet) reads '—', never '0.000'", () => {
   const tiles = FL.hitsTiles(0, 35, true, null, 0, true, "—");
   assert.equal(tiles[1].v, "—");
-});
-
-// --- hitsNote (fix round 1, #5/#12: the Load-more row drops its own
-// count — "kept" lives in the note instead, never a 5th tile) ---
-
-test("hitsNote: no filter, kept === total", () => {
-  assert.equal(FL.hitsNote(50, 2735, null, 2735), "50 of 2735 loaded");
-});
-test("hitsNote: kept < total appends 'kept K'", () => {
-  assert.equal(FL.hitsNote(50, 2735, null, 1000), "50 of 2735 loaded · kept 1000");
-});
-test("hitsNote: a filter's match count still comes first", () => {
-  assert.equal(FL.hitsNote(50, 2735, 12, 1000), "12 of 50 match · 50 of 2735 loaded · kept 1000");
-});
-test("hitsNote: kept === null (groups have no kept concept) never appends anything", () => {
-  assert.equal(FL.hitsNote(50, 10764, null, null), "50 of 10764 loaded");
 });
 
 // --- PAGE (fix round 1, #8: one shared constant, not three literal 50s) ---

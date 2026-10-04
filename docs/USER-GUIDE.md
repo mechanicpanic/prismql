@@ -482,6 +482,15 @@ Fetch the rest with `GET /results/r12-3fa9c1d0?offset=5&limit=5` (same
 once with `GET /results/r12-3fa9c1d0.jsonl` — its response carries an
 `X-PrismQL-Total` header with the number of lines the stream will send.
 Both `/results/{id}` routes are rate-limited the same way `/evaluate` is.
+`GET /results/{id}` also takes two view-only parameters that choose which
+items a page shows, over the whole kept result and without changing it:
+`order=size` (groups largest first, equal sizes in their stored order; the
+default `order=position` is the stored order, and `size` on a hits or rows
+result is a 400) and `reverse=true` (flips whichever order is shown). A page
+in a non-default view carries `order`, `reverse` and `indices` — each item's
+0-based position in the stored result — so a group keeps its number. The
+board's full view uses them: one page at a time, sorted by group size,
+reversed, with verbose groups collapsed. `.jsonl` ignores them.
 Kept results do not survive `/reload` or a restart, and the oldest are
 dropped first once `[server] results_memory_mb` (default 256 MB) fills up;
 either way a stale id comes back as

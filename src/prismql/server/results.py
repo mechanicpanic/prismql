@@ -12,7 +12,7 @@ import sys
 import threading
 from array import array
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import count
 from typing import Any
 
@@ -59,6 +59,11 @@ class StoredResult:
     # why each event is here (graph @aleph/prismql, #119): built from the
     # query and the engine that ran it, request dictionaries included
     explainer: Any = None
+    # item indexes, largest group first, ties in original order — built on
+    # the first size-ordered page, so paging a sorted result sorts once. At
+    # 4 bytes an item it stays under a quarter of what offsets and positions
+    # already hold, and the store's byte budget does not count it.
+    _size_order: array[int] | None = field(default=None, repr=False)
 
     @classmethod
     def from_rows(
@@ -130,19 +135,53 @@ class StoredResult:
             size += self.explainer.nbytes
         return size
 
-    def rows_window(self, offset: int, limit: int) -> list[tuple[str, Any]]:
-        assert self.rows is not None
-        end = min(len(self), max(0, offset) + max(0, limit))
-        return self.rows[max(0, offset) : end]
+    def size_order(self) -> array[int]:
+        """Item indexes by group size, largest first; equal sizes keep their
+        original order. A view over the whole result — the stored order is
+        never touched."""
+        if self._size_order is None:
+            sizes = [self.offsets[i + 1] - self.offsets[i] for i in range(len(self))]
+            self._size_order = array(
+                "I", sorted(range(len(sizes)), key=lambda i: (-sizes[i], i))
+            )
+        return self._size_order
 
-    def window(self, offset: int, limit: int) -> list[tuple[list[int], float | None]]:
-        end = min(len(self), offset + limit)
+    def display_indices(
+        self, offset: int, limit: int, order: str = "position", reverse: bool = False
+    ) -> list[int]:
+        """Original item indexes of the window ``[offset, offset + limit)`` of
+        the displayed order: the stored order, or ``size`` (largest first),
+        then ``reverse`` flips whichever it is. Costs the window, not the
+        result (the size order is built once)."""
+        n = len(self)
+        by_size = self.size_order() if order == "size" else None
+        out: list[int] = []
+        for shown in range(max(0, offset), min(n, max(0, offset) + max(0, limit))):
+            src = n - 1 - shown if reverse else shown
+            out.append(by_size[src] if by_size is not None else src)
+        return out
+
+    def rows_window(
+        self, offset: int, limit: int, reverse: bool = False
+    ) -> list[tuple[str, Any]]:
+        assert self.rows is not None
+        return [
+            self.rows[i] for i in self.display_indices(offset, limit, reverse=reverse)
+        ]
+
+    def window(
+        self,
+        offset: int,
+        limit: int,
+        order: str = "position",
+        reverse: bool = False,
+    ) -> list[tuple[list[int], float | None]]:
         return [
             (
                 list(self.positions[self.offsets[i] : self.offsets[i + 1]]),
                 self.scores[i] if self.scores is not None else None,
             )
-            for i in range(max(0, offset), end)
+            for i in self.display_indices(offset, limit, order, reverse)
         ]
 
 

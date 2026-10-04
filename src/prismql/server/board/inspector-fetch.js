@@ -56,8 +56,10 @@
     bump();
   }
 
-  function fetchPage(rid, offset, limit, fields) {
-    var key = PL.cacheKey(rid, offset, limit, fields);
+  // `view` ({order, reverse}) is the optional order of the result's pages;
+  // absent, the stored order.
+  function fetchPage(rid, offset, limit, fields, view) {
+    var key = PL.cacheKey(rid, offset, limit, fields, view);
     var hit = pageCache[key];
     if (hit) return hit;
     var failed = failCache[key];
@@ -65,7 +67,9 @@
     var rec = { status: "loading" };
     var gen = generation;
     pageCache[key] = rec;
-    window.PrismQLApi.page(rid, { offset: offset, limit: limit, hydrate: true, fields: fields.join(","), explain: true })
+    var opts = { offset: offset, limit: limit, hydrate: true, fields: fields.join(","), explain: true };
+    if (view) { opts.order = view.order; opts.reverse = view.reverse; }
+    window.PrismQLApi.page(rid, opts)
       .then(function (data) { settle(key, rec, gen, data); })
       .catch(function (e) { markFailed(key, rec, gen, { message: String((e && e.message) || e) }); });
     return rec;

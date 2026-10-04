@@ -16,10 +16,13 @@
 
   // rid|offset|limit|fields(sorted) — a page fetched with a different
   // field list (text-only, before /corpora has loaded) never collides
-  // with the fully-fielded page for the same offset (fix round 1, #3).
-  function cacheKey(rid, offset, limit, fields) {
+  // with the fully-fielded page for the same offset (fix round 1, #3). A
+  // non-default view ({order, reverse}) is part of the key too: the same
+  // offset of another order is another page.
+  function cacheKey(rid, offset, limit, fields, view) {
     var sorted = (fields || []).slice().sort().join(",");
-    return rid + "|" + offset + "|" + limit + "|" + sorted;
+    var v = view ? "|" + view.order + (view.reverse ? "|rev" : "") : "";
+    return rid + "|" + offset + "|" + limit + "|" + sorted + v;
   }
 
   // A real page: {gone:true}, a groups/named page ({results:[...]}), a
