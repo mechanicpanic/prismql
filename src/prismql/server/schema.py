@@ -27,16 +27,19 @@ def _events(backend: Any) -> tuple[list[dict[str, Any]], bool]:
 
 
 def _field_stats(docs: list[dict[str, Any]]) -> dict[str, list[Any]]:
-    """name -> [events holding the key, value type names, Counter or None]."""
+    """name -> [events holding a value there, value type names, Counter or
+    None]. A null or an empty string is no value: a table loaded from
+    Parquet has every column on every event, so counting keys put every
+    field at coverage 1.0 (graph @aleph/prismql, #179)."""
     stats: dict[str, list[Any]] = {}
     for doc in docs:
         for key, value in doc.items():
             st = stats.get(key)
             if st is None:
                 st = stats[key] = [0, set(), Counter()]
-            st[0] += 1
-            if value is None:
+            if value is None or value == "":
                 continue
+            st[0] += 1
             st[1].add(type(value).__name__)
             counter = st[2]
             if counter is not None:

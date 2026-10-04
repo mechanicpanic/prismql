@@ -558,7 +558,7 @@ class IRExecutor(PrismQLVisitor):
 
         if isinstance(cond, FieldMatch):
             if isinstance(cond.value, Wildcard):
-                return self._all_documents()
+                return self._field_present(cond.field_name)
             if isinstance(cond.value, Variable):
                 self.variable_constraints.append(
                     VariableConstraint(

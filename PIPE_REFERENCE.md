@@ -539,8 +539,9 @@ from(alice) ~> from(bob) ~> from(alice) ~> from(bob) |> within(1)
 -- Monologue detection (a run of one speaker)
 from(alice){5} |> within(10)
 
--- Unanswered messages (negative arrows carry their own window and
--- cannot be chained with other arrows)
+-- Unanswered messages (a negative arrow carries its own window; it may
+-- open a chain or follow another negative arrow, never a positive one:
+-- a ~> b !~> c is refused, a !<~(30m) s ~>(2h) c runs)
 from(alice) !~> from(bob) |> within(10)
 ```
 

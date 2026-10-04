@@ -583,8 +583,10 @@ SELECT from(alice) FOLLOWED_BY from(bob) FOLLOWED_BY from(alice) FOLLOWED_BY fro
 -- Monologue detection (a run of one speaker)
 SELECT from(alice){5} INWINDOW 10
 
--- Unanswered messages (negative lookarounds carry their own window
--- and cannot be chained with other sequential operators)
+-- Unanswered messages (a negative lookaround carries its own window;
+-- it may open a chain or follow another NOT_ link, never a positive one:
+-- A FOLLOWED_BY B NOT_FOLLOWED_BY C is refused,
+-- A NOT_PRECEDED_BY S DURING 30 minutes FOLLOWED_BY C DURING 2 hours runs)
 SELECT from(alice) NOT_FOLLOWED_BY from(bob) INWINDOW 10
 ```
 

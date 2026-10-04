@@ -52,7 +52,10 @@ Body fields, all optional but `query`: `max_results` (the inline cap, see
 below), `hydrate` (`true` by default; `false` returns ids only),
 `dictionaries` (term lists for this request), `output` (`"inline"` or
 `"file"`), `corpus` (a name from `GET /corpora`), `label` (a slug for the
-results file).
+results file). `max_results` never goes above the server's own cap (50
+unless configured); a larger request is cut to it and says `truncated:
+true` — page on with `GET /results/<result_id>`. `GET /schema?corpus=<name>`
+describes one corpus; `coverage` is the share of events holding a value.
 
 The response carries hydrated event groups (`results[].events`). A bad
 query comes back as a structured 422 whose `error.message` says what to
@@ -115,7 +118,8 @@ more. `!$k` binds nothing and is not listed.
 
 **Read around an event before you name what it is.** `GET /context?id=<id>& minutes=10&same=agent` returns the events around one event in stream order
 — within ten minutes before and after, only those with the same `agent` —
-each with its `offset` from the event (`0`), time and fields. Without
+each with its `offset` from the event (`0`), `time`, and its fields under
+`event` (`events[i].event.text`, not `events[i].text`). Without
 `minutes` it takes `before`/`after` events (10 each, at most 200); `same` is
 any field. One call instead of two queries and a join.
 
@@ -289,7 +293,10 @@ implementation over the ordered corpus:
    Text predicates read only `text`, `content` and `message` (phrases and
    tantivy: `text` alone): on a corpus whose text is in `body` they refuse —
    use `field(body, "word", partial)`. Punctuation alone (`contains_phrase(" — ")`)
-   is no word and refuses — use `field(text, "—", partial)`.
+   is no word and refuses — use `field(text, "—", partial)`. A multi-word
+   dictionary term is a phrase: matched word for word, **not stemmed**
+   ("ran into" does not find "run into"). `field(x, *)` is the events whose
+   `x` holds a value (not null, not empty); `from(*)` is every event.
 5. **`INWINDOW` is unordered; `FOLLOWED_BY` is ordered.** "A then B" →
    `FOLLOWED_BY`; "A and B near each other" → comma + `INWINDOW`.
 6. **Don't flatten multi-stage patterns.** `SELECT (SELECT a, b INWINDOW 3) FOLLOWED_BY (SELECT c) INWINDOW 8` keeps a+b grouped; `SELECT a, b, c INWINDOW 8` does not mean the same thing.

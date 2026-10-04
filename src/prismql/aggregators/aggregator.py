@@ -208,7 +208,10 @@ class Aggregator:
         values = self._get_numeric_field_values(results, field)
 
         if not values:
-            return AggregateResult(value=None, function=function, field=field)
+            raw = self._get_raw_field_values(results, field)
+            if not raw:
+                return AggregateResult(value=None, function=function, field=field)
+            return self._non_numeric(raw, function, field)
 
         if function == AggregationFunction.SUM:
             result_value: Any = sum(values)
@@ -264,32 +267,49 @@ class Aggregator:
 
         return unique_values
 
+    def _non_numeric(
+        self, raw: list[Any], function: AggregationFunction, field: str
+    ) -> AggregateResult:
+        """A field that holds values but no numbers: min/max of timestamps is
+        the earliest/latest one as written; anything else refuses instead of
+        answering null (graph @aleph/prismql, #179)."""
+        name = function.value.lower()
+        if function in (AggregationFunction.MIN, AggregationFunction.MAX):
+            from ..backends.order import epoch_micros
+
+            timed = [(epoch_micros(v), v) for v in raw]
+            known = [(t, v) for t, v in timed if t is not None]
+            if len(known) == len(timed):
+                pick = min if function == AggregationFunction.MIN else max
+                value = pick(known, key=lambda tv: tv[0])[1]
+                return AggregateResult(value=value, function=function, field=field)
+        kinds = "numbers or times" if name in ("min", "max") else "numbers"
+        raise ValueError(
+            f"{name}({field}): the field holds values, but no {kinds} — "
+            f"{name}() would answer null. Count its values with "
+            f"count(DISTINCT {field}) or list them with distinct({field})."
+        )
+
+    def _get_raw_field_values(self, results: QueryResult, field: str) -> list[Any]:
+        """The field's non-null values across all results."""
+        all_ids: set[MessageId] = set()
+        for group in results:
+            all_ids.update(group)
+        try:
+            documents = self.search_backend.get_documents(list(all_ids))
+        except NotImplementedError:
+            # Backend doesn't support document retrieval
+            return []
+        return [doc.get(field) for doc in documents if doc.get(field) is not None]
+
     def _get_numeric_field_values(
         self, results: QueryResult, field: str
     ) -> list[float]:
         """Get numeric values for a field across all results."""
-
         values: list[float] = []
-
-        # Get all message IDs
-        all_ids: set[MessageId] = set()
-        for group in results:
-            all_ids.update(group)
-
-        try:
-            documents = self.search_backend.get_documents(list(all_ids))
-            for doc in documents:
-                value = doc.get(field)
-                if value is not None:
-                    try:
-                        # Try to convert to float
-                        numeric_value = float(value)
-                        values.append(numeric_value)
-                    except (ValueError, TypeError):
-                        # Skip non-numeric values
-                        continue
-        except NotImplementedError:
-            # Backend doesn't support document retrieval
-            pass
-
+        for value in self._get_raw_field_values(results, field):
+            try:
+                values.append(float(value))
+            except (ValueError, TypeError):
+                continue  # non-numeric values are skipped
         return values

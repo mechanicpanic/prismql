@@ -1068,10 +1068,9 @@ class PrismQLVisitor(BasePrismQLVisitor):
                         "(default) or 'partial' (substring over field values)"
                     )
 
-            # Wildcard - match all messages
+            # Wildcard - the events that hold a value there (#179)
             if raw_value == "*":
-                total_docs = self.search_backend.get_total_documents()
-                return self.search_backend.get_all_document_ids(limit=total_docs)
+                return self._field_present(fname)
 
             # Variable - same-value constraint on this field
             if raw_value.lstrip("!").startswith("$"):
@@ -1232,6 +1231,17 @@ class PrismQLVisitor(BasePrismQLVisitor):
             'named `text`, or match the column it is in with field(<column>, "word", '
             'partial) — e.g. field(body, "word", partial).'
         )
+
+    def _field_present(self, field: str) -> set[MessageId]:
+        """``field(x, *)``: the events whose ``x`` holds a value — not null,
+        not an empty string or list. It used to be every event, which read as
+        "has a value" and silently counted the empty ones (graph #179)."""
+        backend = self.search_backend
+        docs = getattr(backend, "documents", None)
+        if not isinstance(docs, list):
+            docs = backend.get_documents(list(backend.get_all_document_ids()))
+        id_field = getattr(backend, "id_field", "id")
+        return {d[id_field] for d in docs if d.get(field) not in (None, "", [])}
 
     def _require_words(self, predicate: str, terms: Sequence[str]) -> None:
         """Refuse a phrase or term with no letters or digits: text is indexed
