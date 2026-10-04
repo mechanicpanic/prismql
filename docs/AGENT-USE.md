@@ -21,6 +21,12 @@ and may be strings.
 
 `.json`, `.jsonl`, `.csv` and `.parquet` all load.
 
+Text search (`contains()`, `contains_phrase()`) reads only the columns named
+`text`, `content` or `message`. Words that live in another column (`body`,
+`title`) are found by `field()` but never by the text predicates, and the
+query does not fail — it just returns less. Put the text an agent should
+search into a `text` column.
+
 Agent harness logs become such a file with `prismql ingest claude-code` or
 `prismql ingest codex`: one event per prompt, thought, tool call and result,
 and each call carries what it ran and how it ended — `cmd`, `path`, `host`,
@@ -212,6 +218,14 @@ a bug.
 **`AGGREGATE count()` is still the only honest total** for the number
 itself — reading `total` off a match response works too, but an aggregate
 is the one shape built to answer "how many" and nothing else.
+
+It counts **match groups**. For `A FOLLOWED_BY B` that is one per start
+event, so a page deleted twice and then saved once is two matches. If the
+question is "how many pages", say `count(DISTINCT page)` (the field both
+legs share); for matches per page `GROUP BY page AGGREGATE count()`. The
+language has no stage that keeps one group per page — an agent that needs
+that takes the groups and deduplicates them itself. The agent skill's
+pitfall 10 has the worked example.
 
 **File output is off.** To enumerate more groups than the cap, the agent
 asks for `"output": "file"`, and on a default server gets:
