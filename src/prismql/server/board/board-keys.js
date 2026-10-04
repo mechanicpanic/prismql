@@ -53,6 +53,19 @@
     box.id = "keys-help";
     box.setAttribute("role", "dialog");
     box.setAttribute("aria-label", "Keyboard shortcuts");
+    var head = root.document.createElement("div");
+    head.className = "kh-head";
+    var title = root.document.createElement("b");
+    title.textContent = "Keyboard shortcuts";
+    var close = root.document.createElement("button");
+    close.type = "button";
+    close.className = "iconbtn sm";
+    close.setAttribute("aria-label", "Close");
+    close.textContent = "×";
+    close.addEventListener("click", toggleHelp);
+    head.appendChild(title);
+    head.appendChild(close);
+    box.appendChild(head);
     var list = root.document.createElement("dl");
     KEYS.forEach(function (k) {
       var dt = root.document.createElement("dt");
@@ -98,7 +111,11 @@
   else {
     root.PrismQLBoardKeys = api;
     // board.js exposes its state and actions as window.PrismQLBoard
-    var go = function () { if (root.PrismQLBoard) attach(root.PrismQLBoard.state, root.PrismQLBoard.actions); };
+    var go = function () {
+      if (root.PrismQLBoard) attach(root.PrismQLBoard.state, root.PrismQLBoard.actions);
+      var btn = root.document.getElementById("keys-toggle"); // the topbar's keyboard button
+      if (btn) btn.addEventListener("click", toggleHelp);
+    };
     if (root.document.readyState === "loading") root.document.addEventListener("DOMContentLoaded", go);
     else go();
   }

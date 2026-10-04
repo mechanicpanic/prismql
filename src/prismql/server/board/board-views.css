@@ -119,3 +119,6 @@ mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
 #keys-help dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}
 #keys-help dt{font-family:"JetBrains Mono",monospace;color:var(--accent);white-space:nowrap}
 #keys-help dd{margin:0;color:var(--text-2)}
+#keys-help .kh-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px}
+#keys-help .kh-head b{font-size:13px}
+#keys-help{top:64px;bottom:auto}
