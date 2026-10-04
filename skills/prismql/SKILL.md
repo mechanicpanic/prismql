@@ -229,14 +229,20 @@ of ids out**:
 | Predicate | Matches | Backed by |
 |---|---|---|
 | `field(name, value)` | a field equals a value (case-insensitive); `from(x)` = `field(user, x)` | field index |
-| `contains(dict)` | the `text` field holds any term of a named dictionary | inverted token index (memory) / tantivy FTS |
+| `contains(dict)` | a text field (`text`, `content`, `message`) holds any term of a named dictionary | inverted token index (memory) / tantivy FTS |
 | `contains_tokens(dict)` | same, whole tokens only (keeps `C++`, emails) | same |
 | `contains_phrase("…")` | one exact phrase | same |
 | `similar_to("…", 0.7)` | embedding cosine ≥ threshold | semantic index, if configured |
 
-Only the `text` field is indexed for the text predicates (memory backend;
-tantivy takes `text_fields`). A dictionary is the semantic layer: invest
-there, and pass it in-band while iterating.
+The text predicates read only the corpus's text fields — by default `text`,
+`content` and `message`, **not** every column: with that default a `body` or
+`title` column is queryable with `field()` but `contains()` does not look in
+it. On a corpus with none of those columns a text predicate refuses with
+an error; on one where only some events hold `text`, the others simply do
+not match. When a count looks too small, compare `contains_phrase("word")`
+with `field(body, "…", partial)`; the reliable fix is a corpus whose text
+sits in a column called `text` (check `/schema`). A dictionary is the semantic
+layer: invest there, and pass it in-band while iterating.
 
 What you can rely on, because every sequence and window operator is one
 implementation over the ordered corpus:
@@ -314,6 +320,36 @@ implementation over the ordered corpus:
    - in a link the step goes inside: `SELECT field(kind, request) AND field(agent, $a) FOLLOWED_BY RUN(field(kind, retry) AND field(agent, $a), DURING 2 minutes){3,} DURING 10 minutes` — one link, either side, NOT_ too; one group per left-hand group;
    - refused: a longer chain around a run, a run beside a comma, inside AND/OR or under a quantifier;
    - runs are found over the whole stream before the link: a request that falls inside another request's run of retries does not start its own run.
+10. **`AGGREGATE count()` counts match groups, not entities.** `A
+    FOLLOWED_BY B` gives one group per event matching `A` that has a partner:
+    two start events on one page are two matches. Stream `1 delete P`,
+    `2 delete P`, `3 save P`, `4 delete Q`, `5 save Q`, with
+    `Q1 = SELECT field(kind, delete) AND field(page, $p) FOLLOWED_BY field(kind, save) AND field(page, $p) INWINDOW 10`:
+    - `Q1` → `[1, 3] [2, 3] [4, 5]`; `Q1 AGGREGATE count()` → **3**, for 2 pages;
+    - pages with a match: `Q1 AGGREGATE count(DISTINCT page)` → **2**;
+    - matches per page: `Q1 GROUP BY page AGGREGATE count()` → `{P: 2, Q: 1}`;
+    - `count(DISTINCT f)` reads `f` off every event of every group, so it
+      counts entities only when both legs carry the value (`$p` here); for a
+      field that differs between legs use `GROUP BY f`, which keys each group
+      by its **first** event;
+    - the other end: `field(kind, save) PRECEDED_BY field(kind, delete) INWINDOW 10`
+      is one group per save (`[2, 3] [4, 5]`) — a different question, not the
+      same pairs reversed;
+    - **limit**: no stage keeps one group per entity. To take the first
+      match per page, page the groups and dedup by the first event's field in
+      your own code.
+11. **`DURING` needs a strictly later time; `INWINDOW` looks at stream
+    position only.** Stream (user, time) `1 alice 100`, `2 bob 100`,
+    `3 bob 101`: `from(alice) FOLLOWED_BY from(bob) INWINDOW 1` → `[1, 2]`;
+    `from(alice) FOLLOWED_BY from(bob) DURING 10 seconds` → `[1, 3]` — event 2
+    has alice's own timestamp, so it never continues the sequence (for
+    `PRECEDED_BY` likewise, strictly earlier). `from(alice), from(bob) DURING
+    10 seconds` is a comma row, a span of at most 10 seconds: it keeps both
+    `[1, 2]` and `[1, 3]`. Among several partners with one timestamp the
+    nearest in the stream wins — going forward the earliest, going backward
+    the latest. Timestamps running backwards in load order make `INWINDOW`
+    (load order) and `DURING` (timestamps) disagree; the engine warns.
+    If a `DURING` query drops a pair you can see, compare the two timestamps.
 
 ## Investigating: from a question to a finding
 

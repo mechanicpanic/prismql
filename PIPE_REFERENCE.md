@@ -83,7 +83,13 @@ A backend that cannot honour a mode refuses rather than substituting
 (tantivy has no substring mode). `contains_tokens()` always matches whole
 tokens; `contains_phrase()` matches one exact phrase.
 
-Text predicates read fixed text fields. Words — `contains()` and `contains_tokens()` — read `text`, `content` and `message` (tantivy: `text` only); a phrase — `contains_phrase()` or a multi-word dictionary term — reads `text` only; `is_question()`, `contains_link()` and `mentions_user()` (when mentions were not stamped at ingest) read `text`, `content` and `message`. When the corpus holds none of the fields a predicate reads, it refuses with an error instead of answering zero; text in another column is matched with `field(body, "word", partial)`.
+Text predicates read fixed text fields and no other column. Words — `contains()` and `contains_tokens()` — read `text`, `content` and `message` (tantivy: `text` only); a phrase — `contains_phrase()` or a multi-word dictionary term — reads `text` only; `is_question()`, `contains_link()` and `mentions_user()` (when mentions were not stamped at ingest) read `text`, `content` and `message`. When the corpus holds none of the fields a predicate reads, it refuses with an error instead of answering zero; text in another column is matched with `field(body, "word", partial)`.
+From Python, `BackendConfig(text_fields=["text", "body"])` makes the words in `body` searchable too; a phrase still reads `text` alone.
+
+**`contains(x)` is a dictionary name, `contains_phrase("x")` is a literal.**
+`contains(timeout)` with no dictionary called `timeout` is an error
+(`Dictionary 'timeout' not found`), not a search for the word. Define
+`timeouts = ["timeout"]` or write `contains_phrase("timeout")`.
 
 ### 2. Boolean Operators
 
@@ -312,6 +318,36 @@ One aggregation stage per query: `|> count() |> sum(x)` is an error — run
 one query per function.
 `group()` accepts plain fields and time buckets (`hour(ts)`, `day(ts)`,
 `week(ts)`, `month(ts)`, `year(ts)`), and multiple fields: `group(user, day(ts))`.
+
+**What `count()` counts: result groups, not entities.** `a ~> b` returns one
+group for every event that matches `a` and has a partner, so two start
+events on one page are two matches and count twice. Stream `1 delete P`,
+`2 delete P`, `3 save P`, `4 delete Q`, `5 save Q`:
+
+```
+field(kind, delete) and field(page, $p) ~> field(kind, save) and field(page, $p) |> within(10)
+-- groups [1, 3] [2, 3] [4, 5]: |> count() is 3, for 2 pages
+field(kind, delete) and field(page, $p) ~> field(kind, save) and field(page, $p) |> within(10) |> count_distinct(page)
+-- 2: the pages that have at least one match
+field(kind, delete) and field(page, $p) ~> field(kind, save) and field(page, $p) |> within(10) |> group(page) |> count()
+-- {P: 2, Q: 1}: matches per page; the number of keys is the number of pages
+```
+
+Pick the one that answers the question asked:
+
+- *how many matches* — `count()`; *how many entities have one* —
+  `count_distinct(field)`; *how many per entity* — `group(field) |> count()`.
+- `count_distinct(f)` collects `f` from **every** event of every group, both
+  sides. It counts entities only when every side carries the same value (the
+  `$p` above). If the field differs between sides (the asker and the
+  answerer), it counts both sides' values together; `group(f)` keys each
+  group by its **first** event alone, so its keys are the first-side values.
+- To count the other end, flip the arrow: `b <~ a` gives one group per `b`,
+  each with its nearest earlier `a` (here `[2, 3] [4, 5]`). It is another
+  question, not the same pairs reversed.
+- There is no "keep one group per entity" stage. To keep the first (or any
+  one) match per page, read the groups and deduplicate by the first event's
+  field outside the language.
 
 ### 8. Subqueries
 
@@ -551,9 +587,20 @@ Arrows (`~>`, `<~`, chains):
   must be strictly later (strictly earlier for `<~`): a message with the same
   timestamp never continues the sequence, even when it is next in the
   stream. `within` arrows look at positions only.
+  Stream (user, time): `1 alice 100`, `2 bob 100`, `3 bob 101`.
+  `from(alice) ~> from(bob) |> within(1)` → `[1, 2]` (next in the stream;
+  time is not looked at); `from(alice) ~> from(bob) |> during(10s)` →
+  `[1, 3]` (event 2 shares alice's time, so it is not later);
+  `from(alice) + from(bob) |> during(10s)` → `[1, 2]` and `[1, 3]` (a `+` row
+  asks only for a span of at most 10 seconds, so equal times pass).
+  `during(0s)` on an arrow therefore matches nothing.
 - **Ties go by position.** Among candidates with the same timestamp the
   nearest in the stream wins: the earliest going forward, the latest going
   backward.
+  Stream (user, time): `1 alice 100`, `2 bob 105`, `3 bob 105`:
+  `from(alice) ~> from(bob) |> during(10s)` → `[1, 2]`, not `[1, 3]`; going
+  backward, `from(bob) <~ from(alice) |> during(10s)` over `1 alice 100`,
+  `2 alice 100`, `3 bob 105` → `[2, 3]`.
 - **Chains grow link by link.** Each element is the nearest after the
   previous one; a trailing window bounds every link, not the whole chain; no
   message appears twice in a group.
