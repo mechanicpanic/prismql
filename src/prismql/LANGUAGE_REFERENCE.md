@@ -108,12 +108,12 @@ its shape:
 C++, emails, contractions); `contains_phrase()` matches one exact phrase.
 
 Text predicates read fixed text fields and no other column. Words — `contains()` and `contains_tokens()` — read `text`, `content` and `message` (tantivy: `text` only); a phrase — `contains_phrase()` or a multi-word dictionary term — reads `text` only; `is_question()`, `contains_link()` and `mentions_user()` (when mentions were not stamped at ingest) read `text`, `content` and `message`. When the corpus holds none of the fields a predicate reads, it refuses with an error instead of answering zero; text in another column is matched with `field(body, "word", partial)`.
-From Python, `BackendConfig(text_fields=["text", "body"])` makes the words in `body` searchable too; a phrase still reads `text` alone.
+From Python on the memory backend, `BackendConfig(text_fields=["text", "body"])` makes the words in `body` searchable too; a phrase still reads `text` alone, and tantivy reads `text` whatever the config says.
 
 **`contains(x)` is a dictionary name, `contains_phrase("x")` is a literal.**
 `contains(timeout)` with no dictionary called `timeout` is an error
 (`Dictionary 'timeout' not found`), not a search for the word; a quoted word
-inside `contains()` is a syntax error that points to `contains_phrase()`. Define `timeouts = ["timeout"]` or
+inside `contains()` is refused with a pointer to `contains_phrase()`. Define `timeouts = ["timeout"]` or
 write `contains_phrase("timeout")`.
 
 ### 2. Boolean Operators
@@ -643,7 +643,7 @@ Sequential links (`FOLLOWED_BY`, `PRECEDED_BY`, chains):
   backward.
   Stream (user, time): `1 alice 100`, `2 bob 105`, `3 bob 105`:
   `from(alice) FOLLOWED_BY from(bob) DURING 10 seconds` → `[1, 2]`, not
-  `[1, 3]`; going backward, `from(bob) PRECEDED_BY from(alice)` over
+  `[1, 3]`; going backward, `from(bob) PRECEDED_BY from(alice) DURING 10 seconds` over
   `1 alice 100`, `2 alice 100`, `3 bob 105` → `[2, 3]`.
 - **Chains grow link by link.** Each element is the nearest after the
   previous one; a trailing window bounds every link, not the whole chain; no

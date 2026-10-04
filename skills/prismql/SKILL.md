@@ -229,7 +229,7 @@ of ids out**:
 | Predicate | Matches | Backed by |
 |---|---|---|
 | `field(name, value)` | a field equals a value (case-insensitive); `from(x)` = `field(user, x)` | field index |
-| `contains(dict)` | a text field (`text`, `content`, `message`) holds any term of a named dictionary | inverted token index (memory) / tantivy FTS |
+| `contains(dict)` | a text field (`text`, `content`, `message`; phrases and tantivy: `text` alone) holds any term of a named dictionary | inverted token index (memory) / tantivy FTS |
 | `contains_tokens(dict)` | same, whole tokens only (keeps `C++`, emails) | same |
 | `contains_phrase("…")` | one exact phrase | same |
 | `similar_to("…", 0.7)` | embedding cosine ≥ threshold | semantic index, if configured |
