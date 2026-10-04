@@ -546,12 +546,14 @@ class IRExecutor(PrismQLVisitor):
                 raise self._missing_dictionary("contains_tokens", dict_name)
             self._require_text(f"contains_tokens({dict_name})")
             tokens = self.user_dictionaries[dict_name]
+            self._require_words(f"contains_tokens({dict_name})", tokens)
             return self.search_backend.search_tokens(
                 tokens, field="text", operator="OR"
             )
 
         if isinstance(cond, ContainsPhrase):
             self._require_text("contains_phrase()", "phrase")
+            self._require_words("contains_phrase()", [cond.phrase])
             return self.search_backend.search_phrase(cond.phrase, field="text")
 
         if isinstance(cond, FieldMatch):

@@ -1,5 +1,6 @@
 """PrismQL query visitor implementation."""
 
+import re
 import warnings
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
@@ -971,6 +972,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
                 raise self._missing_dictionary("contains_tokens", dict_name)
             self._require_text(f"contains_tokens({dict_name})")
             tokens = self.user_dictionaries[dict_name]
+            self._require_words(f"contains_tokens({dict_name})", tokens)
             return self.search_backend.search_tokens(
                 tokens, field="text", operator="OR"
             )
@@ -981,6 +983,7 @@ class PrismQLVisitor(BasePrismQLVisitor):
             # Remove surrounding quotes
             phrase = phrase_text[1:-1]  # Strip first and last character
             self._require_text("contains_phrase()", "phrase")
+            self._require_words("contains_phrase()", [phrase])
             return self.search_backend.search_phrase(phrase, field="text")
 
         # from(username) - same as byuser
@@ -1230,6 +1233,19 @@ class PrismQLVisitor(BasePrismQLVisitor):
             'partial) — e.g. field(body, "word", partial).'
         )
 
+    def _require_words(self, predicate: str, terms: Sequence[str]) -> None:
+        """Refuse a phrase or term with no letters or digits: text is indexed
+        as words, so punctuation alone matches nothing and an empty answer
+        would read as a real negative (graph @aleph/prismql, #178)."""
+        bare = [t for t in terms if not re.search(r"\w", t)]
+        if bare:
+            shown = ", ".join(f'"{t}"' for t in bare)
+            raise PrismQLRuntimeError(
+                f"{predicate}: {shown} has no letters or digits, and text is "
+                "indexed as words, so it would match nothing. To find "
+                f'punctuation, use field(text, "{bare[0].strip() or bare[0]}", partial).'
+            )
+
     def _missing_dictionary(self, func: str, dict_name: str) -> PrismQLRuntimeError:
         """The error for ``func(word)`` naming no configured dictionary — the
         usual cause is a literal word, which ``contains()`` does not search.
@@ -1263,6 +1279,8 @@ class PrismQLVisitor(BasePrismQLVisitor):
         if singles:
             self._require_text(f"contains({dict_name})")
         mode = self.dictionary_modes.get(dict_name, self.text_match)
+        if mode != "substring":  # a substring can be punctuation
+            self._require_words(f"contains({dict_name})", words)
 
         results: set[MessageId] = set()
         for phrase in phrases:

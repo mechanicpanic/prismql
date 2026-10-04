@@ -94,7 +94,7 @@ class TestNotWithBooleanOperators:
     def test_not_with_and(self, engine):
         """Test NOT combined with AND."""
         # Row (unordered): an alice question and a non-bob event
-        engine.add_dictionary("questions", ["How", "?"])
+        engine.add_dictionary("questions", ["How"])  # "?" alone is no word (#178)
         result = engine.execute(
             "SELECT from(alice) AND contains(questions), NOT from(bob) INWINDOW 5"
         )
